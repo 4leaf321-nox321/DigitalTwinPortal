@@ -81,6 +81,33 @@ foreach ($mod in @('werkzeug', 'itsdangerous', 'blinker', 'alembic', 'flask')) {
 }
 Write-Log 'Package dependency check passed'
 
+# The bundled wheels carry ABI tags tied to the Python that built them, so a
+# minor-version mismatch fails at import time with an unhelpful error. Catch it
+# here, while the live folder is still untouched.
+$serverPython = & python -c "import sys; print('{}.{}'.format(sys.version_info[0], sys.version_info[1]))"
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item -Recurse -Force $stagingPath
+    throw "Could not run python. Make sure it is installed and on PATH."
+}
+$buildInfoPath = Join-Path $stagingPath 'BUILD_INFO.txt'
+if (Test-Path $buildInfoPath) {
+    $buildPython = ((Get-Content $buildInfoPath | Where-Object { $_ -match '^python=' }) -replace '^python=', '').Trim()
+    if ($buildPython -and $buildPython -ne $serverPython) {
+        Remove-Item -Recurse -Force $stagingPath
+        Write-Host ''
+        Write-Host "  This server's Python : $serverPython"
+        Write-Host "  Package was built on : $buildPython"
+        Write-Host ''
+        Write-Host "  Set python-version to '$serverPython' in .github/workflows/release-windows.yml"
+        Write-Host "  and ci-windows.yml, then cut a new release."
+        Write-Host ''
+        throw "Python version mismatch. Nothing was changed on this server."
+    }
+    Write-Log "Python version matches ($serverPython)"
+} else {
+    Write-Warning "Package has no BUILD_INFO.txt (built before version stamping). This server runs Python $serverPython."
+}
+
 # --- swap ------------------------------------------------------------------
 if (-not $isFirstRun) {
     if (Test-Path $prevPath) { Write-Log 'Removing the older backup'; Remove-Item -Recurse -Force $prevPath }

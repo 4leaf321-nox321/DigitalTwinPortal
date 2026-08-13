@@ -35,8 +35,16 @@ jobs:
         shell: pwsh
         run: |
           .\backend\.venv\Scripts\Activate.ps1
-          pip install pytest || true
-          if (Test-Path backend\tests) { pytest backend\tests -q } else { Write-Host 'No backend tests found, skipping.' }
+          if (Test-Path backend\requirements-dev.txt) {
+            pip install -r backend\requirements-dev.txt
+            if ($LASTEXITCODE -ne 0) { throw "dev requirements install failed (exit $LASTEXITCODE)" }
+          }
+          if (Test-Path backend\tests) {
+            pytest backend\tests -q
+            if ($LASTEXITCODE -ne 0) { throw "pytest failed (exit $LASTEXITCODE)" }
+          } else {
+            Write-Host 'No backend tests found, skipping.'
+          }
 
       - name: "Frontend: install and build"
         id: frontend-build

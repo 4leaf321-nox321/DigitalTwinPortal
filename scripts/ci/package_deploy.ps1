@@ -42,6 +42,14 @@ if (Test-Path .\\mcp_server) { Copy-Item -Recurse -Force .\\mcp_server .\\deploy
 Write-Host 'Adding run_server.ps1 template'
 Copy-Item -Force .\\scripts\\ci\\run_server_template.ps1 .\\deploy\\run_server.ps1
 
+# Record the Python that built site-packages. The bundled wheels carry ABI tags
+# (for example _psycopg.cp311-win_amd64.pyd) and will not import on a different
+# minor version, so deploy.ps1 compares this against the server's Python.
+$buildPython = & python -c "import sys; print('{}.{}'.format(sys.version_info[0], sys.version_info[1]))"
+if ($LASTEXITCODE -ne 0) { Write-Error 'Could not determine build Python version'; exit 1 }
+Write-Host "Recording build Python version: $buildPython"
+Set-Content -Encoding utf8 -Path .\\deploy\\BUILD_INFO.txt -Value "python=$buildPython"
+
 Write-Host 'Creating zip'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $deployDir = (Resolve-Path .\\deploy).Path

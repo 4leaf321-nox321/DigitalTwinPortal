@@ -1,0 +1,13 @@
+# Development and testing dependencies.
+#
+# Kept separate from requirements.txt because the deploy package bundles
+# everything in requirements.txt into site-packages, and test tooling has no
+# place on the production server.
+#
+# Install with:  pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+# Testing
+pytest==7.4.3
+pytest-flask==1.3.0
