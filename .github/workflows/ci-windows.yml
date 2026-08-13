@@ -44,8 +44,12 @@ jobs:
         run: |
           if (Test-Path frontend\package.json) {
             Push-Location frontend
+            # pwsh does not halt on native command failure; check explicitly so
+            # the real error surfaces instead of a misleading downstream one.
             npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
             npm run build
+            if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
             Pop-Location
             if (Test-Path frontend\dist) {
               echo "dist_exists=true" >> $env:GITHUB_OUTPUT
