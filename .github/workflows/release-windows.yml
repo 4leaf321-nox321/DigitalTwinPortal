@@ -34,8 +34,7 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload deploy zip to release
-        # ensure the artifact exists before attempting upload
+      # ensure the artifact exists before attempting upload
       - name: Check deploy artifact
         shell: pwsh
         run: |

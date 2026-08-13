@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Backend: create venv and install deps
+      - name: "Backend: create venv and install deps"
         shell: pwsh
         run: |
           python -m venv backend\.venv
@@ -31,14 +31,14 @@ jobs:
           python -m pip install --upgrade pip
           if (Test-Path backend\requirements.txt) { pip install -r backend\requirements.txt }
 
-      - name: Backend: run tests
+      - name: "Backend: run tests"
         shell: pwsh
         run: |
           .\backend\.venv\Scripts\Activate.ps1
           pip install pytest || true
           if (Test-Path backend\tests) { pytest backend\tests -q } else { Write-Host 'No backend tests found, skipping.' }
 
-      - name: Frontend: install and build
+      - name: "Frontend: install and build"
         id: frontend-build
         shell: pwsh
         run: |
