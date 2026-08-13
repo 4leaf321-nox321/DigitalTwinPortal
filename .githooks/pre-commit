@@ -1,0 +1,11 @@
+#!/bin/sh
+# Prevent accidental commits of ZIP files. Install by copying to .git/hooks/pre-commit
+
+staged=$(git diff --cached --name-only)
+echo "$staged" | grep -E '\.zip$' >/dev/null
+if [ $? -eq 0 ]; then
+  echo "Error: ZIP 파일은 커밋할 수 없습니다. (staged .zip detected)"
+  exit 1
+fi
+
+exit 0
