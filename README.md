@@ -238,7 +238,7 @@ powershell -File .\scripts\ci\package_deploy.ps1
 ```
 
 운영서버 주의사항
-- `deploy_package.zip`의 `site-packages`는 빌드한 Python 버전(예: 3.11)과 호환되어야 합니다. 버전을 미리 아실 필요는 없습니다 — `deploy.ps1`이 패키지에 기록된 빌드 버전과 서버 버전을 대조해, 다르면 운영 폴더를 건드리기 전에 두 버전을 알려주고 중단합니다.
+- `deploy_package.zip`의 `site-packages`는 빌드한 Python 버전과 호환되어야 합니다. 현재 운영서버와 CI 모두 **Python 3.13** 기준이며, 워크플로의 `python-version`이 이 값을 정합니다. `deploy.ps1`이 패키지에 기록된 빌드 버전과 서버 버전을 대조해, 다르면 운영 폴더를 건드리기 전에 두 버전을 알려주고 중단합니다.
 - 배포 전에 실행 중인 앱을 반드시 중지하세요. Windows가 실행 중인 파일을 잠급니다.
 - 권장: 서비스로 등록(NSSM 등)하여 자동 시작/재시작을 구성하세요.
 
