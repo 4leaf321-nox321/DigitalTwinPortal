@@ -33,7 +33,13 @@ Write-Host 'Creating zip'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $deployDir = (Resolve-Path .\\deploy).Path
 $zipPath = Join-Path $deployDir 'deploy_package.zip'
-[System.IO.Compression.ZipFile]::CreateFromDirectory($deployDir, $zipPath)
+# Build the archive outside the directory being compressed, then move it in.
+# Writing it directly to $deployDir makes CreateFromDirectory try to add the
+# archive to itself, which fails with a sharing violation.
+$stagingZip = Join-Path ([System.IO.Path]::GetDirectoryName($deployDir)) 'deploy_package.zip'
+Remove-Item -Force -ErrorAction SilentlyContinue $stagingZip
+[System.IO.Compression.ZipFile]::CreateFromDirectory($deployDir, $stagingZip)
+Move-Item -Force $stagingZip $zipPath
 
 if (Test-Path $zipPath) {
   Write-Host "Packaging complete: $zipPath"

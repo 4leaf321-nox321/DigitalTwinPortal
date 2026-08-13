@@ -8,6 +8,8 @@ on:
 jobs:
   package-and-release:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,19 +24,8 @@ jobs:
         run: |
           pwsh -File .\\scripts\\ci\\package_deploy.ps1
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          body: 'Windows deploy package'
-          # Use a PAT with repo permissions when greater privileges are required
-          token: ${{ secrets.PUBLISH_PAT }}
-          draft: false
-          prerelease: false
-
-      # ensure the artifact exists before attempting upload
+      # verify the artifact before publishing, so a packaging failure does not
+      # leave an empty release behind
       - name: Check deploy artifact
         shell: pwsh
         run: |
@@ -44,10 +35,17 @@ jobs:
           }
           Write-Output "deploy artifact exists"
 
-      - name: Upload deploy zip to release
-        uses: actions/upload-release-asset@v1
+      # Creates the release and uploads the asset in one step.
+      # PUBLISH_PAT rather than GITHUB_TOKEN: releases published with the
+      # built-in token do not trigger other workflows, which would leave
+      # deploy-via-ssh.yml (on: release: published) never firing.
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./deploy/deploy_package.zip
-          asset_name: deploy_package.zip
-          asset_content_type: application/zip
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: 'Windows deploy package'
+          draft: false
+          prerelease: false
+          files: ./deploy/deploy_package.zip
+          token: ${{ secrets.PUBLISH_PAT }}
