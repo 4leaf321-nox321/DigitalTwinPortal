@@ -36,9 +36,12 @@ jobs:
           Write-Output "deploy artifact exists"
 
       # Creates the release and uploads the asset in one step.
-      # PUBLISH_PAT rather than GITHUB_TOKEN: releases published with the
-      # built-in token do not trigger other workflows, which would leave
-      # deploy-via-ssh.yml (on: release: published) never firing.
+      #
+      # Uses the built-in token, which the contents: write permission above
+      # covers. Note that a release published with it does NOT trigger other
+      # workflows, so deploy-via-ssh.yml (on: release: published) will not fire
+      # automatically. Switch back to a valid PAT once the deploy chain is set
+      # up: token: ${{ secrets.PUBLISH_PAT }}
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -48,4 +51,4 @@ jobs:
           draft: false
           prerelease: false
           files: ./deploy/deploy_package.zip
-          token: ${{ secrets.PUBLISH_PAT }}
+          token: ${{ github.token }}
