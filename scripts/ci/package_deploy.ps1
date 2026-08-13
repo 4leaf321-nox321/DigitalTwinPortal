@@ -31,7 +31,14 @@ Copy-Item -Force .\\scripts\\ci\\run_server_template.ps1 .\\deploy\\run_server.p
 
 Write-Host 'Creating zip'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path .\\deploy).Path, (Resolve-Path .\\deploy\\deploy_package.zip).Path)
+$deployDir = (Resolve-Path .\\deploy).Path
+$zipPath = Join-Path $deployDir 'deploy_package.zip'
+[System.IO.Compression.ZipFile]::CreateFromDirectory($deployDir, $zipPath)
 
-Write-Host 'Packaging complete: deploy\\deploy_package.zip'
+if (Test-Path $zipPath) {
+  Write-Host "Packaging complete: $zipPath"
+} else {
+  Write-Error "Failed to create package $zipPath"
+  exit 1
+}
 Pop-Location
