@@ -39,6 +39,7 @@ jobs:
           if (Test-Path backend\tests) { pytest backend\tests -q } else { Write-Host 'No backend tests found, skipping.' }
 
       - name: Frontend: install and build
+        id: frontend-build
         shell: pwsh
         run: |
           if (Test-Path frontend\package.json) {
@@ -46,8 +47,14 @@ jobs:
             npm ci
             npm run build
             Pop-Location
+            if (Test-Path frontend\dist) {
+              echo "dist_exists=true" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "dist_exists=false" >> $env:GITHUB_OUTPUT
+            }
           } else {
             Write-Host 'No frontend project found, skipping.'
+            echo "dist_exists=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Create artifacts dir
@@ -55,18 +62,26 @@ jobs:
         run: mkdir artifacts
 
       - name: Package backend wheels
+        id: package-backend
         shell: pwsh
         run: |
           .\backend\.venv\Scripts\Activate.ps1
-          python -m pip wheel -r backend\requirements.txt -w artifacts || Write-Host 'Wheel build failed or no requirements.'
+          if (Test-Path backend\requirements.txt) {
+            python -m pip wheel -r backend\requirements.txt -w artifacts || Write-Host 'Wheel build failed or no requirements.'
+          } else {
+            Write-Host 'No backend requirements.txt; skipping wheel build.'
+          }
+          if (Test-Path artifacts) { echo "artifacts_exist=true" >> $env:GITHUB_OUTPUT } else { echo "artifacts_exist=false" >> $env:GITHUB_OUTPUT }
 
       - name: Upload frontend dist
+        if: steps.frontend-build.outputs.dist_exists == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
           path: frontend\dist
 
       - name: Upload backend artifacts
+        if: steps.package-backend.outputs.artifacts_exist == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: backend-artifacts
