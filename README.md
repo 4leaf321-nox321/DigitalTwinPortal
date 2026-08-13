@@ -204,7 +204,17 @@
 이 프로젝트는 ReportArchive GitHub 계정 하에 레포지토리를 생성하여 관리합니다. 운영서버와 개발환경이 Windows인 점을 고려해 Windows 중심의 CI/CD 및 릴리스 패키지를 사용합니다.
 
 핵심 흐름
-- 로컬 개발 → Push → GitHub Actions(Windows)에서 빌드/패키지 → Tag(push)로 Release 생성 → `deploy_package.zip` 다운로드 → 운영서버에 업로드 및 압축 해제 → `run_server.ps1`로 실행
+- 로컬 개발 → Push → GitHub Actions(Windows)에서 빌드/패키지 → Tag(push)로 Release 생성 → 운영서버에서 `deploy.ps1` 실행
+
+배포 절차 전체는 [DEPLOY_WINDOWS.md](DEPLOY_WINDOWS.md)를 참고하세요. 요약하면 태그를 푸시해
+릴리스를 만든 뒤, 운영서버에서 앱을 중지하고 아래를 실행합니다.
+
+```powershell
+.\deploy.ps1 -AppPath 'C:\apps\DigitalTwinPortal'
+```
+
+다운로드·검증·폴더 교체·`uploads`/`.env` 이관·마이그레이션까지 한 번에 처리하며,
+직전 버전은 `_prev`에 남아 `rollback.ps1`로 되돌릴 수 있습니다.
 
 필요 작업(간단)
 1. 이 저장소를 ReportArchive 계정으로 등록(레포 생성) — 권한은 담당자와 협의
@@ -213,7 +223,7 @@
 4. 태그를 푸시하면 릴리스가 생성되고 `deploy_package.zip`이 Release asset으로 올라감
 
 필수 GitHub 시크릿(권장)
-- `PUBLISH_PAT`: Release 업로드 및 리포지토리 권한(최소권한: `repo`, `packages` 권장)
+- `PUBLISH_PAT`: Release 업로드 및 리포지토리 권한(최소권한: `repo`)
 - `MCP_PAT`: MCP 서버 연동용 개인 액세스 토큰(운영용 — 문서화 및 별도 보관)
 - `DOCKER_HUB_TOKEN` / `DOCKER_HUB_USERNAME`: 이미지 푸시가 필요한 경우
 
@@ -228,7 +238,8 @@ powershell -File .\scripts\ci\package_deploy.ps1
 ```
 
 운영서버 주의사항
-- `deploy_package.zip`의 `site-packages`는 빌드한 Python 버전(예: 3.11)과 호환되어야 합니다. 운영서버에 동일한 Python 버전을 설치해 주세요.
+- `deploy_package.zip`의 `site-packages`는 빌드한 Python 버전(예: 3.11)과 호환되어야 합니다. 버전을 미리 아실 필요는 없습니다 — `deploy.ps1`이 패키지에 기록된 빌드 버전과 서버 버전을 대조해, 다르면 운영 폴더를 건드리기 전에 두 버전을 알려주고 중단합니다.
+- 배포 전에 실행 중인 앱을 반드시 중지하세요. Windows가 실행 중인 파일을 잠급니다.
 - 권장: 서비스로 등록(NSSM 등)하여 자동 시작/재시작을 구성하세요.
 
 추가 참고
