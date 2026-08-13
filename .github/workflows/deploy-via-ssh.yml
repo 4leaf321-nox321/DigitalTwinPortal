@@ -1,0 +1,23 @@
+name: Deploy - SSH
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            # Pull latest and run deploy script
+            powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\deploy_pull.ps1" -RepoPath 'C:\inetpub\wwwroot\DigitalTwinPortal' -ServiceName 'DigitalTwinPortal'
