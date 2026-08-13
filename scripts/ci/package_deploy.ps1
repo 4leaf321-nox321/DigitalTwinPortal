@@ -15,7 +15,20 @@ New-Item -ItemType Directory -Path $sitePackages | Out-Null
 if (Test-Path .\\backend\\requirements.txt) {
   Write-Host 'Installing backend dependencies into deploy/site-packages'
   python -m pip install --upgrade pip
-  python -m pip install --no-deps -r .\\backend\\requirements.txt -t $sitePackages
+  # No --no-deps: requirements.txt lists only top-level packages, so skipping
+  # transitive dependencies left site-packages without Werkzeug, itsdangerous,
+  # blinker, alembic, bcrypt and PyJWT, and the app could not import Flask.
+  python -m pip install -r .\\backend\\requirements.txt -t $sitePackages
+  if ($LASTEXITCODE -ne 0) { Write-Error "pip install failed (exit $LASTEXITCODE)"; exit 1 }
+
+  # Fail the build rather than shipping a package that cannot start.
+  foreach ($mod in @('werkzeug', 'itsdangerous', 'blinker', 'alembic', 'jwt')) {
+    if (-not (Get-ChildItem -Path $sitePackages -Filter $mod -Force -ErrorAction SilentlyContinue)) {
+      Write-Error "site-packages is missing '$mod' - the deploy package would not run."
+      exit 1
+    }
+  }
+  Write-Host 'Dependency check passed'
 } else {
   Write-Host 'No backend requirements.txt found; skipping dependency packaging.'
 }
