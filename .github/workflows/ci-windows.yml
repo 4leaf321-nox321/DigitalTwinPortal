@@ -41,6 +41,10 @@ jobs:
       - name: "Frontend: install and build"
         id: frontend-build
         shell: pwsh
+        env:
+          # ~4.3k modules exhaust Node's default ~2GB heap while rendering
+          # chunks; the runner has 16GB, so raise the limit.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           if (Test-Path frontend\package.json) {
             Push-Location frontend
