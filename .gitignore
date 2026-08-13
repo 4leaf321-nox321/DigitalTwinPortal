@@ -71,8 +71,15 @@ logs/
 
 # Archives (do not commit ZIP archives or deploy packages)
 *.zip
-deploy/
-deploy/*.zip
+# Anchored to the repo root: the build output is /deploy, and an unanchored
+# "deploy/" also swallowed the scripts/deploy source directory.
+/deploy/
+/deploy/*.zip
 deploy_package.zip
+
+# Runtime data written by the running app on the server. Deploys run
+# `git reset --hard`, which force-overwrites tracked files, so uploads must
+# stay untracked to survive a deploy.
+backend/uploads/
 
 # End of .gitignore

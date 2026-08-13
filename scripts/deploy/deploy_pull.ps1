@@ -40,12 +40,42 @@ Push-Location $RepoPath
 Write-Log "Recording current HEAD"
 $oldHead = git rev-parse --verify HEAD
 
+# Preserve user-uploaded files across the reset.
+#
+# `git reset --hard` overwrites tracked files and deletes any that the target
+# commit no longer contains. backend/uploads was tracked historically, so the
+# commit that untracks it would otherwise wipe the server's copies. Snapshot
+# outside $RepoPath (anything inside it is within reset's reach), then restore
+# only files the reset removed — never overwrite what survived.
+$uploadsDir = Join-Path $RepoPath 'backend\uploads'
+$uploadsBackup = $null
+if (Test-Path $uploadsDir) {
+    $uploadsBackup = Join-Path (Split-Path -Parent $RepoPath) "uploads_backup_$(Get-Date -Format yyyyMMddHHmmss)"
+    Write-Log "Backing up uploads to $uploadsBackup"
+    Copy-Item -Recurse -Force $uploadsDir $uploadsBackup
+}
+
 Write-Log "Fetching origin and resetting to origin/main"
 git fetch --all
 try {
     git reset --hard origin/main
 } catch {
     Write-Error "git reset failed: $_"; Pop-Location; exit 2
+}
+
+if ($uploadsBackup -and (Test-Path $uploadsBackup)) {
+    Write-Log "Restoring any uploads removed by the reset"
+    $restored = 0
+    Get-ChildItem -Recurse -File $uploadsBackup | ForEach-Object {
+        $rel = $_.FullName.Substring($uploadsBackup.Length).TrimStart('\')
+        $target = Join-Path $uploadsDir $rel
+        if (-not (Test-Path $target)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+            Copy-Item -Force $_.FullName $target
+            $restored++
+        }
+    }
+    Write-Log "Restored $restored upload file(s); backup kept at $uploadsBackup"
 }
 
 # Optional: backup database before migrations
@@ -147,7 +177,8 @@ if ($ServiceName) {
     try {
         Restart-Service -Name $ServiceName -Force -ErrorAction Stop
     } catch {
-        Write-Warning "Failed to restart service $ServiceName: $_"
+        # ${} is required: "$ServiceName:" parses as a scope qualifier
+        Write-Warning "Failed to restart service ${ServiceName}: $_"
     }
 }
 

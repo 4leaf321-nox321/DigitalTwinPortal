@@ -9,15 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
-            # Pull latest and run deploy script
-            powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\deploy_pull.ps1" -RepoPath 'C:\inetpub\wwwroot\DigitalTwinPortal' -ServiceName 'DigitalTwinPortal'
+            # Pull latest and run deploy script.
+            # -BackupDatabase is required: migrations run by default, and the
+            # script's rollback path restores from a pg_dump that is only
+            # produced when this flag is passed.
+            powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\deploy_pull.ps1" -RepoPath 'C:\inetpub\wwwroot\DigitalTwinPortal' -ServiceName 'DigitalTwinPortal' -BackupDatabase

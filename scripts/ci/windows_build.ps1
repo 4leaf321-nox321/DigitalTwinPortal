@@ -11,7 +11,10 @@ if (Test-Path .\backend\requirements.txt) { pip install -r .\backend\requirement
 # Optional: run backend tests if present
 if (Test-Path .\backend\tests) {
   Write-Host 'Running backend tests'
-  pip install pytest || Write-Host 'pytest install failed'
+  # No "||" here: it is a PowerShell 7 pipeline chain operator and a parse
+  # error in Windows PowerShell 5.1, which would reject the whole script.
+  pip install pytest
+  if ($LASTEXITCODE -ne 0) { Write-Host 'pytest install failed' }
   pytest backend\tests -q
 } else {
   Write-Host 'No backend tests found; skipping.'

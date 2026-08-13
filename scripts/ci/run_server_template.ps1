@@ -14,7 +14,13 @@ Push-Location $scriptDir
 
 $sitePackagesPath = Join-Path $scriptDir 'site-packages'
 if (Test-Path $sitePackagesPath) {
-  $env:PYTHONPATH = $sitePackagesPath + [System.IO.Path]::PathSeparator + ($env:PYTHONPATH -ne $null ? $env:PYTHONPATH : '')
+  # No ternary here: Windows PowerShell 5.1 is the default shell on the server
+  # and would fail to parse "? :", taking the whole script with it.
+  if ($env:PYTHONPATH) {
+    $env:PYTHONPATH = $sitePackagesPath + [System.IO.Path]::PathSeparator + $env:PYTHONPATH
+  } else {
+    $env:PYTHONPATH = $sitePackagesPath
+  }
   Write-Host "PYTHONPATH set to $env:PYTHONPATH"
 } else {
   Write-Host 'Warning: site-packages not found in package. Ensure dependencies are installed.'
