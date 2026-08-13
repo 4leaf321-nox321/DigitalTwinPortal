@@ -11,15 +11,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '18'
 
@@ -83,14 +83,14 @@ jobs:
 
       - name: Upload frontend dist
         if: steps.frontend-build.outputs.dist_exists == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: frontend\dist
 
       - name: Upload backend artifacts
         if: steps.package-backend.outputs.artifacts_exist == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-artifacts
           path: artifacts
