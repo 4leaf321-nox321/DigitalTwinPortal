@@ -1,0 +1,96 @@
+{
+  "_설명": [
+    "AI 에이전트 과업 골든셋. 이 파일을 agent_tasks.json 으로 복사해 쓴다.",
+    "",
+    "★ 정답 숫자를 여기에 적지 않는다. 배포마다 데이터가 다르다.",
+    "  대신 `truth` 로 **정답을 구하는 방법**을 적는다 — 러너가 그 도구를 실제로",
+    "  불러 정답을 만들고, 모델 답변에 그 값이 있는지 본다.",
+    "",
+    "필드",
+    "  id            과업 식별자",
+    "  query         사용자가 실제로 할 만한 질문",
+    "  expect_tools  이건 **반드시** 불러야 한다",
+    "  avoid_tools   이걸 부르면 감점 — 예: 세는 질문에 list_projects (잘리면 틀린다)",
+    "  truth         정답 구하는 법 {tool, args, path}. path 문법은 러너 머리말 참고",
+    "  script        각본 모드(LLM 없이)에서 재생할 도구 호출 순서",
+    "",
+    "실제 사용 로그에서 승격하는 것이 가장 좋다 —",
+    "  GET /ai/agent/runs?verdict=bad 로 모인 질문이 곧 여기 들어갈 목록이다."
+  ],
+
+  "tasks": [
+    {
+      "id": "count-total",
+      "query": "지금 등록된 과제가 모두 몇 건이야?",
+      "expect_tools": ["aggregate_projects"],
+      "avoid_tools": ["list_projects"],
+      "truth": { "tool": "aggregate_projects", "args": {}, "path": "total" },
+      "script": [{ "tool": "aggregate_projects", "args": {} }]
+    },
+    {
+      "id": "count-by-division",
+      "query": "사업부별 과제 수를 알려줘",
+      "expect_tools": ["aggregate_projects"],
+      "avoid_tools": ["list_projects"],
+      "truth": { "tool": "aggregate_projects", "args": { "group_by": "division" },
+                 "path": "groups[0].count" },
+      "script": [{ "tool": "aggregate_projects", "args": { "group_by": "division" } }]
+    },
+    {
+      "id": "vocab-then-filter",
+      "query": "MX 사업부의 개발 프로세스 과제가 몇 건이야?",
+      "_왜": "어휘를 먼저 확인하고 필터를 거는 두 홉. 지어내면 0건이 나온다.",
+      "expect_tools": ["aggregate_projects"],
+      "truth": { "tool": "aggregate_projects",
+                 "args": { "division": "MX", "process": "개발" }, "path": "total" },
+      "script": [
+        { "tool": "describe_data", "args": {} },
+        { "tool": "aggregate_projects", "args": { "division": "MX", "process": "개발" } }
+      ]
+    },
+    {
+      "id": "unlinked-kpi",
+      "query": "DX KPI에 아직 연결 안 된 과제가 몇 건이고 어느 사업부야?",
+      "_왜": "이 화면의 상시 안건. kpi_linked 필터를 알아야 한다.",
+      "expect_tools": ["aggregate_projects"],
+      "truth": { "tool": "aggregate_projects", "args": { "kpi_linked": false },
+                 "path": "total" },
+      "script": [
+        { "tool": "aggregate_projects",
+          "args": { "kpi_linked": false, "group_by": "division" } }
+      ]
+    },
+    {
+      "id": "key-projects-low-progress",
+      "query": "중점과제 중에 진행률 30% 이하인 게 몇 건이야?",
+      "_왜": "필터 두 개를 겹쳐야 한다. 하나만 걸고 나머지를 눈으로 세면 틀린다.",
+      "expect_tools": ["aggregate_projects"],
+      "avoid_tools": ["list_projects"],
+      "truth": { "tool": "aggregate_projects",
+                 "args": { "is_key": true, "progress_max": 30 }, "path": "total" },
+      "script": [
+        { "tool": "aggregate_projects", "args": { "is_key": true, "progress_max": 30 } }
+      ]
+    },
+    {
+      "id": "vocab-map",
+      "query": "과제 진행상태에는 어떤 값들이 있어?",
+      "expect_tools": ["describe_data"],
+      "truth": { "tool": "describe_data", "args": {}, "path": "statuses[0]" },
+      "script": [{ "tool": "describe_data", "args": {} }]
+    },
+    {
+      "id": "find-then-detail",
+      "query": "MX 사업부 과제 하나만 골라서 상세를 보여줘",
+      "_왜": "찾기 → 상세의 두 홉 연결. uuid 를 앞 결과에서 옮겨 써야 한다.",
+      "expect_tools": ["list_projects", "get_project"],
+      "truth": { "tool": "aggregate_projects", "args": { "division": "MX" },
+                 "path": "total" },
+      "answer_must_contain_truth": false,
+      "script": [
+        { "tool": "list_projects", "args": { "division": "MX", "limit": 3 } },
+        { "tool": "get_project", "args": { "uuid": "$prev.items[0].uuid" } }
+      ]
+    }
+  ]
+}

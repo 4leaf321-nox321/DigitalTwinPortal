@@ -1,0 +1,289 @@
+/* Swimlane Chart Header Styles */
+
+.swimlane-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 64px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1000;
+  min-height: 64px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #646cff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.logo h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.count-badges {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.count-badge {
+  background-color: #f0f8ff;
+  color: #646cff;
+  padding: 0.4rem 0.8rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #e0e8ff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 20px;
+  min-width: 0;
+  max-width: 600px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid #e9ecef;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #dee2e6;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background-color: transparent;
+  color: #666;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: fit-content;
+}
+
+.header-btn:hover {
+  background-color: #f0f0f0;
+  color: #333;
+  transform: translateY(-1px);
+}
+
+.header-btn:active {
+  background-color: #e0e0e0;
+  transform: translateY(0);
+}
+
+/* Action buttons */
+.action-btn {
+  color: #495057 !important;
+  background-color: #ffffff !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+}
+
+.action-btn:hover {
+  background-color: #e9ecef !important;
+  color: #212529 !important;
+  border-color: #adb5bd !important;
+}
+
+/* Add button - special styling */
+.add-btn {
+  background-color: #e8f5e8 !important;
+  color: #2d5a2d !important;
+  border-color: #a8d4a8 !important;
+}
+
+.add-btn:hover {
+  background-color: #d4edd4 !important;
+  color: #1e3a1e !important;
+  border-color: #85c685 !important;
+}
+
+/* Sample button */
+.sample-btn {
+  background-color: #fff3cd !important;
+  color: #856404 !important;
+  border-color: #ffeaa7 !important;
+}
+
+.sample-btn:hover {
+  background-color: #ffeaa7 !important;
+  color: #533f03 !important;
+  border-color: #ffd93d !important;
+}
+
+/* Home button */
+.home-btn {
+  background-color: #f3e5f5 !important;
+  color: #7b1fa2 !important;
+  border: 1px solid #ce93d8 !important;
+}
+
+.home-btn:hover {
+  background-color: #e1bee7 !important;
+  color: #4a148c !important;
+  border-color: #ba68c8 !important;
+}
+
+.home-btn:active {
+  background-color: #ce93d8 !important;
+}
+
+/* Responsive design */
+@media (max-width: 1200px) {
+  .header-center {
+    max-width: 500px;
+  }
+  
+  .header-actions {
+    gap: 6px;
+    padding: 6px;
+  }
+  
+  .action-btn {
+    padding: 5px 8px !important;
+    font-size: 12px !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .swimlane-header {
+    padding: 0 16px;
+    height: 60px;
+  }
+  
+  .header-center {
+    margin: 0 12px;
+    max-width: 400px;
+  }
+  
+  .header-actions {
+    gap: 4px;
+    padding: 4px;
+  }
+  
+  .header-btn {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  
+  .action-btn {
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+  }
+  
+  .count-badge {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .swimlane-header {
+    padding: 0 12px;
+    height: 56px;
+  }
+  
+  .header-btn span {
+    display: none;
+  }
+  
+  .header-btn {
+    padding: 8px;
+    min-width: 36px;
+    justify-content: center;
+  }
+  
+  .action-btn {
+    padding: 6px !important;
+    min-width: 32px !important;
+  }
+  
+  .logo h1 {
+    font-size: 1.3rem;
+  }
+  
+  .count-badges {
+    display: none;
+  }
+  
+  .header-actions {
+    gap: 2px;
+    padding: 2px;
+  }
+  
+  .header-center {
+    margin: 0 8px;
+    max-width: 250px;
+  }
+  
+  .header-divider {
+    margin: 0 1px;
+  }
+}
+
+@media (max-width: 480px) {
+  .swimlane-header {
+    padding: 0 8px;
+    height: 52px;
+  }
+  
+  .logo h1 {
+    font-size: 1.1rem;
+  }
+  
+  .logo {
+    gap: 6px;
+  }
+}

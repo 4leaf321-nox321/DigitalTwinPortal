@@ -1,0 +1,265 @@
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import styled from 'styled-components';
+import ProcessCell from '../ProcessCell/ProcessCell';
+import { useResize } from './hooks/useResize';
+import { useGlobalConnection } from './hooks/useGlobalConnection';
+import ChartGridHeader from './components/ChartGridHeader';
+import ChartGridBody from './components/ChartGridBody';
+import GlobalConnectionRenderer from './components/GlobalConnectionRenderer';
+
+const ChartContainer = styled.div`
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+`;
+
+const ChartContent = styled.div`
+  min-width: 800px;
+  min-height: 600px;
+  position: relative;
+  padding: 20px;
+`;
+
+// 글로벌 연결선을 위한 전역 SVG 레이어 - 프로세스 셀보다 낮은 z-index
+const GlobalConnectionLayer = styled.svg`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; // 기본적으로 pointer-events 비활성화
+  z-index: 50; // 프로세스 셀(z-index: 1500)보다 낮게 설정
+  
+  // 삭제 가능한 연결선만 pointer-events 활성화
+  path[cursor="pointer"] {
+    pointer-events: all;
+  }
+`;
+
+const SwimlaneChart = ({ 
+  organizations = [], 
+  steps = [], 
+  cellData = {}, // { "stepId-orgId": { processes: [], connections: [] } }
+  onAddOrganization,
+  onEditOrganization,
+  onDeleteOrganization,
+  onMoveOrganizationLeft,
+  onMoveOrganizationRight,
+  onAddStep,
+  onEditStep,
+  onDeleteStep,
+  onUpdateCellData,
+  globalConnecting = false,
+  onToggleGlobalConnection,
+  onRequestAddProcess,
+  onRequestEditProcess
+}) => {
+  const [selectedCell, setSelectedCell] = useState(null);
+
+  // 기본값 설정 (useMemo로 최적화)
+  const defaultOrganizations = useMemo(() => 
+    organizations.length > 0 ? organizations : [
+      { id: 1, name: '마케팅팀' },
+      { id: 2, name: '개발팀' },
+      { id: 3, name: '품질팀' }
+    ], [organizations]
+  );
+
+  const defaultSteps = useMemo(() => 
+    steps.length > 0 ? steps : [
+      { id: 1, name: '1단계' },
+      { id: 2, name: '2단계' },
+      { id: 3, name: '3단계' },
+      { id: 4, name: '4단계' }
+    ], [steps]
+  );
+
+  // cellRefs를 useMemo로 최적화하여 필요한 ref들을 미리 생성
+  const cellRefs = useMemo(() => {
+    const refs = {};
+    defaultSteps.forEach(step => {
+      defaultOrganizations.forEach(org => {
+        const cellId = `${step.id}-${org.id}`;
+        refs[cellId] = React.createRef();
+      });
+    });
+    return refs;
+  }, [defaultOrganizations, defaultSteps]);
+
+  // 커스텀 훅 사용
+  const {
+    colWidths,
+    rowHeights,
+    stepColumnWidth,
+    getColWidth,
+    getRowHeight,
+    handleMouseDown
+  } = useResize();
+
+  const {
+    connectingFrom,
+    handleStartConnection,
+    handleStartGlobalConnection,
+    handleEndConnection,
+    handleCancelConnection
+  } = useGlobalConnection(globalConnecting, onToggleGlobalConnection);
+
+  // cellRef 가져오기 함수 - useCallback으로 메모이제이션
+  const getCellRef = useCallback((cellId) => {
+    return cellRefs[cellId] || React.createRef();
+  }, [cellRefs]);
+
+  // 격자 템플릿 열 계산
+  const generateGridTemplateColumns = useCallback(() => {
+    const stepWidth = stepColumnWidth;
+    const orgWidths = defaultOrganizations.map(org => getColWidth(org.id)).join('px ');
+    return `${stepWidth}px ${orgWidths}px`;
+  }, [stepColumnWidth, defaultOrganizations, getColWidth]);
+
+  const handleAddProcess = useCallback((cellId, newProcess) => {
+    // 이제 모달로 처리하므로 사용하지 않음
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      processes: [...currentData.processes, newProcess]
+    };
+    onUpdateCellData(cellId, updatedData);
+  }, [cellData, onUpdateCellData]);
+
+  const handleUpdateProcess = useCallback((cellId, processId, updatedProcess) => {
+    // 이제 모달로 처리하므로 사용하지 않음
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      processes: currentData.processes.map(p => 
+        p.id === processId ? updatedProcess : p
+      )
+    };
+    onUpdateCellData(cellId, updatedData);
+  }, [cellData, onUpdateCellData]);
+
+  const handleDeleteProcess = useCallback((cellId, processId) => {
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      processes: currentData.processes.filter(p => p.id !== processId)
+    };
+    onUpdateCellData(cellId, updatedData);
+  }, [cellData, onUpdateCellData]);
+
+  const handleUpdateConnections = useCallback((cellId, connections) => {
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      connections
+    };
+    onUpdateCellData(cellId, updatedData);
+  }, [cellData, onUpdateCellData]);
+
+  const handleEditStep = useCallback((e, stepId) => {
+    e.stopPropagation();
+    if (onEditStep) {
+      onEditStep(stepId);
+    }
+  }, [onEditStep]);
+
+  const handleDeleteStep = useCallback((e, stepId) => {
+    e.stopPropagation();
+    if (onDeleteStep) {
+      onDeleteStep(stepId);
+    }
+  }, [onDeleteStep]);
+
+  // ChartContent에 ref 추가 필요
+  const chartContentRef = useRef(null);
+
+  // 글로벌 연결선 삭제 핸들러 (개선됨)
+  const handleDeleteGlobalConnection = useCallback((fromCellId, connectionId) => {
+    // 확인 대화상자 개선
+    const connection = cellData[fromCellId]?.connections?.find(c => c.id === connectionId);
+    if (!connection) return;
+
+    const fromProcess = cellData[fromCellId]?.processes?.find(p => p.id === connection.from);
+    const toData = cellData[connection.targetCell];
+    const toProcess = toData?.processes?.find(p => p.id === connection.to);
+    
+    const confirmMessage = fromProcess && toProcess 
+      ? `'${fromProcess.text}'에서 '${toProcess.text}'로의 글로벌 연결선을 삭제하시겠습니까?`
+      : '이 글로벌 연결선을 삭제하시겠습니까?';
+
+    if (window.confirm(confirmMessage)) {
+      const currentData = cellData[fromCellId] || { processes: [], connections: [] };
+      const updatedConnections = currentData.connections.filter(conn => conn.id !== connectionId);
+      const updatedData = {
+        ...currentData,
+        connections: updatedConnections
+      };
+      onUpdateCellData(fromCellId, updatedData);
+    }
+  }, [cellData, onUpdateCellData]);
+
+  const getCellData = useCallback((stepId, orgId) => {
+    const cellId = `${stepId}-${orgId}`;
+    return cellData[cellId] || { processes: [], connections: [] };
+  }, [cellData]);
+
+  return (
+    <ChartContainer>
+      <ChartContent ref={chartContentRef}>
+        {/* 글로벌 연결선 레이어 - 가장 뒤에 배치 */}
+        <GlobalConnectionLayer>
+          <GlobalConnectionRenderer 
+            cellData={cellData}
+            cellRefs={cellRefs}
+            chartContentRef={chartContentRef}
+            onDeleteGlobalConnection={handleDeleteGlobalConnection}
+          />
+        </GlobalConnectionLayer>
+        
+        {/* 헤더 */}
+        <ChartGridHeader 
+          gridTemplateColumns={generateGridTemplateColumns()}
+          stepColumnWidth={stepColumnWidth}
+          organizations={defaultOrganizations}
+          onMouseDown={handleMouseDown}
+          onEditOrganization={onEditOrganization}
+          onDeleteOrganization={onDeleteOrganization}
+          onMoveOrganizationLeft={onMoveOrganizationLeft}
+          onMoveOrganizationRight={onMoveOrganizationRight}
+        />
+
+        {/* 본문 - 프로세스 셀들이 포함됨 */}
+        <ChartGridBody 
+          gridTemplateColumns={generateGridTemplateColumns()}
+          steps={defaultSteps}
+          organizations={defaultOrganizations}
+          getRowHeight={getRowHeight}
+          getCellData={getCellData}
+          getCellRef={getCellRef}
+          globalConnecting={globalConnecting}
+          connectingFrom={connectingFrom}
+          cellData={cellData}
+          cellRefs={cellRefs}
+          onEditStep={handleEditStep}
+          onDeleteStep={handleDeleteStep}
+          onMouseDown={handleMouseDown}
+          onAddProcess={handleAddProcess}
+          onUpdateProcess={handleUpdateProcess}
+          onRequestAddProcess={onRequestAddProcess}
+          onRequestEditProcess={onRequestEditProcess}
+          onDeleteProcess={handleDeleteProcess}
+          onUpdateConnections={handleUpdateConnections}
+          onStartConnection={handleStartConnection}
+          onStartGlobalConnection={handleStartGlobalConnection}
+          onEndConnection={(cellId, processId) => handleEndConnection(cellId, processId, cellData, onUpdateCellData)}
+          onCancelConnection={handleCancelConnection}
+        />
+      </ChartContent>
+    </ChartContainer>
+  );
+};
+
+export default SwimlaneChart;

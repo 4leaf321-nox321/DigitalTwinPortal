@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Node.js",
+    "description": "JavaScript runtime built on Chrome's V8 JavaScript engine",
+    "sector": "digital-twin-platforms",
+    "ring": "adopt",
+    "isNew": false,
+    "category": "Runtime",
+    "tags": ["javascript", "server", "runtime"],
+    "website": "https://nodejs.org"
+  },
+  {
+    "name": "Deno",
+    "description": "Secure runtime for JavaScript and TypeScript",
+    "sector": "digital-twin-platforms", 
+    "ring": "assess",
+    "isNew": true,
+    "category": "Runtime",
+    "tags": ["javascript", "typescript", "secure"],
+    "website": "https://deno.land"
+  },
+  {
+    "name": "WebAssembly",
+    "description": "Binary instruction format for a stack-based virtual machine",
+    "sector": "visualization-collaboration",
+    "ring": "trial",
+    "isNew": false,
+    "category": "Web Technology",
+    "tags": ["wasm", "performance", "binary"],
+    "website": "https://webassembly.org"
+  }
+]

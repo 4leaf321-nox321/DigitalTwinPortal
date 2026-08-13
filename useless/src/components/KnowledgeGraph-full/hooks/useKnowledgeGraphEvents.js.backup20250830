@@ -1,0 +1,188 @@
+import { useEffect } from 'react';
+
+/**
+ * 노드 삭제, ESC, f키 등의 키보드 이벤트를 처리하는 훅
+ */
+export const useKnowledgeGraphEvents = ({
+  selectedNode,
+  selectedEdge,
+  data,
+  onNodeDelete,
+  onEdgeDelete,
+  isAddingNodeRef,
+  isAddingEdgeRef,
+  updateIsAddingNode,
+  updateIsAddingEdge,
+  updateSourceNodeForEdge,
+  setTempNode,
+  handleFitToView
+}) => {
+  // 키보드 이벤트 리스너
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      // 입력 필드에서 타이핑 중이면 Delete와 f키 외의 처리 무시
+      const isTyping = event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA';
+      
+      // ESC 키 처리
+      if (event.key === 'Escape') {
+        if (isAddingNodeRef.current) {
+          updateIsAddingNode(false);
+          setTempNode(null);
+        }
+        if (isAddingEdgeRef.current) {
+          updateIsAddingEdge(false);
+          updateSourceNodeForEdge(null);
+        }
+      }
+      
+      // Delete 키 처리 - 선택된 노드/엣지 삭제
+      if (event.key === 'Delete' && !isTyping) {
+        event.preventDefault();
+        
+        if (selectedNode && onNodeDelete) {
+          if (confirm(`노드 "${data.nodes.find(n => n.id === selectedNode)?.label || selectedNode}"을(를) 삭제하시겠습니까?`)) {
+            onNodeDelete(selectedNode);
+          }
+        } else if (selectedEdge && onEdgeDelete) {
+          if (confirm(`관계 "${data.edges.find(e => e.id === selectedEdge)?.label || selectedEdge}"을(를) 삭제하시겠습니까?`)) {
+            onEdgeDelete(selectedEdge);
+          }
+        }
+      }
+      
+      // f키 처리 - 전체 그래프 화면에 맞추기
+      if (event.key === 'f' || event.key === 'F') {
+        if (isTyping) {
+          return;
+        }
+        
+        event.preventDefault();
+        handleFitToView();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [
+    selectedNode, 
+    selectedEdge, 
+    data, 
+    onNodeDelete, 
+    onEdgeDelete,
+    isAddingNodeRef,
+    isAddingEdgeRef,
+    updateIsAddingNode,
+    updateIsAddingEdge,
+    updateSourceNodeForEdge,
+    setTempNode,
+    handleFitToView
+  ]);
+};
+
+/**
+ * vis-network 이벤트 리스너를 설정하는 함수
+ */
+export const setupNetworkEventListeners = ({
+  networkRef,
+  isAddingNodeRef,
+  isAddingEdgeRef,
+  handleAddNodeClick,
+  handleAddEdgeClick,
+  onNodeClick,
+  onEdgeClick,
+  updateIsAddingNode,
+  updateCursor,
+  layoutType
+}) => {
+  if (!networkRef.current) return;
+
+  // 노드 클릭
+  networkRef.current.on('click', (params) => {
+    if (isAddingNodeRef.current) {
+      handleAddNodeClick(params);
+    } else if (isAddingEdgeRef.current) {
+      handleAddEdgeClick(params);
+    } else {
+      if (params.nodes.length > 0) {
+        onNodeClick(params.nodes[0]);
+      } else if (params.edges.length > 0) {
+        onEdgeClick(params.edges[0]);
+      } else {
+        onNodeClick(null);
+        onEdgeClick(null);
+      }
+    }
+  });
+
+  // 더블 클릭으로 노드 추가
+  networkRef.current.on('doubleClick', (params) => {
+    if (isAddingNodeRef.current && !params.nodes.length && !params.edges.length) {
+      handleAddNodeClick(params);
+    } else if (!isAddingNodeRef.current && !params.nodes.length && !params.edges.length) {
+      updateIsAddingNode(true);
+    }
+  });
+
+  // 호버 효과
+  networkRef.current.on('hoverNode', (params) => {
+    if (isAddingEdgeRef.current) {
+      networkRef.current.canvas.body.container.style.cursor = 'crosshair';
+    } else {
+      networkRef.current.canvas.body.container.style.cursor = 'pointer';
+    }
+  });
+
+  networkRef.current.on('blurNode', (params) => {
+    updateCursor();
+  });
+
+  networkRef.current.on('hoverEdge', (params) => {
+    networkRef.current.canvas.body.container.style.cursor = 'pointer';
+  });
+
+  networkRef.current.on('blurEdge', (params) => {
+    updateCursor();
+  });
+
+  // 드래그 이벤트
+  networkRef.current.on('dragStart', (params) => {
+    if (layoutType === 'force-directed' && params.nodes.length > 0) {
+      networkRef.current.setOptions({
+        physics: {
+          enabled: true,
+          stabilization: { enabled: false }
+        }
+      });
+    }
+  });
+
+  networkRef.current.on('dragEnd', (params) => {
+    if (layoutType === 'force-directed' && params.nodes.length > 0) {
+      setTimeout(() => {
+        if (networkRef.current && networkRef.current.physics) {
+          networkRef.current.setOptions({
+            physics: { enabled: false }
+          });
+        }
+      }, 1000);
+    }
+  });
+
+  networkRef.current.on('oncontext', (params) => {
+    params.event.preventDefault();
+  });
+
+  networkRef.current.on('stabilizationIterationsDone', () => {
+    if (layoutType === 'force-directed') {
+      setTimeout(() => {
+        if (networkRef.current && networkRef.current.physics) {
+          networkRef.current.setOptions({
+            physics: { enabled: false }
+          });
+        }
+      }, 2000);
+    }
+  });
+};

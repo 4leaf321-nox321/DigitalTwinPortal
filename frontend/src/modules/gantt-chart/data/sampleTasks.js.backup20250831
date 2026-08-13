@@ -1,0 +1,274 @@
+// 간트 차트 샘플 태스크 데이터 (계층 구조 포함)
+export const sampleTasks = [
+  // 1단계: 프로젝트 기획 (부모 태스크)
+  {
+    id: 'phase-1',
+    name: '📋 1단계: 프로젝트 기획',
+    startDate: '2024-09-01',
+    endDate: '2024-09-07',
+    progress: 100,
+    category: 'planning',
+    assignee: '프로젝트팀',
+    description: '프로젝트 전체 기획 단계',
+    dependencies: [],
+    priority: 'high',
+    level: 0,
+    collapsed: false
+  },
+  {
+    id: 'task-1-1',
+    name: '요구사항 분석',
+    startDate: '2024-09-01',
+    endDate: '2024-09-04',
+    progress: 100,
+    category: 'planning',
+    assignee: '김철수',
+    description: '고객 요구사항 분석 및 정리',
+    dependencies: [],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-1'
+  },
+  {
+    id: 'task-1-2',
+    name: '프로젝트 계획 수립',
+    startDate: '2024-09-05',
+    endDate: '2024-09-07',
+    progress: 100,
+    category: 'planning',
+    assignee: '박영희',
+    description: '전체 프로젝트 일정 및 리소스 계획',
+    dependencies: ['task-1-1'],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-1'
+  },
+
+  // 2단계: 설계 (부모 태스크)
+  {
+    id: 'phase-2',
+    name: '🎨 2단계: 시스템 설계',
+    startDate: '2024-09-08',
+    endDate: '2024-09-28',
+    progress: 75,
+    category: 'design',
+    assignee: '설계팀',
+    description: '시스템 및 UI/UX 설계 단계',
+    dependencies: ['phase-1'],
+    priority: 'high',
+    level: 0,
+    collapsed: false
+  },
+  {
+    id: 'task-2-1',
+    name: '시스템 아키텍처 설계',
+    startDate: '2024-09-08',
+    endDate: '2024-09-15',
+    progress: 100,
+    category: 'design',
+    assignee: '박영희',
+    description: '전체 시스템 구조 및 데이터베이스 설계',
+    dependencies: ['phase-1'],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-2'
+  },
+  {
+    id: 'task-2-2',
+    name: 'UI/UX 디자인',
+    startDate: '2024-09-15',
+    endDate: '2024-09-28',
+    progress: 60,
+    category: 'design',
+    assignee: '이민수',
+    description: '사용자 인터페이스 및 사용자 경험 디자인',
+    dependencies: ['task-2-1'],
+    priority: 'medium',
+    level: 1,
+    parentId: 'phase-2'
+  },
+  {
+    id: 'task-2-3',
+    name: 'API 설계',
+    startDate: '2024-09-20',
+    endDate: '2024-09-25',
+    progress: 80,
+    category: 'design',
+    assignee: '정수연',
+    description: 'RESTful API 구조 설계',
+    dependencies: ['task-2-1'],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-2'
+  },
+
+  // 3단계: 개발 (부모 태스크)
+  {
+    id: 'phase-3',
+    name: '⚡ 3단계: 개발',
+    startDate: '2024-09-25',
+    endDate: '2024-10-20',
+    progress: 45,
+    category: 'development',
+    assignee: '개발팀',
+    description: '프론트엔드 및 백엔드 개발 단계',
+    dependencies: ['phase-2'],
+    priority: 'high',
+    level: 0,
+    collapsed: false
+  },
+  {
+    id: 'task-3-1',
+    name: '프론트엔드 개발',
+    startDate: '2024-09-25',
+    endDate: '2024-10-20',
+    progress: 40,
+    category: 'development',
+    assignee: '최지훈',
+    description: 'React를 이용한 프론트엔드 개발',
+    dependencies: ['task-2-2'],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-3'
+  },
+  {
+    id: 'task-3-2',
+    name: '백엔드 개발',
+    startDate: '2024-09-21',
+    endDate: '2024-10-15',
+    progress: 30,
+    category: 'development',
+    assignee: '정수연',
+    description: 'Node.js를 이용한 백엔드 API 개발',
+    dependencies: ['task-2-3'],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-3'
+  },
+  {
+    id: 'task-3-3',
+    name: '데이터베이스 구축',
+    startDate: '2024-09-21',
+    endDate: '2024-10-05',
+    progress: 70,
+    category: 'development',
+    assignee: '김하늘',
+    description: 'MongoDB 데이터베이스 구축 및 스키마 설정',
+    dependencies: ['task-2-1'],
+    priority: 'medium',
+    level: 1,
+    parentId: 'phase-3'
+  },
+
+  // 4단계: 테스트 (부모 태스크)
+  {
+    id: 'phase-4',
+    name: '🧪 4단계: 테스트',
+    startDate: '2024-10-16',
+    endDate: '2024-10-30',
+    progress: 0,
+    category: 'testing',
+    assignee: '테스트팀',
+    description: '통합 테스트 및 사용자 테스트 단계',
+    dependencies: ['phase-3'],
+    priority: 'high',
+    level: 0,
+    collapsed: false
+  },
+  {
+    id: 'task-4-1',
+    name: '통합 테스트',
+    startDate: '2024-10-16',
+    endDate: '2024-10-25',
+    progress: 0,
+    category: 'testing',
+    assignee: '오지은',
+    description: '프론트엔드와 백엔드 통합 테스트',
+    dependencies: ['task-3-1', 'task-3-2'],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-4'
+  },
+  {
+    id: 'task-4-2',
+    name: '사용자 테스트',
+    startDate: '2024-10-22',
+    endDate: '2024-10-30',
+    progress: 0,
+    category: 'testing',
+    assignee: '윤채원',
+    description: '실제 사용자를 대상으로 한 사용성 테스트',
+    dependencies: ['task-4-1'],
+    priority: 'medium',
+    level: 1,
+    parentId: 'phase-4'
+  },
+
+  // 5단계: 배포 (부모 태스크)
+  {
+    id: 'phase-5',
+    name: '🚀 5단계: 배포',
+    startDate: '2024-10-28',
+    endDate: '2024-11-08',
+    progress: 0,
+    category: 'deployment',
+    assignee: '운영팀',
+    description: '배포 준비 및 서비스 런칭 단계',
+    dependencies: ['phase-4'],
+    priority: 'critical',
+    level: 0,
+    collapsed: false
+  },
+  {
+    id: 'task-5-1',
+    name: '배포 준비',
+    startDate: '2024-10-28',
+    endDate: '2024-11-05',
+    progress: 0,
+    category: 'deployment',
+    assignee: '임도현',
+    description: '프로덕션 환경 설정 및 배포 준비',
+    dependencies: ['task-4-1'],
+    priority: 'high',
+    level: 1,
+    parentId: 'phase-5'
+  },
+  {
+    id: 'task-5-2',
+    name: '서비스 런칭',
+    startDate: '2024-11-04',
+    endDate: '2024-11-08',
+    progress: 0,
+    category: 'deployment',
+    assignee: '전체팀',
+    description: '서비스 런칭 및 모니터링',
+    dependencies: ['task-4-2', 'task-5-1'],
+    priority: 'critical',
+    level: 1,
+    parentId: 'phase-5'
+  }
+];
+
+// 카테고리별 색상 정의
+export const categoryColors = {
+  planning: '#3498db',    // 파란색
+  design: '#e74c3c',      // 빨간색
+  development: '#2ecc71', // 초록색
+  testing: '#f39c12',     // 주황색
+  deployment: '#9b59b6'   // 보라색
+};
+
+// 우선순위별 색상 정의
+export const priorityColors = {
+  low: '#95a5a6',      // 회색
+  medium: '#f39c12',   // 주황색
+  high: '#e74c3c',     // 빨간색
+  critical: '#8e44ad'  // 진한 보라색
+};
+
+// 진행 상황에 따른 색상
+export const progressColors = {
+  notStarted: '#ecf0f1',  // 연한 회색
+  inProgress: '#3498db',  // 파란색
+  completed: '#2ecc71'    // 초록색
+};

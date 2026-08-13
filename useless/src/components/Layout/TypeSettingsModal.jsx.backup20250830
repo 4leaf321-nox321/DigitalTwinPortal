@@ -1,0 +1,584 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Plus, Trash2, Edit2, Save, Settings } from 'lucide-react';
+import './TypeSettingsModal.css';
+
+const TypeSettingsModal = ({ 
+  isOpen, 
+  onClose,
+  initialNodeTypes = [],
+  initialEdgeTypes = [],
+  onSave,
+  // 현재 사용 중인 타입들을 전달받기 위한 prop
+  currentGraphData = { nodes: [], edges: [] }
+}) => {
+  const [nodeTypes, setNodeTypes] = useState([]);
+  const [edgeTypes, setEdgeTypes] = useState([]);
+  const [newNodeType, setNewNodeType] = useState('');
+  const [newEdgeType, setNewEdgeType] = useState('');
+  const [editingNodeType, setEditingNodeType] = useState(null);
+  const [editingEdgeType, setEditingEdgeType] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  // 현재 그래프에서 사용 중인 타입들 계산
+  const usedNodeTypes = useMemo(() => {
+    const types = new Set();
+    currentGraphData.nodes.forEach(node => {
+      if (node.type) {
+        types.add(node.type);
+      }
+    });
+    return types;
+  }, [currentGraphData.nodes]);
+
+  const usedEdgeTypes = useMemo(() => {
+    const types = new Set();
+    currentGraphData.edges.forEach(edge => {
+      if (edge.type) {
+        types.add(edge.type);
+      }
+    });
+    return types;
+  }, [currentGraphData.edges]);
+
+  // 타입별 사용 개수 계산
+  const nodeTypeUsage = useMemo(() => {
+    const usage = {};
+    currentGraphData.nodes.forEach(node => {
+      if (node.type) {
+        usage[node.type] = (usage[node.type] || 0) + 1;
+      }
+    });
+    return usage;
+  }, [currentGraphData.nodes]);
+
+  const edgeTypeUsage = useMemo(() => {
+    const usage = {};
+    currentGraphData.edges.forEach(edge => {
+      if (edge.type) {
+        usage[edge.type] = (usage[edge.type] || 0) + 1;
+      }
+    });
+    return usage;
+  }, [currentGraphData.edges]);
+
+  // Default node types
+  const defaultNodeTypes = useMemo(() => [
+    { id: 'person', label: 'Person', color: '#3498db' },
+    { id: 'company', label: 'Company', color: '#e74c3c' },
+    { id: 'project', label: 'Project', color: '#2ecc71' },
+    { id: 'skill', label: 'Skill', color: '#f39c12' },
+    { id: 'department', label: 'Department', color: '#9b59b6' },
+    { id: 'technology', label: 'Technology', color: '#f39c12' },
+    { id: 'team', label: 'Team', color: '#1abc9c' },
+    { id: 'product', label: 'Product', color: '#34495e' },
+    { id: 'service', label: 'Service', color: '#95a5a6' },
+    { id: 'location', label: 'Location', color: '#e67e22' },
+    { id: 'unknown', label: 'Unknown', color: '#cccccc' }
+  ], []);
+
+  // Default edge types
+  const defaultEdgeTypes = useMemo(() => [
+    { id: 'works_for', label: 'Works For' },
+    { id: 'participates_in', label: 'Participates In' },
+    { id: 'has_skill', label: 'Has Skill' },
+    { id: 'belongs_to', label: 'Belongs To' },
+    { id: 'uses_technology', label: 'Uses Technology' },
+    { id: 'utilizes', label: 'Utilizes' },
+    { id: 'part_of', label: 'Part Of' },
+    { id: 'collaborates_with', label: 'Collaborates With' },
+    { id: 'unknown', label: 'Unknown' }
+  ], []);
+
+  // JSON.stringify를 사용해서 깊은 비교를 통해 의존성을 체크합니다
+  const initialNodeTypesString = JSON.stringify(initialNodeTypes);
+  const initialEdgeTypesString = JSON.stringify(initialEdgeTypes);
+
+  useEffect(() => {
+    if (isOpen) {
+      setNodeTypes(initialNodeTypes.length > 0 ? [...initialNodeTypes] : [...defaultNodeTypes]);
+      setEdgeTypes(initialEdgeTypes.length > 0 ? [...initialEdgeTypes] : [...defaultEdgeTypes]);
+      setNewNodeType('');
+      setNewEdgeType('');
+      setEditingNodeType(null);
+      setEditingEdgeType(null);
+      setErrors({});
+    }
+  }, [isOpen, initialNodeTypesString, initialEdgeTypesString, defaultNodeTypes, defaultEdgeTypes]);
+
+  const validateId = (id, existingTypes, editingId = null) => {
+    if (!id.trim()) {
+      return 'Please enter an ID.';
+    }
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(id)) {
+      return 'ID must start with a letter or underscore, and contain only letters, numbers, and underscores.';
+    }
+    if (existingTypes.some(type => type.id === id && type.id !== editingId)) {
+      return 'This ID already exists.';
+    }
+    return null;
+  };
+
+  const handleAddNodeType = () => {
+    const error = validateId(newNodeType, nodeTypes);
+    if (error) {
+      setErrors(prev => ({ ...prev, newNodeType: error }));
+      return;
+    }
+
+    const newType = {
+      id: newNodeType.trim(),
+      label: newNodeType.trim(),
+      color: '#' + Math.floor(Math.random()*16777215).toString(16)
+    };
+
+    setNodeTypes(prev => [...prev, newType]);
+    setNewNodeType('');
+    setErrors(prev => ({ ...prev, newNodeType: null }));
+  };
+
+  const handleAddEdgeType = () => {
+    const error = validateId(newEdgeType, edgeTypes);
+    if (error) {
+      setErrors(prev => ({ ...prev, newEdgeType: error }));
+      return;
+    }
+
+    const newType = {
+      id: newEdgeType.trim(),
+      label: newEdgeType.trim()
+    };
+
+    setEdgeTypes(prev => [...prev, newType]);
+    setNewEdgeType('');
+    setErrors(prev => ({ ...prev, newEdgeType: null }));
+  };
+
+  const handleUpdateNodeType = (id, updates) => {
+    if (updates.id && updates.id !== id) {
+      const error = validateId(updates.id, nodeTypes, id);
+      if (error) {
+        setErrors(prev => ({ ...prev, [`editNodeType_${id}`]: error }));
+        return;
+      }
+    }
+
+    setNodeTypes(prev => prev.map(type => 
+      type.id === id ? { ...type, ...updates } : type
+    ));
+    setEditingNodeType(null);
+    setErrors(prev => ({ ...prev, [`editNodeType_${id}`]: null }));
+  };
+
+  const handleUpdateEdgeType = (id, updates) => {
+    if (updates.id && updates.id !== id) {
+      const error = validateId(updates.id, edgeTypes, id);
+      if (error) {
+        setErrors(prev => ({ ...prev, [`editEdgeType_${id}`]: error }));
+        return;
+      }
+    }
+
+    setEdgeTypes(prev => prev.map(type => 
+      type.id === id ? { ...type, ...updates } : type
+    ));
+    setEditingEdgeType(null);
+    setErrors(prev => ({ ...prev, [`editEdgeType_${id}`]: null }));
+  };
+
+  const handleDeleteNodeType = (id) => {
+    // "unknown" 타입은 삭제할 수 없음
+    if (id === 'unknown') {
+      alert('"알 수 없음" 타입은 삭제할 수 없습니다.');
+      return;
+    }
+
+    const usage = nodeTypeUsage[id] || 0;
+    
+    if (usage > 0) {
+      const confirmMessage = `이 노드 타입 "${id}"은(는) 현재 ${usage}개의 노드에서 사용되고 있습니다.\n\n삭제하면 해당 노드들이 "unknown" 타입으로 변경됩니다.\n\n계속하시겠습니까?`;
+      
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+    }
+    
+    setNodeTypes(prev => prev.filter(type => type.id !== id));
+  };
+
+  const handleDeleteEdgeType = (id) => {
+    // "unknown" 타입은 삭제할 수 없음
+    if (id === 'unknown') {
+      alert('"알 수 없음" 타입은 삭제할 수 없습니다.');
+      return;
+    }
+
+    const usage = edgeTypeUsage[id] || 0;
+    
+    if (usage > 0) {
+      const confirmMessage = `이 엣지 타입 "${id}"은(는) 현재 ${usage}개의 관계에서 사용되고 있습니다.\n\n삭제하면 해당 관계들이 "unknown" 타입으로 변경됩니다.\n\n계속하시겠습니까?`;
+      
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+    }
+    
+    setEdgeTypes(prev => prev.filter(type => type.id !== id));
+  };
+
+  const handleSave = () => {
+    // 삭제된 타입들에 대한 정리 작업 정보도 함께 전달
+    const deletedNodeTypes = [];
+    const deletedEdgeTypes = [];
+    
+    // 기존에 있었지만 현재 없는 타입들 찾기
+    const currentNodeTypeIds = new Set(nodeTypes.map(t => t.id));
+    const currentEdgeTypeIds = new Set(edgeTypes.map(t => t.id));
+    
+    if (initialNodeTypes.length > 0) {
+      initialNodeTypes.forEach(type => {
+        if (!currentNodeTypeIds.has(type.id)) {
+          deletedNodeTypes.push(type.id);
+        }
+      });
+    } else {
+      defaultNodeTypes.forEach(type => {
+        if (!currentNodeTypeIds.has(type.id)) {
+          deletedNodeTypes.push(type.id);
+        }
+      });
+    }
+    
+    if (initialEdgeTypes.length > 0) {
+      initialEdgeTypes.forEach(type => {
+        if (!currentEdgeTypeIds.has(type.id)) {
+          deletedEdgeTypes.push(type.id);
+        }
+      });
+    } else {
+      defaultEdgeTypes.forEach(type => {
+        if (!currentEdgeTypeIds.has(type.id)) {
+          deletedEdgeTypes.push(type.id);
+        }
+      });
+    }
+
+    onSave({
+      nodeTypes,
+      edgeTypes,
+      deletedNodeTypes,
+      deletedEdgeTypes
+    });
+    onClose();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="type-settings-modal-overlay" onClick={onClose}>
+      <div 
+        className="type-settings-modal" 
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
+        <div className="modal-header">
+          <h2>
+            <Settings size={24} strokeWidth={2} />
+            Type Settings
+          </h2>
+          <button 
+            className="modal-close-btn"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={20} strokeWidth={2} />
+          </button>
+        </div>
+        
+        <div className="modal-body">
+          {/* Node types section */}
+          <div className="type-section">
+            <h3>Node Types</h3>
+            <div className="add-type-form">
+              <input
+                type="text"
+                value={newNodeType}
+                onChange={(e) => {
+                  setNewNodeType(e.target.value);
+                  if (errors.newNodeType) {
+                    setErrors(prev => ({ ...prev, newNodeType: null }));
+                  }
+                }}
+                placeholder="New node type ID (e.g. organization)"
+                className={`add-type-input ${errors.newNodeType ? 'error' : ''}`}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddNodeType()}
+              />
+              <button 
+                onClick={handleAddNodeType}
+                className="add-type-btn"
+                type="button"
+              >
+                <Plus size={16} strokeWidth={2} />
+                Add
+              </button>
+            </div>
+            {errors.newNodeType && (
+              <div className="error-message">{errors.newNodeType}</div>
+            )}
+            
+            <div className="type-list">
+              {nodeTypes.map((type) => {
+                const usage = nodeTypeUsage[type.id] || 0;
+                const isUsed = usage > 0;
+                
+                return (
+                  <div key={type.id} className="type-item">
+                    <div 
+                      className="color-indicator"
+                      style={{ backgroundColor: type.color }}
+                    ></div>
+                    
+                    {editingNodeType === type.id ? (
+                      <EditNodeTypeForm
+                        type={type}
+                        onSave={(updates) => handleUpdateNodeType(type.id, updates)}
+                        onCancel={() => setEditingNodeType(null)}
+                        error={errors[`editNodeType_${type.id}`]}
+                      />
+                    ) : (
+                      <>
+                        <div className="type-info">
+                          <span className="type-id">{type.id}</span>
+                          <span className="type-label">{type.label}</span>
+                          {isUsed && (
+                            <span className="usage-indicator" title={`${usage} nodes using this type`}>
+                              ({usage} used)
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="type-actions">
+                          <button 
+                            onClick={() => setEditingNodeType(type.id)}
+                            className="edit-btn node-edit-btn"
+                            title="Edit"
+                          >
+                            ✎
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteNodeType(type.id)}
+                            className={`delete-btn node-delete-btn ${isUsed ? 'used' : ''} ${type.id === 'unknown' ? 'disabled' : ''}`}
+                            title={type.id === 'unknown' ? 'Cannot delete Unknown type' : (isUsed ? `Delete (${usage} nodes will be affected)` : "Delete")}
+                            disabled={type.id === 'unknown'}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Edge types section */}
+          <div className="type-section">
+            <h3>Edge Types</h3>
+            <div className="add-type-form">
+              <input
+                type="text"
+                value={newEdgeType}
+                onChange={(e) => {
+                  setNewEdgeType(e.target.value);
+                  if (errors.newEdgeType) {
+                    setErrors(prev => ({ ...prev, newEdgeType: null }));
+                  }
+                }}
+                placeholder="New edge type ID (e.g. manages)"
+                className={`add-type-input ${errors.newEdgeType ? 'error' : ''}`}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddEdgeType()}
+              />
+              <button 
+                onClick={handleAddEdgeType}
+                className="add-type-btn"
+                type="button"
+              >
+                <Plus size={16} strokeWidth={2} />
+                Add
+              </button>
+            </div>
+            {errors.newEdgeType && (
+              <div className="error-message">{errors.newEdgeType}</div>
+            )}
+            
+            <div className="type-list">
+              {edgeTypes.map((type) => {
+                const usage = edgeTypeUsage[type.id] || 0;
+                const isUsed = usage > 0;
+                
+                return (
+                  <div key={type.id} className="type-item edge-type">
+                    {editingEdgeType === type.id ? (
+                      <EditEdgeTypeForm
+                        type={type}
+                        onSave={(updates) => handleUpdateEdgeType(type.id, updates)}
+                        onCancel={() => setEditingEdgeType(null)}
+                        error={errors[`editEdgeType_${type.id}`]}
+                      />
+                    ) : (
+                      <>
+                        <div className="type-info">
+                          <span className="type-id">{type.id}</span>
+                          <span className="type-label">{type.label}</span>
+                          {isUsed && (
+                            <span className="usage-indicator" title={`${usage} edges using this type`}>
+                              ({usage} used)
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="type-actions">
+                          <button 
+                            onClick={() => setEditingEdgeType(type.id)}
+                            className="edit-btn edge-edit-btn"
+                            title="Edit"
+                          >
+                            ✎
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteEdgeType(type.id)}
+                            className={`delete-btn edge-delete-btn ${isUsed ? 'used' : ''} ${type.id === 'unknown' ? 'disabled' : ''}`}
+                            title={type.id === 'unknown' ? 'Cannot delete Unknown type' : (isUsed ? `Delete (${usage} edges will be affected)` : "Delete")}
+                            disabled={type.id === 'unknown'}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button 
+            type="button" 
+            className="btn-cancel"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button 
+            type="button" 
+            className="btn-save"
+            onClick={handleSave}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Node type edit form component
+const EditNodeTypeForm = ({ type, onSave, onCancel, error }) => {
+  const [editData, setEditData] = useState({
+    id: type.id,
+    label: type.label,
+    color: type.color
+  });
+
+  const handleSave = () => {
+    onSave(editData);
+  };
+
+  return (
+    <div className="edit-form">
+      <div className="edit-inputs">
+        <input
+          type="text"
+          value={editData.id}
+          onChange={(e) => setEditData(prev => ({ ...prev, id: e.target.value }))}
+          placeholder="ID"
+          className={`edit-input ${error ? 'error' : ''}`}
+        />
+        <input
+          type="text"
+          value={editData.label}
+          onChange={(e) => setEditData(prev => ({ ...prev, label: e.target.value }))}
+          placeholder="Label"
+          className="edit-input"
+        />
+        <input
+          type="color"
+          value={editData.color}
+          onChange={(e) => setEditData(prev => ({ ...prev, color: e.target.value }))}
+          className="edit-color-input"
+        />
+      </div>
+      {error && <div className="error-message">{error}</div>}
+      <div className="edit-actions">
+        <button onClick={handleSave} className="save-btn" title="Save">
+          ✓
+        </button>
+        <button onClick={onCancel} className="cancel-btn" title="Cancel">
+          ×
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Edge type edit form component
+const EditEdgeTypeForm = ({ type, onSave, onCancel, error }) => {
+  const [editData, setEditData] = useState({
+    id: type.id,
+    label: type.label
+  });
+
+  const handleSave = () => {
+    onSave(editData);
+  };
+
+  return (
+    <div className="edit-form">
+      <div className="edit-inputs">
+        <input
+          type="text"
+          value={editData.id}
+          onChange={(e) => setEditData(prev => ({ ...prev, id: e.target.value }))}
+          placeholder="ID"
+          className={`edit-input ${error ? 'error' : ''}`}
+        />
+        <input
+          type="text"
+          value={editData.label}
+          onChange={(e) => setEditData(prev => ({ ...prev, label: e.target.value }))}
+          placeholder="Label"
+          className="edit-input"
+        />
+      </div>
+      {error && <div className="error-message">{error}</div>}
+      <div className="edit-actions">
+        <button onClick={handleSave} className="save-btn" title="Save">
+          ✓
+        </button>
+        <button onClick={onCancel} className="cancel-btn" title="Cancel">
+          ×
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default TypeSettingsModal;

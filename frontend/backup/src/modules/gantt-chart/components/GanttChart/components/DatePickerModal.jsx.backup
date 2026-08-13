@@ -1,0 +1,125 @@
+import React from 'react';
+
+const DatePickerModal = ({
+  showDatePicker,
+  displayRange,
+  onClose,
+  onDateRangeChange,
+  onResetDateRange
+}) => {
+  if (!showDatePicker) return null;
+
+  return (
+    <div className="date-picker-overlay">
+      <div className="date-picker-modal">
+        <div className="date-picker-header">
+          <h3>날짜 범위 설정</h3>
+          <button 
+            className="close-btn"
+            onClick={onClose}
+            title="닫기"
+          >
+            ✕
+          </button>
+        </div>
+        
+        <div className="date-picker-content">
+          <div className="date-input-group">
+            <label>시작 날짜:</label>
+            <input 
+              type="date" 
+              id="startDate"
+              defaultValue={displayRange.start.toISOString().split('T')[0]}
+            />
+          </div>
+          
+          <div className="date-input-group">
+            <label>종료 날짜:</label>
+            <input 
+              type="date" 
+              id="endDate"
+              defaultValue={displayRange.end.toISOString().split('T')[0]}
+            />
+          </div>
+          
+          <div className="preset-buttons">
+            <button 
+              className="preset-btn"
+              onClick={() => {
+                const today = new Date();
+                const oneMonthLater = new Date(today);
+                oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+                onDateRangeChange(
+                  today.toISOString().split('T')[0],
+                  oneMonthLater.toISOString().split('T')[0]
+                );
+              }}
+            >
+              다음 1개월
+            </button>
+            
+            <button 
+              className="preset-btn"
+              onClick={() => {
+                const today = new Date();
+                const threeMonthsLater = new Date(today);
+                threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+                onDateRangeChange(
+                  today.toISOString().split('T')[0],
+                  threeMonthsLater.toISOString().split('T')[0]
+                );
+              }}
+            >
+              다음 3개월
+            </button>
+            
+            <button 
+              className="preset-btn"
+              onClick={() => {
+                const today = new Date();
+                const sixMonthsLater = new Date(today);
+                sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+                onDateRangeChange(
+                  today.toISOString().split('T')[0],
+                  sixMonthsLater.toISOString().split('T')[0]
+                );
+              }}
+            >
+              다음 6개월
+            </button>
+          </div>
+        </div>
+        
+        <div className="date-picker-footer">
+          <button 
+            className="reset-btn"
+            onClick={onResetDateRange}
+          >
+            전체 기간 보기
+          </button>
+          
+          <div className="action-buttons">
+            <button 
+              className="cancel-btn"
+              onClick={onClose}
+            >
+              취소
+            </button>
+            <button 
+              className="apply-btn"
+              onClick={() => {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                onDateRangeChange(startDate, endDate);
+              }}
+            >
+              적용
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DatePickerModal;

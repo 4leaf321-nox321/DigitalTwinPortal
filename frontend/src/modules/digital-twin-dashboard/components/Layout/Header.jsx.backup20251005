@@ -1,0 +1,95 @@
+import React from 'react';
+import { Activity, BarChart3, Calendar, Plus, Settings } from 'lucide-react';
+import { CommonHeader } from '../../../../shared/components/Header';
+
+const Header = ({ 
+  onGoHome,
+  viewMode = 'dashboard',
+  onViewModeChange,
+  onAddProject,
+  onManageSettings
+}) => {
+  // 간단한 통계 데이터 (개발중이므로 기본값)
+  const statsData = [
+    {
+      label: '개발중',
+      style: {
+        backgroundColor: '#e7f3ff',
+        color: '#0066cc',
+        borderColor: '#b3d9ff'
+      }
+    }
+  ];
+
+  // 중앙 액션 버튼들
+  const centerContent = (
+    <div className="header-center-content">
+      {/* 새 과제 추가 버튼 - 간트 뷰에서만 표시 */}
+      {viewMode === 'gantt' && (
+        <button 
+          className="add-project-btn"
+          onClick={onAddProject}
+          title="새 과제 추가"
+        >
+          <Plus size={16} strokeWidth={2} />
+          <span>새 과제 추가</span>
+        </button>
+      )}
+      
+      {/* View Toggle */}
+      <div className="header-actions">
+        <div className="view-toggle">
+          <button 
+            className={`toggle-btn ${viewMode === 'dashboard' ? 'active' : ''}`}
+            onClick={() => onViewModeChange('dashboard')}
+            title="대시보드 뷰"
+          >
+            <BarChart3 size={16} strokeWidth={2} />
+            <span>대시보드</span>
+          </button>
+          <button 
+            className={`toggle-btn ${viewMode === 'gantt' ? 'active' : ''}`}
+            onClick={() => onViewModeChange('gantt')}
+            title="간트 차트 뷰"
+          >
+            <Calendar size={16} strokeWidth={2} />
+            <span>과제 진행 현황</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // 설정 버튼 (홈 버튼 왼쪽에 표시)
+  const settingsButton = (
+    <button 
+      className="header-btn action-btn settings-btn"
+      onClick={onManageSettings}
+      title="시스템 설정"
+      style={{
+        backgroundColor: '#8b5cf6',
+        color: '#ffffff',
+        borderColor: '#7c3aed',
+        marginRight: '0.75rem'
+      }}
+    >
+      <Settings size={18} strokeWidth={2} />
+      <span>설정</span>
+    </button>
+  );
+
+  return (
+    <CommonHeader
+      logo={<Activity size={24} strokeWidth={2} />}
+      title="Digital Twin Dashboard"
+      titleColor="#0066cc"
+      centerContent={centerContent}
+      rightContent={settingsButton}
+      statsData={statsData}
+      onGoHome={onGoHome}
+      className="digital-twin-dashboard-header"
+    />
+  );
+};
+
+export default Header;

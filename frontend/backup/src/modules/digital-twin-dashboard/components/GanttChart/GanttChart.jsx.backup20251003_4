@@ -1,0 +1,18 @@
+import React, { useState } from 'react';
+import styled from 'styled-components';
+import { motion } from 'framer-motion';
+import { Calendar, User, Building, Edit, Trash2 } from 'lucide-react';
+import GanttFilters from './components/GanttFilters';
+
+const GanttContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: white;
+  border-radius: 1rem;
+  overflow: visible;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+`;
+
+const GanttHeader = styled.div`

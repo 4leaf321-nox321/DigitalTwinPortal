@@ -1,0 +1,160 @@
+/* Gantt Chart App Styles */
+
+.gantt-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f8f9fa;
+  overflow: hidden;
+}
+
+.gantt-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gantt-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.chart-container {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-container {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .gantt-content {
+    flex-direction: column;
+  }
+  
+  .panel-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    background-color: white;
+  }
+}
+
+/* Loading States */
+.gantt-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 1.1rem;
+  color: #666;
+}
+
+/* Error States */
+.gantt-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #d32f2f;
+  padding: 2rem;
+  text-align: center;
+}
+
+.gantt-error h3 {
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.gantt-error p {
+  margin-bottom: 2rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.retry-btn {
+  background-color: #646cff;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.retry-btn:hover {
+  background-color: #5854e6;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.gantt-content {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Focus and Accessibility */
+.gantt-layout *:focus {
+  outline: 2px solid #646cff;
+  outline-offset: 2px;
+}
+
+/* Print Styles */
+@media print {
+  .gantt-layout {
+    height: auto;
+  }
+  
+  .panel-container {
+    display: none;
+  }
+  
+  .gantt-toolbar {
+    display: none;
+  }
+  
+  .gantt-legend {
+    break-inside: avoid;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .gantt-layout {
+    background-color: white;
+  }
+  
+  .task-bar {
+    border: 2px solid black;
+  }
+  
+  .gantt-header {
+    border-bottom: 3px solid black;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

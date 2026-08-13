@@ -1,0 +1,349 @@
+"""디지털 트윈 대시보드 MCP 서버 — 외부 AI(Claude Code · Gemini CLI …)가 과제를 조회·수정.
+
+구조
+    이 서버는 **얇은 프록시**다. 판단(권한·검증·제안 큐 분기)은 전부 백엔드에 있고
+    여기선 REST 로 부르기만 한다. 도구를 늘릴 때도 로직을 여기 두지 않는다 —
+    같은 규칙을 두 곳에 두면 갈린다.
+
+인증 — **만능 토큰을 쓰지 않는다**
+    사용자가 각자 자기 JWT 로 붙고, 이 서버는 그 `Authorization` 헤더를 백엔드로
+    **그대로 넘긴다.** 그래서 과제별 편집 권한(`can_edit_project`)이 사람이 화면에서
+    쓸 때와 **똑같이** 걸린다. 서비스 계정을 두면 그 계정이 전 과제를 고칠 수 있게 되고,
+    `on_behalf_of` 대리는 admin·dt_office 만 쓸 수 있어 일반 사용자는 오히려 막힌다.
+
+AI 쓰기의 안전장치 (백엔드가 이미 갖고 있다)
+    `patch_project` 는 `actor_mode='ai'` 로 보낸다. 그러면 백엔드가 필드 위험도로 나눈다 —
+    **저위험은 즉시 반영, 핵심 필드는 제안 큐(202)** 로 가서 사람이 승인해야 한다.
+    그래서 AI 가 과제명·일정·진행상태를 함부로 바꿔도 바로 반영되지 않는다.
+
+실행
+    set DT_API_BASE=http://localhost:5174
+    venv\\Scripts\\python.exe server.py        # streamable-http, 기본 127.0.0.1:3003/mcp
+
+등록 (사용자별 토큰)
+    claude mcp add --transport http digitaltwin http://<host>:3003/mcp \\
+      --header "Authorization: Bearer <내 토큰>"
+"""
+import os
+
+import httpx
+from mcp.server.fastmcp import Context, FastMCP
+
+# ⚠️ DT 백엔드는 **5174** 다(backend/.env 의 FLASK_PORT). 5173 은 Vite(프론트)이고
+#    브라우저가 보는 `/api` 는 Vite 가 5174 로 프록시한 것이다. 여기선 직접 붙는다.
+API_BASE = os.environ.get("DT_API_BASE", "http://localhost:5174").rstrip("/")
+API_PREFIX = "/api/dt-v2"
+
+# 기본은 SSE(streamable-http). 중간에 SSE 를 버퍼링하는 프록시·VPN·보안장비가 끼면
+# initialize 응답의 첫 바이트가 클라이언트에 닿지 못해 "무응답 → 타임아웃" 이 난다.
+# 이 값이 1 이면 응답을 **단발 JSON**(Content-Length 완결)으로 돌려 그런 경로를 통과한다.
+# 이 서버는 진행률·로그 스트리밍을 쓰지 않으므로 실질 손실이 없다.
+_JSON_RESPONSE = os.environ.get("MCP_JSON_RESPONSE") == "1"
+
+mcp = FastMCP("digitaltwin", json_response=_JSON_RESPONSE)
+
+
+def _forward_headers(ctx: Context) -> dict:
+    """들어온 MCP 요청의 인증 헤더를 백엔드로 그대로 넘긴다 — 그 사용자 권한으로 동작."""
+    headers = {}
+    req = getattr(getattr(ctx, "request_context", None), "request", None)
+    if req is not None:
+        v = req.headers.get("authorization")
+        if v:
+            headers["Authorization"] = v
+    return headers
+
+
+def _unwrap(r: httpx.Response):
+    """
+    `{success, data, message}` 봉투를 벗긴다.
+
+    **오류를 조용히 삼키지 않는다.** 실패를 빈 결과로 돌려주면 AI 가 "없다" 로 오해하고
+    엉뚱한 답을 만든다. 상태코드와 서버 메시지를 그대로 올려 AI 가 고쳐 재시도하게 한다.
+    특히 **202(제안 큐로 감)와 409(남이 먼저 고침)는 오류가 아니라 결과**라 그대로 전한다.
+    """
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+
+    if r.status_code == 202:
+        return {"status": "needs_confirmation", "httpStatus": 202,
+                "message": body.get("message")
+                or "핵심 필드라 아직 반영되지 않았습니다. 확인이 필요합니다.",
+                "data": body.get("data"),
+                "next": "data.preview 의 before → after 를 사용자에게 그대로 보여주고, "
+                        "동의를 받은 뒤 confirm_change(data.proposalId) 를 부르세요. "
+                        "묻지 않고 바로 부르면 안 됩니다."}
+    if r.status_code == 409:
+        return {"status": "conflict", "httpStatus": 409,
+                "message": body.get("message") or "다른 사용자가 먼저 수정했습니다.",
+                "data": body.get("data"),
+                "hint": "get_project 로 최신 rowVersion 을 다시 받아 재시도하세요."}
+    if not r.is_success:
+        return {"status": "error", "httpStatus": r.status_code,
+                "message": body.get("message") or r.text[:500],
+                "errors": body.get("errors")}
+    return body.get("data") if isinstance(body, dict) and "data" in body else body
+
+
+async def _request(ctx, method, path, *, params=None, json_body=None):
+    async with httpx.AsyncClient(timeout=60) as c:
+        r = await c.request(method, f"{API_BASE}{API_PREFIX}{path}",
+                            headers=_forward_headers(ctx),
+                            params=params, json=json_body)
+    return _unwrap(r)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 읽기
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+async def describe_fields(ctx: Context) -> dict:
+    """과제에서 **무엇을 고칠 수 있는지**와 각 필드의 위험도·선택지를 돌려준다.
+
+    **과제를 수정하기 전에 반드시 먼저 부른다.** 필드 이름을 지어내면 서버가 조용히
+    무시(`ignored`)하므로, 여기 나온 `key` 만 쓴다.
+
+    risk 값의 뜻:
+      low         즉시 반영된다
+      core        **제안 큐로 간다(202).** 사람이 승인해야 반영 — 사용자에게 알릴 것
+      relation    이 PATCH 로 못 고친다. `via` 의 다른 API 를 써야 한다
+      unsupported 쓰기 경로가 없다. 시도하지 말 것
+      immutable   서버가 정한다
+    """
+    return await _request(ctx, "GET", "/describe/fields")
+
+
+@mcp.tool()
+async def list_projects(
+    ctx: Context,
+    q: str = "",
+    status: str = "",
+    year: int = 0,
+    mine_only: bool = False,
+    editable_only: bool = False,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """과제 목록을 검색한다.
+
+    q             과제명·과제코드 부분일치
+    status        진행상태로 거르기 (describe_fields 의 선택지 참고)
+    year          과제년도
+    mine_only     내가 소유자인 것만
+    editable_only 내가 고칠 수 있는 것만 — **수정하려는 과제를 찾을 때 이걸 켜면
+                  권한 없는 과제를 붙잡고 헤매지 않는다**
+    """
+    params = {"limit": limit, "offset": offset}
+    if q:
+        params["q"] = q
+    if status:
+        params["status"] = status
+    if year:
+        params["year"] = year
+    if mine_only:
+        params["owner"] = "me"
+    if editable_only:
+        params["editable"] = "true"
+    return await _request(ctx, "GET", "/projects", params=params)
+
+
+@mcp.tool()
+async def get_project(uuid: str, ctx: Context) -> dict:
+    """과제 1건의 상세. 수정 전에 부르면 **`rowVersion`** 을 얻을 수 있고,
+    그 값을 `patch_project(expected_version=…)` 에 넣으면 남이 먼저 고쳤을 때 409 로 막힌다.
+    `canEdit` 이 false 면 이 사용자는 그 과제를 고칠 수 없다."""
+    return await _request(ctx, "GET", f"/projects/{uuid}")
+
+
+@mcp.tool()
+async def get_project_changes(uuid: str, ctx: Context, limit: int = 50) -> list:
+    """과제의 **필드 단위 변경 이력** — 누가·언제·무엇을 어떤 값에서 어떤 값으로 바꿨나.
+
+    행 하나가 필드 하나다. 같은 `rowVersion` 은 **한 번의 저장**이다.
+    ⚠️ 2026-07-31(V2 전환) 이후 변경만 기록돼 있다."""
+    return await _request(ctx, "GET", f"/projects/{uuid}/changes", params={"limit": limit})
+
+
+@mcp.tool()
+async def get_project_history(uuid: str, ctx: Context, limit: int = 50) -> list:
+    """과제의 **진척 지표 추이** — 그 시점의 진행률·진행상태·액션아이템·이슈·기간.
+
+    화면의 진척률은 액션아이템 완료 비율로 **매번 다시 계산**되어 소급 변경되지만
+    (액션아이템을 추가하면 분모가 바뀌어 과거 숫자까지 달라진다), 이 이력은 **그때 기록된
+    분자·분모**라 안 바뀐다. 그래서 "진척률이 떨어진 게 일을 못 해서인지 일이 늘어서인지"
+    를 가릴 수 있다 — `actionTotal` 이 늘었는지 보면 된다.
+
+    ⚠️ `startMonth`/`endMonth` 는 **날짜가 아니라 월 번호(1~12)**. 연도는 `year`.
+    ⚠️ 2026-07-29 이전 기간은 존재하지 않는다."""
+    return await _request(ctx, "GET", f"/projects/{uuid}/history", params={"limit": limit})
+
+
+@mcp.tool()
+async def list_proposals(ctx: Context, status: str = "pending", limit: int = 50) -> list:
+    """확인 대기 중인 변경 목록. 핵심 필드를 고치려 하면 여기 쌓인다.
+
+    status: pending(기본) · approved · rejected · stale · all
+
+    대기 중인 것이 있으면 **사용자에게 무엇이 걸려 있는지 알리고** 어떻게 할지 묻는다.
+    반영은 `confirm_change`, 취소는 `cancel_change`."""
+    return await _request(ctx, "GET", "/proposals",
+                          params={"status": status, "limit": limit})
+
+
+@mcp.tool()
+async def find_people(q: str, ctx: Context) -> list:
+    """이름(또는 knoxId 앞부분)으로 사람을 찾아 **knoxId 를 확인한다.** 읽기 전용.
+
+    q  이름 일부 또는 knoxId 앞부분
+
+    돌려주는 것: `[{"이름", "knoxId", "부서", "동명이인"}]` — 가입한 활성 계정만.
+
+    ── 언제 부르나 ──────────────────────────────────────────────────────────
+    `과제참여인력목록`·`과제PL_knoxId` 를 넣기 **전에.** 이 두 필드는 knoxId 가
+    없으면 서버가 400 으로 거절한다. 이름만 알고 있다면 여기서 먼저 확정한다.
+
+    ⚠️ **`동명이인: true` 가 있으면 마음대로 고르지 말 것.** 사용자에게 이름·부서를
+       보여주고 누구인지 물어본다. 여기 넣은 사람은 **그 과제를 고칠 수 있게 된다** —
+       잘못 고르면 엉뚱한 사람에게 편집 권한이 간다.
+
+    ⚠️ 검색 결과가 없으면 **아직 가입하지 않은 사람**일 수 있다. knoxId(사내 이메일
+       @앞부분)를 사용자에게 물어 넣어 두면, 그 사람이 가입하는 순간 연결된다.
+       지어내지 말 것.
+    """
+    return await _request(ctx, "GET", "/people/search", params={"q": q})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 쓰기 — 위험도 분기는 **백엔드가** 한다
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+async def patch_project(
+    uuid: str,
+    patch: dict,
+    reason: str,
+    ctx: Context,
+    expected_version: int = 0,
+) -> dict:
+    """과제 1건을 수정한다. **바뀐 필드만** 담는다.
+
+    patch            `{"진행률": 60, "과제상세설명": "..."}` — 키는 `describe_fields` 의 `key`
+    reason           **왜 고치는지.** 변경 이력에 남아 사람이 판단 근거를 본다. 필수로 적을 것
+    expected_version `get_project` 의 `rowVersion`. 넣으면 남이 먼저 고쳤을 때 409 로 막힌다
+
+    돌아오는 것:
+      status=needs_confirmation(202) **아직 안 바뀌었다.** 핵심 필드라 확인이 필요하다.
+                                    → 아래 '확인 절차' 를 그대로 따를 것
+      status=conflict(409)          남이 먼저 고쳤다. get_project 로 다시 받아 재시도
+      그 외 성공                    `applied` 에 반영된 필드, **`ignored` 에 무시된 키**.
+                                    `ignored` 가 비어 있지 않으면 **그 키는 저장되지 않았다** —
+                                    사용자에게 그대로 알릴 것. 조용히 넘기지 말 것
+
+    ── 확인 절차 (202 를 받았을 때) ──────────────────────────────────
+    1. `preview` 의 **before → after 를 사용자에게 그대로 보여준다.**
+       요약하거나 "바꿨습니다" 로 넘기지 말 것 — 확인의 요점은 사용자가 **값을 직접
+       보는 것**이다. `projectTitle`·`projectCode` 도 함께 보여 **과제를 제대로
+       집었는지** 사용자가 판단하게 한다.
+    2. 사용자에게 **명시적으로 묻는다** ("이대로 반영할까요?").
+    3. 사용자가 그렇다고 하면 `confirm_change(proposalId)`, 아니라면
+       `cancel_change(proposalId)`.
+
+    ⚠️ 응답에 `peoplePreview` 가 있으면 **그 표를 반드시 같이 보여준다.** 사람 필드는
+       값만 봐서는 누구인지 모른다 — 이름·knoxId·부서·연결여부가 거기 들어 있다.
+       "홍길동 추가" 만 보여주면 사용자는 어느 홍길동인지 모른 채 승인하게 된다.
+       `연결: 가입 대기(계정 없음)` 이면 지금은 권한이 안 생기고 그 사람이 가입할 때
+       생긴다는 것도 같이 알린다.
+
+    ⚠️ **묻지 않고 바로 `confirm_change` 를 부르지 말 것.** 그러면 이 단계가 없는 것과
+       같다. 사용자가 "확인 없이 그냥 해" 라고 **먼저 말한 경우에만** 바로 진행한다.
+
+    ⚠️ `성과목록`·이미지·`선행과제목록` 은 여기로 안 간다. `describe_fields` 참고.
+    """
+    body = {"patch": patch, "actor_mode": "ai", "ignore_unknown": True}
+    if reason:
+        body["reason"] = reason
+    if expected_version:
+        body["expected_version"] = expected_version
+    return await _request(ctx, "PATCH", f"/projects/{uuid}", json_body=body)
+
+
+@mcp.tool()
+async def create_project(
+    fields: dict,
+    reason: str,
+    ctx: Context,
+) -> dict:
+    """**새 과제를 만든다.** 있는 과제를 고치는 것이 아니다.
+
+    fields  `{"과제명": "...", "사업부": "MX", "진행상태": "미착수", ...}`
+            키는 `describe_fields` 의 `key` 를 쓴다. **`과제명` 은 필수.**
+            `id`(과제코드)를 주면 그 값으로, 안 주면 코드 없이 만들어진다.
+    reason  왜 만드는지. 변경 이력에 남는다.
+
+    ── 부르기 전에 반드시 ────────────────────────────────────────────
+    1. `describe_fields` 로 필드 이름과 **선택지**를 확인한다(사업부·진행상태·프로세스·
+       과제구분·과제영역은 정해진 값만 들어간다).
+    2. **만들 내용을 사용자에게 보여주고 동의를 받는다.**
+       수정과 달리 **확인 대기(202)가 없다** — 부르는 즉시 만들어진다.
+       생성은 기존 값을 덮지 않아 잃는 것이 없지만, 그래도 **묻지 않고 만들지 말 것.**
+    3. 여러 건이면 **한 건씩** 만들고 결과를 보고한다. 한 번에 몰아 만들지 않는다.
+
+    ── 사람을 같이 넣을 때 ───────────────────────────────────────────
+    `과제참여인력목록`·`과제PL_knoxId` 를 여기서 바로 넣을 수 있다. 단
+    **knoxId 가 없으면 400** 이다 — 먼저 `find_people` 로 확인한다.
+    같은 이름이 여럿이면 **사용자에게 누구인지 물어본 뒤** 넣는다.
+    생성은 확인 대기가 없어 **즉시 권한이 생긴다.** 짐작으로 고르지 말 것.
+    (`담당자`·`과제참여인력`(레거시 문자열)·소유자는 여전히 못 넣는다 — 이름만
+     담기는 형태라 동명이인을 가릴 수 없다.)
+
+    ⚠️ 과제코드가 이미 있으면 **409** 로 거절된다 — 다른 코드로 다시 부른다.
+    ⚠️ 응답의 `ignored` 에 키가 있으면 **그 값은 저장되지 않았다.** 사용자에게 알릴 것.
+
+    돌아오는 것: 만들어진 과제의 상세(`uuid`·`rowVersion` 포함).
+    그 `uuid` 로 이어서 `patch_project` 를 부를 수 있다.
+    """
+    body = {"fields": fields, "actor_mode": "ai", "ignore_unknown": True}
+    if reason:
+        body["reason"] = reason
+    return await _request(ctx, "POST", "/projects", json_body=body)
+
+
+@mcp.tool()
+async def confirm_change(proposal_id: int, ctx: Context, note: str = "") -> dict:
+    """확인 대기 중인 변경을 **실제로 반영한다.**
+
+    `patch_project` 가 202(needs_confirmation)를 돌려줬을 때, **사용자에게 before → after
+    를 보여주고 명시적으로 동의를 받은 다음** 부른다.
+
+    note  사용자가 덧붙인 말이 있으면 적는다. 변경 이력에 남는다.
+
+    ⚠️ **사용자에게 묻지 않고 부르지 말 것.** 이 도구를 바로 부르면 확인 단계가 통째로
+       사라진다. 202 응답을 받자마자 자동으로 이어 부르는 것은 잘못된 사용이다.
+
+    409 가 오면 그 사이 **누군가 같은 항목을 고친 것**이다. 그대로 덮으면 그 수정이
+    사라지므로 서버가 막는다 — `get_project` 로 지금 값을 다시 보고 사용자와 다시 정한다.
+    """
+    return await _request(ctx, "POST", f"/proposals/{proposal_id}/approve",
+                          json_body={"note": note} if note else {})
+
+
+@mcp.tool()
+async def cancel_change(proposal_id: int, ctx: Context, note: str = "") -> dict:
+    """확인 대기 중인 변경을 **취소한다.** 과제는 건드리지 않는다.
+
+    사용자가 "아니다" 라고 했을 때 부른다. 그냥 두면 대기 목록에 계속 남아
+    나중에 무엇이 살아 있는 요청인지 알 수 없게 된다.
+
+    note  왜 취소하는지 짧게. 나중에 목록에서 사람이 읽는다.
+    """
+    return await _request(ctx, "POST", f"/proposals/{proposal_id}/reject",
+                          json_body={"note": note} if note else {})
+
+
+if __name__ == "__main__":
+    mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
+    mcp.settings.port = int(os.environ.get("MCP_PORT", "3003"))
+    mcp.run(transport="streamable-http")

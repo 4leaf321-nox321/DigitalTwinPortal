@@ -1,0 +1,27 @@
+[
+  {
+    "id": "e162795c-0908-49db-b459-bdaaa950fb63",
+    "name": "test",
+    "mode": "stats",
+    "template": "project_report_template.pptx",
+    "mappings": {
+      "PoC과제여부": "MX_과제수",
+      "과제PL": "MX_과제수"
+    },
+    "sourceType": "",
+    "year": 2026,
+    "createdAt": "2026-03-09T20:41:25.990810"
+  },
+  {
+    "id": "edf0f99e-10c0-42b2-972e-f569da835ab3",
+    "name": "test1",
+    "mode": "single",
+    "template": "project_report_template.pptx",
+    "mappings": {
+      "PoC과제여부": "과제명"
+    },
+    "sourceType": "projects",
+    "year": null,
+    "createdAt": "2026-03-09T20:44:25.116231"
+  }
+]

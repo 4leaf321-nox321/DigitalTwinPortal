@@ -1,0 +1,175 @@
+========================================
+  오프라인 환경 이전 체크리스트
+========================================
+
+📌 현재 환경에서 실행할 작업
+========================================
+
+1. [  ] PostgreSQL 설치 파일 다운로드
+   - https://www.postgresql.org/download/windows/
+   - 파일명: postgresql-16.x-windows-x64.exe
+
+2. [  ] Python 설치 파일 다운로드
+   - https://www.python.org/downloads/
+   - 파일명: python-3.11.x-amd64.exe
+
+3. [  ] Node.js 설치 파일 다운로드
+   - https://nodejs.org/
+   - 파일명: node-v18.x.x-x64.msi
+
+4. [  ] 데이터베이스 덤프 생성
+   명령어:
+   > cd backend
+   > python export_database.py
+
+   생성 파일:
+   - database_dump_YYYYMMDD_HHMMSS.sql
+   - database_dump_YYYYMMDD_HHMMSS_info.txt
+
+5. [  ] Python 패키지 확인
+   위치: backend/packages/*.whl
+   파일 개수: 29개 (requirements.txt 참고)
+
+6. [  ] Frontend 패키지 준비
+   옵션 1 (권장): node_modules 폴더 통째로 복사
+   옵션 2: npm-cache 폴더 백업 (%APPDATA%\npm-cache)
+
+========================================
+📦 오프라인 환경으로 가져갈 것들
+========================================
+
+설치 파일:
+[  ] PostgreSQL 설치 파일 (.exe)
+[  ] Python 설치 파일 (.exe)
+[  ] Node.js 설치 파일 (.msi)
+
+프로젝트 파일:
+[  ] 전체 프로젝트 폴더 (52_KnowledgeGraphProject)
+    ├── frontend/
+    │   ├── node_modules/  (옵션 1인 경우)
+    │   ├── src/
+    │   ├── .env
+    │   └── package.json
+    ├── backend/
+    │   ├── packages/      (Python .whl 파일들)
+    │   ├── app/
+    │   ├── export_database.py
+    │   ├── import_database.py
+    │   ├── setup_database.py
+    │   ├── database_dump_*.sql  ⭐ 중요!
+    │   ├── database_dump_*_info.txt
+    │   ├── .env.example
+    │   └── requirements.txt
+    ├── OFFLINE_SETUP.md
+    └── OFFLINE_CHECKLIST.txt (이 파일)
+
+========================================
+🔧 오프라인 환경에서 실행할 작업
+========================================
+
+Phase 1: 기본 소프트웨어 설치
+[  ] PostgreSQL 설치 (포트: 5432, 비밀번호 기억하기)
+[  ] Python 설치 ("Add to PATH" 체크 필수!)
+[  ] Node.js 설치
+
+Phase 2: Backend 설정
+[  ] 가상환경 생성
+    > cd backend
+    > python -m venv venv
+
+[  ] 가상환경 활성화
+    CMD: > venv\Scripts\activate
+    PowerShell: > venv\Scripts\Activate.ps1
+    (프롬프트 앞에 (venv) 표시 확인)
+
+[  ] Python 패키지 설치 (가상환경 활성화 상태에서)
+    > pip install --no-index --find-links=packages -r requirements.txt
+
+[  ] .env 파일 생성 및 수정
+    > copy .env.example .env
+    > notepad .env
+    (DATABASE_URL의 비밀번호 수정 필수!)
+
+[  ] 데이터베이스 복원 (가상환경 활성화 상태에서)
+    > python import_database.py database_dump_YYYYMMDD_HHMMSS.sql
+
+[  ] Backend 서버 테스트 (가상환경 활성화 상태에서)
+    > python run.py
+    (http://localhost:5000 접속 확인)
+
+Phase 3: Frontend 설정
+[  ] Node 패키지 확인
+    (node_modules 폴더가 있으면 건너뛰기)
+    > cd frontend
+    > npm install --offline
+
+[  ] Frontend .env 파일 확인
+    > notepad .env
+    (VITE_API_URL=http://localhost:5000 확인)
+
+[  ] Frontend 서버 테스트
+    > cd frontend
+    > npm run dev
+    (http://localhost:5173 접속 확인)
+
+Phase 4: 전체 시스템 테스트
+[  ] Backend 실행 (터미널 1)
+    > cd backend
+    > venv\Scripts\activate
+    > python run.py
+
+[  ] Frontend 실행 (터미널 2)
+    > cd frontend
+    > npm run dev
+
+[  ] 로그인 테스트
+    - http://localhost:5173 접속
+    - 관리자 계정으로 로그인
+    - 주요 기능 동작 확인
+
+========================================
+📝 추가 참고사항
+========================================
+
+중요한 파일들:
+- database_dump_*.sql          ⭐ 가장 중요! 모든 데이터 포함
+- backend/packages/            ⭐ Python 패키지 29개
+- frontend/node_modules/       ⭐ 또는 npm-cache
+- .env 파일들                  ⭐ DB 연결 정보
+
+문제 발생 시:
+1. OFFLINE_SETUP.md 파일의 "문제 해결" 섹션 확인
+2. 로그 파일 확인 (backend.log, frontend.log)
+3. database_dump_*_info.txt 파일 확인
+
+파일 크기 참고:
+- 데이터베이스 덤프: 실제 데이터에 따라 다름 (수MB ~ 수GB)
+- backend/packages: 약 50-100MB
+- frontend/node_modules: 약 200-500MB
+- 전체 프로젝트: 약 1GB 내외
+
+========================================
+✅ 최종 확인
+========================================
+
+이전 전:
+[  ] 모든 설치 파일 준비 완료
+[  ] 데이터베이스 덤프 생성 완료
+[  ] Python 패키지 확인 완료
+[  ] Frontend 패키지 준비 완료
+[  ] 모든 파일을 USB/외장하드에 복사 완료
+
+이전 후:
+[  ] PostgreSQL 정상 설치 및 실행
+[  ] Python 3.13 정상 설치
+[  ] Node.js 정상 설치
+[  ] Backend 가상환경(venv) 생성 완료
+[  ] 가상환경에 패키지 설치 완료
+[  ] 데이터베이스 복원 완료
+[  ] Backend 서버 정상 실행
+[  ] Frontend 정상 실행
+[  ] 로그인 및 주요 기능 정상 동작
+
+========================================
+
+상세 가이드: OFFLINE_SETUP.md 파일 참고

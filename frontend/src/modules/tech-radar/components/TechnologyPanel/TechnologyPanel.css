@@ -1,0 +1,521 @@
+/* Technology Panel Styles */
+
+.technology-panel {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 100px);
+}
+
+.panel-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.panel-header h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+/* 필터 섹션 */
+.filters-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+}
+
+.search-container {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  background: white;
+  transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.filter-icon {
+  color: #64748b;
+}
+
+.filter-select {
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.85rem;
+  background: white;
+  cursor: pointer;
+  flex: 1;
+  min-width: 120px;
+  max-width: 100%;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.adoption-filter {
+  border: 2px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #475569;
+  font-weight: 500;
+}
+
+.adoption-filter:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+}
+
+/* 기술 목록 */
+.technology-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.count-badge {
+  background: #e0f2fe;
+  color: #0c4a6e;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.technology-item {
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+  position: relative;
+}
+
+.technology-item:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.technology-item.not-adopted {
+  background: #f8fafc;
+  border-color: #d1d5db;
+  opacity: 0.85;
+}
+
+.technology-item.not-adopted:hover {
+  background: #f1f5f9;
+  border-color: #9ca3af;
+  opacity: 1;
+}
+
+.technology-item.not-adopted .tech-number {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.technology-item.not-adopted .tech-name {
+  color: #6b7280;
+}
+
+.technology-item.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.tech-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+  gap: 1rem;
+}
+
+.tech-info {
+  display: flex;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.tech-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #f1f5f9;
+  color: #475569;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tech-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.tech-name {
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.4rem;
+  font-size: 1rem;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.adoption-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.adoption-status-indicator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.adoption-status-indicator:hover::before {
+  left: 100%;
+}
+
+.adoption-status-indicator.adopted {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.3);
+}
+
+.adoption-status-indicator.not-adopted {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(156, 163, 175, 0.3);
+}
+
+.tech-meta {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+}
+
+.sector-badge,
+.ring-badge {
+  color: white;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.65rem;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  display: inline-block;
+  line-height: 1.3;
+  text-align: center;
+}
+
+/* 액션 버튼 영역 - 호버시에만 표시 */
+.tech-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  align-items: flex-start;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  margin-top: 0.2rem; /* 약간 아래로 이동 */
+}
+
+.technology-item:hover .tech-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; /* 크기 축소: 36px → 28px */
+  height: 28px; /* 크기 축소: 36px → 28px */
+  border: none;
+  border-radius: 0.375rem; /* 둥글기 약간 줄임 */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.action-btn:active {
+  transform: scale(0.95);
+}
+
+.edit-btn {
+  background: #10b981;
+  color: white;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2); /* 그림자 축소 */
+}
+
+.edit-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3); /* 호버 그림자 축소 */
+}
+
+.delete-btn {
+  background: #ef4444;
+  color: white;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.2); /* 그림자 축소 */
+}
+
+.delete-btn:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3); /* 호버 그림자 축소 */
+}
+
+.tech-description {
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-top: 0.5rem;
+  padding-left: 2.25rem;
+}
+
+.technology-item.not-adopted .tech-description {
+  color: #9ca3af;
+}
+
+.selected-indicator {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  text-align: center;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #64748b;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1200px) {
+  .tech-actions {
+    opacity: 0;
+    visibility: hidden;
+  }
+  
+  .technology-item:hover .tech-actions {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+@media (max-width: 1024px) {
+  .filter-container {
+    flex-wrap: wrap;
+  }
+  
+  .filter-select {
+    min-width: 100px;
+  }
+  
+  .tech-actions {
+    opacity: 0;
+    visibility: hidden;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  
+  .technology-item:hover .tech-actions {
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .action-btn {
+    width: 26px;
+    height: 26px;
+  }
+  
+  .tech-name {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
+  
+  .adoption-status-indicator {
+    margin-left: 0;
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .technology-panel {
+    padding: 1rem;
+  }
+  
+  .panel-header {
+    margin-bottom: 1rem;
+  }
+  
+  .filter-container {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  
+  .filter-select {
+    width: 100%;
+    flex: none;
+    min-width: auto;
+  }
+  
+  .tech-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  
+  .tech-actions {
+    justify-content: flex-end;
+    flex-direction: row;
+    opacity: 0;
+    visibility: hidden;
+    align-self: flex-end;
+    margin-top: 0.5rem;
+  }
+  
+  .technology-item:hover .tech-actions {
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .tech-meta {
+    margin-top: 0.5rem;
+  }
+  
+  .sector-badge,
+  .ring-badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.4rem;
+  }
+  
+  .tech-name {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+  
+  .adoption-status-indicator {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .technology-panel {
+    padding: 0.75rem;
+  }
+  
+  .panel-header h3 {
+    font-size: 1.2rem;
+  }
+  
+  .tech-description {
+    padding-left: 0;
+    margin-top: 0.75rem;
+  }
+  
+  .tech-details {
+    min-width: 0;
+  }
+  
+  .tech-name {
+    word-wrap: break-word;
+  }
+  
+  .action-btn {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .adoption-status-indicator {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+  }
+}

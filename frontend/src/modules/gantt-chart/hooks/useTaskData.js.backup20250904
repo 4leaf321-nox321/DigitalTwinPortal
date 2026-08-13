@@ -1,0 +1,382 @@
+import { useState, useCallback, useEffect } from 'react';
+import { 
+  validateTask, 
+  validateTaskHierarchy,
+  calculateParentProgress,
+  calculateParentDates,
+  toggleTaskCollapse,
+  sortTasksHierarchically,
+  getAllChildrenIds,
+  isParentTask,
+  getChildrenIds
+} from '../utils/taskUtils';
+
+export const useTaskData = (initialTasks = []) => {
+  const [tasks, setTasks] = useState(initialTasks);
+  const [selectedTask, setSelectedTask] = useState(null);
+
+  // 로컬 스토리지에서 데이터 로드
+  useEffect(() => {
+    const savedTasks = localStorage.getItem('ganttChartTasks');
+    if (savedTasks) {
+      try {
+        const parsedTasks = JSON.parse(savedTasks);
+        if (Array.isArray(parsedTasks) && parsedTasks.length > 0) {
+          // 계층 구조 유효성 검사
+          const hierarchyErrors = validateTaskHierarchy(parsedTasks);
+          if (hierarchyErrors.length > 0) {
+            console.warn('계층 구조 오류:', hierarchyErrors);
+          }
+          // 레거시 데이터 호환성을 위해 isParent, children 필드 제거
+          const cleanTasks = parsedTasks.map(task => {
+            const { isParent, children, ...cleanTask } = task;
+            return cleanTask;
+          });
+          setTasks(cleanTasks);
+          console.log('✅ 저장된 태스크 데이터 로드:', cleanTasks.length + '개');
+        } else {
+          setTasks(initialTasks);
+        }
+      } catch (error) {
+        console.error('❌ 태스크 데이터 로드 실패:', error);
+        setTasks(initialTasks);
+      }
+    } else {
+      setTasks(initialTasks);
+    }
+  }, []);
+
+  // 태스크가 변경될 때마다 로컬 스토리지에 저장
+  useEffect(() => {
+    if (tasks.length > 0) {
+      localStorage.setItem('ganttChartTasks', JSON.stringify(tasks));
+      console.log('💾 태스크 데이터 저장:', tasks.length + '개');
+    }
+  }, [tasks]);
+
+  // 부모 태스크들의 진행률과 날짜를 자동 업데이트
+  const updateParentTasks = useCallback((taskList) => {
+    return taskList.map(task => {
+      if (isParentTask(task.id, taskList)) {
+        const calculatedProgress = calculateParentProgress(task, taskList);
+        const calculatedDates = calculateParentDates(task, taskList);
+        
+        return {
+          ...task,
+          progress: calculatedProgress,
+          startDate: calculatedDates.startDate,
+          endDate: calculatedDates.endDate
+        };
+      }
+      return task;
+    });
+  }, []);
+
+  // 계층 구조를 재계산하는 함수 (level만 계산)
+  const recalculateHierarchy = useCallback((taskList) => {
+    const taskMap = new Map(taskList.map(t => [t.id, t]));
+    
+    return taskList.map(task => {
+      let level = 0;
+      let currentParentId = task.parentId;
+      
+      // 부모를 따라 올라가면서 레벨 계산
+      while (currentParentId && level < 10) { // 무한루프 방지
+        const parent = taskMap.get(currentParentId);
+        if (!parent) break;
+        level++;
+        currentParentId = parent.parentId;
+      }
+      
+      return {
+        ...task,
+        level
+      };
+    });
+  }, []);
+
+  // 태스크 추가
+  const addTask = useCallback((taskData) => {
+    const errors = validateTask(taskData);
+    if (errors.length > 0) {
+      throw new Error(errors.join('\\n'));
+    }
+
+    const newTask = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      progress: 0,
+      dependencies: [],
+      priority: 'medium',
+      level: 0,
+      collapsed: false,
+      ...taskData,
+    };
+
+    setTasks(prevTasks => {
+      let updatedTasks = [...prevTasks, newTask];
+      
+      // 계층 구조 재계산 (레벨 업데이트)
+      updatedTasks = recalculateHierarchy(updatedTasks);
+      
+      // 부모 태스크들 업데이트
+      updatedTasks = updateParentTasks(updatedTasks);
+      
+      return updatedTasks;
+    });
+
+    return newTask;
+  }, [updateParentTasks, recalculateHierarchy]);
+
+  // 멀티 태스크 추가
+  const addMultipleTasks = useCallback((tasksData) => {
+    const addedTasks = [];
+    const errors = [];
+
+    // 각 태스크 데이터 검증
+    tasksData.forEach((taskData, index) => {
+      const taskErrors = validateTask(taskData);
+      if (taskErrors.length > 0) {
+        errors.push(`태스크 ${index + 1} (${taskData.name}): ${taskErrors.join(', ')}`);
+      }
+    });
+
+    if (errors.length > 0) {
+      throw new Error(errors.join('\\n'));
+    }
+
+    // 모든 태스크를 한 번에 추가
+    setTasks(prevTasks => {
+      const newTasks = tasksData.map((taskData, index) => {
+        const newTask = {
+          id: `task-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          progress: 0,
+          dependencies: [],
+          priority: 'medium',
+          level: 0,
+          collapsed: false,
+          ...taskData,
+        };
+        addedTasks.push(newTask);
+        return newTask;
+      });
+
+      let updatedTasks = [...prevTasks, ...newTasks];
+      
+      // 계층 구조 재계산 (레벨 업데이트)
+      updatedTasks = recalculateHierarchy(updatedTasks);
+      
+      // 부모 태스크들 업데이트
+      updatedTasks = updateParentTasks(updatedTasks);
+      
+      return updatedTasks;
+    });
+
+    return addedTasks;
+  }, [updateParentTasks, recalculateHierarchy]);
+
+  // 태스크 업데이트
+  const updateTask = useCallback((taskId, updates) => {
+    setTasks(prevTasks => {
+      // 원래 태스크 찾기
+      const originalTask = prevTasks.find(t => t.id === taskId);
+      if (!originalTask) return prevTasks;
+      
+      const updatedTask = { ...originalTask, ...updates };
+      const errors = validateTask(updatedTask);
+      if (errors.length > 0) {
+        throw new Error(errors.join('\\n'));
+      }
+      
+      let updatedTasks = prevTasks.map(task => 
+        task.id === taskId ? updatedTask : task
+      );
+      
+      // 계층 구조 재계산 (레벨 업데이트)
+      updatedTasks = recalculateHierarchy(updatedTasks);
+      
+      // 부모 태스크들 업데이트
+      updatedTasks = updateParentTasks(updatedTasks);
+      
+      return updatedTasks;
+    });
+  }, [updateParentTasks, recalculateHierarchy]);
+
+  // 태스크 삭제 (계층 구조 고려)
+  const deleteTask = useCallback((taskId) => {
+    setTasks(prevTasks => {
+      const taskToDelete = prevTasks.find(t => t.id === taskId);
+      if (!taskToDelete) return prevTasks;
+
+      let tasksToDelete = [taskId];
+
+      // 부모 태스크인 경우 모든 하위 테스크도 삭제
+      if (isParentTask(taskId, prevTasks)) {
+        const allChildrenIds = getAllChildrenIds(taskToDelete, prevTasks);
+        tasksToDelete = [...tasksToDelete, ...allChildrenIds];
+      }
+
+      // 삭제할 태스크들을 제외
+      let filteredTasks = prevTasks.filter(task => !tasksToDelete.includes(task.id));
+
+      // 삭제된 태스크들을 의존성에서 제거
+      filteredTasks = filteredTasks.map(task => ({
+        ...task,
+        dependencies: task.dependencies ? 
+          task.dependencies.filter(dep => !tasksToDelete.includes(dep)) : []
+      }));
+
+      // 계층 구조 재계산
+      filteredTasks = recalculateHierarchy(filteredTasks);
+      
+      // 부모 태스크들 업데이트
+      return updateParentTasks(filteredTasks);
+    });
+    
+    // 선택된 태스크가 삭제된 태스크면 선택 해제
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask(null);
+    }
+  }, [selectedTask, updateParentTasks, recalculateHierarchy]);
+
+  // 다중 태스크 삭제
+  const deleteMultipleTasks = useCallback((taskIds) => {
+    setTasks(prevTasks => {
+      let allTasksToDelete = [...taskIds];
+
+      // 각 태스크가 부모 태스크면 하위 테스크들도 삭제 목록에 추가
+      taskIds.forEach(taskId => {
+        if (isParentTask(taskId, prevTasks)) {
+          const task = prevTasks.find(t => t.id === taskId);
+          const childrenIds = getAllChildrenIds(task, prevTasks);
+          allTasksToDelete = [...allTasksToDelete, ...childrenIds];
+        }
+      });
+
+      // 중복 제거
+      allTasksToDelete = [...new Set(allTasksToDelete)];
+
+      const filteredTasks = prevTasks.filter(task => !allTasksToDelete.includes(task.id));
+      
+      // 의존성에서 삭제된 태스크들 제거
+      const updatedTasks = filteredTasks.map(task => ({
+        ...task,
+        dependencies: task.dependencies ? 
+          task.dependencies.filter(dep => !allTasksToDelete.includes(dep)) : []
+      }));
+
+      // 계층 구조 재계산
+      const hierarchyUpdated = recalculateHierarchy(updatedTasks);
+      
+      return updateParentTasks(hierarchyUpdated);
+    });
+    
+    // 선택된 태스크가 삭제된 태스크 중 하나면 선택 해제
+    if (selectedTask && taskIds.includes(selectedTask.id)) {
+      setSelectedTask(null);
+    }
+  }, [selectedTask, updateParentTasks, recalculateHierarchy]);
+
+  // 태스크 복제
+  const duplicateTask = useCallback((taskId) => {
+    const taskToDuplicate = tasks.find(task => task.id === taskId);
+    if (!taskToDuplicate) return null;
+
+    // 종료일에 1일을 더해서 새로운 시작일로 설정
+    const originalEndDate = new Date(taskToDuplicate.endDate);
+    const newStartDate = new Date(originalEndDate);
+    newStartDate.setDate(newStartDate.getDate() + 1);
+    
+    const duration = new Date(taskToDuplicate.endDate) - new Date(taskToDuplicate.startDate);
+    const newEndDate = new Date(newStartDate.getTime() + duration);
+
+    const duplicatedTask = {
+      ...taskToDuplicate,
+      id: `task-${Date.now()}`,
+      name: `${taskToDuplicate.name} (복사본)`,
+      startDate: newStartDate.toISOString().split('T')[0],
+      endDate: newEndDate.toISOString().split('T')[0],
+      progress: 0,
+      dependencies: [], // 복제된 태스크는 의존성을 제거
+      parentId: taskToDuplicate.parentId // 같은 부모 유지
+    };
+
+    setTasks(prevTasks => {
+      let updatedTasks = [...prevTasks, duplicatedTask];
+      
+      // 계층 구조 재계산
+      updatedTasks = recalculateHierarchy(updatedTasks);
+      
+      return updateParentTasks(updatedTasks);
+    });
+
+    return duplicatedTask;
+  }, [tasks, updateParentTasks, recalculateHierarchy]);
+
+  // 태스크 토글 (접기/펼치기)
+  const toggleTask = useCallback((taskId) => {
+    setTasks(prevTasks => toggleTaskCollapse(prevTasks, taskId));
+  }, []);
+
+  // 모든 태스크 삭제
+  const clearAllTasks = useCallback(() => {
+    setTasks([]);
+    setSelectedTask(null);
+    localStorage.removeItem('ganttChartTasks');
+  }, []);
+
+  // 태스크 데이터 전체 교체 (가져오기)
+  const setTasksData = useCallback((newTasks) => {
+    // 각 태스크 검증
+    const errors = [];
+    newTasks.forEach((task, index) => {
+      const taskErrors = validateTask(task);
+      if (taskErrors.length > 0) {
+        errors.push(`태스크 ${index + 1}: ${taskErrors.join(', ')}`);
+      }
+    });
+
+    if (errors.length > 0) {
+      throw new Error(errors.join('\\n'));
+    }
+
+    // 계층 구조 검증
+    const hierarchyErrors = validateTaskHierarchy(newTasks);
+    if (hierarchyErrors.length > 0) {
+      console.warn('계층 구조 경고:', hierarchyErrors);
+      // 경고만 표시하고 데이터는 로드
+    }
+
+    // 레거시 데이터 호환성을 위해 isParent, children 필드 제거
+    const cleanTasks = newTasks.map(task => {
+      const { isParent, children, ...cleanTask } = task;
+      return cleanTask;
+    });
+
+    // 계층 구조 재계산 후 데이터 설정
+    const hierarchyUpdatedTasks = recalculateHierarchy(cleanTasks);
+    const finalTasks = updateParentTasks(hierarchyUpdatedTasks);
+    
+    setTasks(finalTasks);
+    setSelectedTask(null);
+  }, [recalculateHierarchy, updateParentTasks]);
+
+  // 표시용 태스크 목록 (계층 구조 정렬 및 접힘 상태 고려)
+  const displayTasks = sortTasksHierarchically(tasks);
+
+  return {
+    tasks,
+    displayTasks, // 화면에 표시할 태스크 목록
+    selectedTask,
+    setSelectedTask,
+    addTask,
+    addMultipleTasks, // 멀티 태스크 추가 함수
+    updateTask,
+    deleteTask,
+    deleteMultipleTasks,
+    duplicateTask,
+    toggleTask, // 태스크 접기/펼치기
+    clearAllTasks,
+    setTasksData,
+    updateParentTasks // 부모 태스크 수동 업데이트용
+  };
+};

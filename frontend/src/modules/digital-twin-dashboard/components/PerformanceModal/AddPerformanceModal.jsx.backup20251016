@@ -1,0 +1,964 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, X, Target, List, Search, Filter } from 'lucide-react';
+
+const AddPerformanceModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  settingsData = {},
+  globalPerformances = [],
+  showSuccess,
+  showError
+}) => {
+  const [activeTab, setActiveTab] = useState('create'); // 'create' 또는 'list'
+  const [formData, setFormData] = useState({
+    대분류: '',
+    소분류: '',
+    성과항목: '',
+    현재수준: '',
+    목표수준: '',
+    실적수준: '',
+    단위: '',
+    설명: ''
+  });
+
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [availableSubcategories, setAvailableSubcategories] = useState([]);
+  
+  // 리스트 탭용 상태
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [subcategoryFilter, setSubcategoryFilter] = useState('');
+
+  // 설정 데이터에서 카테고리와 서브카테고리 목록 가져오기
+  const categories = settingsData.performanceCategories || [];
+  const subcategories = settingsData.performanceSubcategories || [];
+
+  useEffect(() => {
+    if (selectedCategory) {
+      const filteredSubs = subcategories.filter(sub => sub.categoryId === selectedCategory);
+      setAvailableSubcategories(filteredSubs);
+    } else {
+      setAvailableSubcategories([]);
+    }
+  }, [selectedCategory, subcategories]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // 모달이 열릴 때 폼 초기화
+      setFormData({
+        대분류: '',
+        소분류: '',
+        성과항목: '',
+        현재수준: '',
+        목표수준: '',
+        실적수준: '',
+        단위: '',
+        설명: ''
+      });
+      setSelectedCategory('');
+      setActiveTab('create');
+      setSearchTerm('');
+      setCategoryFilter('');
+      setSubcategoryFilter('');
+    }
+  }, [isOpen]);
+
+  const handleCategoryChange = (categoryId) => {
+    setSelectedCategory(categoryId);
+    const category = categories.find(cat => cat.id === categoryId);
+    setFormData(prev => ({
+      ...prev,
+      대분류: category ? category.name : '',
+      소분류: '' // 대분류 변경 시 소분류 초기화
+    }));
+  };
+
+  const handleSubcategoryChange = (subcategoryId) => {
+    const subcategory = subcategories.find(sub => sub.id === subcategoryId);
+    setFormData(prev => ({
+      ...prev,
+      소분류: subcategory ? subcategory.name : ''
+    }));
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // 필수 필드 검증
+    if (!formData.성과항목.trim()) {
+      showError('성과 항목명을 입력해주세요.');
+      return;
+    }
+
+    if (!formData.대분류) {
+      showError('대분류를 선택해주세요.');
+      return;
+    }
+
+    if (!formData.소분류) {
+      showError('소분류를 선택해주세요.');
+      return;
+    }
+
+    // 새로운 성과 데이터 생성 (독립적인 성과 항목)
+    const newPerformance = {
+      ...formData,
+      id: `global_perf_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      isActive: true
+    };
+
+    try {
+      onSubmit(newPerformance);
+      showSuccess('새 성과 항목이 성공적으로 생성되었습니다. 이제 각 과제에서 이 성과를 선택할 수 있습니다.');
+      onClose();
+    } catch (error) {
+      showError('성과 생성 중 오류가 발생했습니다: ' + error.message);
+    }
+  };
+
+  const handleClose = () => {
+    // 변경사항이 있는지 확인
+    const hasChanges = Object.values(formData).some(value => value.trim() !== '');
+    
+    if (hasChanges && activeTab === 'create') {
+      if (window.confirm('작성 중인 내용이 있습니다. 정말 닫으시겠습니까?')) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  // 성과 목록 필터링
+  const getFilteredPerformances = () => {
+    let filtered = globalPerformances;
+
+    // 검색어 필터링
+    if (searchTerm) {
+      filtered = filtered.filter(perf => 
+        perf.성과항목.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        perf.대분류.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        perf.소분류.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (perf.설명 && perf.설명.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+
+    // 대분류 필터링
+    if (categoryFilter) {
+      filtered = filtered.filter(perf => perf.대분류 === categoryFilter);
+    }
+
+    // 소분류 필터링
+    if (subcategoryFilter) {
+      filtered = filtered.filter(perf => perf.소분류 === subcategoryFilter);
+    }
+
+    return filtered;
+  };
+
+  const renderCreateTab = () => (
+    <form onSubmit={handleSubmit} className="tab-content">
+      <div className="form-section">
+        <h3>기본 정보</h3>
+        
+        <div className="form-row">
+          <label>성과 항목명 <span className="required">*</span></label>
+          <input
+            type="text"
+            value={formData.성과항목}
+            onChange={(e) => handleInputChange('성과항목', e.target.value)}
+            placeholder="예: 시뮬레이션 정확도 개선, 처리 속도 향상 등"
+            className="form-input"
+            required
+          />
+        </div>
+
+        <div className="form-row">
+          <label>대분류 <span className="required">*</span></label>
+          <div className="select-wrapper">
+            <select
+              value={selectedCategory}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              className="form-select"
+              required
+            >
+              <option value="">대분류를 선택하세요</option>
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="form-row">
+          <label>소분류 <span className="required">*</span></label>
+          <div className="select-wrapper">
+            <select
+              value={availableSubcategories.find(sub => sub.name === formData.소분류)?.id || ''}
+              onChange={(e) => handleSubcategoryChange(e.target.value)}
+              className="form-select"
+              disabled={!selectedCategory}
+              required
+            >
+              <option value="">소분류를 선택하세요</option>
+              {availableSubcategories.map(subcategory => (
+                <option key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="form-row">
+          <label>단위</label>
+          <input
+            type="text"
+            value={formData.단위}
+            onChange={(e) => handleInputChange('단위', e.target.value)}
+            placeholder="예: %, 건, 시간, 억원, ppm, 배"
+            className="form-input"
+          />
+          <div className="help-text">
+            성과 측정에 사용될 단위를 입력하세요. 나중에 각 과제에서 구체적인 수치를 설정할 수 있습니다.
+          </div>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h3>기본 성과 수준 (선택사항)</h3>
+        <div className="section-description">
+          기본값을 설정하면 각 과제에서 이 성과를 선택할 때 참고값으로 사용됩니다.
+        </div>
+        
+        <div className="form-grid">
+          <div className="form-row">
+            <label>일반적 현재 수준</label>
+            <input
+              type="text"
+              value={formData.현재수준}
+              onChange={(e) => handleInputChange('현재수준', e.target.value)}
+              placeholder="일반적인 현재 수준"
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-row">
+            <label>권장 목표 수준</label>
+            <input
+              type="text"
+              value={formData.목표수준}
+              onChange={(e) => handleInputChange('목표수준', e.target.value)}
+              placeholder="권장 목표 수준"
+              className="form-input"
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <label>일반적 실적 수준</label>
+          <input
+            type="text"
+            value={formData.실적수준}
+            onChange={(e) => handleInputChange('실적수준', e.target.value)}
+            placeholder="일반적인 실적 수준 (선택사항)"
+            className="form-input"
+          />
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h3>성과 설명</h3>
+        
+        <div className="form-row">
+          <label>상세 설명</label>
+          <textarea
+            value={formData.설명}
+            onChange={(e) => handleInputChange('설명', e.target.value)}
+            placeholder="이 성과 항목에 대한 상세 설명을 입력하세요. 측정 방법, 중요도, 활용 목적 등을 포함할 수 있습니다."
+            className="form-textarea"
+            rows={4}
+          />
+        </div>
+      </div>
+
+      <div className="modal-footer">
+        <button
+          type="button"
+          onClick={handleClose}
+          className="cancel-btn"
+        >
+          취소
+        </button>
+        <button
+          type="submit"
+          className="submit-btn"
+        >
+          <Plus size={16} />
+          성과 항목 생성
+        </button>
+      </div>
+    </form>
+  );
+
+  const renderListTab = () => (
+    <div className="tab-content">
+      <div className="list-header">
+        <h3>등록된 성과 항목 ({getFilteredPerformances().length}개)</h3>
+        <div className="info-text">
+          <span className="sample-badge">샘플</span> 표시는 시스템에 미리 정의된 성과 항목입니다.
+        </div>
+        
+        {/* 검색 및 필터 */}
+        <div className="filters-section">
+          <div className="search-box">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              placeholder="성과 항목명, 분류명으로 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+          </div>
+          
+          <div className="filter-row">
+            <select
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setSubcategoryFilter(''); // 대분류 변경 시 소분류 초기화
+              }}
+              className="filter-select"
+            >
+              <option value="">전체 대분류</option>
+              {categories.map(category => (
+                <option key={category.id} value={category.name}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            
+            <select
+              value={subcategoryFilter}
+              onChange={(e) => setSubcategoryFilter(e.target.value)}
+              className="filter-select"
+              disabled={!categoryFilter}
+            >
+              <option value="">전체 소분류</option>
+              {subcategories
+                .filter(sub => {
+                  const category = categories.find(cat => cat.name === categoryFilter);
+                  return category ? sub.categoryId === category.id : false;
+                })
+                .map(subcategory => (
+                  <option key={subcategory.id} value={subcategory.name}>
+                    {subcategory.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="performance-list">
+        {getFilteredPerformances().length === 0 ? (
+          <div className="empty-state">
+            {globalPerformances.length === 0 ? (
+              <p>등록된 성과 항목이 없습니다. 새 성과를 생성해보세요!</p>
+            ) : (
+              <p>검색 조건에 맞는 성과 항목이 없습니다.</p>
+            )}
+          </div>
+        ) : (
+          getFilteredPerformances().map((performance, index) => (
+            <div key={performance.id || index} className={`performance-card ${performance.isFromSample ? 'sample-item' : ''}`}>
+              <div className="card-header">
+                <div className="performance-title">
+                  {performance.성과항목}
+                  {performance.isFromSample && <span className="sample-badge">샘플</span>}
+                </div>
+                <div className="performance-category">
+                  {performance.대분류} › {performance.소분류}
+                </div>
+              </div>
+              
+              <div className="card-content">
+                {performance.단위 && (
+                  <div className="performance-detail">
+                    <span className="label">단위:</span> {performance.단위}
+                  </div>
+                )}
+                
+                {(performance.현재수준 || performance.목표수준 || performance.실적수준) && (
+                  <div className="performance-levels">
+                    {performance.현재수준 && (
+                      <span className="level-item">
+                        현재: {performance.현재수준} {performance.단위}
+                      </span>
+                    )}
+                    {performance.목표수준 && (
+                      <span className="level-item">
+                        목표: {performance.목표수준} {performance.단위}
+                      </span>
+                    )}
+                    {performance.실적수준 && (
+                      <span className="level-item">
+                        실적: {performance.실적수준} {performance.단위}
+                      </span>
+                    )}
+                  </div>
+                )}
+                
+                {performance.설명 && (
+                  <div className="performance-description">
+                    {performance.설명}
+                  </div>
+                )}
+                
+                <div className="performance-meta">
+                  생성일: {new Date(performance.createdAt).toLocaleDateString('ko-KR')}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="modal-footer">
+        <button
+          type="button"
+          onClick={handleClose}
+          className="cancel-btn"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  );
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="modal-overlay"
+        onClick={(e) => e.target === e.currentTarget && handleClose()}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          transition={{ type: "spring", damping: 20 }}
+          className="performance-modal"
+        >
+          <div className="modal-header">
+            <div className="header-left">
+              <Target className="modal-icon" size={24} />
+              <h2>성과 항목 관리</h2>
+            </div>
+            <button onClick={handleClose} className="close-btn">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="modal-info">
+            <p>
+              📋 <strong>성과 항목을 생성하고 관리합니다.</strong> 생성된 성과 항목은 각 과제에서 선택하여 사용할 수 있습니다.
+            </p>
+          </div>
+
+          {/* 탭 네비게이션 */}
+          <div className="tab-navigation">
+            <button
+              className={`tab-btn ${activeTab === 'create' ? 'active' : ''}`}
+              onClick={() => setActiveTab('create')}
+            >
+              <Plus size={16} />
+              새 성과 생성
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'list' ? 'active' : ''}`}
+              onClick={() => setActiveTab('list')}
+            >
+              <List size={16} />
+              성과 목록 ({globalPerformances.length})
+            </button>
+          </div>
+
+          {/* 탭 컨텐츠 */}
+          <div className="modal-content">
+            {activeTab === 'create' ? renderCreateTab() : renderListTab()}
+          </div>
+        </motion.div>
+      </motion.div>
+
+      <style jsx>{`
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 2rem;
+        }
+
+        .performance-modal {
+          background: white;
+          border-radius: 0.75rem;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+          width: 100%;
+          max-width: 1050px;
+          max-height: 90vh;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1.5rem;
+          border-bottom: 1px solid #e5e7eb;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+        }
+
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .modal-icon {
+          color: #fbbf24;
+        }
+
+        .modal-header h2 {
+          margin: 0;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+
+        .close-btn {
+          background: none;
+          border: none;
+          color: white;
+          cursor: pointer;
+          padding: 0.5rem;
+          border-radius: 0.375rem;
+          transition: all 0.2s ease;
+        }
+
+        .close-btn:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-info {
+          padding: 1rem 1.5rem;
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-bottom: 1px solid #f59e0b;
+        }
+
+        .modal-info p {
+          margin: 0;
+          font-size: 0.875rem;
+          color: #92400e;
+        }
+
+        .tab-navigation {
+          display: flex;
+          border-bottom: 1px solid #e5e7eb;
+          background: #f9fafb;
+        }
+
+        .tab-btn {
+          flex: 1;
+          padding: 1rem 1.5rem;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+          color: #6b7280;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+
+        .tab-btn:hover {
+          background: #f3f4f6;
+          color: #374151;
+        }
+
+        .tab-btn.active {
+          background: white;
+          color: #f59e0b;
+          border-bottom: 2px solid #f59e0b;
+        }
+
+        .modal-content {
+          overflow-y: auto;
+          flex: 1;
+          max-height: calc(90vh - 280px);
+        }
+
+        .tab-content {
+          padding: 1.5rem;
+        }
+
+        .form-section {
+          margin-bottom: 1.5rem;
+        }
+
+        .form-section h3 {
+          margin: 0 0 1rem 0;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #374151;
+          border-bottom: 2px solid #e5e7eb;
+          padding-bottom: 0.5rem;
+        }
+
+        .section-description {
+          margin-bottom: 1rem;
+          font-size: 0.875rem;
+          color: #6b7280;
+          font-style: italic;
+        }
+
+        .form-row {
+          margin-bottom: 1rem;
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+
+        .form-row label {
+          display: block;
+          margin-bottom: 0.5rem;
+          font-weight: 500;
+          color: #374151;
+          font-size: 0.875rem;
+        }
+
+        .required {
+          color: #ef4444;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          transition: all 0.2s ease;
+          box-sizing: border-box;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+          outline: none;
+          border-color: #f59e0b;
+          box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+        }
+
+        .form-select:disabled {
+          background-color: #f9fafb;
+          color: #9ca3af;
+          cursor: not-allowed;
+        }
+
+        .form-textarea {
+          resize: vertical;
+          min-height: 100px;
+        }
+
+        .select-wrapper {
+          position: relative;
+        }
+
+        .help-text {
+          margin-top: 0.5rem;
+          font-size: 0.75rem;
+          color: #6b7280;
+          font-style: italic;
+        }
+
+        .list-header {
+          margin-bottom: 1.5rem;
+        }
+
+        .list-header h3 {
+          margin: 0 0 0.5rem 0;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .info-text {
+          margin-bottom: 1rem;
+          font-size: 0.875rem;
+          color: #6b7280;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .filters-section {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .search-box {
+          position: relative;
+          flex: 1;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: 0.75rem;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #9ca3af;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          box-sizing: border-box;
+        }
+
+        .search-input:focus {
+          outline: none;
+          border-color: #f59e0b;
+          box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+        }
+
+        .filter-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.75rem;
+        }
+
+        .filter-select {
+          padding: 0.5rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          background: white;
+        }
+
+        .filter-select:disabled {
+          background: #f9fafb;
+          color: #9ca3af;
+        }
+
+        .performance-list {
+          display: grid;
+          gap: 1rem;
+          max-height: 400px;
+          overflow-y: auto;
+        }
+
+        .sample-item {
+          border-left: 4px solid #f59e0b;
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 10%, white 10%);
+        }
+
+        .sample-badge {
+          display: inline-block;
+          background: #f59e0b;
+          color: white;
+          font-size: 0.75rem;
+          padding: 0.125rem 0.375rem;
+          border-radius: 0.25rem;
+          margin-left: 0.5rem;
+          font-weight: 500;
+        }
+
+        .performance-card {
+          border: 1px solid #e5e7eb;
+          border-radius: 0.5rem;
+          padding: 1rem;
+          background: white;
+          transition: all 0.2s ease;
+        }
+
+        .performance-card:hover {
+          border-color: #f59e0b;
+          box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1);
+        }
+
+        .card-header {
+          margin-bottom: 0.75rem;
+        }
+
+        .performance-title {
+          font-weight: 600;
+          color: #374151;
+          font-size: 1rem;
+          margin-bottom: 0.25rem;
+        }
+
+        .performance-category {
+          color: #f59e0b;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+
+        .card-content {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .performance-detail {
+          font-size: 0.875rem;
+          color: #6b7280;
+        }
+
+        .label {
+          font-weight: 500;
+          color: #374151;
+        }
+
+        .performance-levels {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          font-size: 0.875rem;
+        }
+
+        .level-item {
+          background: #f3f4f6;
+          padding: 0.25rem 0.5rem;
+          border-radius: 0.25rem;
+          color: #4b5563;
+        }
+
+        .performance-description {
+          font-size: 0.875rem;
+          color: #6b7280;
+          line-height: 1.4;
+          padding: 0.5rem;
+          background: #f9fafb;
+          border-radius: 0.25rem;
+          border-left: 3px solid #f59e0b;
+        }
+
+        .performance-meta {
+          font-size: 0.75rem;
+          color: #9ca3af;
+          padding-top: 0.5rem;
+          border-top: 1px solid #f3f4f6;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 2rem;
+          color: #6b7280;
+          font-style: italic;
+        }
+
+        .modal-footer {
+          display: flex;
+          gap: 0.75rem;
+          justify-content: flex-end;
+          padding: 1.5rem;
+          border-top: 1px solid #e5e7eb;
+          background: #f9fafb;
+        }
+
+        .cancel-btn,
+        .submit-btn {
+          padding: 0.75rem 1.5rem;
+          border-radius: 0.375rem;
+          font-weight: 500;
+          font-size: 0.875rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .cancel-btn {
+          background: white;
+          color: #6b7280;
+          border: 1px solid #d1d5db;
+        }
+
+        .cancel-btn:hover {
+          background: #f9fafb;
+          border-color: #9ca3af;
+        }
+
+        .submit-btn {
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+          border: none;
+        }
+
+        .submit-btn:hover {
+          background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+
+        .submit-btn:active {
+          transform: translateY(0);
+        }
+
+        @media (max-width: 768px) {
+          .performance-modal {
+            max-width: 95vw;
+            margin: 1rem;
+          }
+          
+          .form-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .filter-row {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </AnimatePresence>
+  );
+};
+
+export default AddPerformanceModal;

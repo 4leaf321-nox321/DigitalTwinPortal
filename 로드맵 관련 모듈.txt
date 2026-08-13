@@ -1,0 +1,253 @@
+import React, { useMemo, useState } from "react";
+import { Chrono } from "react-chrono";
+
+/**
+ * 디지털 트윈 전략 로드맵 — 3가지 보기 제공
+ * 1) 카드형 타임라인 (react-chrono)
+ * 2) 경영진 보고용 (One‑pager 스타일)
+ * 3) 실행계획/과제관리용 (간단 Gantt)
+ */
+
+/****************************
+ * 1) 카드형 타임라인 데이터
+ ****************************/ 
+const items = [
+  { title: "2025 Q1", cardTitle: "사무국 출범 & 용어 정리", cardSubtitle: "DT 정의·범주 합의, 거버넌스 설계", cardDetailedText: "전사 DT 정의(제품/공정/시스템/서비스)와 단계(Level) 합의. 의사결정 프로세스와 R&R, 예산 흐름 정립. 지식그래프 기반 용어집(PLM/MES/CAE/IoT/AI/OPC UA 등) 공개." },
+  { title: "2025 Q2", cardTitle: "우선 과제 선정 & PoC 설계", cardSubtitle: "Use Case 맵핑, KPI 정의", cardDetailedText: "사업부별 현안 수집 후 ROI/리드타임/품질/에너지 기준으로 우선순위 선정. 각 PoC의 KPI(불량률↓, 리드타임↓, 예지정비 정확도↑ 등)와 데이터 요구사항 정의." },
+  { title: "2025 Q3", cardTitle: "데이터 파이프라인 & 인터페이스", cardSubtitle: "Digital Thread 초석", cardDetailedText: "CAD/CAE/PLM/MES/ERP 간 API·데이터 포맷 정합(CSV/JSON/FMU/OPC UA). 데이터 거버넌스·보안·접근권한 설계. 파일럿 라인에 센서/이벤트 수집 파이프라인 구축." },
+  { title: "2025 Q4", cardTitle: "PoC 결과 검증 & 확산 결정", cardSubtitle: "경영 보고", cardDetailedText: "PoC 성과를 PowerBI 대시보드로 시각화. KPI 달성/미달성 원인 분석, 운영/투자 판단을 위한 의사결정 패키지 정리." },
+  { title: "2026 H1", cardTitle: "사업부 확산 1단계", cardSubtitle: "설비/공정 중심", cardDetailedText: "예지정비/공정 최적화 시나리오를 중심으로 2~3개 공장·라인 확산. 공통 템플릿(데이터 스키마/대시보드/모델 배포)을 표준화." },
+  { title: "2026 H2", cardTitle: "제품/서비스 DT 연계", cardSubtitle: "E2E 가치사슬", cardDetailedText: "제품 설계-제조-AS/서비스까지 DT 파이프라인 연결. 클로즈드 루프(현장 데이터 → 설계 피드백) 정착." },
+  { title: "2027 H1", cardTitle: "최적화·자율화 고도화", cardSubtitle: "시뮬레이션+AI 결합", cardDetailedText: "CAE 기반 메타모델/서로게이트로 탐색·최적화를 자동화. 다목표 최적화, 온라인 파라미터 튜닝 도입." },
+  { title: "2027 H2", cardTitle: "전사 운영모델 정착", cardSubtitle: "조직·프로세스 내재화", cardDetailedText: "DT 운영지표를 경영 성과 체계에 편입. 중복투자 방지, 공용데이터 자산화, 벤더/학계와의 오픈이노베이션 상시화." }
+];
+
+function CardTimelineView() {
+  return (
+    <div className="w-full">
+      <h2 className="text-2xl font-bold mb-2">카드형 타임라인</h2>
+      <p className="text-gray-600 mb-4">react-chrono 기반 · 마일스톤 스토리텔링에 적합</p>
+      <Chrono
+        items={items}
+        mode="HORIZONTAL"
+        cardHeight={190}
+        slideShow
+        allowDynamicUpdate
+        useReadMore
+        theme={{ primary: "#0ea5e9", secondary: "#0284c7", titleColor: "#0f172a", cardBgColor: "#ffffff" }}
+        toolbarPosition="top"
+      />
+    </div>
+  );
+}
+
+/****************************************
+ * 2) 경영진 보고용 — One‑Pager 스타일
+ ****************************************/ 
+function ExecutiveOnePager() {
+  // 하이레벨 KPI/테마/마일스톤 카드 데이터 (샘플)
+  const metrics = [
+    { label: "리드타임 절감", value: "-30%", note: "설계→검증" },
+    { label: "품질 불량률", value: "-25%", note: "공정 수율" },
+    { label: "OEE 향상", value: "+8%p", note: "설비 가동" },
+    { label: "ROI", value: "18개월", note: "Payback" },
+  ];
+
+  const pillars = [
+    { title: "① 표준·거버넌스", bullets: ["DT 정의/범주 합의", "R&R·의사결정 체계", "보안·데이터 거버넌스"] },
+    { title: "② 데이터/스레드", bullets: ["CAD/CAE/PLM/MES 연계", "OPC UA·FMU 표준", "데이터 카탈로그"] },
+    { title: "③ PoC→확산", bullets: ["ROI 높은 Use Case 선별", "PoC KPI 검증", "템플릿 기반 확산"] },
+    { title: "④ 운영 내재화", bullets: ["KPI 대시보드 상시화", "운영 프로세스 편입", "오픈이노베이션"] },
+  ];
+
+  const milestones = [
+    { when: "2025 Q2", what: "PoC 선정·착수" },
+    { when: "2025 Q4", what: "PoC 검증·의사결정" },
+    { when: "2026 H1", what: "우선 라인 확산" },
+    { when: "2026 H2", what: "제품/서비스 연계" },
+    { when: "2027 H1", what: "자율 최적화 파일럿" },
+  ];
+
+  return (
+    <div className="w-full">
+      <h2 className="text-2xl font-bold mb-2">경영진 보고용 (One‑Pager)</h2>
+      <p className="text-gray-600 mb-6">핵심 KPI · 전략 기둥 · 분기별 큰 마일스톤만 간결하게</p>
+
+      {/* KPI 스트립 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {metrics.map((m) => (
+          <div key={m.label} className="bg-white rounded-2xl shadow p-4">
+            <div className="text-sm text-gray-500">{m.label}</div>
+            <div className="text-2xl font-bold leading-tight">{m.value}</div>
+            <div className="text-xs text-gray-500">{m.note}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 전략 Pillars */}
+      <div className="grid md:grid-cols-4 gap-4 mb-6">
+        {pillars.map((p) => (
+          <div key={p.title} className="bg-white rounded-2xl shadow p-5">
+            <div className="text-base font-semibold mb-2">{p.title}</div>
+            <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+              {p.bullets.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {/* 큰 마일스톤 타임라인 (간단 표시) */}
+      <div className="bg-white rounded-2xl shadow p-5">
+        <div className="flex flex-wrap items-center gap-4">
+          {milestones.map((m, idx) => (
+            <div key={m.when} className="flex items-center">
+              <div className="text-sm font-semibold mr-2 text-sky-700">{m.when}</div>
+              <div className="text-sm text-gray-800">{m.what}</div>
+              {idx < milestones.length - 1 && <div className="mx-3 w-8 h-[2px] bg-gray-200" />}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/*******************************************
+ * 3) 실행계획/과제 관리용 — 간단 Gantt
+ *******************************************/
+function daysBetween(a, b) {
+  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function ExecutionPlanGantt() {
+  // 샘플 태스크
+  const tasks = [
+    { id: "T1", name: "요건/범위 정리", owner: "사무국", start: "2025-02-01", end: "2025-03-15", deps: [] },
+    { id: "T2", name: "데이터 연결 설계", owner: "IT/PLM", start: "2025-03-01", end: "2025-05-15", deps: ["T1"] },
+    { id: "T3", name: "센서/수집 파이프라인", owner: "제조기술", start: "2025-04-01", end: "2025-06-30", deps: ["T1"] },
+    { id: "T4", name: "PoC 모델 개발", owner: "CAE/AI", start: "2025-05-01", end: "2025-08-31", deps: ["T2","T3"] },
+    { id: "T5", name: "PoC 검증·보고", owner: "사무국", start: "2025-09-01", end: "2025-10-15", deps: ["T4"] },
+  ];
+
+  const minStart = useMemo(() => new Date("2025-02-01"), []);
+  const maxEnd = useMemo(() => new Date("2025-10-31"), []);
+  const totalDays = daysBetween(minStart, maxEnd) + 1;
+
+  // 픽셀 스케일 (반응형)
+  const usableWidth = 1000; // 캔버스 가로 기준
+  const pxPerDay = usableWidth / totalDays;
+  const rowH = 36;
+
+  const today = new Date();
+  const showToday = today >= minStart && today <= maxEnd;
+
+  return (
+    <div className="w-full">
+      <h2 className="text-2xl font-bold mb-2">실행계획/과제 관리용 (간단 Gantt)</h2>
+      <p className="text-gray-600 mb-4">드래그 편집은 없지만, 기간·의존관계·담당 표시로 운영 회의에 충분</p>
+
+      <div className="overflow-auto bg-white rounded-2xl shadow">
+        <div className="min-w-[1100px]">
+          {/* 헤더: 날짜 눈금 (월 단위) */}
+          <div className="px-4 py-2 border-b bg-gray-50 text-sm text-gray-700 flex items-center">
+            <div className="w-56 font-semibold">과제</div>
+            <div className="flex-1 relative h-6">
+              {/* 월 블럭 */}
+              {Array.from({ length: 10 }, (_, i) => {
+                const d = new Date(minStart);
+                d.setMonth(d.getMonth() + i);
+                const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+                const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+                const left = Math.max(0, daysBetween(minStart, monthStart)) * pxPerDay;
+                const width = (daysBetween(monthStart, monthEnd) + 1) * pxPerDay;
+                return (
+                  <div key={i} className="absolute top-0 h-6 border-l border-gray-200" style={{ left, width }}>
+                    <div className="text-[11px] px-1 whitespace-nowrap">
+                      {d.getFullYear()}-{String(d.getMonth() + 1).padStart(2, "0")}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Today 라인 */}
+              {showToday && (
+                <div className="absolute top-0 bottom-0 w-[2px] bg-sky-500/70" style={{ left: daysBetween(minStart, today) * pxPerDay }} />
+              )}
+            </div>
+          </div>
+
+          {/* 바디: 태스크 행 */}
+          {tasks.map((t, idx) => {
+            const s = new Date(t.start);
+            const e = new Date(t.end);
+            const left = Math.max(0, daysBetween(minStart, s)) * pxPerDay;
+            const width = Math.max(6, (daysBetween(s, e) + 1) * pxPerDay);
+            return (
+              <div key={t.id} className="flex items-center border-b last:border-b-0">
+                <div className="w-56 px-4 py-2 text-sm">
+                  <div className="font-medium">{t.name}</div>
+                  <div className="text-gray-500">{t.owner}</div>
+                </div>
+                <div className="flex-1 relative h-[${rowH}px]">
+                  <div className="absolute top-1 h-7 rounded-md shadow" style={{ left, width, background: "#e0f2fe" }} />
+                  {/* 의존선 간단 표기 (끝점 점) */}
+                  {t.deps?.map((dep) => {
+                    const from = tasks.find((x) => x.id === dep);
+                    if (!from) return null;
+                    const fx = Math.max(0, daysBetween(minStart, new Date(from.end))) * pxPerDay;
+                    const tx = left;
+                    const y = 26 + idx * rowH;
+                    return (
+                      <svg key={dep} className="absolute inset-0 pointer-events-none" width={usableWidth} height={(tasks.length + 1) * rowH}>
+                        <circle cx={fx} cy={y} r={3} fill="#94a3b8" />
+                        <line x1={fx} y1={y} x2={tx} y2={y} stroke="#94a3b8" strokeDasharray="4 2" />
+                      </svg>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3 text-xs text-gray-500">* 필요 시 dhtmlx-gantt 같은 전문 컴포넌트로 교체하면 드래그 편집·자원배분까지 확장 가능합니다.</div>
+    </div>
+  );
+}
+
+/***********************
+ * 메인: 보기 전환 탭
+ ***********************/
+export default function DTRoadmapShowcase() {
+  const [tab, setTab] = useState("card");
+  return (
+    <div className="w-full min-h-screen bg-gray-50 py-10">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold mb-2">디지털 트윈 전략 로드맵 — 뷰 선택</h1>
+        <p className="text-gray-600 mb-6">카드형 타임라인 / 경영진 보고용 / 실행계획 Gantt</p>
+
+        <div className="flex gap-2 mb-6">
+          {[
+            { k: "card", t: "카드형 타임라인" },
+            { k: "exec", t: "경영진 보고용" },
+            { k: "gantt", t: "실행계획(Gantt)" },
+          ].map((b) => (
+            <button
+              key={b.k}
+              onClick={() => setTab(b.k)}
+              className={`px-4 py-2 rounded-2xl shadow text-sm ${tab === b.k ? "bg-sky-600 text-white" : "bg-white text-gray-800"}`}
+            >
+              {b.t}
+            </button>
+          ))}
+        </div>
+
+        {tab === "card" && <CardTimelineView />}
+        {tab === "exec" && <ExecutiveOnePager />}
+        {tab === "gantt" && <ExecutionPlanGantt />}
+      </div>
+    </div>
+  );
+}

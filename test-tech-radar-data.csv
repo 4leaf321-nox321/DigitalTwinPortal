@@ -1,0 +1,7 @@
+ID,Name,Description,Sector,Ring,Is New,Category,Tags,Website
+test_1,React,Modern JavaScript library for building user interfaces,visualization-collaboration,adopt,false,Frontend,javascript;library;ui,https://reactjs.org
+test_2,Vue.js,Progressive JavaScript framework,visualization-collaboration,trial,false,Frontend,javascript;framework;progressive,https://vuejs.org
+test_3,Angular,Platform for building mobile and desktop web applications,visualization-collaboration,assess,false,Frontend,typescript;framework;enterprise,https://angular.io
+test_4,Svelte,Cybernetically enhanced web apps,visualization-collaboration,assess,true,Frontend,javascript;compiler;performance,https://svelte.dev
+test_5,TensorFlow,Open source machine learning framework,ai-ml-simulation,adopt,false,AI/ML,python;machine-learning;neural-networks,https://tensorflow.org
+test_6,PyTorch,Deep learning framework,ai-ml-simulation,trial,false,AI/ML,python;deep-learning;research,https://pytorch.org

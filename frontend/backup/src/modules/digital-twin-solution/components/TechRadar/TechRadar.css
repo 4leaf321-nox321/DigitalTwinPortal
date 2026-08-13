@@ -1,0 +1,413 @@
+.tech-radar-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  overflow: visible; /* 영역 밖으로 나가는 콘텐츠 표시 */
+  padding: 10px; /* 여백 추가 */
+}
+
+.tech-radar-svg {
+  flex: 1;
+  max-width: 100%;
+  max-height: 100%;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+/* 섹터 배경 */
+.sector-background {
+  transition: all 0.3s ease;
+}
+
+.sector-background:hover {
+  fill-opacity: 0.15;
+  stroke-opacity: 0.5;
+}
+
+/* 레이더 링 */
+.radar-ring {
+  transition: all 0.3s ease;
+}
+
+.radar-ring:hover {
+  stroke-opacity: 0.6;
+  stroke-width: 3;
+}
+
+/* 섹터 구분선 */
+.sector-line {
+  transition: all 0.3s ease;
+}
+
+/* 기술 포인트 */
+.technology-point {
+  cursor: pointer;
+}
+
+.tech-point {
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.tech-point:hover {
+  r: 8;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+
+.tech-point.selected {
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.3));
+  animation: pulse 2s infinite;
+}
+
+.tech-point.not-adopted {
+  stroke-dasharray: 3 3;
+  stroke-width: 3;
+  opacity: 0.7;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    r: 10;
+  }
+  50% {
+    r: 12;
+  }
+}
+
+/* 기술 라벨 */
+.tech-label {
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s ease;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+.tech-label.selected {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+}
+
+.technology-point:hover .tech-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #1f2937;
+}
+
+/* 도입 상태 표시 */
+.adoption-status {
+  font-family: 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* 섹터 라벨 */
+.sector-labels {
+  z-index: 1000;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.sector-label-background {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: all 0.3s ease;
+}
+
+.sector-label {
+  font-family: 'Inter', sans-serif;
+  text-shadow: 
+    0 0 8px rgba(255, 255, 255, 1),
+    0 0 4px rgba(255, 255, 255, 0.9),
+    0 2px 4px rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(255, 255, 255, 0.8),
+    1px 1px 3px rgba(0, 0, 0, 0.3),
+    -1px -1px 3px rgba(255, 255, 255, 0.8),
+    2px 2px 4px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  position: relative;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.8);
+  stroke-width: 0.5px;
+}
+
+/* 링 라벨 */
+.ring-label {
+  font-family: 'Inter', sans-serif;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+/* 중심 포인트 */
+.center-point {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+/* 선택 링 애니메이션 */
+.selection-ring {
+  animation: selectionPulse 2s infinite;
+}
+
+@keyframes selectionPulse {
+  0%, 100% {
+    stroke-opacity: 0.8;
+    r: 15;
+  }
+  50% {
+    stroke-opacity: 0.3;
+    r: 25;
+  }
+}
+
+/* 범례 */
+.radar-legend {
+  position: relative; /* absolute에서 relative로 변경 */
+  margin-top: 20px; /* 상단 여백 추가 */
+  display: flex;
+  gap: 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-width: 100%;
+  overflow-x: auto;
+  justify-content: center; /* 중앙 정렬 */
+}
+
+.legend-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.legend-section h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1024px) {
+  .radar-legend {
+    margin-top: 16px;
+    justify-content: center;
+    max-width: 100%;
+  }
+  
+  .legend-section {
+    min-width: 100px;
+  }
+  
+  .legend-section h4 {
+    font-size: 0.8rem;
+  }
+  
+  .legend-item {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .tech-radar-container {
+    padding: 12px;
+  }
+  
+  .radar-legend {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
+    margin-top: 12px;
+  }
+  
+  .legend-section {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+    min-width: auto;
+  }
+  
+  .legend-section h4 {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  
+  .tech-label {
+    font-size: 9px !important;
+  }
+  
+  .sector-label {
+    font-size: 12px !important;
+    text-shadow: 
+      0 0 6px rgba(255, 255, 255, 1),
+      0 0 3px rgba(255, 255, 255, 0.9),
+      0 1px 2px rgba(255, 255, 255, 0.8),
+      1px 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  
+  .ring-label {
+    font-size: 10px !important;
+  }
+  
+  .adoption-status {
+    font-size: 7px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .tech-radar-container {
+    padding: 8px;
+  }
+  
+  .radar-legend {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  
+  .legend-section {
+    gap: 8px;
+  }
+  
+  .legend-item {
+    font-size: 0.7rem;
+  }
+  
+  .legend-color {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .tech-label {
+    font-size: 8px !important;
+  }
+  
+  .sector-label {
+    font-size: 11px !important;
+    text-shadow: 
+      0 0 4px rgba(255, 255, 255, 1),
+      0 0 2px rgba(255, 255, 255, 0.9),
+      0 1px 1px rgba(255, 255, 255, 0.8),
+      1px 1px 1px rgba(0, 0, 0, 0.3);
+    stroke-width: 0.3px;
+  }
+  
+  .ring-label {
+    font-size: 9px !important;
+  }
+}
+
+/* 고대비 모드 */
+@media (prefers-contrast: high) {
+  .tech-radar-container {
+    background: white;
+  }
+  
+  .tech-point {
+    stroke: #000;
+    stroke-width: 3;
+  }
+  
+  .tech-label,
+  .sector-label,
+  .ring-label {
+    text-shadow: none;
+    font-weight: 700;
+  }
+  
+  .radar-legend {
+    background: white;
+    border: 2px solid #000;
+  }
+}
+
+/* 애니메이션 감소 모드 */
+@media (prefers-reduced-motion: reduce) {
+  .tech-point,
+  .tech-label,
+  .sector-background,
+  .radar-ring,
+  .sector-line {
+    transition: none;
+  }
+  
+  .tech-point.selected {
+    animation: none;
+  }
+  
+  .selection-ring {
+    animation: none;
+  }
+  
+  .selection-ring animate {
+    display: none;
+  }
+}
+
+/* 다크 모드 */
+@media (prefers-color-scheme: dark) {
+  .tech-radar-container {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  }
+  
+  .tech-label {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  }
+  
+  .tech-label.selected {
+    fill: #f9fafb;
+  }
+  
+  .sector-label,
+  .ring-label {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  }
+  
+  .radar-legend {
+    background: rgba(31, 41, 55, 0.95);
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .legend-section h4 {
+    color: #e5e7eb;
+  }
+  
+  .legend-item {
+    color: #9ca3af;
+  }
+  
+  .center-point {
+    fill: #9ca3af;
+  }
+}

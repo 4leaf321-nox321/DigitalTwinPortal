@@ -1,0 +1,113 @@
+import { useMemo } from 'react';
+
+/**
+ * 정확한 오늘 날짜 위치 계산 훅 (시간대 문제 해결)
+ */
+export const useTodayPosition = (displayRange, timeUnits, timeType, subUnitWidth, scale) => {
+  return useMemo(() => {
+    // 현재 로컬 시간의 날짜 부분만 사용 (시간대 변환 없이)
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // displayRange도 로컬 시간 기준으로 정규화
+    const rangeStart = new Date(displayRange.start);
+    const normalizedStart = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate());
+    const rangeEnd = new Date(displayRange.end);
+    const normalizedEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate());
+    
+    if (normalizedStart > today || today > normalizedEnd) {
+      return -1;
+    }
+    
+    switch (timeType) {
+      case 'days':
+      case 'weeks':
+        // 일/주 단위에서는 정확한 일별 계산
+        const daysSinceStart = Math.round(
+          (today.getTime() - normalizedStart.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        return daysSinceStart * (40 * scale);
+      
+      case 'months':
+        return calculateMonthlyTodayPosition(today, normalizedStart, normalizedEnd, timeUnits, subUnitWidth);
+      
+      case 'years':
+        return calculateYearlyTodayPosition(today, normalizedStart, normalizedEnd, timeUnits, subUnitWidth);
+      
+      default:
+        return 0;
+    }
+  }, [displayRange, timeUnits, timeType, subUnitWidth, scale]);
+};
+
+/**
+ * 월 단위 뷰에서 오늘 날짜 위치 계산 (시간대 문제 해결)
+ */
+const calculateMonthlyTodayPosition = (today, rangeStart, rangeEnd, timeUnits, weekWidth) => {
+  const getWeekStart = (date) => {
+    const result = new Date(date);
+    const day = result.getDay();
+    const diff = result.getDate() - day + (day === 0 ? -6 : 1);
+    result.setDate(diff);
+    return result;
+  };
+  
+  // 프로젝트 시작일의 주 시작점 계산
+  const projectStartWeek = getWeekStart(rangeStart);
+  const todayWeek = getWeekStart(today);
+  
+  // 주별 오프셋 계산
+  const msPerWeek = 1000 * 60 * 60 * 24 * 7;
+  const weekOffset = Math.round((todayWeek.getTime() - projectStartWeek.getTime()) / msPerWeek);
+  
+  if (weekOffset < 0) return 0; // 범위 이전
+  
+  // 주 내에서의 일별 위치 계산
+  const dayOfWeek = (today.getDay() + 6) % 7; // 월요일을 0으로
+  const dayRatio = dayOfWeek / 7;
+  
+  return weekOffset * weekWidth + dayRatio * weekWidth;
+};
+
+/**
+ * 연 단위 뷰에서 오늘 날짜 위치 계산 (시간대 문제 해결) - 원래 방식으로 복원
+ */
+const calculateYearlyTodayPosition = (today, rangeStart, rangeEnd, timeUnits, monthWidth) => {
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth(); // 0-11
+  const todayDate = today.getDate(); // 1-31
+  
+  const startYear = rangeStart.getFullYear();
+  const startMonth = rangeStart.getMonth(); // 0-11
+  
+  // 디버깅 로그 (로컬 시간 기준)
+  console.log('=== 연단위 오늘 위치 계산 (원래 방식) ===');
+  console.log('실제 오늘:', new Date().toLocaleDateString('ko-KR'));
+  console.log('계산용 오늘:', todayYear, '년', todayMonth + 1, '월', todayDate, '일');
+  console.log('시작일:', startYear, '년', startMonth + 1, '월');
+  console.log('rangeStart:', rangeStart);
+  console.log('rangeEnd:', rangeEnd);
+  
+  // 월별 오프셋 계산 (원래 방식 - 부분 월 무시)
+  const monthOffset = (todayYear - startYear) * 12 + (todayMonth - startMonth);
+  console.log('월 오프셋:', monthOffset);
+  
+  if (monthOffset < 0) return 0; // 범위 이전
+  
+  // 현재 월에서 일별 위치 계산 (로컬 시간 기준)
+  const daysInMonth = new Date(todayYear, todayMonth + 1, 0).getDate();
+  const dayRatio = (todayDate - 1) / daysInMonth;
+  
+  console.log('현재 월(', todayMonth + 1, '월)의 총 일수:', daysInMonth);
+  console.log('오늘 일자:', todayDate);
+  console.log('일 비율:', dayRatio, '=', (todayDate - 1), '/', daysInMonth);
+  console.log('월 너비:', monthWidth);
+  
+  const result = monthOffset * monthWidth + dayRatio * monthWidth;
+  console.log('최종 위치:', result);
+  console.log('세부 계산:', monthOffset, '* ', monthWidth, '+', dayRatio, '*', monthWidth);
+  console.log('= ', monthOffset * monthWidth, '+', dayRatio * monthWidth);
+  console.log('===============================================');
+  
+  return result;
+};

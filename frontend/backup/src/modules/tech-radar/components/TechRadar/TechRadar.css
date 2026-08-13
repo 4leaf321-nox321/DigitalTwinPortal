@@ -1,0 +1,296 @@
+/* Tech Radar Visualization Styles */
+
+.tech-radar-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin: 0;
+  height: 100%;
+  min-height: 600px;
+}
+
+/* 툴팁 스타일 */
+.tech-tooltip {
+  position: fixed;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  max-width: 250px;
+  z-index: 1000;
+  pointer-events: none;
+  border: 1px solid #e2e8f0;
+}
+
+.tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.tooltip-title {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  flex: 1;
+}
+
+.tooltip-ring {
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.tooltip-sector {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.tooltip-adoption-status {
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.adoption-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.adoption-badge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.adoption-badge:hover::before {
+  left: 100%;
+}
+
+.adoption-badge.adopted {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.3);
+}
+
+.adoption-badge.not-adopted {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(156, 163, 175, 0.3);
+}
+
+.tooltip-description {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* 반응형 디자인 */
+
+.tech-radar-svg {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 50%;
+  background: white;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.05);
+}
+
+.technology-point {
+  transition: all 0.2s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.technology-point:hover {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+}
+
+/* 미도입 기술 점에 대한 추가 스타일 */
+.technology-point.not-adopted {
+  filter: drop-shadow(0 2px 4px rgba(156, 163, 175, 0.3));
+  transition: all 0.2s ease;
+}
+
+.technology-point.not-adopted:hover {
+  filter: drop-shadow(0 4px 8px rgba(156, 163, 175, 0.5));
+  opacity: 0.9 !important;
+}
+
+.technology-number {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 기술 라벨 스타일 */
+.technology-label {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  user-select: none;
+  pointer-events: none;
+  text-shadow: 
+    0 0 3px rgba(255, 255, 255, 0.9),
+    1px 1px 2px rgba(255, 255, 255, 0.8),
+    -1px -1px 2px rgba(255, 255, 255, 0.8);
+  transition: all 0.2s ease;
+}
+
+.ring-label {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.sector-label {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+}
+
+.selected-highlight {
+  animation: pulse 2s infinite;
+}
+
+.selected-highlight-ring {
+  animation: pulseRing 2s infinite;
+}
+
+.selected-highlight-fill {
+  animation: pulseFill 2s infinite;
+}
+
+.technology-point.selected {
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    stroke-opacity: 0.8;
+    r: 15;
+  }
+  50% {
+    stroke-opacity: 1;
+    r: 18;
+  }
+  100% {
+    stroke-opacity: 0.8;
+    r: 15;
+  }
+}
+
+@keyframes pulseFill {
+  0% {
+    fill-opacity: 0.15;
+  }
+  50% {
+    fill-opacity: 0.25;
+  }
+  100% {
+    fill-opacity: 0.15;
+  }
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .tech-radar-container {
+    padding: 2rem;
+    min-height: 450px;
+  }
+  
+  .sector-label {
+    font-size: 10px;
+  }
+  
+  .ring-label {
+    font-size: 10px;
+  }
+  
+  .technology-number {
+    font-size: 8px;
+  }
+  
+  .technology-label {
+    font-size: 9px;
+  }
+  
+  .technology-point {
+    r: 6;
+  }
+  
+  .technology-point:hover {
+    r: 8;
+  }
+  
+  .adoption-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tech-radar-container {
+    padding: 1rem;
+    min-height: 400px;
+  }
+  
+  .sector-label {
+    font-size: 9px;
+  }
+  
+  .ring-label {
+    font-size: 9px;
+  }
+  
+  .technology-number {
+    font-size: 7px;
+  }
+  
+  .technology-label {
+    font-size: 8px;
+  }
+  
+  .adoption-badge {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+  
+  .tech-tooltip {
+    max-width: 200px;
+  }
+}

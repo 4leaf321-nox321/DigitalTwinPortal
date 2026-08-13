@@ -1,0 +1,502 @@
+import React, { useMemo } from 'react';
+import styled from 'styled-components';
+import { motion } from 'framer-motion';
+import { sortDivisionEntries } from '../../utils/divisionSorting';
+
+const Container = styled(motion.div)`
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  height: fit-content;
+`;
+
+const Title = styled.h3`
+  margin: 0 0 1.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  
+  &::before {
+    content: '📋';
+    font-size: 1.25rem;
+  }
+`;
+
+const DivisionsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
+  
+  @media (max-width: 1800px) {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 0.875rem;
+  }
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.75rem;
+  }
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.5rem;
+  }
+`;
+
+const DivisionCard = styled(motion.div)`
+  background: ${props => props.bgColor};
+  border: 2px solid ${props => props.borderColor};
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  transition: all 0.3s ease;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  }
+  
+  @media (max-width: 1800px) {
+    padding: 0.875rem;
+    min-height: 280px;
+  }
+`;
+
+const DivisionHeader = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+`;
+
+const DivisionName = styled.h4`
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: ${props => props.color};
+  text-align: center;
+  
+  @media (max-width: 1800px) {
+    font-size: 1.5rem;
+  }
+  
+  @media (max-width: 1200px) {
+    font-size: 1.375rem;
+  }
+`;
+
+const MetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
+  flex: 1;
+`;
+
+const MetricItem = styled.div`
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  text-align: center;
+`;
+
+const MetricValue = styled.div`
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: ${props => props.color};
+  line-height: 1;
+  margin-bottom: 0.25rem;
+  
+  @media (max-width: 1800px) {
+    font-size: 1.25rem;
+  }
+  
+  @media (max-width: 1200px) {
+    font-size: 1.125rem;
+  }
+`;
+
+const MetricLabel = styled.div`
+  font-size: 0.625rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.2;
+  
+  @media (max-width: 1800px) {
+    font-size: 0.75rem;
+  }
+  
+  @media (max-width: 1200px) {
+    font-size: 0.6875rem;
+  }
+`;
+
+const ProgressBar = styled.div`
+  width: 100%;
+  height: 0.25rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 0.125rem;
+  margin-top: 0.25rem;
+  overflow: hidden;
+`;
+
+const ProgressFill = styled.div`
+  height: 100%;
+  background: ${props => props.color || '#3b82f6'};
+  border-radius: 0.125rem;
+  width: ${props => props.percentage}%;
+  transition: width 0.8s ease-out;
+`;
+
+const StatusSection = styled.div`
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+`;
+
+const StatusSectionTitle = styled.div`
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const StatusGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+  gap: 0.2rem;
+  
+  @media (max-width: 1800px) {
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 0.25rem;
+  }
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fit, minmax(55px, 1fr));
+  }
+`;
+
+const StatusItem = styled.div`
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0.375rem;
+  padding: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  text-align: center;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 1);
+    transform: translateY(-1px);
+  }
+`;
+
+const StatusDot = styled.div`
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: ${props => props.color};
+  margin: 0 auto 0.25rem;
+`;
+
+const StatusCount = styled.div`
+  font-size: 1rem;
+  font-weight: 700;
+  color: ${props => props.color};
+  line-height: 1;
+  margin-bottom: 0.125rem;
+  
+  @media (max-width: 1800px) {
+    font-size: 1.125rem;
+  }
+  
+  @media (max-width: 1200px) {
+    font-size: 1rem;
+  }
+`;
+
+const StatusLabel = styled.div`
+  font-size: 0.5rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1;
+  
+  @media (max-width: 1800px) {
+    font-size: 0.625rem;
+  }
+  
+  @media (max-width: 1200px) {
+    font-size: 0.55rem;
+  }
+`;
+
+const TotalItem = styled.div`
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 0.375rem;
+  padding: 0.375rem;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+`;
+
+const TotalDot = styled.div`
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #64748b;
+  margin: 0 auto 0.25rem;
+`;
+
+const TotalCount = styled.div`
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1;
+  margin-bottom: 0.125rem;
+  
+  @media (max-width: 1800px) {
+    font-size: 1.125rem;
+  }
+  
+  @media (max-width: 1200px) {
+    font-size: 1rem;
+  }
+`;
+
+const TotalLabel = styled.div`
+  font-size: 0.5rem;
+  color: #64748b;
+  font-weight: 600;
+  line-height: 1;
+  
+  @media (max-width: 1800px) {
+    font-size: 0.625rem;
+  }
+  
+  @media (max-width: 1200px) {
+    font-size: 0.55rem;
+  }
+`;
+
+const EmptyState = styled.div`
+  text-align: center;
+  color: #64748b;
+  padding: 2rem;
+  
+  .icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+  
+  .message {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+`;
+
+const ProjectSummary = ({ projects, divisionColors, statusColors }) => {
+  // 사업부별 데이터 분석
+  const divisionData = useMemo(() => {
+    if (!projects || projects.length === 0) {
+      return {};
+    }
+
+    const data = {};
+    
+    projects.forEach(project => {
+      const division = project.사업부 || 'Unknown';
+      
+      if (!data[division]) {
+        data[division] = {
+          totalProjects: 0,
+          completedProjects: 0,
+          onTimeProjects: 0,
+          pocProjects: 0,
+          keyProjects: 0,
+          statusCounts: {}
+        };
+      }
+      
+      data[division].totalProjects += 1;
+      
+      // 상태별 카운트
+      const status = project.진행상태 || '미착수';
+      data[division].statusCounts[status] = (data[division].statusCounts[status] || 0) + 1;
+      
+      // 완료된 프로젝트
+      if (status === '완료') {
+        data[division].completedProjects += 1;
+      }
+      
+      // 정상 진행 프로젝트 (완료 + 정상진행)
+      if (status === '완료' || status === '정상진행') {
+        data[division].onTimeProjects += 1;
+      }
+      
+      // PoC 프로젝트
+      if (project.PoC과제여부) {
+        data[division].pocProjects += 1;
+      }
+      
+      // 중점 프로젝트
+      if (project.중점과제여부) {
+        data[division].keyProjects += 1;
+      }
+    });
+    
+    // 비율 계산
+    Object.keys(data).forEach(division => {
+      const divData = data[division];
+      divData.completionRate = divData.totalProjects > 0 ? 
+        (divData.completedProjects / divData.totalProjects * 100) : 0;
+      divData.onTimeRate = divData.totalProjects > 0 ? 
+        (divData.onTimeProjects / divData.totalProjects * 100) : 0;
+    });
+    
+    return data;
+  }, [projects]);
+
+  // 데이터가 없는 경우
+  if (!projects || projects.length === 0) {
+    return (
+      <Container
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Title>사업부별 과제 현황</Title>
+        <EmptyState>
+          <div className="icon">📋</div>
+          <div className="message">
+            분석할 프로젝트 데이터가 없습니다.<br />
+            프로젝트를 추가해보세요.
+          </div>
+        </EmptyState>
+      </Container>
+    );
+  }
+
+  return (
+    <Container
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <Title>사업부별 과제 현황</Title>
+      
+      <DivisionsGrid>
+        {sortDivisionEntries(Object.entries(divisionData))
+          .map(([division, data], index) => {
+            const divisionColor = divisionColors[division] || '#94a3b8';
+            const bgColor = `${divisionColor}15`; // 15% 투명도
+            const borderColor = `${divisionColor}30`; // 30% 투명도
+            
+            // 상태별 데이터를 개수 순으로 정렬
+            const statusEntries = Object.entries(data.statusCounts)
+              .sort(([,a], [,b]) => b - a);
+            
+            return (
+              <DivisionCard
+                key={division}
+                bgColor={bgColor}
+                borderColor={borderColor}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+              >
+                <DivisionHeader>
+                  <DivisionName color={divisionColor}>
+                    {division}
+                  </DivisionName>
+                </DivisionHeader>
+                
+                <MetricsGrid>
+                  {/* 완료율 */}
+                  <MetricItem>
+                    <MetricValue color={statusColors['완료'] || '#3b82f6'}>
+                      {data.completionRate.toFixed(1)}%
+                    </MetricValue>
+                    <MetricLabel>완료율</MetricLabel>
+                    <ProgressBar>
+                      <ProgressFill 
+                        color={statusColors['완료'] || '#3b82f6'}
+                        percentage={data.completionRate}
+                      />
+                    </ProgressBar>
+                  </MetricItem>
+                  
+                  {/* 정상 진행율 */}
+                  <MetricItem>
+                    <MetricValue color={statusColors['정상진행'] || '#eab308'}>
+                      {data.onTimeRate.toFixed(1)}%
+                    </MetricValue>
+                    <MetricLabel>정상 진행율</MetricLabel>
+                    <ProgressBar>
+                      <ProgressFill 
+                        color={statusColors['정상진행'] || '#eab308'}
+                        percentage={data.onTimeRate}
+                      />
+                    </ProgressBar>
+                  </MetricItem>
+                  
+                  {/* PoC 과제 */}
+                  <MetricItem>
+                    <MetricValue color="#7c3aed">
+                      {data.pocProjects}
+                    </MetricValue>
+                    <MetricLabel>PoC 과제</MetricLabel>
+                  </MetricItem>
+                  
+                  {/* 중점 과제 */}
+                  <MetricItem>
+                    <MetricValue color="#dc2626">
+                      {data.keyProjects}
+                    </MetricValue>
+                    <MetricLabel>중점 과제</MetricLabel>
+                  </MetricItem>
+                </MetricsGrid>
+                
+                {/* 진행 상태별 현황 */}
+                <StatusSection>
+                  <StatusSectionTitle>진행 상태별 현황</StatusSectionTitle>
+                  <StatusGrid>
+                    {/* 총 과제 수 */}
+                    <TotalItem>
+                      <TotalDot />
+                      <TotalCount>{data.totalProjects}</TotalCount>
+                      <TotalLabel>총 과제</TotalLabel>
+                    </TotalItem>
+                    
+                    {/* 개별 상태들 */}
+                    {statusEntries.map(([status, count]) => (
+                      <StatusItem key={status}>
+                        <StatusDot color={statusColors[status] || '#94a3b8'} />
+                        <StatusCount color={statusColors[status] || '#94a3b8'}>
+                          {count}
+                        </StatusCount>
+                        <StatusLabel>{status}</StatusLabel>
+                      </StatusItem>
+                    ))}
+                  </StatusGrid>
+                </StatusSection>
+              </DivisionCard>
+            );
+          })}
+      </DivisionsGrid>
+    </Container>
+  );
+};
+
+export default ProjectSummary;

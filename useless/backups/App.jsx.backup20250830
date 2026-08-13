@@ -1,0 +1,249 @@
+import React, { useState, useEffect } from 'react';
+import Layout from './components/Layout/Layout';
+import KnowledgeGraph from './components/KnowledgeGraph/KnowledgeGraph';
+import DataPanel from './components/DataPanel/DataPanel';
+import { useGraphData } from './hooks/useGraphData';
+import { useGraphInteraction } from './hooks/useGraphInteraction';
+import { sampleGraphData } from './data/sampleData';
+import { applyNodeTypeColors } from './utils/colorUtils';
+import './App.css';
+
+function App() {
+  // 초기 데이터에 타입별 색상 적용
+  const initialData = {
+    ...sampleGraphData,
+    nodes: applyNodeTypeColors(sampleGraphData.nodes)
+  };
+  
+  const [graphData, setGraphData] = useState(initialData);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [selectedEdge, setSelectedEdge] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [layoutType, setLayoutType] = useState('force-directed');
+  const [filterOptions, setFilterOptions] = useState({
+    nodeTypes: [],
+    edgeTypes: [],
+    minConnections: 0
+  });
+  const [typeSettings, setTypeSettings] = useState({
+    nodeTypes: [],
+    edgeTypes: []
+  });
+
+  const { 
+    processedData, 
+    updateGraphData, 
+    addNode, 
+    addEdge, 
+    removeNode, 
+    removeEdge 
+  } = useGraphData(graphData, filterOptions);
+
+  const {
+    highlightedNodes,
+    highlightedEdges,
+    handleNodeClick,
+    handleEdgeClick,
+    handleSearch,
+    clearSelection
+  } = useGraphInteraction({
+    graphData: processedData,
+    searchQuery,
+    onNodeSelect: setSelectedNode,
+    onEdgeSelect: setSelectedEdge
+  });
+
+  // 노드/엣지 데이터와 타입 설정 동기화 함수
+  const syncDataWithTypeSettings = (currentData, currentTypeSettings) => {
+    console.log('데이터와 타입 설정 동기화 시작:', {
+      nodeCount: currentData.nodes.length,
+      edgeCount: currentData.edges.length,
+      nodeTypes: currentTypeSettings.nodeTypes.map(t => t.id),
+      edgeTypes: currentTypeSettings.edgeTypes.map(t => t.id)
+    });
+
+    const validNodeTypeIds = new Set(currentTypeSettings.nodeTypes.map(t => t.id));
+    const validEdgeTypeIds = new Set(currentTypeSettings.edgeTypes.map(t => t.id));
+    
+    let hasChanges = false;
+    const updatedData = { ...currentData };
+
+    // 노드 타입 동기화
+    updatedData.nodes = currentData.nodes.map(node => {
+      if (!validNodeTypeIds.has(node.type)) {
+        console.log(`노드 ${node.id}의 타입 ${node.type}을(를) unknown으로 변경`);
+        hasChanges = true;
+        return {
+          ...node,
+          type: 'unknown',
+          color: '#cccccc'
+        };
+      }
+      return node;
+    });
+
+    // 엣지 타입 동기화
+    updatedData.edges = currentData.edges.map(edge => {
+      if (!validEdgeTypeIds.has(edge.type)) {
+        console.log(`엣지 ${edge.id}의 타입 ${edge.type}을(를) unknown으로 변경`);
+        hasChanges = true;
+        return {
+          ...edge,
+          type: 'unknown',
+          label: edge.label || 'unknown'
+        };
+      }
+      return edge;
+    });
+
+    if (hasChanges) {
+      console.log('데이터 동기화 완료 - 변경사항 적용됨');
+      // 색상을 다시 적용
+      const dataWithColors = {
+        ...updatedData,
+        nodes: applyNodeTypeColors(updatedData.nodes)
+      };
+      return dataWithColors;
+    }
+
+    console.log('데이터 동기화 완료 - 변경사항 없음');
+    return currentData;
+  };
+
+  useEffect(() => {
+    handleSearch(searchQuery);
+  }, [searchQuery, handleSearch]);
+
+  const handleLayoutChange = (newLayout) => {
+    setLayoutType(newLayout);
+  };
+
+  const handleFilterChange = (newFilters) => {
+    setFilterOptions(newFilters);
+  };
+
+  const handleDataImport = (importedData) => {
+    const dataWithColors = {
+      ...importedData,
+      nodes: applyNodeTypeColors(importedData.nodes)
+    };
+    setGraphData(dataWithColors);
+    
+    // 가져온 데이터와 현재 타입 설정 동기화
+    if (typeSettings.nodeTypes.length > 0 || typeSettings.edgeTypes.length > 0) {
+      const syncedData = syncDataWithTypeSettings(dataWithColors, typeSettings);
+      setGraphData(syncedData);
+    }
+  };
+
+  const handleTypeSettingsChange = (newTypeSettings) => {
+    console.log('App: 타입 설정 변경됨:', newTypeSettings);
+    
+    // 타입 설정 상태 업데이트
+    const settingsToSave = {
+      nodeTypes: newTypeSettings.nodeTypes,
+      edgeTypes: newTypeSettings.edgeTypes
+    };
+    setTypeSettings(settingsToSave);
+    
+    // 타입 설정을 로컬 스토리지에 저장
+    localStorage.setItem('knowledgeGraphTypeSettings', JSON.stringify(settingsToSave));
+    
+    // 현재 그래프 데이터와 새로운 타입 설정 동기화
+    const syncedData = syncDataWithTypeSettings(graphData, settingsToSave);
+    if (syncedData !== graphData) {
+      setGraphData(syncedData);
+    }
+  };
+
+  // 컴포넌트 마운트 시 로컬 스토리지에서 타입 설정 불러오기
+  useEffect(() => {
+    const savedTypeSettings = localStorage.getItem('knowledgeGraphTypeSettings');
+    if (savedTypeSettings) {
+      try {
+        const parsedSettings = JSON.parse(savedTypeSettings);
+        console.log('로드된 타입 설정:', parsedSettings);
+        setTypeSettings(parsedSettings);
+        
+        // 로드된 타입 설정과 현재 그래프 데이터 동기화
+        const syncedData = syncDataWithTypeSettings(graphData, parsedSettings);
+        if (syncedData !== graphData) {
+          setGraphData(syncedData);
+        }
+      } catch (error) {
+        console.error('타입 설정 로드 중 오류:', error);
+      }
+    }
+  }, []); // 의존성 배열에서 graphData 제거 (무한 루프 방지)
+
+  const handleDataExport = () => {
+    const dataStr = JSON.stringify(graphData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'knowledge-graph-data.json';
+    link.click();
+  };
+
+  return (
+    <div className="app">
+      <Layout
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        layoutType={layoutType}
+        onLayoutChange={handleLayoutChange}
+        onDataImport={handleDataImport}
+        onDataExport={handleDataExport}
+        filterOptions={filterOptions}
+        onFilterChange={handleFilterChange}
+        onTypeSettingsChange={handleTypeSettingsChange}
+        currentGraphData={processedData}
+        typeSettings={typeSettings}
+      >
+        <div className="app-content">
+          <div className="graph-container">
+            <KnowledgeGraph
+              data={processedData}
+              selectedNode={selectedNode}
+              selectedEdge={selectedEdge}
+              highlightedNodes={highlightedNodes}
+              highlightedEdges={highlightedEdges}
+              layoutType={layoutType}
+              onNodeClick={handleNodeClick}
+              onEdgeClick={handleEdgeClick}
+              onNodeAdd={addNode}
+              onEdgeAdd={addEdge}
+            />
+          </div>
+          
+          <div className="panel-container">
+            <DataPanel
+              selectedNode={selectedNode}
+              selectedEdge={selectedEdge}
+              graphData={processedData}
+              onNodeUpdate={(nodeId, updates) => {
+                updateGraphData('updateNode', nodeId, updates);
+              }}
+              onEdgeUpdate={(edgeId, updates) => {
+                updateGraphData('updateEdge', edgeId, updates);
+              }}
+              onNodeDelete={(nodeId) => {
+                removeNode(nodeId);
+                clearSelection();
+              }}
+              onEdgeDelete={(edgeId) => {
+                removeEdge(edgeId);
+                clearSelection();
+              }}
+              onClearSelection={clearSelection}
+              nodeTypes={typeSettings.nodeTypes}
+            />
+          </div>
+        </div>
+      </Layout>
+    </div>
+  );
+}
+
+export default App;

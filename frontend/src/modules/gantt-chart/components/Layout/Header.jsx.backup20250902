@@ -1,0 +1,93 @@
+import React from 'react';
+import { Calendar, Home, Plus, Download, Upload, RotateCcw, PlusSquare } from 'lucide-react';
+import './Header.css';
+
+const Header = ({ 
+  onGoHome, 
+  onAddTask, 
+  onAddMultipleTasks,
+  onImport, 
+  onExport, 
+  onLoadSample,
+  tasksCount = 0 
+}) => {
+  return (
+    <header className="gantt-header">
+      <div className="header-left">
+        <div className="logo">
+          <Calendar size={24} strokeWidth={2} />
+          <h1>Gantt Chart</h1>
+        </div>
+        <div className="task-count-badge">
+          {tasksCount}개 태스크
+        </div>
+      </div>
+
+      <div className="header-center">
+        <div className="header-actions">
+          <button 
+            className="header-btn action-btn add-btn"
+            onClick={onAddTask}
+            title="새 태스크 추가"
+          >
+            <Plus size={18} strokeWidth={2} />
+            <span>태스크 추가</span>
+          </button>
+          
+          <button 
+            className="header-btn action-btn multi-add-btn"
+            onClick={onAddMultipleTasks}
+            title="여러 태스크를 한번에 추가"
+          >
+            <PlusSquare size={18} strokeWidth={2} />
+            <span>멀티 태스크 추가</span>
+          </button>
+          
+          <div className="header-divider"></div>
+          
+          <button 
+            className="header-btn action-btn"
+            onClick={onImport}
+            title="데이터 불러오기"
+          >
+            <Upload size={18} strokeWidth={2} />
+            <span>불러오기</span>
+          </button>
+          
+          <button 
+            className="header-btn action-btn"
+            onClick={onExport}
+            title="데이터 내보내기"
+          >
+            <Download size={18} strokeWidth={2} />
+            <span>내보내기</span>
+          </button>
+          
+          <div className="header-divider"></div>
+          
+          <button 
+            className="header-btn action-btn sample-btn"
+            onClick={onLoadSample}
+            title="샘플 데이터 로드"
+          >
+            <RotateCcw size={18} strokeWidth={2} />
+            <span>샘플</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="header-right">
+        <button 
+          className="header-btn home-btn"
+          onClick={onGoHome}
+          title="메인 화면으로 돌아가기"
+        >
+          <Home size={18} strokeWidth={2} />
+          <span>홈</span>
+        </button>
+      </div>
+    </header>
+  );
+};
+
+export default Header;

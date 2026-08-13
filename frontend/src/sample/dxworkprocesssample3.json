@@ -1,0 +1,1074 @@
+{
+  "version": "1.0",
+  "timestamp": "2025-11-21T21:58:08.248Z",
+  "settings": {
+    "nodeTypes": [
+      {
+        "id": "group",
+        "label": "그룹",
+        "color": "#f50a0a",
+        "description": "사업부/부서"
+      },
+      {
+        "id": "requireddata",
+        "label": "필요데이터",
+        "color": "#3B82F6",
+        "description": "프로젝트/과제"
+      },
+      {
+        "id": "performance",
+        "label": "성과",
+        "color": "#10B981",
+        "description": "성과 항목"
+      },
+      {
+        "id": "default",
+        "label": "기본"
+      }
+    ],
+    "edgeTypes": [
+      {
+        "id": "require",
+        "label": "요청",
+        "color": "#F97316",
+        "description": "과제가 사업부에 소속됨"
+      }
+    ]
+  },
+  "data": {
+    "nodes": [
+      {
+        "id": "node_1763732578881",
+        "label": "회로 설계 그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 19.87067556374625,
+        "y": -94.57707934865483,
+        "physics": true
+      },
+      {
+        "id": "node_1763732579268",
+        "label": "기구 설계 그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 157.27586356515587,
+        "y": 53.515178830642206,
+        "physics": true
+      },
+      {
+        "id": "node_1763732624312",
+        "label": "MCAD 도면",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -27.382513638302633,
+        "y": -30.52402664988128,
+        "physics": true
+      },
+      {
+        "id": "node_1763732625771",
+        "label": "ECAD 도면",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 6.9700702832689645,
+        "y": 20.344222618599744,
+        "physics": true
+      },
+      {
+        "id": "node_1763732722583",
+        "label": "공정기술그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 14.657430387309898,
+        "y": -226.85063831984317,
+        "physics": true
+      },
+      {
+        "id": "node_1763732725965",
+        "label": "제품기술그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 32.77062402797836,
+        "y": -200.07461293798553,
+        "physics": true
+      },
+      {
+        "id": "node_1763732748674",
+        "label": "금형 타입",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -177.81105126093055,
+        "y": -185.95740565604757,
+        "physics": true
+      },
+      {
+        "id": "node_1763732749071",
+        "label": "금형 업체",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 59.420255680727664,
+        "y": -188.87418402008436,
+        "physics": true
+      },
+      {
+        "id": "node_1763732807404",
+        "label": "포장 사양",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -163.77677485285432,
+        "y": -7.244487783381184,
+        "physics": true
+      },
+      {
+        "id": "node_1763732808188",
+        "label": "액정 종류",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -171.1991486639276,
+        "y": 174.6036705879136,
+        "physics": true
+      },
+      {
+        "id": "node_1763732950699",
+        "label": "BOM 정보",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -169.3823766500337,
+        "y": -185.3045571777375,
+        "physics": true
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_1763732683286",
+        "from": "node_1763732578881",
+        "to": "node_1763732624312",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732689490",
+        "from": "node_1763732624312",
+        "to": "node_1763732579268",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732692668",
+        "from": "node_1763732579268",
+        "to": "node_1763732625771",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732696258",
+        "from": "node_1763732625771",
+        "to": "node_1763732578881",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732784982",
+        "from": "node_1763732722583",
+        "to": "node_1763732748674",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732788982",
+        "from": "node_1763732748674",
+        "to": "node_1763732579268",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732793278",
+        "from": "node_1763732722583",
+        "to": "node_1763732749071",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732795885",
+        "from": "node_1763732749071",
+        "to": "node_1763732579268",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732850895",
+        "from": "node_1763732725965",
+        "to": "node_1763732807404",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732853611",
+        "from": "node_1763732725965",
+        "to": "node_1763732808188",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732857209",
+        "from": "node_1763732807404",
+        "to": "node_1763732579268",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763732860304",
+        "from": "node_1763732808188",
+        "to": "node_1763732579268",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763733004269",
+        "from": "node_1763732722583",
+        "to": "node_1763732950699",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763733007704",
+        "from": "node_1763732725965",
+        "to": "node_1763732950699",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      },
+      {
+        "id": "edge_1763733010928",
+        "from": "node_1763732950699",
+        "to": "node_1763732579268",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "node_1763732578881",
+      "label": "회로 설계 그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 19.87067556374625,
+      "y": -94.57707934865483,
+      "physics": true
+    },
+    {
+      "id": "node_1763732579268",
+      "label": "기구 설계 그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 157.27586356515587,
+      "y": 53.515178830642206,
+      "physics": true
+    },
+    {
+      "id": "node_1763732624312",
+      "label": "MCAD 도면",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -27.382513638302633,
+      "y": -30.52402664988128,
+      "physics": true
+    },
+    {
+      "id": "node_1763732625771",
+      "label": "ECAD 도면",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 6.9700702832689645,
+      "y": 20.344222618599744,
+      "physics": true
+    },
+    {
+      "id": "node_1763732722583",
+      "label": "공정기술그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 14.657430387309898,
+      "y": -226.85063831984317,
+      "physics": true
+    },
+    {
+      "id": "node_1763732725965",
+      "label": "제품기술그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 32.77062402797836,
+      "y": -200.07461293798553,
+      "physics": true
+    },
+    {
+      "id": "node_1763732748674",
+      "label": "금형 타입",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -177.81105126093055,
+      "y": -185.95740565604757,
+      "physics": true
+    },
+    {
+      "id": "node_1763732749071",
+      "label": "금형 업체",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 59.420255680727664,
+      "y": -188.87418402008436,
+      "physics": true
+    },
+    {
+      "id": "node_1763732807404",
+      "label": "포장 사양",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -163.77677485285432,
+      "y": -7.244487783381184,
+      "physics": true
+    },
+    {
+      "id": "node_1763732808188",
+      "label": "액정 종류",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -171.1991486639276,
+      "y": 174.6036705879136,
+      "physics": true
+    },
+    {
+      "id": "node_1763732950699",
+      "label": "BOM 정보",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -169.3823766500337,
+      "y": -185.3045571777375,
+      "physics": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1763732683286",
+      "from": "node_1763732578881",
+      "to": "node_1763732624312",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732689490",
+      "from": "node_1763732624312",
+      "to": "node_1763732579268",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732692668",
+      "from": "node_1763732579268",
+      "to": "node_1763732625771",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732696258",
+      "from": "node_1763732625771",
+      "to": "node_1763732578881",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732784982",
+      "from": "node_1763732722583",
+      "to": "node_1763732748674",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732788982",
+      "from": "node_1763732748674",
+      "to": "node_1763732579268",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732793278",
+      "from": "node_1763732722583",
+      "to": "node_1763732749071",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732795885",
+      "from": "node_1763732749071",
+      "to": "node_1763732579268",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732850895",
+      "from": "node_1763732725965",
+      "to": "node_1763732807404",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732853611",
+      "from": "node_1763732725965",
+      "to": "node_1763732808188",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732857209",
+      "from": "node_1763732807404",
+      "to": "node_1763732579268",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763732860304",
+      "from": "node_1763732808188",
+      "to": "node_1763732579268",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763733004269",
+      "from": "node_1763732722583",
+      "to": "node_1763732950699",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763733007704",
+      "from": "node_1763732725965",
+      "to": "node_1763732950699",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    },
+    {
+      "id": "edge_1763733010928",
+      "from": "node_1763732950699",
+      "to": "node_1763732579268",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2
+    }
+  ]
+}

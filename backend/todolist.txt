@@ -1,0 +1,38 @@
+백엔드 이전:
+  1. Python 설치 파일 준비
+  2. pip 패키지 오프라인 설치용 파일 준비:
+  pip download -r requirements.txt -d ./packages
+  2. → 새 환경에서: pip install --no-index --find-links=./packages -r requirements.txt
+
+  DB 이전:
+  1. PostgreSQL 설치 파일 준비
+  2. 기존 DB 백업:
+  pg_dump -U postgres -d 데이터베이스명 > backup.sql
+  3. 새 환경에서 복원:
+  psql -U postgres -d 데이터베이스명 < backup.sql
+
+  준비물 체크리스트:
+  - Python 설치 파일
+  - PostgreSQL 설치 파일
+  - backend/ 폴더 전체
+  - pip 패키지 파일들 (./packages/)
+  - DB 백업 파일 (backup.sql)
+  - .env 파일 (DB 접속 정보 새 환경에 맞게 수정)
+
+  사용 방법:
+  cd backend
+  python setup_database.py
+
+  스크립트가 수행하는 작업:
+  1. .env 파일 확인 (없으면 대화형으로 생성)
+  2. PostgreSQL 데이터베이스 존재 여부 확인 및 생성
+  3. 모든 테이블 자동 생성 (14개 테이블)
+  4. 관리자 계정 생성 (선택)
+
+  새 환경에서 필요한 것:
+  1. Python + pip 패키지 설치
+  2. PostgreSQL 설치 및 실행
+  3. python setup_database.py 실행
+
+● How is Claude doing this session? (optional)
+  1: Bad    2: Fine   3: Good   0: Dismiss

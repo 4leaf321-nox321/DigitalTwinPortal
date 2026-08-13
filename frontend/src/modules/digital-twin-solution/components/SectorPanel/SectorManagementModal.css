@@ -1,0 +1,58 @@
+/* Sector Management Modal Styles */
+.sector-management-modal .modal-overlay {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.sector-management-modal .modal-content {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.sector-management-modal .color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  gap: 8px;
+  max-width: 300px;
+}
+
+.sector-management-modal .color-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.sector-management-modal .color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.sector-management-modal .color-option.selected {
+  border-color: #1f2937;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #1f2937;
+}
+
+.sector-management-modal .sector-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.sector-management-modal .form-transition {
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 640px) {
+  .sector-management-modal .modal-content {
+    margin: 1rem;
+    border-radius: 0.75rem;
+  }
+  
+  .sector-management-modal .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

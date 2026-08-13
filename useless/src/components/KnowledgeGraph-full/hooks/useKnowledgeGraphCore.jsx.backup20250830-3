@@ -1,0 +1,275 @@
+import { useState, useRef } from 'react';
+import { getNodeStyle, getEdgeColorByType } from '../../../utils/colorUtils';
+import { useKnowledgeGraphEvents } from './useKnowledgeGraphEvents';
+
+export const useKnowledgeGraphCore = ({
+  networkRef,
+  nodesRef,
+  data,
+  nodeTypes,
+  edgeTypes,
+  onNodeAdd,
+  onEdgeAdd,
+  setIsFitActive,
+  // Delete 키 처리를 위한 추가 매개변수
+  deleteSelectedNodes,
+  selectedNodes
+}) => {
+  // 상태를 ref로도 관리하여 이벤트 리스너에서 최신 값 참조
+  const isAddingNodeRef = useRef(false);
+  const isAddingEdgeRef = useRef(false);
+  const sourceNodeForEdgeRef = useRef(null);
+  
+  const [isAddingNode, setIsAddingNode] = useState(false);
+  const [isAddingEdge, setIsAddingEdge] = useState(false);
+  const [tempNode, setTempNode] = useState(null);
+  const [sourceNodeForEdge, setSourceNodeForEdge] = useState(null);
+
+  // 상태 업데이트 함수들 - ref와 동기화
+  const updateIsAddingNode = (value) => {
+    setIsAddingNode(value);
+    isAddingNodeRef.current = value;
+  };
+
+  const updateIsAddingEdge = (value) => {
+    setIsAddingEdge(value);
+    isAddingEdgeRef.current = value;
+  };
+
+  const updateSourceNodeForEdge = (value) => {
+    setSourceNodeForEdge(value);
+    sourceNodeForEdgeRef.current = value;
+  };
+
+  // 컨트롤 함수들
+  const handleFitToView = (setIsFitActive) => {
+    if (networkRef.current) {
+      setIsFitActive(true);
+      networkRef.current.fit({
+        animation: {
+          duration: 1000,
+          easingFunction: 'easeInOutQuart'
+        }
+      });
+      setTimeout(() => setIsFitActive(false), 1000);
+    }
+  };
+
+  const handleZoomIn = () => {
+    if (networkRef.current) {
+      const scale = networkRef.current.getScale();
+      networkRef.current.moveTo({ scale: scale * 1.2 });
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (networkRef.current) {
+      const scale = networkRef.current.getScale();
+      networkRef.current.moveTo({ scale: scale * 0.8 });
+    }
+  };
+
+  const togglePhysics = () => {
+    if (networkRef.current) {
+      const options = networkRef.current.physics.options;
+      const newPhysicsState = !options.enabled;
+      
+      networkRef.current.setOptions({
+        physics: { 
+          enabled: newPhysicsState,
+          stabilization: { 
+            enabled: newPhysicsState,
+            iterations: newPhysicsState ? 100 : 0
+          }
+        }
+      });
+      
+      if (newPhysicsState) {
+        networkRef.current.physics.startSimulation();
+        setTimeout(() => {
+          if (networkRef.current && networkRef.current.physics) {
+            networkRef.current.setOptions({
+              physics: { enabled: false }
+            });
+          }
+        }, 3000);
+      }
+    }
+  };
+
+  const reapplyLayout = () => {
+    if (!networkRef.current) return;
+    
+    const resetNodes = data.nodes.map(node => {
+      const style = getNodeStyle(node.type, nodeTypes);
+      return {
+        ...node,
+        ...style,
+        physics: true,
+        fixed: false,
+        x: undefined,
+        y: undefined
+      };
+    });
+    
+    nodesRef.current.update(resetNodes);
+    networkRef.current.physics.startSimulation();
+  };
+
+  // 노드/엣지 추가 핸들러
+  const handleAddNodeClick = (params) => {
+    const nodeStyle = getNodeStyle('default', nodeTypes);
+    const newNode = {
+      id: `node_${Date.now()}`,
+      label: '새 노드',
+      type: 'default',
+      properties: {},
+      ...nodeStyle,
+      size: 25,
+      x: params.pointer.canvas.x,
+      y: params.pointer.canvas.y,
+      physics: false // 새로 추가된 노드는 고정 위치
+    };
+
+    onNodeAdd(newNode);
+    setTempNode(null);
+  };
+
+  const handleAddEdgeClick = (params) => {
+    if (params.nodes.length > 0) {
+      const clickedNode = params.nodes[0];
+      
+      if (!sourceNodeForEdgeRef.current) {
+        updateSourceNodeForEdge(clickedNode);
+      } else if (sourceNodeForEdgeRef.current !== clickedNode) {
+        const defaultEdgeType = edgeTypes.length > 0 
+          ? edgeTypes.find(t => t.id === 'unknown') || edgeTypes[0]
+          : { id: 'unknown', label: '알 수 없음' };
+        
+        const newEdge = {
+          id: `edge_${Date.now()}`,
+          from: sourceNodeForEdgeRef.current,
+          to: clickedNode,
+          label: defaultEdgeType.label,
+          type: defaultEdgeType.id,
+          properties: {},
+          color: getEdgeColorByType(defaultEdgeType.id, edgeTypes),
+          width: 2
+        };
+
+        onEdgeAdd(newEdge);
+        updateIsAddingEdge(false);
+        updateSourceNodeForEdge(null);
+      }
+    }
+  };
+
+  // 개선된 일괄 노드 추가 핸들러 - 화면 중앙을 기준으로 배치
+  const handleBulkAddNodes = (nodes) => {
+    // 현재 화면의 중심점을 구하기
+    let centerX = 0, centerY = 0;
+    if (networkRef.current) {
+      try {
+        const viewPosition = networkRef.current.getViewPosition();
+        centerX = viewPosition.x || 0;
+        centerY = viewPosition.y || 0;
+      } catch (error) {
+        centerX = 0;
+        centerY = 0;
+      }
+    }
+    
+    nodes.forEach((nodeData, index) => {
+      const nodeStyle = getNodeStyle(nodeData.type, nodeTypes);
+      
+      // 새 노드들을 현재 뷰포트 중심을 기준으로 그리드 형태 배치
+      const gridCols = Math.min(5, nodes.length); // 최대 5열
+      const col = index % gridCols;
+      const row = Math.floor(index / gridCols);
+      
+      const newNode = {
+        id: `bulk_node_${Date.now()}_${index}`,
+        label: nodeData.label,
+        type: nodeData.type,
+        properties: {},
+        ...nodeStyle,
+        size: 25,
+        // 화면 중심 기준으로 배치
+        x: centerX + (col - (gridCols - 1) / 2) * 150, // 중심을 기준으로 좌우 배치
+        y: centerY + row * 100, // 위에서 아래로 배치
+        physics: false // 일괄 추가된 노드들은 고정 위치
+      };
+
+      onNodeAdd(newNode);
+    });
+  };
+
+  // 일괄 엣지 추가 핸들러
+  const handleBulkAddEdges = (edges) => {
+    console.log('일괄 엣지 추가 시작:', edges);
+    
+    edges.forEach((edgeData, index) => {
+      const edgeColor = getEdgeColorByType(edgeData.type, edgeTypes);
+      
+      const newEdge = {
+        id: `bulk_edge_${Date.now()}_${index}`,
+        from: edgeData.from,
+        to: edgeData.to,
+        label: edgeData.label || '',
+        type: edgeData.type,
+        properties: {},
+        color: edgeColor,
+        width: 2,
+        // 엣지 스타일 추가
+        arrows: {
+          to: {
+            enabled: true,
+            scaleFactor: 1,
+            type: 'arrow'
+          }
+        },
+        smooth: {
+          type: 'continuous'
+        }
+      };
+
+      console.log('엣지 추가:', newEdge);
+      onEdgeAdd(newEdge);
+    });
+    
+    console.log('일괄 엣지 추가 완료:', edges.length, '개');
+  };
+
+  // 키보드 이벤트 훅 사용 - Delete 키 처리를 위한 매개변수 추가
+  useKnowledgeGraphEvents({
+    isAddingNodeRef,
+    isAddingEdgeRef,
+    updateIsAddingNode,
+    updateIsAddingEdge,
+    updateSourceNodeForEdge,
+    setTempNode,
+    handleFitToView: () => handleFitToView(setIsFitActive),
+    deleteSelectedNodes,
+    selectedNodes
+  });
+
+  return {
+    isAddingNode,
+    isAddingEdge,
+    sourceNodeForEdge,
+    tempNode,
+    updateIsAddingNode,
+    updateIsAddingEdge,
+    updateSourceNodeForEdge,
+    setTempNode,
+    handleFitToView,
+    handleZoomIn,
+    handleZoomOut,
+    togglePhysics,
+    reapplyLayout,
+    handleAddNodeClick,
+    handleAddEdgeClick,
+    handleBulkAddNodes,
+    handleBulkAddEdges
+  };
+};

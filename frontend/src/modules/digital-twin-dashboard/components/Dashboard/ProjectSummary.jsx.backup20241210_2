@@ -1,0 +1,306 @@
+import React, { useMemo } from 'react';
+import styled from 'styled-components';
+import { motion } from 'framer-motion';
+
+const Container = styled(motion.div)`
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  height: fit-content;
+`;
+
+const Title = styled.h3`
+  margin: 0 0 1.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  
+  &::before {
+    content: '📋';
+    font-size: 1.25rem;
+  }
+`;
+
+const DivisionsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+`;
+
+const DivisionCard = styled(motion.div)`
+  background: ${props => props.bgColor};
+  border: 2px solid ${props => props.borderColor};
+  border-radius: 0.75rem;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  }
+`;
+
+const DivisionHeader = styled.div`
+  display: flex;
+  justify-content: between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+`;
+
+const DivisionName = styled.h4`
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: ${props => props.color};
+`;
+
+const TotalProjects = styled.div`
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: ${props => props.color};
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+`;
+
+const MetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+`;
+
+const MetricItem = styled.div`
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  text-align: center;
+`;
+
+const MetricValue = styled.div`
+  font-size: 1rem;
+  font-weight: 700;
+  color: ${props => props.color};
+  line-height: 1;
+  margin-bottom: 0.25rem;
+`;
+
+const MetricLabel = styled.div`
+  font-size: 0.625rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.2;
+`;
+
+const ProgressBar = styled.div`
+  width: 100%;
+  height: 0.25rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 0.125rem;
+  margin-top: 0.25rem;
+  overflow: hidden;
+`;
+
+const ProgressFill = styled.div`
+  height: 100%;
+  background: ${props => props.color || '#3b82f6'};
+  border-radius: 0.125rem;
+  width: ${props => props.percentage}%;
+  transition: width 0.8s ease-out;
+`;
+
+const EmptyState = styled.div`
+  text-align: center;
+  color: #64748b;
+  padding: 2rem;
+  
+  .icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+  
+  .message {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+`;
+
+const ProjectSummary = ({ projects, divisionColors, statusColors }) => {
+  // 사업부별 데이터 분석
+  const divisionData = useMemo(() => {
+    if (!projects || projects.length === 0) {
+      return {};
+    }
+
+    const data = {};
+    
+    projects.forEach(project => {
+      const division = project.사업부 || 'Unknown';
+      
+      if (!data[division]) {
+        data[division] = {
+          totalProjects: 0,
+          completedProjects: 0,
+          onTimeProjects: 0,
+          pocProjects: 0,
+          keyProjects: 0,
+          statusCounts: {}
+        };
+      }
+      
+      data[division].totalProjects += 1;
+      
+      // 상태별 카운트
+      const status = project.진행상태 || '미착수';
+      data[division].statusCounts[status] = (data[division].statusCounts[status] || 0) + 1;
+      
+      // 완료된 프로젝트
+      if (status === '완료') {
+        data[division].completedProjects += 1;
+      }
+      
+      // 정상 진행 프로젝트 (완료 + 정상진행)
+      if (status === '완료' || status === '정상진행') {
+        data[division].onTimeProjects += 1;
+      }
+      
+      // PoC 프로젝트
+      if (project.PoC과제여부) {
+        data[division].pocProjects += 1;
+      }
+      
+      // 중점 프로젝트
+      if (project.중점과제여부) {
+        data[division].keyProjects += 1;
+      }
+    });
+    
+    // 비율 계산
+    Object.keys(data).forEach(division => {
+      const divData = data[division];
+      divData.completionRate = divData.totalProjects > 0 ? 
+        (divData.completedProjects / divData.totalProjects * 100) : 0;
+      divData.onTimeRate = divData.totalProjects > 0 ? 
+        (divData.onTimeProjects / divData.totalProjects * 100) : 0;
+    });
+    
+    return data;
+  }, [projects]);
+
+  // 데이터가 없는 경우
+  if (!projects || projects.length === 0) {
+    return (
+      <Container
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Title>사업부별 과제 현황</Title>
+        <EmptyState>
+          <div className="icon">📋</div>
+          <div className="message">
+            분석할 프로젝트 데이터가 없습니다.<br />
+            프로젝트를 추가해보세요.
+          </div>
+        </EmptyState>
+      </Container>
+    );
+  }
+
+  return (
+    <Container
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <Title>사업부별 과제 현황</Title>
+      
+      <DivisionsGrid>
+        {Object.entries(divisionData)
+          .sort(([,a], [,b]) => b.totalProjects - a.totalProjects) // 총 과제 수 순으로 정렬
+          .map(([division, data], index) => {
+            const divisionColor = divisionColors[division] || '#94a3b8';
+            const bgColor = `${divisionColor}15`; // 15% 투명도
+            const borderColor = `${divisionColor}30`; // 30% 투명도
+            
+            return (
+              <DivisionCard
+                key={division}
+                bgColor={bgColor}
+                borderColor={borderColor}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+              >
+                <DivisionHeader>
+                  <DivisionName color={divisionColor}>
+                    {division}
+                  </DivisionName>
+                  <TotalProjects color={divisionColor}>
+                    {data.totalProjects}
+                  </TotalProjects>
+                </DivisionHeader>
+                
+                <MetricsGrid>
+                  {/* 완료율 */}
+                  <MetricItem>
+                    <MetricValue color={statusColors['완료'] || '#3b82f6'}>
+                      {data.completionRate.toFixed(1)}%
+                    </MetricValue>
+                    <MetricLabel>완료율</MetricLabel>
+                    <ProgressBar>
+                      <ProgressFill 
+                        color={statusColors['완료'] || '#3b82f6'}
+                        percentage={data.completionRate}
+                      />
+                    </ProgressBar>
+                  </MetricItem>
+                  
+                  {/* 정상 진행율 */}
+                  <MetricItem>
+                    <MetricValue color={statusColors['정상진행'] || '#eab308'}>
+                      {data.onTimeRate.toFixed(1)}%
+                    </MetricValue>
+                    <MetricLabel>정상 진행율</MetricLabel>
+                    <ProgressBar>
+                      <ProgressFill 
+                        color={statusColors['정상진행'] || '#eab308'}
+                        percentage={data.onTimeRate}
+                      />
+                    </ProgressBar>
+                  </MetricItem>
+                  
+                  {/* PoC 과제 */}
+                  <MetricItem>
+                    <MetricValue color="#7c3aed">
+                      {data.pocProjects}
+                    </MetricValue>
+                    <MetricLabel>PoC 과제</MetricLabel>
+                  </MetricItem>
+                  
+                  {/* 중점 과제 */}
+                  <MetricItem>
+                    <MetricValue color="#dc2626">
+                      {data.keyProjects}
+                    </MetricValue>
+                    <MetricLabel>중점 과제</MetricLabel>
+                  </MetricItem>
+                </MetricsGrid>
+              </DivisionCard>
+            );
+          })}
+      </DivisionsGrid>
+    </Container>
+  );
+};
+
+export default ProjectSummary;

@@ -1,0 +1,73 @@
+name: CI - Windows
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Backend: create venv and install deps
+        shell: pwsh
+        run: |
+          python -m venv backend\.venv
+          .\backend\.venv\Scripts\Activate.ps1
+          python -m pip install --upgrade pip
+          if (Test-Path backend\requirements.txt) { pip install -r backend\requirements.txt }
+
+      - name: Backend: run tests
+        shell: pwsh
+        run: |
+          .\backend\.venv\Scripts\Activate.ps1
+          pip install pytest || true
+          if (Test-Path backend\tests) { pytest backend\tests -q } else { Write-Host 'No backend tests found, skipping.' }
+
+      - name: Frontend: install and build
+        shell: pwsh
+        run: |
+          if (Test-Path frontend\package.json) {
+            Push-Location frontend
+            npm ci
+            npm run build
+            Pop-Location
+          } else {
+            Write-Host 'No frontend project found, skipping.'
+          }
+
+      - name: Create artifacts dir
+        shell: pwsh
+        run: mkdir artifacts
+
+      - name: Package backend wheels
+        shell: pwsh
+        run: |
+          .\backend\.venv\Scripts\Activate.ps1
+          python -m pip wheel -r backend\requirements.txt -w artifacts || Write-Host 'Wheel build failed or no requirements.'
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend\dist
+
+      - name: Upload backend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-artifacts
+          path: artifacts

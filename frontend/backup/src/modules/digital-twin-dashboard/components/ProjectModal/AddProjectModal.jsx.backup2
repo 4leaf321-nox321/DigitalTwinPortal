@@ -1,0 +1,808 @@
+import React, { useState } from 'react';
+import styled from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  X, 
+  Calendar, 
+  Building, 
+  Target, 
+  User, 
+  ShieldCheck, 
+  FileText, 
+  TrendingUp,
+  Plus,
+  Save,
+  Minus
+} from 'lucide-react';
+
+const ModalOverlay = styled(motion.div)`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+`;
+
+const ModalContainer = styled(motion.div)`
+  background: white;
+  border-radius: 1rem;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
+`;
+
+const ModalHeader = styled.div`
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  
+  .title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 0.5rem;
+    color: white;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
+    }
+  }
+`;
+
+const ModalBody = styled.div`
+  padding: 2rem;
+  max-height: calc(90vh - 200px);
+  overflow-y: auto;
+`;
+
+const FormGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+  
+  .full-width {
+    grid-column: 1 / -1;
+  }
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const Label = styled.label`
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  
+  .required {
+    color: #ef4444;
+  }
+`;
+
+const Input = styled.input`
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  }
+  
+  &:invalid {
+    border-color: #ef4444;
+  }
+`;
+
+const Select = styled.select`
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  }
+`;
+
+const TextArea = styled.textarea`
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  resize: vertical;
+  min-height: 100px;
+  transition: all 0.2s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  }
+`;
+
+const DateRangeContainer = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+`;
+
+const ModalFooter = styled.div`
+  padding: 1.5rem 2rem;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  background: #f9fafb;
+`;
+
+const Button = styled.button`
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  
+  &.secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 2px solid #d1d5db;
+    
+    &:hover {
+      background: #e5e7eb;
+      border-color: #9ca3af;
+    }
+  }
+  
+  &.primary {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: 2px solid transparent;
+    
+    &:hover {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+  }
+`;
+
+const ErrorMessage = styled.div`
+  color: #ef4444;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+`;
+
+const PerformanceContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const PerformanceRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  
+  &:first-child {
+    background: white;
+    border-color: #d1d5db;
+  }
+`;
+
+const RemoveButton = styled.button`
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  font-weight: bold;
+  line-height: 1;
+  
+  &:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+  }
+  
+  &:disabled {
+    background: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const AddButton = styled.button`
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  
+  &:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const AddProjectModal = ({ isOpen, onClose, onSubmit, currentYear, settingsData }) => {
+  const [formData, setFormData] = useState({
+    사업부: '',
+    대분류: '',
+    중분류: '',
+    소분류: '',
+    과제명: '',
+    성과목록: [{ 성과구분: '', 경영성과: '' }], // 배열로 변경
+    시작: 1,
+    종료: 12,
+    진행상태: '미착수',
+    담당부서: '',
+    담당자: '',
+    관리자: '',
+    비고: ''
+  });
+
+  const [errors, setErrors] = useState({});
+
+  // 설정 데이터에서 옵션 추출 (기본값 사용)
+  const 사업부Options = settingsData?.divisions?.map(division => division.name) || ['VD', 'MX', '의료기기', 'DA', 'NW'];
+  const 대분류Options = settingsData?.categories?.map(category => category.name) || ['개발', '품질', '제조'];
+  const 중분류Options = settingsData?.midcategories?.map(midcategory => midcategory.name) || ['시스템 개발', '품질 관리', '제조 최적화', '데이터 분석'];
+  const 소분류Options = settingsData?.subcategories?.map(subcategory => subcategory.name) || ['시뮬레이션', '이상감지/조기개선', 'DB 플랫폼'];
+  const 진행상태Options = settingsData?.statuses?.map(status => status.name) || ['미착수', '정상진행', '이슈', '지연', '완료', '미배정', '계획', '보류', '취소'];
+  const 성과구분Options = settingsData?.objectives?.map(objective => objective.name) || ['업무 시간 효율화', '원가 절감', '품질 개선', '생산성 향상'];
+
+  const monthOptions = Array.from({ length: 12 }, (_, i) => ({
+    value: i + 1,
+    label: `${i + 1}월`
+  }));
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // 에러 클리어
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: null
+      }));
+    }
+  };
+
+  // 성과 관련 함수들
+  const handlePerformanceChange = (index, field, value) => {
+    const newPerformances = [...formData.성과목록];
+    newPerformances[index][field] = value;
+    setFormData(prev => ({
+      ...prev,
+      성과목록: newPerformances
+    }));
+    
+    // 에러 클리어
+    const errorKey = `성과목록_${index}_${field}`;
+    if (errors[errorKey]) {
+      setErrors(prev => ({
+        ...prev,
+        [errorKey]: null
+      }));
+    }
+  };
+
+  const addPerformance = () => {
+    if (formData.성과목록.length < 3) {
+      setFormData(prev => ({
+        ...prev,
+        성과목록: [...prev.성과목록, { 성과구분: '', 경영성과: '' }]
+      }));
+    }
+  };
+
+  const removePerformance = (index) => {
+    if (formData.성과목록.length > 1) {
+      const newPerformances = formData.성과목록.filter((_, i) => i !== index);
+      setFormData(prev => ({
+        ...prev,
+        성과목록: newPerformances
+      }));
+      
+      // 해당 인덱스의 에러 제거
+      const newErrors = { ...errors };
+      Object.keys(newErrors).forEach(key => {
+        if (key.startsWith(`성과목록_${index}_`)) {
+          delete newErrors[key];
+        }
+      });
+      setErrors(newErrors);
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.사업부) newErrors.사업부 = '사업부를 선택해주세요.';
+    if (!formData.대분류) newErrors.대분류 = '대분류를 선택해주세요.';
+    if (!formData.중분류) newErrors.중분류 = '중분류를 선택해주세요.';
+    if (!formData.소분류) newErrors.소분류 = '소분류를 선택해주세요.';
+    if (!formData.과제명.trim()) newErrors.과제명 = '과제명을 입력해주세요.';
+    
+    // 성과 목록 검증
+    formData.성과목록.forEach((performance, index) => {
+      if (!performance.성과구분) {
+        newErrors[`성과목록_${index}_성과구분`] = '성과구분을 선택해주세요.';
+      }
+      if (!performance.경영성과.trim()) {
+        newErrors[`성과목록_${index}_경영성과`] = '경영성과를 입력해주세요.';
+      }
+    });
+    
+    // 담당부서 및 담당자 유효성 검사 (쉼표로 구분된 값 고려)
+    const deptValues = formData.담당부서.split(',').map(dept => dept.trim()).filter(dept => dept.length > 0);
+    const assigneeValues = formData.담당자.split(',').map(person => person.trim()).filter(person => person.length > 0);
+    
+    if (deptValues.length === 0) newErrors.담당부서 = '담당부서를 입력해주세요.';
+    if (assigneeValues.length === 0) newErrors.담당자 = '담당자를 입력해주세요.';
+    if (!formData.관리자.trim()) newErrors.관리자 = '관리자를 입력해주세요.';
+    
+    if (formData.종료 < formData.시작) {
+      newErrors.종료 = '종료월은 시작월보다 늦어야 합니다.';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    // 담당부서와 담당자를 쉼표로 분리하여 배열로 변환
+    const processedData = {
+      ...formData,
+      담당부서: formData.담당부서.split(',').map(dept => dept.trim()).filter(dept => dept.length > 0),
+      담당자: formData.담당자.split(',').map(person => person.trim()).filter(person => person.length > 0)
+    };
+    
+    const newProject = {
+      ...processedData,
+      id: Date.now(), // 임시 ID
+      과제년도: currentYear,
+      시작: parseInt(formData.시작),
+      종료: parseInt(formData.종료)
+    };
+    
+    onSubmit(newProject);
+    handleClose();
+  };
+
+  const handleClose = () => {
+    setFormData({
+      사업부: '',
+      대분류: '',
+      중분류: '',
+      소분류: '',
+      과제명: '',
+      성과목록: [{ 성과구분: '', 경영성과: '' }],
+      시작: 1,
+      종료: 12,
+      진행상태: '미착수',
+      담당부서: '',
+      담당자: '',
+      관리자: '',
+      비고: ''
+    });
+    setErrors({});
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <ModalOverlay
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleClose();
+          }
+        }}
+      >
+        <ModalContainer
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          transition={{ type: "spring", damping: 25, stiffness: 500 }}
+        >
+          <ModalHeader>
+            <div className="title">
+              <Plus size={20} />
+              새 과제 추가 ({currentYear}년)
+            </div>
+            <button className="close-btn" onClick={handleClose}>
+              <X size={18} />
+            </button>
+          </ModalHeader>
+
+          <form onSubmit={handleSubmit}>
+            <ModalBody>
+              <FormGrid>
+                <FormGroup>
+                  <Label>
+                    <Building size={16} />
+                    사업부 <span className="required">*</span>
+                  </Label>
+                  <Select
+                    name="사업부"
+                    value={formData.사업부}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">사업부 선택</option>
+                    {사업부Options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </Select>
+                  {errors.사업부 && <ErrorMessage>{errors.사업부}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>
+                    <FileText size={16} />
+                    진행상태
+                  </Label>
+                  <Select
+                    name="진행상태"
+                    value={formData.진행상태}
+                    onChange={handleInputChange}
+                  >
+                    {진행상태Options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </Select>
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>대분류 <span className="required">*</span></Label>
+                  <Select
+                    name="대분류"
+                    value={formData.대분류}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">대분류 선택</option>
+                    {대분류Options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </Select>
+                  {errors.대분류 && <ErrorMessage>{errors.대분류}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>중분류 <span className="required">*</span></Label>
+                  <Select
+                    name="중분류"
+                    value={formData.중분류}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">중분류 선택</option>
+                    {중분류Options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </Select>
+                  {errors.중분류 && <ErrorMessage>{errors.중분류}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>소분류 <span className="required">*</span></Label>
+                  <Select
+                    name="소분류"
+                    value={formData.소분류}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">소분류 선택</option>
+                    {소분류Options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </Select>
+                  {errors.소분류 && <ErrorMessage>{errors.소분류}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup className="full-width">
+                  <Label>
+                    <FileText size={16} />
+                    과제명 <span className="required">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    name="과제명"
+                    value={formData.과제명}
+                    onChange={handleInputChange}
+                    placeholder="과제명을 입력하세요"
+                    required
+                  />
+                  {errors.과제명 && <ErrorMessage>{errors.과제명}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup className="full-width">
+                  <Label>
+                    <Target size={16} />
+                    성과 구분 & 성과 상세 <span className="required">*</span>
+                  </Label>
+                  <PerformanceContainer>
+                    {formData.성과목록.map((performance, index) => (
+                      <PerformanceRow key={index}>
+                        <Select
+                          value={performance.성과구분}
+                          onChange={(e) => handlePerformanceChange(index, '성과구분', e.target.value)}
+                          required
+                        >
+                          <option value="">성과구분 선택</option>
+                          {성과구분Options.map(option => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </Select>
+                        
+                        <Input
+                          type="text"
+                          value={performance.경영성과}
+                          onChange={(e) => handlePerformanceChange(index, '경영성과', e.target.value)}
+                          placeholder="예: 5PM, 1.5억 등"
+                          required
+                        />
+                        
+                        <RemoveButton
+                          type="button"
+                          onClick={() => removePerformance(index)}
+                          disabled={formData.성과목록.length === 1}
+                          title="성과 삭제"
+                        >
+                          ×
+                        </RemoveButton>
+                        
+                        {/* 에러 메시지 표시 */}
+                        {(errors[`성과목록_${index}_성과구분`] || errors[`성과목록_${index}_경영성과`]) && (
+                          <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
+                            {errors[`성과목록_${index}_성과구분`] && (
+                              <ErrorMessage>{errors[`성과목록_${index}_성과구분`]}</ErrorMessage>
+                            )}
+                            {errors[`성과목록_${index}_경영성과`] && (
+                              <ErrorMessage>{errors[`성과목록_${index}_경영성과`]}</ErrorMessage>
+                            )}
+                          </div>
+                        )}
+                      </PerformanceRow>
+                    ))}
+                    
+                    {formData.성과목록.length < 3 && (
+                      <AddButton
+                        type="button"
+                        onClick={addPerformance}
+                      >
+                        <Plus size={16} />
+                        성과 추가
+                      </AddButton>
+                    )}
+                  </PerformanceContainer>
+                </FormGroup>
+
+                <FormGroup className="full-width">
+                  <Label>
+                    <Calendar size={16} />
+                    진행 기간
+                  </Label>
+                  <DateRangeContainer>
+                    <div>
+                      <Select
+                        name="시작"
+                        value={formData.시작}
+                        onChange={handleInputChange}
+                      >
+                        {monthOptions.map(({ value, label }) => (
+                          <option key={value} value={value}>{label} 시작</option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div>
+                      <Select
+                        name="종료"
+                        value={formData.종료}
+                        onChange={handleInputChange}
+                      >
+                        {monthOptions.map(({ value, label }) => (
+                          <option key={value} value={value}>{label} 종료</option>
+                        ))}
+                      </Select>
+                      {errors.종료 && <ErrorMessage>{errors.종료}</ErrorMessage>}
+                    </div>
+                  </DateRangeContainer>
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>
+                    <Building size={16} />
+                    담당부서 <span className="required">*</span>
+                    <small style={{fontSize: '0.75rem', color: '#6b7280', fontWeight: 400, marginLeft: '0.25rem'}}>(콤마로 구분)</small>
+                  </Label>
+                  <Input
+                    type="text"
+                    name="담당부서"
+                    value={formData.담당부서}
+                    onChange={handleInputChange}
+                    placeholder="담당부서를 입력하세요 (예: Mecha Solution(VD), Mecha 1Lab(VD))"
+                    required
+                  />
+                  {formData.담당부서 && (
+                    <div style={{fontSize: '0.75rem', color: '#059669', marginTop: '0.25rem'}}>
+                      확인: {formData.담당부서.split(',').map(dept => dept.trim()).filter(dept => dept.length > 0).length}개 부서
+                    </div>
+                  )}
+                  {errors.담당부서 && <ErrorMessage>{errors.담당부서}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>
+                    <User size={16} />
+                    담당자 <span className="required">*</span>
+                    <small style={{fontSize: '0.75rem', color: '#6b7280', fontWeight: 400, marginLeft: '0.25rem'}}>(콤마로 구분)</small>
+                  </Label>
+                  <Input
+                    type="text"
+                    name="담당자"
+                    value={formData.담당자}
+                    onChange={handleInputChange}
+                    placeholder="담당자 이름을 입력하세요 (예: 남규현, 박용진)"
+                    required
+                  />
+                  {formData.담당자 && (
+                    <div style={{fontSize: '0.75rem', color: '#059669', marginTop: '0.25rem'}}>
+                      확인: {formData.담당자.split(',').map(person => person.trim()).filter(person => person.length > 0).length}명
+                    </div>
+                  )}
+                  {errors.담당자 && <ErrorMessage>{errors.담당자}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup>
+                  <Label>
+                    <ShieldCheck size={16} />
+                    관리자 <span className="required">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    name="관리자"
+                    value={formData.관리자}
+                    onChange={handleInputChange}
+                    placeholder="관리자 이름을 입력하세요"
+                    required
+                  />
+                  {errors.관리자 && <ErrorMessage>{errors.관리자}</ErrorMessage>}
+                </FormGroup>
+
+                <FormGroup className="full-width">
+                  <Label>
+                    <FileText size={16} />
+                    비고
+                  </Label>
+                  <TextArea
+                    name="비고"
+                    value={formData.비고}
+                    onChange={handleInputChange}
+                    placeholder="추가 설명이나 참고사항을 입력하세요 (선택사항)"
+                  />
+                </FormGroup>
+              </FormGrid>
+            </ModalBody>
+
+            <ModalFooter>
+              <Button type="button" className="secondary" onClick={handleClose}>
+                취소
+              </Button>
+              <Button type="submit" className="primary">
+                <Save size={16} />
+                과제 추가
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContainer>
+      </ModalOverlay>
+    </AnimatePresence>
+  );
+};
+
+export default AddProjectModal;

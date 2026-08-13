@@ -1,0 +1,17 @@
+import React, { useState, useEffect } from 'react';
+import styled from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  X, 
+  Calendar, 
+  Building, 
+  Target, 
+  User, 
+  ShieldCheck, 
+  FileText, 
+  TrendingUp,
+  Edit3,
+  Save,
+  Plus,
+  Minus
+} from 'lucide-react';

@@ -1,0 +1,183 @@
+import React from 'react';
+import styled from 'styled-components';
+import { User, Building, ShieldCheck } from 'lucide-react';
+
+const SectionContainer = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+  
+  @media (max-width: 1200px) {
+    flex: none;
+    width: 100%;
+  }
+  
+  @media (max-width: 768px) {
+    gap: 1rem;
+  }
+`;
+
+const SectionTitle = styled.h3`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+  }
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const Label = styled.label`
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  
+  .required {
+    color: #ef4444;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 0.8rem;
+  }
+`;
+
+const Input = styled.input`
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  min-width: 0;
+  
+  &:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  }
+  
+  &:invalid {
+    border-color: #ef4444;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.8rem;
+  }
+`;
+
+const ErrorMessage = styled.div`
+  color: #ef4444;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  word-break: break-word;
+  
+  @media (max-width: 768px) {
+    font-size: 0.7rem;
+  }
+`;
+
+const ResponsibleInfoSection = ({ formData, handleInputChange, errors }) => {
+  return (
+    <SectionContainer>
+      <SectionTitle>
+        <User size={16} />
+        담당 정보
+      </SectionTitle>
+      
+      <FormGroup>
+        <Label>
+          <ShieldCheck size={16} />
+          과제 PL <span className="required">*</span>
+        </Label>
+        <Input
+          type="text"
+          name="과제PL"
+          value={formData.과제PL}
+          onChange={handleInputChange}
+          placeholder="과제 PL 이름을 입력하세요"
+          required
+        />
+        {errors.과제PL && <ErrorMessage>{errors.과제PL}</ErrorMessage>}
+      </FormGroup>
+
+      <FormGroup>
+        <Label>
+          <Building size={16} />
+          담당부서 <span className="required">*</span>
+          <small style={{fontSize: '0.75rem', color: '#6b7280', fontWeight: 400, marginLeft: '0.25rem'}}>(콤마로 구분)</small>
+        </Label>
+        <Input
+          type="text"
+          name="담당부서"
+          value={formData.담당부서}
+          onChange={handleInputChange}
+          placeholder="담당부서를 입력하세요 (예: Mecha Solution(VD), Mecha 1Lab(VD))"
+          required
+        />
+        {formData.담당부서 && (
+          <div style={{fontSize: '0.75rem', color: '#059669', marginTop: '0.25rem'}}>
+            확인: {formData.담당부서.split(',').map(dept => dept.trim()).filter(dept => dept.length > 0).length}개 부서
+          </div>
+        )}
+        {errors.담당부서 && <ErrorMessage>{errors.담당부서}</ErrorMessage>}
+      </FormGroup>
+
+      <FormGroup>
+        <Label>
+          <User size={16} />
+          과제 참여 인력 <span className="required">*</span>
+          <small style={{fontSize: '0.75rem', color: '#6b7280', fontWeight: 400, marginLeft: '0.25rem'}}>(콤마로 구분)</small>
+        </Label>
+        <Input
+          type="text"
+          name="과제참여인력"
+          value={formData.과제참여인력}
+          onChange={handleInputChange}
+          placeholder="과제 참여 인력을 입력하세요 (예: 남규현, 박용진)"
+          required
+        />
+        {formData.과제참여인력 && (
+          <div style={{fontSize: '0.75rem', color: '#059669', marginTop: '0.25rem'}}>
+            확인: {formData.과제참여인력.split(',').map(person => person.trim()).filter(person => person.length > 0).length}명
+          </div>
+        )}
+        {errors.과제참여인력 && <ErrorMessage>{errors.과제참여인력}</ErrorMessage>}
+      </FormGroup>
+
+      <FormGroup>
+        <Label>
+          <User size={16} />
+          작성자
+        </Label>
+        <Input
+          type="text"
+          name="작성자"
+          value={formData.작성자}
+          onChange={handleInputChange}
+          placeholder="작성자 이름을 입력하세요"
+        />
+      </FormGroup>
+    </SectionContainer>
+  );
+};
+
+export default ResponsibleInfoSection;

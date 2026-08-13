@@ -1,0 +1,188 @@
+import React, { useMemo } from 'react';
+import styled from 'styled-components';
+import { motion } from 'framer-motion';
+import StatusChart from './StatusChart';
+import DivisionStatusGrid from './DivisionStatusGrid';
+import ProjectSummary from './ProjectSummary';
+import ProgressOverview from './ProgressOverview';
+import ProgressTrendChart from './ProgressTrendChart';
+import PerformanceMetrics from './PerformanceMetrics';
+
+const Container = styled.div`
+  width: 100%;
+  height: 100%;
+  padding: 2rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  overflow-y: auto;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: between;
+  align-items: center;
+  margin-bottom: 1rem;
+  
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .subtitle {
+    font-size: 1rem;
+    color: #64748b;
+    margin-top: 0.5rem;
+  }
+`;
+
+const MetricsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+`;
+
+const ChartsGrid = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  
+  @media (max-width: 1400px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const BottomGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const DashboardView = ({ projects, statusColors, divisionColors }) => {
+  // 데이터 분석을 위한 메모이제이션
+  const dashboardData = useMemo(() => {
+    if (!projects || projects.length === 0) {
+      return {
+        totalProjects: 0,
+        statusCounts: {},
+        divisionCounts: {},
+        completionRate: 0,
+        onTimeRate: 0,
+        pocProjects: 0,
+        keyProjects: 0
+      };
+    }
+
+    // 상태별 카운트
+    const statusCounts = {};
+    projects.forEach(project => {
+      const status = project.진행상태 || '미착수';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+
+    // 사업부별 카운트
+    const divisionCounts = {};
+    projects.forEach(project => {
+      const division = project.사업부 || 'Unknown';
+      divisionCounts[division] = (divisionCounts[division] || 0) + 1;
+    });
+
+    // 완료율 계산
+    const completedProjects = statusCounts['완료'] || 0;
+    const completionRate = projects.length > 0 ? (completedProjects / projects.length * 100) : 0;
+
+    // 정상 진행율 계산 (완료 + 정상진행)
+    const onTimeProjects = (statusCounts['완료'] || 0) + (statusCounts['정상진행'] || 0);
+    const onTimeRate = projects.length > 0 ? (onTimeProjects / projects.length * 100) : 0;
+
+    // PoC 과제 수
+    const pocProjects = projects.filter(p => p.PoC과제여부).length;
+    
+    // 중점 과제 수
+    const keyProjects = projects.filter(p => p.중점과제여부).length;
+
+    return {
+      totalProjects: projects.length,
+      statusCounts,
+      divisionCounts,
+      completionRate,
+      onTimeRate,
+      pocProjects,
+      keyProjects
+    };
+  }, [projects]);
+
+  return (
+    <Container>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <Header>
+          <div>
+            <h1>디지털 트윈 대시보드</h1>
+            <div className="subtitle">
+              과제 진행 현황 및 성과 지표를 실시간으로 모니터링
+            </div>
+          </div>
+        </Header>
+
+        {/* 주요 지표 카드들 */}
+        <MetricsRow>
+          <ProjectSummary
+            totalProjects={dashboardData.totalProjects}
+            completionRate={dashboardData.completionRate}
+            onTimeRate={dashboardData.onTimeRate}
+            pocProjects={dashboardData.pocProjects}
+            keyProjects={dashboardData.keyProjects}
+          />
+          <ProgressOverview 
+            statusCounts={dashboardData.statusCounts}
+            statusColors={statusColors}
+          />
+        </MetricsRow>
+
+        {/* 메인 차트 그리드 */}
+        <ChartsGrid>
+          <DivisionStatusGrid
+            projects={projects}
+            divisionColors={divisionColors}
+            statusColors={statusColors}
+          />
+          <StatusChart
+            statusCounts={dashboardData.statusCounts}
+            statusColors={statusColors}
+          />
+        </ChartsGrid>
+
+        {/* 하단 차트 그리드 */}
+        <BottomGrid>
+          <ProgressTrendChart
+            projects={projects}
+            statusColors={statusColors}
+          />
+          <PerformanceMetrics
+            projects={projects}
+            statusColors={statusColors}
+          />
+        </BottomGrid>
+      </motion.div>
+    </Container>
+  );
+};
+
+export default DashboardView;

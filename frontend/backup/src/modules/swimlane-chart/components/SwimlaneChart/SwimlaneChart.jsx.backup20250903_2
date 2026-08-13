@@ -1,0 +1,460 @@
+import React, { useState, useRef, useEffect } from 'react';
+import styled from 'styled-components';
+import { Edit3, Trash2 } from 'lucide-react';
+import ProcessCell from '../ProcessCell/ProcessCell';
+
+const ChartContainer = styled.div`
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+`;
+
+const ChartContent = styled.div`
+  min-width: 800px;
+  min-height: 600px;
+  position: relative;
+  padding: 20px;
+`;
+
+const GridHeader = styled.div`
+  display: grid;
+  grid-template-columns: ${props => `${props.stepWidth}px repeat(${props.orgCount}, ${props.colWidth}px)`};
+  gap: 1px;
+  margin-bottom: 1px;
+  background-color: #e5e7eb;
+  border-radius: 8px 8px 0 0;
+`;
+
+const GridBody = styled.div`
+  display: grid;
+  grid-template-columns: ${props => `${props.stepWidth}px repeat(${props.orgCount}, ${props.colWidth}px)`};
+  gap: 1px;
+  background-color: #e5e7eb;
+  border-radius: 0 0 8px 8px;
+`;
+
+const HeaderCell = styled.div`
+  background: #374151;
+  color: white;
+  padding: 16px 12px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  position: relative;
+  
+  &:first-child {
+    background: #1f2937;
+    border-radius: 8px 0 0 0;
+    cursor: col-resize;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 10%;
+      bottom: 10%;
+      width: 4px;
+      background: rgba(59, 130, 246, 0.4);
+      cursor: col-resize;
+      z-index: 10;
+      border-radius: 2px;
+    }
+    
+    &:hover::after {
+      background: rgba(59, 130, 246, 0.8);
+    }
+  }
+  
+  &:last-child {
+    border-radius: 0 8px 0 0;
+  }
+  
+  &:not(:first-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 10%;
+    bottom: 10%;
+    width: 4px;
+    background: rgba(99, 102, 241, 0.4);
+    cursor: col-resize;
+    z-index: 10;
+    border-radius: 2px;
+  }
+  
+  &:not(:first-child):hover::after {
+    background: rgba(99, 102, 241, 0.8);
+  }
+`;
+
+const StepCell = styled.div`
+  background: #f3f4f6;
+  padding: 16px 12px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: ${props => props.height || 120}px;
+  border-left: 4px solid #6366f1;
+  position: relative;
+  
+  .step-name {
+    flex: 1;
+  }
+  
+  .step-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  
+  &:hover .step-actions {
+    opacity: 1;
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    right: 10%;
+    height: 4px;
+    background: rgba(16, 185, 129, 0.4);
+    cursor: row-resize;
+    z-index: 10;
+    border-radius: 2px;
+  }
+  
+  &:hover::after {
+    background: rgba(16, 185, 129, 0.8);
+  }
+`;
+
+const ProcessCellContainer = styled.div`
+  background: white;
+  min-height: ${props => props.height || 120}px;
+  border: 1px solid #e5e7eb;
+  position: relative;
+`;
+
+const ActionButton = styled.button`
+  padding: 4px;
+  border: none;
+  background: none;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: #e5e7eb;
+    color: #374151;
+  }
+  
+  &.delete:hover {
+    color: #dc2626;
+    background: #fee2e2;
+  }
+`;
+
+const SwimlaneChart = ({ 
+  organizations = [], 
+  steps = [], 
+  cellData = {}, // { "stepId-orgId": { processes: [], connections: [] } }
+  onAddOrganization,
+  onEditOrganization,
+  onDeleteOrganization,
+  onAddStep,
+  onEditStep,
+  onDeleteStep,
+  onUpdateCellData
+}) => {
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [colWidths, setColWidths] = useState({});
+  const [rowHeights, setRowHeights] = useState({});
+  const [resizing, setResizing] = useState(null);
+  const [stepColumnWidth, setStepColumnWidth] = useState(200);
+
+  // 기본값 설정
+  const defaultOrganizations = organizations.length > 0 ? organizations : [
+    { id: 1, name: '마케팅팀' },
+    { id: 2, name: '개발팀' },
+    { id: 3, name: '품질팀' }
+  ];
+
+  const defaultSteps = steps.length > 0 ? steps : [
+    { id: 1, name: '1단계' },
+    { id: 2, name: '2단계' },
+    { id: 3, name: '3단계' },
+    { id: 4, name: '4단계' }
+  ];
+
+  // 열 너비와 행 높이 계산
+  const getColWidth = (orgId) => colWidths[orgId] || 150;
+  const getRowHeight = (stepId) => rowHeights[stepId] || 120;
+
+  // 리사이징 핸들러
+  const handleMouseDown = (e, type, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizing({ type, id, startX: e.clientX, startY: e.clientY });
+  };
+
+  const handleMouseMove = (e) => {
+    if (!resizing) return;
+
+    if (resizing.type === 'column') {
+      const deltaX = e.clientX - resizing.startX;
+      const currentWidth = getColWidth(resizing.id);
+      const newWidth = Math.max(100, currentWidth + deltaX); // 최소 너비 100px
+      setColWidths(prev => ({ ...prev, [resizing.id]: newWidth }));
+    } else if (resizing.type === 'row') {
+      const deltaY = e.clientY - resizing.startY;
+      const currentHeight = getRowHeight(resizing.id);
+      const newHeight = Math.max(80, currentHeight + deltaY); // 최소 높이 80px
+      setRowHeights(prev => ({ ...prev, [resizing.id]: newHeight }));
+    } else if (resizing.type === 'stepColumn') {
+      const deltaX = e.clientX - resizing.startX;
+      const newWidth = Math.max(120, stepColumnWidth + deltaX); // 최소 너비 120px
+      setStepColumnWidth(newWidth);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setResizing(null);
+  };
+
+  useEffect(() => {
+    if (resizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [resizing]);
+
+  const handleCellClick = (stepId, orgId) => {
+    // ProcessCell에서 직접 처리하므로 여기서는 제거
+  };
+
+  const handleAddProcess = (cellId, newProcess) => {
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      processes: [...currentData.processes, newProcess]
+    };
+    onUpdateCellData(cellId, updatedData);
+  };
+
+  const handleUpdateProcess = (cellId, processId, updatedProcess) => {
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      processes: currentData.processes.map(p => 
+        p.id === processId ? updatedProcess : p
+      )
+    };
+    onUpdateCellData(cellId, updatedData);
+  };
+
+  const handleDeleteProcess = (cellId, processId) => {
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      processes: currentData.processes.filter(p => p.id !== processId)
+    };
+    onUpdateCellData(cellId, updatedData);
+  };
+
+  const handleUpdateConnections = (cellId, connections) => {
+    const currentData = cellData[cellId] || { processes: [], connections: [] };
+    const updatedData = {
+      ...currentData,
+      connections
+    };
+    onUpdateCellData(cellId, updatedData);
+  };
+
+  const handleEditStep = (e, stepId) => {
+    e.stopPropagation();
+    if (onEditStep) {
+      onEditStep(stepId);
+    }
+  };
+
+  const handleDeleteStep = (e, stepId) => {
+    e.stopPropagation();
+    if (onDeleteStep) {
+      onDeleteStep(stepId);
+    }
+  };
+
+  const getCellData = (stepId, orgId) => {
+    const cellId = `${stepId}-${orgId}`;
+    return cellData[cellId] || { processes: [], connections: [] };
+  };
+
+  return (
+    <ChartContainer>
+      <ChartContent>
+        {/* 헤더 */}
+        <GridHeader 
+          orgCount={defaultOrganizations.length}
+          colWidth={150}
+          stepWidth={stepColumnWidth}
+        >
+          <HeaderCell 
+            onMouseDown={(e) => handleMouseDown(e, 'stepColumn', 'step')}
+            style={{ position: 'relative' }}
+          >
+            단계 \ 팀
+            <div
+              style={{
+                position: 'absolute',
+                right: '-2px',
+                top: 0,
+                bottom: 0,
+                width: '6px',
+                background: 'rgba(59, 130, 246, 0.4)',
+                cursor: 'col-resize',
+                zIndex: 20,
+                borderRadius: '0 2px 2px 0',
+                transition: 'background-color 0.2s ease'
+              }}
+              onMouseDown={(e) => handleMouseDown(e, 'stepColumn', 'step')}
+              onMouseEnter={(e) => {
+                e.target.style.background = 'rgba(59, 130, 246, 0.8)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'rgba(59, 130, 246, 0.4)';
+              }}
+              title="Resize step column"
+            />
+          </HeaderCell>
+          {defaultOrganizations.map(org => (
+            <HeaderCell 
+              key={org.id}
+              style={{ width: getColWidth(org.id) }}
+            >
+              {org.name}
+              <div
+                style={{
+                  position: 'absolute',
+                  right: '-2px',
+                  top: 0,
+                  bottom: 0,
+                  width: '6px',
+                  background: 'rgba(99, 102, 241, 0.4)',
+                  cursor: 'col-resize',
+                  zIndex: 20,
+                  borderRadius: '0 2px 2px 0',
+                  transition: 'background-color 0.2s ease'
+                }}
+                onMouseDown={(e) => handleMouseDown(e, 'column', org.id)}
+                onMouseEnter={(e) => {
+                  e.target.style.background = 'rgba(99, 102, 241, 0.8)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'rgba(99, 102, 241, 0.4)';
+                }}
+                title={`Resize ${org.name} column`}
+              />
+            </HeaderCell>
+          ))}
+        </GridHeader>
+
+        {/* 본문 */}
+        <GridBody 
+          orgCount={defaultOrganizations.length}
+          colWidth={150}
+          stepWidth={stepColumnWidth}
+        >
+          {defaultSteps.map(step => (
+            <React.Fragment key={step.id}>
+              <StepCell height={getRowHeight(step.id)}>
+                <div className="step-name">{step.name}</div>
+                <div className="step-actions">
+                  <ActionButton 
+                    onClick={(e) => handleEditStep(e, step.id)}
+                    title="편집"
+                  >
+                    <Edit3 size={14} />
+                  </ActionButton>
+                  <ActionButton 
+                    className="delete"
+                    onClick={(e) => handleDeleteStep(e, step.id)}
+                    title="삭제"
+                  >
+                    <Trash2 size={14} />
+                  </ActionButton>
+                </div>
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '-2px',
+                    left: 0,
+                    right: 0,
+                    height: '6px',
+                    background: 'rgba(16, 185, 129, 0.4)',
+                    cursor: 'row-resize',
+                    zIndex: 20,
+                    borderRadius: '0 0 2px 2px',
+                    transition: 'background-color 0.2s ease'
+                  }}
+                  onMouseDown={(e) => handleMouseDown(e, 'row', step.id)}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'rgba(16, 185, 129, 0.8)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'rgba(16, 185, 129, 0.4)';
+                  }}
+                  title={`Resize ${step.name} row`}
+                />
+              </StepCell>
+              
+              {defaultOrganizations.map(org => {
+                const cellId = `${step.id}-${org.id}`;
+                const data = getCellData(step.id, org.id);
+                return (
+                  <ProcessCellContainer 
+                    key={cellId}
+                    height={getRowHeight(step.id)}
+                    style={{ width: getColWidth(org.id) }}
+                  >
+                    <ProcessCell
+                      cellId={cellId}
+                      processes={data.processes}
+                      connections={data.connections}
+                      onAddProcess={handleAddProcess}
+                      onUpdateProcess={handleUpdateProcess}
+                      onDeleteProcess={handleDeleteProcess}
+                      onUpdateConnections={handleUpdateConnections}
+                    />
+                  </ProcessCellContainer>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </GridBody>
+      </ChartContent>
+    </ChartContainer>
+  );
+};
+
+export default SwimlaneChart;

@@ -1,0 +1,178 @@
+/* 일괄 노드 추가 모달 스타일 */
+.bulk-modal {
+  max-width: 700px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.bulk-instructions {
+  background: #f8f9fa;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border-left: 4px solid #3498db;
+}
+
+.bulk-instructions p {
+  margin: 0;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.bulk-table-container {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.bulk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.bulk-table th {
+  background: #f5f5f5;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.bulk-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: top;
+}
+
+.bulk-table tr:last-child td {
+  border-bottom: none;
+}
+
+.bulk-table tr:hover {
+  background: #fafafa;
+}
+
+.bulk-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.bulk-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.bulk-input-small {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.bulk-input-small:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.bulk-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.bulk-select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.bulk-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulk-action-btn:hover {
+  background: #f8f9fa;
+  border-color: #ccc;
+}
+
+.bulk-action-btn.add {
+  color: #2ecc71;
+}
+
+.bulk-action-btn.add:hover {
+  background: #f0fff4;
+  border-color: #2ecc71;
+}
+
+.bulk-action-btn.remove {
+  color: #e74c3c;
+}
+
+.bulk-action-btn.remove:hover {
+  background: #fff5f5;
+  border-color: #e74c3c;
+}
+
+.bulk-summary {
+  background: #e8f5e8;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 4px solid #2ecc71;
+}
+
+.bulk-summary p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #27ae60;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .bulk-modal {
+    max-width: 95vw;
+    margin: 10px;
+  }
+  
+  .bulk-table-container {
+    overflow-x: auto;
+  }
+  
+  .bulk-table {
+    min-width: 500px;
+  }
+  
+  .bulk-instructions {
+    font-size: 13px;
+  }
+}

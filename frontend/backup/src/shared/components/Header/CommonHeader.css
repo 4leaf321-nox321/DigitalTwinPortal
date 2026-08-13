@@ -1,0 +1,870 @@
+/* Common Header Styles */
+
+.common-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 24px;
+  height: 64px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1000;
+  min-height: 64px;
+  overflow: visible;
+}
+
+.common-header .header-left {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  flex-shrink: 1;
+  min-width: 0;
+  height: auto;
+  flex: 1;
+  max-width: 50%;
+}
+
+.common-header .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.common-header .logo h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.stats-badges {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+}
+
+.stat-badge {
+  background-color: #f0f8ff;
+  color: #646cff;
+  padding: 0.5rem 0.8rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #e0e8ff;
+  white-space: nowrap;
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.common-header .header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.common-header .header-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background-color: transparent;
+  color: #666;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: fit-content;
+  height: 36px;
+  min-height: 36px;
+}
+
+.common-header .header-btn:hover {
+  background-color: #f0f0f0;
+  color: #333;
+  transform: translateY(-1px);
+}
+
+.common-header .header-btn:active {
+  background-color: #e0e0e0;
+  transform: translateY(0);
+}
+
+/* Home button */
+.common-header .home-btn {
+  background-color: #f3e5f5 !important;
+  color: #7b1fa2 !important;
+  border: 1px solid #ce93d8 !important;
+}
+
+.common-header .home-btn:hover {
+  background-color: #e1bee7 !important;
+  color: #4a148c !important;
+  border-color: #ba68c8 !important;
+}
+
+.common-header .home-btn:active {
+  background-color: #ce93d8 !important;
+}
+
+/* Action buttons base style */
+.common-header .action-btn {
+  color: #495057 !important;
+  background-color: #ffffff !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+}
+
+.common-header .action-btn:hover {
+  background-color: #e9ecef !important;
+  color: #212529 !important;
+  border-color: #adb5bd !important;
+}
+
+/* Button variations */
+.common-header .add-btn {
+  background-color: #e8f5e8 !important;
+  color: #2d5a2d !important;
+  border-color: #a8d4a8 !important;
+}
+
+.common-header .add-btn:hover {
+  background-color: #d4edd4 !important;
+  color: #1e3a1e !important;
+  border-color: #85c685 !important;
+}
+
+.common-header .sample-btn {
+  background-color: #fff3cd !important;
+  color: #856404 !important;
+  border-color: #ffeaa7 !important;
+}
+
+.common-header .sample-btn:hover {
+  background-color: #ffeaa7 !important;
+  color: #533f03 !important;
+  border-color: #ffd93d !important;
+}
+
+.common-header .clear-btn {
+  background-color: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-color: #fecaca !important;
+}
+
+.common-header .clear-btn:hover {
+  background-color: #fecaca !important;
+  color: #b91c1c !important;
+  border-color: #f87171 !important;
+}
+
+.common-header .bulk-add-btn {
+  background-color: #f0f9ff !important;
+  color: #0369a1 !important;
+  border-color: #bae6fd !important;
+}
+
+.common-header .bulk-add-btn:hover {
+  background-color: #e0f2fe !important;
+  color: #0c4a6e !important;
+  border-color: #7dd3fc !important;
+}
+
+/* Connect button */
+.common-header .connect-btn {
+  background-color: #e3f2fd !important;
+  color: #1565c0 !important;
+  border-color: #90caf9 !important;
+}
+
+.common-header .connect-btn:hover {
+  background-color: #bbdefb !important;
+  color: #0d47a1 !important;
+  border-color: #64b5f6 !important;
+}
+
+.common-header .connect-btn.active {
+  background-color: #ffebee !important;
+  color: #c62828 !important;
+  border-color: #ef9a9a !important;
+}
+
+.common-header .connect-btn.active:hover {
+  background-color: #ffcdd2 !important;
+  color: #b71c1c !important;
+  border-color: #e57373 !important;
+}
+
+/* Label toggle button */
+.common-header .label-toggle-btn {
+  background-color: #f8f4ff !important;
+  color: #7c3aed !important;
+  border-color: #d8b4fe !important;
+}
+
+.common-header .label-toggle-btn:hover {
+  background-color: #ede9fe !important;
+  color: #5b21b6 !important;
+  border-color: #c4b5fd !important;
+}
+
+.common-header .label-toggle-btn.active {
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+  border-color: #6d28d9 !important;
+  box-shadow: 0 2px 4px rgba(124, 58, 237, 0.25) !important;
+}
+
+.common-header .label-toggle-btn.active:hover {
+  background-color: #6d28d9 !important;
+  color: #ffffff !important;
+  border-color: #5b21b6 !important;
+}
+
+/* Search button */
+.common-header .search-btn {
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #93c5fd !important;
+}
+
+.common-header .search-btn:hover {
+  background-color: #dbeafe !important;
+  color: #1e40af !important;
+  border-color: #60a5fa !important;
+}
+
+/* Knowledge Graph specific styles */
+.common-header .header-left .search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 0 12px;
+  min-width: 200px;
+  max-width: 400px;
+  width: 100%;
+  flex: 1;
+  height: 40px;
+  flex-shrink: 1;
+  align-self: center;
+  margin: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  transform: none !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+}
+
+.common-header .search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 0 12px;
+  min-width: 200px;
+  max-width: 400px;
+  width: 100%;
+  flex: 1;
+  height: 40px;
+  flex-shrink: 1;
+  align-self: center;
+  margin: 0;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.common-header .header-left .search-container input {
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-size: 14px;
+  color: #495057;
+  margin: 0 !important;
+  padding: 0;
+}
+
+.common-header .header-left .search-container input::placeholder {
+  color: #6c757d;
+}
+
+.common-header .search-container input {
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-size: 14px;
+  color: #495057;
+}
+
+.common-header .search-container input::placeholder {
+  color: #6c757d;
+}
+
+.common-header .dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.common-header .dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 180px;
+  margin-top: 4px;
+  padding: 4px;
+}
+
+.common-header .dropdown-menu button {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #495057;
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.common-header .dropdown-menu button:hover {
+  background-color: #f8f9fa;
+}
+
+.common-header .dropdown-menu button.active {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Header center content container */
+.header-center-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  overflow: visible;
+  min-height: 48px;
+  height: auto;
+  align-self: center;
+  width: max-content;
+}
+
+/* Add Project Button - outside of header-actions */
+.header-center-content .add-project-btn {
+  background-color: #10b981;
+  color: white;
+  border: 1px solid #059669;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 36px;
+  min-height: 36px;
+}
+
+.header-center-content .add-project-btn:hover {
+  background-color: #059669;
+  color: white;
+  border-color: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.header-center-content .add-project-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2);
+}
+
+/* Header actions container - now only contains view toggle */
+.header-center-content .header-actions {
+  display: flex;
+  align-items: center;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid #e9ecef;
+  flex-shrink: 0;
+  overflow: visible;
+  min-height: 48px;
+  height: auto;
+  align-self: center;
+  width: max-content;
+}
+
+/* View toggle inside header-actions */
+.header-center-content .header-actions .view-toggle {
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 3px;
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.header-center-content .header-actions .view-toggle .toggle-btn {
+  padding: 6px 8px;
+  border: none;
+  background-color: transparent;
+  color: #666;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: 50px;
+  justify-content: center;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-center-content .header-actions .view-toggle .toggle-btn:hover {
+  background-color: #f1f3f4;
+  color: #333;
+}
+
+.header-center-content .header-actions .view-toggle .toggle-btn.active {
+  background-color: #007bff;
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 123, 255, 0.25);
+}
+
+.header-center-content .header-actions .view-toggle .toggle-btn.active:hover {
+  background-color: #0056b3;
+  color: white;
+}
+
+.header-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #dee2e6;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* View toggle */
+.view-toggle {
+  display: flex;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 4px;
+  border: 1px solid #e9ecef;
+  flex-shrink: 0;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: none;
+  background-color: transparent;
+  color: #666;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: 60px;
+  justify-content: center;
+}
+
+.toggle-btn:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.toggle-btn.active {
+  background-color: #007bff;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.25);
+}
+
+.toggle-btn.active:hover {
+  background-color: #0056b3;
+  color: white;
+}
+
+/* Import/Export Dropdown Styles */
+.common-header .header-import-dropdown,
+.common-header .header-export-dropdown {
+  display: inline-block;
+  position: relative;
+}
+
+.common-header .header-import-dropdown .import-dropdown-trigger,
+.common-header .header-export-dropdown .export-dropdown-trigger {
+  color: #495057;
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.common-header .header-import-dropdown .import-dropdown-trigger:hover,
+.common-header .header-export-dropdown .export-dropdown-trigger:hover {
+  background-color: #e9ecef;
+  color: #212529;
+  border-color: #adb5bd;
+}
+
+.common-header .header-import-dropdown .import-dropdown-trigger:disabled,
+.common-header .header-export-dropdown .export-dropdown-trigger:disabled {
+  background-color: #e9ecef;
+  color: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Dropdown 메뉴가 다른 요소들 위에 표시되도록 z-index 조정 */
+.common-header .header-import-dropdown .import-dropdown-menu,
+.common-header .header-export-dropdown .export-dropdown-menu {
+  z-index: 10000 !important;
+}
+
+.common-header .header-import-dropdown .import-dropdown-overlay,
+.common-header .header-export-dropdown .export-dropdown-overlay {
+  z-index: 9999 !important;
+}
+
+/* Responsive design */
+@media (max-width: 1300px) {
+  .header-center-content {
+    gap: 6px;
+  }
+  
+  .header-center-content .header-actions {
+    gap: 6px;
+    padding: 6px;
+    min-height: 40px;
+    height: auto;
+  }
+  
+  .common-header .action-btn {
+    padding: 5px 7px !important;
+    font-size: 11px !important;
+  }
+  
+  .common-header .header-import-dropdown .import-dropdown-trigger,
+  .common-header .header-export-dropdown .export-dropdown-trigger {
+    padding: 5px 7px;
+    font-size: 11px;
+  }
+  
+  .header-center-content .header-actions .view-toggle .toggle-btn {
+    padding: 4px 5px;
+    font-size: 9px;
+    min-width: 40px;
+    gap: 2px;
+  }
+  
+  .header-center-content .add-project-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .header-center-content .header-actions {
+    gap: 6px;
+    padding: 6px;
+    min-height: 40px;
+    height: auto;
+  }
+  
+  .common-header .action-btn {
+    padding: 5px 8px !important;
+    font-size: 12px !important;
+  }
+  
+  .common-header .header-import-dropdown .import-dropdown-trigger,
+  .common-header .header-export-dropdown .export-dropdown-trigger {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+  
+  .header-center-content .header-actions .view-toggle .toggle-btn {
+    padding: 5px 6px;
+    font-size: 10px;
+    min-width: 45px;
+    gap: 3px;
+  }
+  
+  .header-center-content .add-project-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+  
+  .common-header .search-container {
+    min-width: 250px;
+  }
+}
+
+@media (max-width: 1100px) {
+  /* Tech Radar specific: Hide less important buttons */
+  .tech-radar-header .header-actions .header-divider:nth-of-type(3),
+  .tech-radar-header .header-actions .clear-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  .common-header {
+    padding: 0 16px;
+    height: 60px;
+  }
+  
+  /* Tech Radar specific: Hide bulk add button on smaller screens */
+  .tech-radar-header .header-actions .bulk-add-btn {
+    display: none;
+  }
+  
+  .header-center-content .header-actions {
+    gap: 4px;
+    padding: 4px;
+    min-height: 36px;
+    height: auto;
+  }
+  
+  .common-header .header-btn {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  
+  .common-header .action-btn {
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+  }
+  
+  .stat-badge {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .common-header .header-import-dropdown .import-dropdown-trigger,
+  .common-header .header-export-dropdown .export-dropdown-trigger {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+  
+  .header-center-content .header-actions .view-toggle {
+    padding: 2px;
+    gap: 1px;
+  }
+  
+  .header-center-content .header-actions .view-toggle .toggle-btn {
+    padding: 4px 5px;
+    font-size: 9px;
+    min-width: 40px;
+    gap: 2px;
+  }
+  
+  .header-center-content .add-project-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+  
+  .common-header .search-container {
+    min-width: 150px;
+    max-width: 250px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 768px) {
+  .common-header {
+    padding: 0 12px;
+    height: 56px;
+  }
+  
+  /* Tech Radar specific: Hide more buttons on mobile */
+  .tech-radar-header .header-actions .bulk-add-btn,
+  .tech-radar-header .header-actions .clear-btn {
+    display: none;
+  }
+  
+  .common-header .header-btn span {
+    display: none;
+  }
+  
+  .common-header .header-btn {
+    padding: 8px;
+    min-width: 36px;
+    justify-content: center;
+  }
+  
+  .common-header .action-btn {
+    padding: 6px !important;
+    min-width: 32px !important;
+  }
+  
+  .common-header .logo h1 {
+    font-size: 1.3rem;
+  }
+  
+  .stats-badges {
+    display: none;
+  }
+  
+  .header-center-content {
+    gap: 4px;
+  }
+  
+  .header-center-content .header-actions {
+    gap: 2px;
+    padding: 2px;
+    min-height: 32px;
+    height: auto;
+  }
+  
+  .header-divider {
+    margin: 0 1px;
+  }
+
+  .common-header .header-import-dropdown .import-dropdown-trigger span,
+  .common-header .header-export-dropdown .export-dropdown-trigger span {
+    display: none;
+  }
+  
+  .header-center-content .header-actions .view-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .header-center-content .header-actions .view-toggle .toggle-btn {
+    flex: 1;
+    max-width: 60px;
+    min-width: 50px;
+    padding: 6px 4px;
+    font-size: 8px;
+  }
+  
+  .header-center-content .header-actions .view-toggle .toggle-btn span {
+    display: block;
+    font-size: 8px;
+  }
+  
+  .header-center-content .add-project-btn {
+    padding: 6px 8px;
+    font-size: 8px;
+  }
+  
+  .header-center-content .add-project-btn span {
+    display: none;
+  }
+  
+  .common-header .header-import-dropdown .import-dropdown-trigger,
+  .common-header .header-export-dropdown .export-dropdown-trigger {
+    padding: 8px;
+    min-width: 36px;
+    justify-content: center;
+  }
+  
+  .common-header .search-container {
+    min-width: 120px;
+    max-width: 180px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 600px) {
+  .header-center-content {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .header-center-content::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .common-header .action-btn {
+    flex-shrink: 0;
+  }
+  
+  .common-header .header-import-dropdown,
+  .common-header .header-export-dropdown {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .common-header {
+    padding: 0 8px;
+    height: auto;
+    min-height: 80px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  
+  .common-header .header-left {
+    flex: 1;
+    min-width: 0;
+    position: static;
+    transform: none;
+  }
+  
+  .common-header .logo h1 {
+    font-size: 1.1rem;
+  }
+  
+  .common-header .logo {
+    gap: 6px;
+  }
+
+  .common-header .header-import-dropdown .import-dropdown-trigger span,
+  .common-header .header-export-dropdown .export-dropdown-trigger span {
+    display: none;
+  }
+}

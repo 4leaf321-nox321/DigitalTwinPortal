@@ -1,0 +1,170 @@
+.export-dropdown-container {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.export-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  justify-content: center;
+  height: 36px; /* 다른 버튼들과 동일한 높이 */
+  box-sizing: border-box;
+}
+
+.export-dropdown-trigger:hover {
+  background: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
+.export-dropdown-trigger:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.export-dropdown-trigger.disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.export-dropdown-trigger.loading {
+  background: #218838;
+  cursor: wait;
+}
+
+.dropdown-arrow {
+  transition: transform 0.2s ease;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.export-dropdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9998;
+  background: transparent;
+}
+
+.export-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 280px;
+  background: white;
+  border: 1px solid #e1e5e9;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  overflow: hidden;
+  animation: dropdownSlideIn 0.2s ease-out;
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-header {
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid #f0f2f5;
+  background: #f8f9fa;
+}
+
+.dropdown-header span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.export-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #333;
+}
+
+.export-dropdown-item:hover {
+  background: #f8f9fa;
+}
+
+.export-dropdown-item:active {
+  background: #e9ecef;
+}
+
+.export-dropdown-item:disabled {
+  color: #999;
+  cursor: not-allowed;
+}
+
+.export-dropdown-item:disabled:hover {
+  background: none;
+}
+
+.item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.item-description {
+  font-size: 12px;
+  color: #666;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .export-dropdown-menu {
+    min-width: 240px;
+    right: -50px;
+  }
+  
+  .export-dropdown-trigger span {
+    display: none;
+  }
+  
+  .export-dropdown-trigger {
+    min-width: auto;
+    padding: 8px 10px;
+  }
+}

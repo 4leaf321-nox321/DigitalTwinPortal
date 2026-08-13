@@ -1,0 +1,19 @@
+import React, { useState } from 'react';
+import styled from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  X, 
+  Calendar, 
+  Building, 
+  Target, 
+  User, 
+  ShieldCheck, 
+  FileText, 
+  TrendingUp,
+  Plus,
+  Save,
+  Minus
+} from 'lucide-react';
+
+// 기본 설정 데이터 직접 import
+import { settingsData } from '../../data/sampleData';

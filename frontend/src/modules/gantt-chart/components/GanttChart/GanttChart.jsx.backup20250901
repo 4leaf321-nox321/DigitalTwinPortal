@@ -1,0 +1,1015 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { getProjectDateRange, groupByWeeks, groupByMonths, groupByYears, groupWeeksByMonth, formatDateKorean, isToday } from '../../utils/dateUtils';
+import { calculateTaskPosition, getTaskStatus, isTaskDelayed, isParentTask } from '../../utils/taskUtils';
+import { categoryColors, priorityColors, progressColors } from '../../data/sampleTasks';
+import TaskBar from './TaskBar';
+import './GanttChart.css';
+
+const GanttChart = ({ 
+  tasks = [], 
+  displayTasks = [], // 계층 구조로 정렬된 표시용 태스크
+  selectedTask, 
+  onTaskSelect, 
+  onTaskUpdate,
+  onTaskToggle, // 태스크 접기/펼치기
+  viewMode = 'weeks' // 'days', 'weeks', 'months', 'years'
+}) => {
+  const [scale, setScale] = useState(1);
+  const [scrollX, setScrollX] = useState(0);
+  const [viewModeState, setViewModeState] = useState(viewMode); // 내부 뷰 모드 상태
+  const [taskNameColWidth, setTaskNameColWidth] = useState(() => {
+    // 초기 너비를 화면 크기에 따라 설정
+    const width = window.innerWidth;
+    if (width <= 480) return 90;
+    if (width <= 1024) return 110;
+    return 140;
+  }); // 동적 너비 상태
+  
+  const [assigneeColWidth, setAssigneeColWidth] = useState(() => {
+    const width = window.innerWidth;
+    if (width <= 480) return 60;
+    if (width <= 1024) return 70;
+    return 90;
+  });
+  
+  const [progressColWidth, setProgressColWidth] = useState(() => {
+    const width = window.innerWidth;
+    if (width <= 480) return 40;
+    if (width <= 1024) return 50;
+    return 70;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizingColumn, setResizingColumn] = useState(null);
+  const [dragStarted, setDragStarted] = useState(false);
+  const [customDateRange, setCustomDateRange] = useState(null); // 사용자 지정 날짜 범위
+  const [showDatePicker, setShowDatePicker] = useState(false); // 날짜 선택 모달 표시
+  const containerRef = useRef(null);
+  const chartRef = useRef(null);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+  
+  // displayTasks가 없으면 원본 tasks 사용
+  const tasksToDisplay = displayTasks.length > 0 ? displayTasks : tasks;
+  
+  // 프로젝트 전체 기간 계산 (모든 태스크 기준)
+  const projectRange = getProjectDateRange(tasks);
+  
+  // 표시용 날짜 범위 (사용자 지정 또는 프로젝트 전체)
+  const displayRange = customDateRange || projectRange;
+  
+  // 뷰 모드에 따른 시간 축 생성
+  const getTimelineData = () => {
+    const baseDayWidth = 40 * scale;
+    
+    switch (viewModeState) {
+      case 'days':
+        return {
+          units: groupByWeeks(displayRange.start, displayRange.end),
+          type: 'days',
+          unitWidth: baseDayWidth * 7, // 주 단위 너비 (7일)
+          subUnitWidth: baseDayWidth // 일 단위 너비
+        };
+      case 'weeks':
+        return {
+          units: groupByWeeks(displayRange.start, displayRange.end),
+          type: 'weeks',
+          unitWidth: baseDayWidth * 7, // 주 단위 너비
+          subUnitWidth: baseDayWidth // 일 단위 너비
+        };
+      case 'months':
+        return {
+          units: groupWeeksByMonth(displayRange.start, displayRange.end),
+          type: 'months',
+          unitWidth: baseDayWidth * 7, // 주 단위 너비 (월별 주 단위로 동적 계산)
+          subUnitWidth: baseDayWidth * 7 // 주 단위 너비
+        };
+      case 'years':
+        return {
+          units: groupByYears(displayRange.start, displayRange.end),
+          type: 'years',
+          unitWidth: baseDayWidth * 30, // 월 단위 너비
+          subUnitWidth: baseDayWidth * 30 // 월 단위 너비
+        };
+      default:
+        return {
+          units: groupByWeeks(displayRange.start, displayRange.end),
+          type: 'weeks',
+          unitWidth: baseDayWidth * 7,
+          subUnitWidth: baseDayWidth
+        };
+    }
+  };
+  
+  const timelineData = getTimelineData();
+  const { units: timeUnits, type: timeType, unitWidth, subUnitWidth } = timelineData;
+  
+  // 오늘 날짜 위치 계산 (뷰 모드별로 정확한 계산)
+  const calculateTodayPosition = () => {
+    const today = new Date();
+    
+    if (displayRange.start > today || today > displayRange.end) {
+      return -1;
+    }
+    
+    const daysSinceStart = (today - displayRange.start) / (1000 * 60 * 60 * 24);
+    
+    // 뷰 모드별 정확한 위치 계산
+    switch (timeType) {
+      case 'days':
+      case 'weeks':
+        // 일/주 단위에서는 기본 일일 픽셀 너비 사용
+        return daysSinceStart * (40 * scale);
+      
+      case 'months':
+        // 월 단위에서는 주 단위로 정확한 위치 계산
+        const monthTodayYear = today.getFullYear();
+        const monthTodayMonth = today.getMonth();
+        const monthTodayDate = today.getDate();
+        
+        let monthTotalPosition = 0;
+        
+        // 각 월의 주들을 순회하며 오늘이 속한 주까지의 위치 계산
+        for (const monthUnit of timeUnits) {
+          const monthStart = monthUnit.start;
+          const monthEnd = monthUnit.end;
+          
+          if (today >= monthStart && today <= monthEnd) {
+            // 현재 월에서 오늘이 속한 주 찾기
+            for (let i = 0; i < monthUnit.weeks.length; i++) {
+              const week = monthUnit.weeks[i];
+              if (today >= week.start && today <= week.end) {
+                // 주 내에서 일일 위치 계산
+                const daysSinceWeekStart = (today - week.start) / (1000 * 60 * 60 * 24);
+                monthTotalPosition += subUnitWidth * (daysSinceWeekStart / 7);
+                break;
+              }
+              monthTotalPosition += subUnitWidth;
+            }
+            break;
+          } else if (today > monthEnd) {
+            // 이미 지나간 월이면 전체 너비 추가
+            monthTotalPosition += monthUnit.weeks.length * subUnitWidth;
+          }
+        }
+        
+        return monthTotalPosition;
+      
+      case 'years':
+        // 연 단위에서는 월별 위치를 정확히 계산
+        const yearTodayYear = today.getFullYear();
+        const yearTodayMonth = today.getMonth();
+        const yearTodayDate = today.getDate();
+        
+        let yearTotalPosition = 0;
+        
+        // 해당 연도의 timeUnits에서 오늘이 속한 월까지의 위치 계산
+        for (const yearUnit of timeUnits) {
+          if (yearUnit.start.getFullYear() < yearTodayYear) {
+            // 이전 연도는 전체 너비 추가
+            yearTotalPosition += yearUnit.months.length * subUnitWidth;
+          } else if (yearUnit.start.getFullYear() === yearTodayYear) {
+            // 현재 연도에서 해당 월까지의 위치 계산
+            for (let i = 0; i < yearUnit.months.length; i++) {
+              const month = yearUnit.months[i];
+              if (month.start.getMonth() < yearTodayMonth) {
+                // 이전 월들은 전체 너비 추가
+                yearTotalPosition += subUnitWidth;
+              } else if (month.start.getMonth() === yearTodayMonth) {
+                // 현재 월에서 일별 위치 계산
+                const daysInMonth = new Date(yearTodayYear, yearTodayMonth + 1, 0).getDate();
+                const dayRatio = (yearTodayDate - 1) / daysInMonth; // -1은 월 시작이 1일부터이므로
+                yearTotalPosition += subUnitWidth * dayRatio;
+                break;
+              }
+            }
+            break;
+          }
+        }
+        
+        return yearTotalPosition;
+      
+      default:
+        return daysSinceStart * (40 * scale);
+    }
+  };
+  
+  const todayPosition = calculateTodayPosition();
+  
+  // 스크롤 핸들링
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const handleScroll = () => {
+      setScrollX(container.scrollLeft);
+    };
+    
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // 전역 마우스 이벤트 핸들러
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      if (!isResizing || !resizingColumn) return;
+      
+      const deltaX = e.clientX - resizeStartX.current;
+      
+      // 최소 3px 이동해야 드래그 시작
+      if (!dragStarted && Math.abs(deltaX) < 3) {
+        return;
+      }
+      
+      if (!dragStarted) {
+        setDragStarted(true);
+      }
+      
+      let newWidth;
+      
+      switch (resizingColumn) {
+        case 'name':
+          newWidth = Math.max(80, Math.min(1000, resizeStartWidth.current + deltaX));
+          setTaskNameColWidth(newWidth);
+          break;
+        case 'assignee':
+          newWidth = Math.max(50, Math.min(150, resizeStartWidth.current + deltaX));
+          setAssigneeColWidth(newWidth);
+          break;
+        case 'progress':
+          newWidth = Math.max(40, Math.min(120, resizeStartWidth.current + deltaX));
+          setProgressColWidth(newWidth);
+          break;
+      }
+    };
+
+    const handleGlobalMouseUp = (e) => {
+      if (!isResizing) return;
+      
+      setIsResizing(false);
+      setResizingColumn(null);
+      setDragStarted(false);
+      
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.body.classList.remove('resizing');
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleGlobalMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleGlobalMouseUp, { passive: false });
+      
+      return () => {
+        document.removeEventListener('mousemove', handleGlobalMouseMove);
+        document.removeEventListener('mouseup', handleGlobalMouseUp);
+      };
+    }
+  }, [isResizing, resizingColumn, dragStarted]);
+
+  // 리사이즈 이벤트 리스너 정리 및 화면 크기 변경 감지
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      
+      // 기본값이면 화면 크기에 따라 조정
+      if ([140, 110, 90].includes(taskNameColWidth)) {
+        if (width <= 480) setTaskNameColWidth(90);
+        else if (width <= 1024) setTaskNameColWidth(110);
+        else setTaskNameColWidth(140);
+      }
+      
+      if ([90, 70, 60].includes(assigneeColWidth)) {
+        if (width <= 480) setAssigneeColWidth(60);
+        else if (width <= 1024) setAssigneeColWidth(70);
+        else setAssigneeColWidth(90);
+      }
+      
+      if ([70, 50, 40].includes(progressColWidth)) {
+        if (width <= 480) setProgressColWidth(40);
+        else if (width <= 1024) setProgressColWidth(50);
+        else setProgressColWidth(70);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [taskNameColWidth, assigneeColWidth, progressColWidth]);
+
+  // 컴포넌트 언마운트 시 정리
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.body.classList.remove('resizing');
+    };
+  }, []);
+  
+  // 확대/축소 및 뷰 모드 전환
+  const handleZoom = (direction) => {
+    setScale(prev => {
+      let newScale;
+      if (direction === 'in') {
+        newScale = Math.min(prev * 1.2, 3);
+      } else {
+        newScale = Math.max(prev / 1.2, 0.1); // 최소 0.1배까지 축소 가능
+      }
+      
+      // 스케일에 따른 뷰 모드 자동 전환
+      if (newScale >= 1.5) {
+        setViewModeState('days');
+      } else if (newScale >= 0.8) {
+        setViewModeState('weeks');
+      } else if (newScale >= 0.3) {
+        setViewModeState('months');
+      } else {
+        setViewModeState('years');
+      }
+      
+      return newScale;
+    });
+  };
+  
+  // 뷰 모드 직접 변경
+  const handleViewModeChange = (newViewMode) => {
+    setViewModeState(newViewMode);
+    
+    // 뷰 모드에 따른 기본 스케일 설정
+    switch (newViewMode) {
+      case 'days':
+        setScale(2);
+        break;
+      case 'weeks':
+        setScale(1);
+        break;
+      case 'months':
+        setScale(0.5);
+        break;
+      case 'years':
+        setScale(0.2);
+        break;
+      default:
+        setScale(1);
+    }
+  };
+  
+  // 오늘로 이동
+  const scrollToToday = () => {
+    if (todayPosition >= 0 && containerRef.current) {
+      containerRef.current.scrollLeft = Math.max(0, todayPosition - containerRef.current.clientWidth / 2);
+    }
+  };
+
+  // 날짜 선택 핸들러
+  const handleDateRangeClick = () => {
+    setShowDatePicker(true);
+  };
+
+  const handleDateRangeChange = (startDate, endDate) => {
+    if (startDate && endDate && startDate <= endDate) {
+      setCustomDateRange({
+        start: new Date(startDate),
+        end: new Date(endDate)
+      });
+    }
+    setShowDatePicker(false);
+  };
+
+  const handleResetDateRange = () => {
+    setCustomDateRange(null);
+    setShowDatePicker(false);
+  };
+
+  // 태스크 토글 핸들러
+  const handleTaskToggle = (taskId, e) => {
+    e.stopPropagation();
+    if (onTaskToggle) {
+      onTaskToggle(taskId);
+    }
+  };
+
+  // 전체 태스크 패널 너비 계산
+  const totalTaskPanelWidth = taskNameColWidth + assigneeColWidth + progressColWidth;
+
+  // 전체 차트 최소 너비 계산 (뷰 모드에 따라 달라짐)
+  const getTotalChartWidth = () => {
+    let totalWidth = 0;
+    
+    timeUnits.forEach(unit => {
+      if (timeType === 'months' && unit.weeks) {
+        totalWidth += unit.weeks.length * subUnitWidth;
+      } else if (timeType === 'years' && unit.months) {
+        totalWidth += unit.months.length * subUnitWidth;
+      } else if (timeType === 'weeks' || timeType === 'days') {
+        totalWidth += unitWidth;
+      } else {
+        totalWidth += unitWidth;
+      }
+    });
+    
+    return totalTaskPanelWidth + totalWidth;
+  };
+  
+  const totalChartMinWidth = getTotalChartWidth();
+
+  if (tasks.length === 0) {
+    return (
+      <div className="gantt-chart-container">
+        <div className="gantt-empty">
+          <div className="empty-icon">📊</div>
+          <h3>태스크가 없습니다</h3>
+          <p>새 태스크를 추가하거나 샘플 데이터를 불러오세요.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="gantt-chart-container">
+      {/* 툴바 */}
+      <div className="gantt-toolbar">
+        <div className="toolbar-left">
+          {/* 뷰 모드 선택 */}
+          <div className="view-mode-controls">
+            <span className="view-mode-label">뷰:</span>
+            <div className="view-mode-buttons">
+              <button 
+                className={`view-mode-btn ${viewModeState === 'days' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('days')}
+                title="일단위 보기"
+              >
+                일
+              </button>
+              <button 
+                className={`view-mode-btn ${viewModeState === 'weeks' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('weeks')}
+                title="주단위 보기"
+              >
+                주
+              </button>
+              <button 
+                className={`view-mode-btn ${viewModeState === 'months' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('months')}
+                title="월단위 보기"
+              >
+                월
+              </button>
+              <button 
+                className={`view-mode-btn ${viewModeState === 'years' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('years')}
+                title="연단위 보기"
+              >
+                연
+              </button>
+            </div>
+          </div>
+          
+          <div className="zoom-controls">
+            <button 
+              className="zoom-btn" 
+              onClick={() => handleZoom('in')}
+              title="확대"
+            >
+              ➕
+            </button>
+            <span className="zoom-level">{Math.round(scale * 100)}%</span>
+            <button 
+              className="zoom-btn" 
+              onClick={() => handleZoom('out')}
+              title="축소"
+            >
+              ➖
+            </button>
+          </div>
+        </div>
+        
+        <div className="toolbar-center">
+          <button 
+            className="period-info clickable"
+            onClick={handleDateRangeClick}
+            title="클릭하여 날짜 범위 설정"
+          >
+            {formatDateKorean(displayRange.start)} ~ {formatDateKorean(displayRange.end)}
+            {customDateRange && (
+              <span className="custom-range-indicator"> 📊</span>
+            )}
+          </button>
+        </div>
+        
+        <div className="toolbar-right">
+          {todayPosition >= 0 && (
+            <button 
+              className="today-btn" 
+              onClick={scrollToToday}
+              title="오늘로 이동"
+            >
+              📅 오늘
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 간트 차트 */}
+      <div 
+        ref={containerRef} 
+        className="gantt-scroll-container"
+      >
+        <div 
+          ref={chartRef}
+          className="gantt-chart"
+          style={{ minWidth: totalChartMinWidth }}
+        >
+          {/* 시간 헤더 */}
+          <div className="gantt-header-row">
+            <div 
+              className="task-list-header"
+              style={{ width: totalTaskPanelWidth, minWidth: totalTaskPanelWidth }}
+            >
+              <div 
+                className="task-name-col"
+                style={{ 
+                  width: taskNameColWidth, 
+                  minWidth: taskNameColWidth,
+                  backgroundColor: isResizing && resizingColumn === 'name' ? '#e3f2fd' : 'inherit'
+                }}
+              >
+                태스크
+                {/* 리사이즈 핸들 */}
+                <div 
+                  className="column-resize-handle"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    setIsResizing(true);
+                    setResizingColumn('name');
+                    setDragStarted(false);
+                    resizeStartX.current = e.clientX;
+                    resizeStartWidth.current = taskNameColWidth;
+                    
+                    document.body.style.userSelect = 'none';
+                    document.body.style.cursor = 'col-resize';
+                    document.body.classList.add('resizing');
+                  }}
+                  title="드래그하여 너비 조절"
+                />
+              </div>
+              <div 
+                className="task-assignee-col"
+                style={{ 
+                  width: assigneeColWidth, 
+                  minWidth: assigneeColWidth,
+                  backgroundColor: isResizing && resizingColumn === 'assignee' ? '#e3f2fd' : 'inherit'
+                }}
+              >
+                담당자
+                <div 
+                  className="column-resize-handle"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    setIsResizing(true);
+                    setResizingColumn('assignee');
+                    setDragStarted(false);
+                    resizeStartX.current = e.clientX;
+                    resizeStartWidth.current = assigneeColWidth;
+                    
+                    document.body.style.userSelect = 'none';
+                    document.body.style.cursor = 'col-resize';
+                    document.body.classList.add('resizing');
+                  }}
+                  title="드래그하여 너비 조절"
+                />
+              </div>
+              <div 
+                className="task-progress-col"
+                style={{ 
+                  width: progressColWidth, 
+                  minWidth: progressColWidth,
+                  backgroundColor: isResizing && resizingColumn === 'progress' ? '#e3f2fd' : 'inherit'
+                }}
+              >
+                진행률
+              </div>
+            </div>
+            <div className="timeline-header">
+              {timeType === 'days' && timeUnits.map((week, index) => (
+                <div 
+                  key={index} 
+                  className="week-header"
+                  style={{ width: unitWidth }}
+                >
+                  <div className="week-label">{week.label}</div>
+                  <div className="days-row">
+                    {[...Array(7)].map((_, dayIndex) => {
+                      const currentDate = new Date(week.start);
+                      currentDate.setDate(currentDate.getDate() + dayIndex);
+                      const isToday_ = isToday(currentDate);
+                      
+                      return (
+                        <div 
+                          key={dayIndex}
+                          className={`day-header ${isToday_ ? 'today' : ''}`}
+                          style={{ width: subUnitWidth }}
+                        >
+                          {currentDate.getDate()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              
+              {timeType === 'weeks' && timeUnits.map((week, index) => (
+                <div 
+                  key={index} 
+                  className="week-header"
+                  style={{ width: unitWidth }}
+                >
+                  <div className="week-label">{week.label}</div>
+                  <div className="days-row">
+                    {[...Array(7)].map((_, dayIndex) => {
+                      const currentDate = new Date(week.start);
+                      currentDate.setDate(currentDate.getDate() + dayIndex);
+                      const isToday_ = isToday(currentDate);
+                      
+                      return (
+                        <div 
+                          key={dayIndex}
+                          className={`day-header ${isToday_ ? 'today' : ''}`}
+                          style={{ width: subUnitWidth }}
+                        >
+                          {currentDate.getDate()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              
+              {timeType === 'months' && timeUnits.map((month, index) => (
+                <div 
+                  key={index} 
+                  className="month-header"
+                  style={{ width: month.weeks.length * subUnitWidth }}
+                >
+                  <div className="month-label">{month.label}</div>
+                  <div className="weeks-row">
+                    {month.weeks.map((week, weekIndex) => (
+                      <div 
+                        key={weekIndex}
+                        className="week-header-small"
+                        style={{ width: subUnitWidth }}
+                        title={`${week.year}년 ${week.weekNumber}주 (${week.start.getMonth() + 1}/${week.start.getDate()} ~ ${week.end.getMonth() + 1}/${week.end.getDate()})`}
+                      >
+                        {week.weekNumber}주
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              
+              {timeType === 'years' && timeUnits.map((year, index) => (
+                <div 
+                  key={index} 
+                  className="year-header"
+                  style={{ width: year.months.length * subUnitWidth }}
+                >
+                  <div className="year-label">{year.label}</div>
+                  <div className="months-row">
+                    {year.months.map((month, monthIndex) => (
+                      <div 
+                        key={monthIndex}
+                        className="month-header-small"
+                        style={{ width: subUnitWidth }}
+                      >
+                        {month.start.getMonth() + 1}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 태스크 행들 */}
+          <div className="gantt-body">
+            {tasksToDisplay.map((task, index) => {
+              // 뷰 모드별 TaskBar 위치 계산
+              let taskDayWidth;
+              if (viewModeState === 'years') {
+                // 연 단위에서는 월 단위 너비 전달
+                taskDayWidth = subUnitWidth; // 월 단위 너비
+              } else if (viewModeState === 'months') {
+                // 월 단위에서는 주 단위 너비 전달
+                taskDayWidth = subUnitWidth; // 주 단위 너비
+              } else {
+                // 다른 뷰 모드에서는 기본 일일 픽셀 너비
+                taskDayWidth = 40 * scale;
+              }
+              
+              const position = calculateTaskPosition(task, displayRange.start, taskDayWidth, viewModeState, scale);
+              const isSelected = selectedTask && selectedTask.id === task.id;
+              const status = getTaskStatus(task.progress);
+              const isDelayed = isTaskDelayed(task);
+              const taskIsParent = isParentTask(task.id, tasks);
+              
+              return (
+                <div 
+                  key={task.id} 
+                  className={`gantt-row ${isSelected ? 'selected' : ''} ${index % 2 === 0 ? 'even' : 'odd'} level-${task.level}`}
+                >
+                  {/* 태스크 정보 */}
+                  <div 
+                    className="task-info"
+                    style={{ 
+                      width: totalTaskPanelWidth, 
+                      minWidth: totalTaskPanelWidth,
+                      backgroundColor: isResizing ? 'rgba(227, 242, 253, 0.3)' : 'inherit'
+                    }}
+                  >
+                    <div 
+                      className="task-name-col"
+                      style={{ 
+                        width: taskNameColWidth, 
+                        minWidth: taskNameColWidth,
+                        backgroundColor: isResizing && resizingColumn === 'name' ? '#e3f2fd' : 'inherit'
+                      }}
+                    >
+                      <div 
+                      className={`task-name ${isDelayed ? 'delayed' : ''}`}
+                      onClick={() => onTaskSelect(task)}
+                      style={{ 
+                        fontWeight: taskIsParent ? 'bold' : 'normal'
+                      }}
+                      >
+                        {/* 계층 표시 인덴트 */}
+                        <div 
+                          className="task-hierarchy"
+                          style={{ paddingLeft: `${task.level * 20}px` }}
+                        >
+                          {/* 토글 버튼 공간 (모든 태스크에 일정한 공간 확보) */}
+                          <div className="task-toggle-space">
+                            {taskIsParent ? (
+                              <button
+                                className="task-toggle-btn"
+                                onClick={(e) => handleTaskToggle(task.id, e)}
+                                title={task.collapsed ? '펼치기' : '접기'}
+                              >
+                                {task.collapsed ? 
+                                  <ChevronRight size={14} /> : 
+                                  <ChevronDown size={14} />
+                                }
+                              </button>
+                            ) : (
+                              <span className="task-toggle-placeholder"></span>
+                            )}
+                          </div>
+                          
+                          {/* 우선순위 표시 */}
+                          <div 
+                            className="task-priority-indicator"
+                            style={{ backgroundColor: priorityColors[task.priority] }}
+                            title={`우선순위: ${task.priority}`}
+                          ></div>
+                          
+                          {/* 태스크 이름 */}
+                          <span className="task-name-text">
+                            {task.name}
+                          </span>
+                          
+                          {/* 지연 표시 */}
+                          {isDelayed && <span className="delayed-indicator">⚠️</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div 
+                      className="task-assignee-col"
+                      style={{ 
+                        width: assigneeColWidth, 
+                        minWidth: assigneeColWidth,
+                        backgroundColor: isResizing && resizingColumn === 'assignee' ? '#e3f2fd' : 'inherit'
+                      }}
+                    >
+                      {task.assignee || '-'}
+                    </div>
+                    <div 
+                      className="task-progress-col"
+                      style={{ 
+                        width: progressColWidth, 
+                        minWidth: progressColWidth,
+                        backgroundColor: isResizing && resizingColumn === 'progress' ? '#e3f2fd' : 'inherit'
+                      }}
+                    >
+                      <div className="progress-container">
+                        <div 
+                          className="progress-bar"
+                          style={{ 
+                            width: `${task.progress}%`,
+                            backgroundColor: progressColors[status]
+                          }}
+                        ></div>
+                        <span className="progress-text">{task.progress}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 타임라인 */}
+                  <div className="task-timeline">
+                    <TaskBar
+                      task={task}
+                      position={position}
+                      isSelected={isSelected}
+                      isDelayed={isDelayed}
+                      isParent={taskIsParent}
+                      onClick={() => onTaskSelect(task)}
+                      onUpdate={onTaskUpdate}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 오늘 표시선 */}
+          {todayPosition >= 0 && (
+            <div 
+              className="today-line"
+              data-date={`${new Date().getMonth() + 1}/${new Date().getDate()}`}
+              style={{ left: todayPosition + totalTaskPanelWidth }} // 동적 태스크 패널 너비
+            />
+          )}
+        </div>
+      </div>
+
+      {/* 범례 */}
+      <div className="gantt-legend">
+        <div className="legend-group">
+          <span className="legend-title">진행 상태:</span>
+          <div className="legend-item">
+            <div className="legend-color" style={{ backgroundColor: progressColors.notStarted }}></div>
+            <span>미시작</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ backgroundColor: progressColors.inProgress }}></div>
+            <span>진행중</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ backgroundColor: progressColors.completed }}></div>
+            <span>완료</span>
+          </div>
+        </div>
+        
+        <div className="legend-group">
+          <span className="legend-title">우선순위:</span>
+          <div className="legend-item">
+            <div className="legend-color" style={{ backgroundColor: priorityColors.low }}></div>
+            <span>낮음</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ backgroundColor: priorityColors.medium }}></div>
+            <span>보통</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ backgroundColor: priorityColors.high }}></div>
+            <span>높음</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ backgroundColor: priorityColors.critical }}></div>
+            <span>긴급</span>
+          </div>
+        </div>
+        
+        <div className="legend-group">
+          <span className="legend-title">계층 구조:</span>
+          <div className="legend-item">
+            <div className="legend-symbol">📋</div>
+            <span>부모 태스크</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-symbol">📄</div>
+            <span>테스크</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 날짜 범위 선택 모달 */}
+      {showDatePicker && (
+        <div className="date-picker-overlay">
+          <div className="date-picker-modal">
+            <div className="date-picker-header">
+              <h3>날짜 범위 설정</h3>
+              <button 
+                className="close-btn"
+                onClick={() => setShowDatePicker(false)}
+                title="닫기"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="date-picker-content">
+              <div className="date-input-group">
+                <label>시작 날짜:</label>
+                <input 
+                  type="date" 
+                  id="startDate"
+                  defaultValue={displayRange.start.toISOString().split('T')[0]}
+                />
+              </div>
+              
+              <div className="date-input-group">
+                <label>종료 날짜:</label>
+                <input 
+                  type="date" 
+                  id="endDate"
+                  defaultValue={displayRange.end.toISOString().split('T')[0]}
+                />
+              </div>
+              
+              <div className="preset-buttons">
+                <button 
+                  className="preset-btn"
+                  onClick={() => {
+                    const today = new Date();
+                    const oneMonthLater = new Date(today);
+                    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+                    handleDateRangeChange(
+                      today.toISOString().split('T')[0],
+                      oneMonthLater.toISOString().split('T')[0]
+                    );
+                  }}
+                >
+                  다음 1개월
+                </button>
+                
+                <button 
+                  className="preset-btn"
+                  onClick={() => {
+                    const today = new Date();
+                    const threeMonthsLater = new Date(today);
+                    threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+                    handleDateRangeChange(
+                      today.toISOString().split('T')[0],
+                      threeMonthsLater.toISOString().split('T')[0]
+                    );
+                  }}
+                >
+                  다음 3개월
+                </button>
+                
+                <button 
+                  className="preset-btn"
+                  onClick={() => {
+                    const today = new Date();
+                    const sixMonthsLater = new Date(today);
+                    sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+                    handleDateRangeChange(
+                      today.toISOString().split('T')[0],
+                      sixMonthsLater.toISOString().split('T')[0]
+                    );
+                  }}
+                >
+                  다음 6개월
+                </button>
+              </div>
+            </div>
+            
+            <div className="date-picker-footer">
+              <button 
+                className="reset-btn"
+                onClick={handleResetDateRange}
+              >
+                전체 기간 보기
+              </button>
+              
+              <div className="action-buttons">
+                <button 
+                  className="cancel-btn"
+                  onClick={() => setShowDatePicker(false)}
+                >
+                  취소
+                </button>
+                <button 
+                  className="apply-btn"
+                  onClick={() => {
+                    const startDate = document.getElementById('startDate').value;
+                    const endDate = document.getElementById('endDate').value;
+                    handleDateRangeChange(startDate, endDate);
+                  }}
+                >
+                  적용
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default GanttChart;

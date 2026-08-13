@@ -1,0 +1,660 @@
+import React, { useState, useEffect } from 'react';
+import styled from 'styled-components';
+import { motion } from 'framer-motion';
+
+// Components
+import Header from './components/Layout/Header';
+import GanttChart from './components/GanttChart/GanttChart';
+import AddProjectModal from './components/ProjectModal/AddProjectModal';
+import EditProjectModal from './components/ProjectModal/EditProjectModal';
+import DeleteConfirmModal from './components/ProjectModal/DeleteConfirmModal';
+import SettingsModal from './components/SettingsPanel/SettingsModal';
+import ImportDataModal from './components/ImportExport/ImportDataModal';
+import ExportDataModal from './components/ImportExport/ExportDataModal';
+import BulkAddModal from './components/BulkAddModal/BulkAddModal';
+
+// Data and Utils
+import { sampleProjects, STATUS_COLORS, DIVISION_COLORS, settingsData } from './data/sampleData';
+
+const Container = styled.div`
+  background: #ECEFF1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+`;
+
+const Content = styled.div`
+  flex: 1;
+  padding: ${props => props.viewMode === 'gantt' ? '1rem' : '2rem'};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  margin: 0;
+  width: 100%;
+  height: calc(100vh - 80px);
+  
+  ${props => props.viewMode === 'gantt' && `
+    align-items: stretch;
+    padding: 1rem;
+  `}
+`;
+
+const DevelopmentMessage = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  background: white;
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  text-align: center;
+  color: #64748b;
+  max-width: 600px;
+  width: 100%;
+  transition: all 0.5s ease;
+  
+  .icon {
+    font-size: 6rem;
+    margin-bottom: 2rem;
+    filter: grayscale(0);
+    transition: all 0.3s ease;
+  }
+  
+  .title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #1e293b;
+    background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    transition: all 0.3s ease;
+  }
+  
+  .subtitle {
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: #475569;
+    transition: all 0.3s ease;
+  }
+  
+  .description {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #64748b;
+    margin-bottom: 2rem;
+    transition: all 0.3s ease;
+    
+    strong {
+      font-weight: 600;
+      color: #1e293b;
+    }
+    
+    small {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      margin-top: 0.5rem;
+      display: block;
+    }
+  }
+  
+  .progress-bar {
+    width: 200px;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0066cc 0%, #004499 100%);
+    border-radius: 2px;
+    animation: progress 2s ease-in-out infinite;
+    transition: background 0.5s ease;
+  }
+  
+  @keyframes progress {
+    0% { width: 0%; }
+    50% { width: 100%; }
+    100% { width: 0%; }
+  }
+  
+  .status-text {
+    font-size: 0.875rem;
+    color: #0066cc;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+  }
+`;
+
+const DigitalTwinDashboardApp = () => {
+  const [viewMode, setViewMode] = useState('dashboard');
+  const [projects, setProjects] = useState(sampleProjects);
+  const [currentSettingsData, setCurrentSettingsData] = useState(settingsData);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [currentYear, setCurrentYear] = useState(2025);
+  const [notification, setNotification] = useState('');
+
+  // 기본 설정 사용 (드롭다운은 고정값 사용)
+  useEffect(() => {
+    console.log('Using default settingsData for UI consistency:', settingsData);
+    setCurrentSettingsData(settingsData);
+  }, []);
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+  };
+
+  const handleAddProject = () => {
+    setIsAddModalOpen(true);
+  };
+
+  const handleAddMultipleProjects = () => {
+    setIsBulkAddModalOpen(true);
+  };
+
+  const handleManageSettings = () => {
+    setIsSettingsModalOpen(true);
+  };
+
+  // 로컬 저장 모달 열기
+  const handleExportData = () => {
+    setIsExportModalOpen(true);
+  };
+
+  // 데이터 가져오기 (로컬 불러오기)
+  const handleImportData = () => {
+    setIsImportModalOpen(true);
+  };
+
+  // 전체 데이터 삭제
+  const handleClearAllData = () => {
+    try {
+      setProjects([]);
+      showSuccess('모든 프로젝트 데이터가 삭제되었습니다.');
+      console.log('All project data cleared');
+    } catch (error) {
+      showError('데이터 삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+  };
+
+  // 벌크 추가 처리
+  const handleBulkAddProjects = (bulkData) => {
+    try {
+      const { projects: projectsData, performances, actionItems, teamMembers } = bulkData;
+      
+      if (!projectsData || projectsData.length === 0) {
+        showError('추가할 프로젝트 데이터가 없습니다.');
+        return;
+      }
+
+      let addedCount = 0;
+      let updatedCount = 0;
+      let addedPerformances = 0;
+      let updatedPerformances = 0;
+      let addedActionItems = 0;
+      let updatedActionItems = 0;
+      let addedTeamMembers = 0;
+      let updatedTeamMembers = 0;
+      
+      // 기존 프로젝트들의 최대 ID 찾기
+      const maxId = Math.max(0, ...projects.map(p => p.id || 0));
+      let nextNewId = maxId + 1;
+      
+      const updatedProjects = [...projects];
+      
+      // 프로젝트별 처리
+      projectsData.forEach((projectData) => {
+        const projectId = projectData.id;
+        
+        // 기존 프로젝트 찾기
+        const existingProjectIndex = updatedProjects.findIndex(p => p.id === projectId);
+        
+        let finalProjectId = projectId;
+        
+        if (existingProjectIndex >= 0) {
+          // 기존 프로젝트 업데이트
+          const existingProject = updatedProjects[existingProjectIndex];
+          
+          // 프로젝트 기본 정보 업데이트
+          updatedProjects[existingProjectIndex] = {
+            ...existingProject,
+            과제년도: projectData.과제년도 || existingProject.과제년도,
+            사업부: projectData.사업부 || existingProject.사업부,
+            프로세스: projectData.프로세스 || existingProject.프로세스,
+            과제구분: projectData.과제구분 || existingProject.과제구분,
+            과제명: projectData.과제명 || existingProject.과제명,
+            과제목표: projectData.과제목표 || existingProject.과제목표,
+            시작: projectData.시작 || existingProject.시작,
+            종료: projectData.종료 || existingProject.종료,
+            진행상태: projectData.진행상태 || existingProject.진행상태,
+            과제PL: projectData.과제PL || existingProject.과제PL,
+            작성자: projectData.작성자 || existingProject.작성자,
+            과제상세설명: projectData.과제상세설명 || existingProject.과제상세설명,
+            PoC과제여부: projectData.PoC과제여부 !== undefined ? projectData.PoC과제여부 : existingProject.PoC과제여부,
+            중점과제여부: projectData.중점과제여부 !== undefined ? projectData.중점과제여부 : existingProject.중점과제여부
+          };
+          updatedCount++;
+        } else {
+          // 새 프로젝트 추가 (ID가 없으면 새 ID 할당)
+          if (!projectId || projectId <= 0) {
+            finalProjectId = nextNewId++;
+          }
+          
+          const newProject = {
+            id: finalProjectId,
+            과제년도: projectData.과제년도 || currentYear,
+            사업부: projectData.사업부 || 'VD',
+            프로세스: projectData.프로세스 || '개발',
+            과제구분: projectData.과제구분 || '신규 시뮬레이션 기법 개발',
+            과제명: projectData.과제명 || '',
+            과제목표: projectData.과제목표 || '업무 시간 효율화',
+            시작: projectData.시작 || 1,
+            종료: projectData.종료 || 12,
+            진행상태: projectData.진행상태 || '미착수',
+            과제PL: projectData.과제PL || '',
+            작성자: projectData.작성자 || '',
+            과제상세설명: projectData.과제상세설명 || '',
+            PoC과제여부: projectData.PoC과제여부 || false,
+            중점과제여부: projectData.중점과제여부 || false,
+            성과목록: [],
+            액션아이템목록: [],
+            과제참여인력목록: [],
+            담당부서목록: []
+          };
+          updatedProjects.push(newProject);
+          addedCount++;
+        }
+        
+        // 성과 데이터 처리
+        const projectPerformances = (performances || []).filter(p => p.project_id === projectId);
+        if (projectPerformances.length > 0) {
+          const projectIndex = updatedProjects.findIndex(p => p.id === finalProjectId);
+          if (projectIndex >= 0) {
+            const existingPerformances = updatedProjects[projectIndex].성과목록 || [];
+            const newPerformances = [];
+            
+            projectPerformances.forEach(perf => {
+              const existingPerfIndex = existingPerformances.findIndex(ep => ep.순번 === perf.순번);
+              
+              const performanceData = {
+                대분류: perf.대분류 || '',
+                소분류: perf.소분류 || '',
+                성과항목: perf.성과항목 || '',
+                과제기여도: perf.과제기여도 || '',
+                현재수준: perf.현재수준 || '',
+                목표수준: perf.목표수준 || '',
+                실적수준: perf.실적수준 || '',
+                단위: perf.단위 || '',
+                순번: perf.순번
+              };
+              
+              if (existingPerfIndex >= 0) {
+                // 기존 성과 업데이트
+                existingPerformances[existingPerfIndex] = performanceData;
+                updatedPerformances++;
+              } else {
+                // 새 성과 추가
+                newPerformances.push(performanceData);
+                addedPerformances++;
+              }
+            });
+            
+            updatedProjects[projectIndex].성과목록 = [...existingPerformances, ...newPerformances];
+          }
+        }
+        
+        // 액션아이템 데이터 처리
+        const projectActionItems = (actionItems || []).filter(a => a.project_id === projectId);
+        if (projectActionItems.length > 0) {
+          const projectIndex = updatedProjects.findIndex(p => p.id === finalProjectId);
+          if (projectIndex >= 0) {
+            const existingActionItems = updatedProjects[projectIndex].액션아이템목록 || [];
+            const newActionItems = [];
+            
+            projectActionItems.forEach(item => {
+              const existingItemIndex = existingActionItems.findIndex(ei => {
+                const itemId = `action_${finalProjectId}_${item.순번}`;
+                return ei.id === itemId;
+              });
+              
+              const actionItemData = {
+                id: `action_${finalProjectId}_${item.순번}`,
+                제목: item.제목 || '',
+                완료여부: item.완료여부 || false,
+                순번: item.순번
+              };
+              
+              if (existingItemIndex >= 0) {
+                // 기존 액션아이템 업데이트
+                existingActionItems[existingItemIndex] = actionItemData;
+                updatedActionItems++;
+              } else {
+                // 새 액션아이템 추가
+                newActionItems.push(actionItemData);
+                addedActionItems++;
+              }
+            });
+            
+            updatedProjects[projectIndex].액션아이템목록 = [...existingActionItems, ...newActionItems];
+          }
+        }
+        
+        // 팀멤버 데이터 처리
+        const projectTeamMembers = (teamMembers || []).filter(m => m.project_id === projectId);
+        if (projectTeamMembers.length > 0) {
+          const projectIndex = updatedProjects.findIndex(p => p.id === finalProjectId);
+          if (projectIndex >= 0) {
+            const existingTeamMembers = updatedProjects[projectIndex].과제참여인력목록 || [];
+            const newTeamMembers = [];
+            
+            projectTeamMembers.forEach(member => {
+              const existingMemberIndex = existingTeamMembers.findIndex(em => 
+                em.이름 === member.이름 && em.부서 === member.부서
+              );
+              
+              const teamMemberData = {
+                이름: member.이름 || '',
+                부서: member.부서 || '',
+                순번: member.순번
+              };
+              
+              if (existingMemberIndex >= 0) {
+                // 기존 팀멤버 업데이트
+                existingTeamMembers[existingMemberIndex] = teamMemberData;
+                updatedTeamMembers++;
+              } else {
+                // 새 팀멤버 추가
+                newTeamMembers.push(teamMemberData);
+                addedTeamMembers++;
+              }
+            });
+            
+            updatedProjects[projectIndex].과제참여인력목록 = [...existingTeamMembers, ...newTeamMembers];
+          }
+        }
+      });
+      
+      // 업데이트된 프로젝트 적용
+      setProjects(updatedProjects);
+      setIsBulkAddModalOpen(false);
+      
+      // 결과 요약
+      const summary = [];
+      if (addedCount > 0) summary.push(`신규 프로젝트 ${addedCount}개`);
+      if (updatedCount > 0) summary.push(`프로젝트 업데이트 ${updatedCount}개`);
+      if (addedPerformances > 0) summary.push(`신규 성과 ${addedPerformances}개`);
+      if (updatedPerformances > 0) summary.push(`성과 업데이트 ${updatedPerformances}개`);
+      if (addedActionItems > 0) summary.push(`신규 액션아이템 ${addedActionItems}개`);
+      if (updatedActionItems > 0) summary.push(`액션아이템 업데이트 ${updatedActionItems}개`);
+      if (addedTeamMembers > 0) summary.push(`신규 팀멤버 ${addedTeamMembers}개`);
+      if (updatedTeamMembers > 0) summary.push(`팀멤버 업데이트 ${updatedTeamMembers}개`);
+      
+      const message = summary.length > 0 ? 
+        `데이터 처리 완료:\n${summary.join('\n')}` :
+        '처리된 데이터가 없습니다.';
+        
+      showSuccess(message);
+      
+    } catch (error) {
+      console.error('벌크 추가 실패:', error);
+      showError('과제 추가 중 오류가 발생했습니다: ' + error.message);
+    }
+  };
+
+  // 가져오기 완료 처리
+  const handleImportComplete = (importedData) => {
+    try {
+      setProjects(importedData.projects);
+      
+      const count = importedData.projects.length;
+      const fileType = importedData.metadata?.type?.includes('csv') ? 'CSV' : 'JSON';
+      const modeInfo = importedData.columnMapping?.mode === 'hybrid' ? ' (하이브리드 방식)' : '';
+      
+      showSuccess(`${count}개의 프로젝트가 ${fileType}${modeInfo} 파일에서 성공적으로 가져와졌습니다.`);
+      
+      setIsImportModalOpen(false);
+    } catch (error) {
+      showError('데이터 가져오기 중 오류가 발생했습니다: ' + error.message);
+    }
+  };
+
+  // 내보내기 완료 처리
+  const handleExportComplete = (exportInfo) => {
+    try {
+      const formatInfo = exportInfo.format === 'json' ? 'JSON' : 
+                        `CSV (${exportInfo.mode === 'hybrid' ? '하이브리드' : '레거시'})`;
+      showSuccess(`${exportInfo.projectCount}개 프로젝트가 ${formatInfo} 형식으로 성공적으로 저장되었습니다.`);
+      setIsExportModalOpen(false);
+    } catch (error) {
+      showError('내보내기 완료 처리 중 오류가 발생했습니다: ' + error.message);
+    }
+  };
+
+  const showSuccess = (message) => {
+    setNotification(message);
+    setTimeout(() => setNotification(''), 4000);
+  };
+
+  const showError = (message) => {
+    alert(message);
+  };
+
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+  };
+
+  const handleSubmitProject = (newProject) => {
+    setProjects(prev => [...prev, newProject]);
+    console.log('새 과제가 추가되었습니다:', newProject);
+  };
+
+  const handleEditProject = (project) => {
+    setSelectedProject(project);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedProject(null);
+  };
+
+  const handleUpdateProject = (updatedProject) => {
+    setProjects(prev => 
+      prev.map(project => 
+        project.id === updatedProject.id ? updatedProject : project
+      )
+    );
+    console.log('과제가 업데이트되었습니다:', updatedProject);
+  };
+
+  const handleDeleteProject = (project) => {
+    setSelectedProject(project);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setSelectedProject(null);
+  };
+
+  const handleUpdateSettings = (newSettingsData) => {
+    setCurrentSettingsData(newSettingsData);
+    // 로컬 스토리지에 저장 (선택사항)
+    localStorage.setItem('digitalTwinDashboardSettings', JSON.stringify(newSettingsData));
+  };
+
+  const handleConfirmDelete = (projectToDelete) => {
+    setProjects(prev => 
+      prev.filter(project => project.id !== projectToDelete.id)
+    );
+    console.log('과제가 삭제되었습니다:', projectToDelete);
+  };
+
+  const renderContent = () => {
+    if (viewMode === 'dashboard') {
+      return (
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        >
+          <DevelopmentMessage style={{
+            background: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%)',
+            border: '2px solid #0ea5e9'
+          }}>
+            <div className="icon" style={{color: '#0ea5e9'}}>📊</div>
+            <div className="title" style={{color: '#0ea5e9'}}>개발중</div>
+            <div className="subtitle">Digital Twin Dashboard</div>
+            <div className="description">
+              디지털 트윈 현황을 실시간으로 모니터링하는
+              <br />
+              <strong>통합 대시보드</strong>가 개발 중입니다!
+              <br />
+              <small>🔄 실시간 데이터 • 📈 성능 지표 • 🔔 알림 시스템</small>
+            </div>
+            <div className="progress-bar">
+              <div className="progress-fill" style={{background: 'linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%)'}}></div>
+            </div>
+            <div className="status-text" style={{color: '#0ea5e9'}}>DASHBOARD MODE</div>
+          </DevelopmentMessage>
+        </motion.div>
+      );
+    } else {
+      return (
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <GanttChart 
+            projects={projects}
+            statusColors={STATUS_COLORS}
+            divisionColors={DIVISION_COLORS}
+            onYearChange={setCurrentYear}
+            currentYear={currentYear}
+            onEditProject={handleEditProject}
+            onDeleteProject={handleDeleteProject}
+            settingsData={currentSettingsData}
+          />
+        </motion.div>
+      );
+    }
+  };
+  
+  return (
+    <Container>
+      <Header 
+        onGoHome={() => window.location.href = '/'}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        onAddProject={handleAddProject}
+        onAddMultipleProjects={handleAddMultipleProjects}
+        onManageSettings={handleManageSettings}
+        onExportData={handleExportData}
+        onImportData={handleImportData}
+        onClearAllData={handleClearAllData}
+      />
+
+      <Content viewMode={viewMode}>
+        {renderContent()}
+      </Content>
+      
+      {/* 알림 메시지 */}
+      {notification && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          style={{
+            position: 'fixed',
+            top: '80px',
+            right: '20px',
+            background: '#10b981',
+            color: 'white',
+            padding: '1rem 1.5rem',
+            borderRadius: '0.5rem',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            zIndex: 1001,
+            maxWidth: '400px',
+            fontSize: '0.875rem',
+            lineHeight: '1.4'
+          }}
+        >
+          {notification}
+        </motion.div>
+      )}
+      
+      <AddProjectModal 
+        isOpen={isAddModalOpen}
+        onClose={handleCloseAddModal}
+        onSubmit={handleSubmitProject}
+        currentYear={currentYear}
+      />
+      
+      <BulkAddModal
+        isOpen={isBulkAddModalOpen}
+        onClose={() => setIsBulkAddModalOpen(false)}
+        onApply={handleBulkAddProjects}
+        existingProjects={projects}
+      />
+      
+      <EditProjectModal 
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        onSubmit={handleUpdateProject}
+        project={selectedProject}
+      />
+      
+      <DeleteConfirmModal 
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        project={selectedProject}
+      />
+      
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        settingsData={currentSettingsData}
+        onUpdateSettings={handleUpdateSettings}
+        showSuccess={showSuccess}
+        showError={showError}
+      />
+
+      <ImportDataModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={handleImportComplete}
+        existingProjects={projects}
+      />
+
+      <ExportDataModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        projects={projects}
+        onExportComplete={handleExportComplete}
+      />
+    </Container>
+  );
+};
+
+export default DigitalTwinDashboardApp;

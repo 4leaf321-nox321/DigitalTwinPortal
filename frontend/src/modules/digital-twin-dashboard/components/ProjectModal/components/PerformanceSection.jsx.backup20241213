@@ -1,0 +1,5 @@
+import React from 'react';
+import styled from 'styled-components';
+import { Target, Plus } from 'lucide-react';
+import { PERFORMANCE_CATEGORIES } from '../constants/formConstants';
+import { validatePerformanceInput, validateNumericInput, validateContributionInput } from '../utils/formUtils';

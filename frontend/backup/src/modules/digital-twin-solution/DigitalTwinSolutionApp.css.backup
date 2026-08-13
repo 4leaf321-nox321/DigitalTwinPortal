@@ -1,0 +1,480 @@
+.digital-twin-solution-app {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1f2937;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.solution-count {
+  padding: 6px 12px;
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* View Switcher */
+.view-switcher {
+  display: flex;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.view-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+  position: relative;
+  overflow: hidden;
+}
+
+.view-btn:hover:not(.active) {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  transform: translateY(-1px);
+}
+
+.view-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+}
+
+.view-btn.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.view-label {
+  font-weight: 600;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+  transform: translate(-50%, -50%);
+}
+
+.action-btn:hover::before {
+  width: 120%;
+  height: 120%;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.action-btn.primary:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.action-btn.secondary {
+  background: rgba(255, 255, 255, 0.9);
+  color: #374151;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn.secondary:hover {
+  background: white;
+  color: #1f2937;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Main Content */
+.app-content {
+  flex: 1;
+  padding: 20px;
+  min-height: 0;
+}
+
+/* Radar Layout */
+.radar-layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 20px;
+  height: calc(100vh - 100px);
+  max-height: calc(100vh - 100px);
+}
+
+.radar-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  position: relative;
+}
+
+.technology-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Table Layouts */
+.table-layout,
+.grouped-layout {
+  height: calc(100vh - 100px);
+  max-height: calc(100vh - 100px);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1400px) {
+  .radar-layout {
+    grid-template-columns: 1fr 350px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .app-header {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .header-actions {
+    gap: 16px;
+  }
+  
+  .radar-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 16px;
+    height: auto;
+    max-height: none;
+  }
+  
+  .radar-section {
+    min-height: 60vh;
+  }
+  
+  .technology-section {
+    max-height: 50vh;
+  }
+}
+
+@media (max-width: 1024px) {
+  .app-content {
+    padding: 16px;
+  }
+  
+  .view-switcher {
+    order: 2;
+    margin-top: 8px;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .action-buttons {
+    order: 1;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    padding: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .header-left {
+    justify-content: center;
+    text-align: center;
+  }
+  
+  .app-title {
+    font-size: 1.5rem;
+  }
+  
+  .view-switcher {
+    padding: 3px;
+  }
+  
+  .view-btn {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+  
+  .view-label {
+    display: none;
+  }
+  
+  .action-buttons {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .action-btn {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+  
+  .action-btn span {
+    display: none;
+  }
+  
+  .app-content {
+    padding: 12px;
+  }
+  
+  .radar-layout {
+    gap: 12px;
+  }
+  
+  .table-layout,
+  .grouped-layout {
+    height: auto;
+    max-height: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: 8px;
+  }
+  
+  .app-title {
+    font-size: 1.25rem;
+  }
+  
+  .solution-count {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+  }
+  
+  .view-btn {
+    padding: 6px 8px;
+  }
+  
+  .action-btn {
+    padding: 6px 8px;
+  }
+  
+  .app-content {
+    padding: 8px;
+  }
+  
+  .radar-section {
+    min-height: 50vh;
+  }
+}
+
+/* 스크롤바 스타일링 */
+.app-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.app-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.app-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* 애니메이션 */
+.radar-layout,
+.table-layout,
+.grouped-layout {
+  animation: layoutSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes layoutSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 다크 모드 대응 */
+@media (prefers-color-scheme: dark) {
+  .app-header {
+    background: rgba(17, 24, 39, 0.95);
+    border-bottom-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .app-title {
+    color: #f9fafb;
+  }
+  
+  .solution-count {
+    background: rgba(102, 126, 234, 0.2);
+    color: #a5b4fc;
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+  
+  .view-switcher {
+    background: rgba(31, 41, 55, 0.8);
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .view-btn {
+    color: #9ca3af;
+  }
+  
+  .view-btn:hover:not(.active) {
+    background: rgba(102, 126, 234, 0.2);
+    color: #a5b4fc;
+  }
+  
+  .action-btn.secondary {
+    background: rgba(31, 41, 55, 0.9);
+    color: #e5e7eb;
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .action-btn.secondary:hover {
+    background: rgba(31, 41, 55, 1);
+    color: #f9fafb;
+  }
+}
+
+/* 접근성 개선 */
+@media (prefers-reduced-motion: reduce) {
+  .view-btn,
+  .action-btn,
+  .radar-layout,
+  .table-layout,
+  .grouped-layout {
+    animation: none;
+    transition: none;
+  }
+  
+  .view-btn:hover,
+  .action-btn:hover {
+    transform: none;
+  }
+}
+
+/* 고대비 모드 */
+@media (prefers-contrast: high) {
+  .app-header {
+    border-bottom: 2px solid #000;
+  }
+  
+  .view-btn {
+    border: 1px solid #000;
+  }
+  
+  .view-btn.active {
+    background: #000;
+    color: #fff;
+  }
+  
+  .action-btn {
+    border: 1px solid #000;
+  }
+}

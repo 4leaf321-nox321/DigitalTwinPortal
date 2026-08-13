@@ -1,0 +1,3010 @@
+{
+  "version": "1.0",
+  "timestamp": "2025-11-21T22:40:30.381Z",
+  "settings": {
+    "nodeTypes": [
+      {
+        "id": "group",
+        "label": "그룹",
+        "color": "#f50a0a",
+        "description": "사업부/부서"
+      },
+      {
+        "id": "requireddata",
+        "label": "필요데이터",
+        "color": "#3B82F6",
+        "description": "프로젝트/과제"
+      },
+      {
+        "id": "performance",
+        "label": "성과",
+        "color": "#10B981",
+        "description": "성과 항목"
+      },
+      {
+        "id": "default",
+        "label": "기본"
+      }
+    ],
+    "edgeTypes": [
+      {
+        "id": "require",
+        "label": "요청",
+        "color": "#F97316",
+        "description": "과제가 사업부에 소속됨"
+      }
+    ]
+  },
+  "data": {
+    "nodes": [
+      {
+        "id": "bulk_node_1763764074673_0",
+        "label": "기구설계그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -300.260287053435,
+        "y": 0.398966059757809,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_1",
+        "label": "회로설계그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -150.26028705343498,
+        "y": 0.398966059757809,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_2",
+        "label": "시장품질그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -0.2602870534349829,
+        "y": 0.398966059757809,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_3",
+        "label": "부품품질그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 149.73971294656502,
+        "y": 0.398966059757809,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_4",
+        "label": "공정기술그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 299.739712946565,
+        "y": 0.398966059757809,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_5",
+        "label": "제품기술그룹",
+        "type": "group",
+        "properties": {},
+        "color": {
+          "background": "#f50a0a",
+          "border": "#c40808",
+          "highlight": {
+            "background": "#f62323",
+            "border": "#ac0707"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -300.260287053435,
+        "y": 100.39896605975781,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_6",
+        "label": "MCAD Data",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -150.26028705343498,
+        "y": 100.39896605975781,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_7",
+        "label": "BOM",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -0.2602870534349829,
+        "y": 100.39896605975781,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_8",
+        "label": "BOP",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 149.73971294656502,
+        "y": 100.39896605975781,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_9",
+        "label": "ECAD Data",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 299.739712946565,
+        "y": 100.39896605975781,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_10",
+        "label": "불량데이터",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -300.260287053435,
+        "y": 200.3989660597578,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_11",
+        "label": "불량데이터",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -150.26028705343498,
+        "y": 200.3989660597578,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_12",
+        "label": "택 타임",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -0.2602870534349829,
+        "y": 200.3989660597578,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_13",
+        "label": "불량모드",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 149.73971294656502,
+        "y": 200.3989660597578,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_14",
+        "label": "브라켓데이터",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": 299.739712946565,
+        "y": 200.3989660597578,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_15",
+        "label": "라인정보",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -300.260287053435,
+        "y": 300.3989660597578,
+        "physics": true
+      },
+      {
+        "id": "bulk_node_1763764074673_16",
+        "label": "마켓 데이터",
+        "type": "requireddata",
+        "properties": {},
+        "color": {
+          "background": "#3B82F6",
+          "border": "#2f68c5",
+          "highlight": {
+            "background": "#4f8ff7",
+            "border": "#295bac"
+          }
+        },
+        "size": 25,
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        },
+        "x": -150.26028705343498,
+        "y": 300.3989660597578,
+        "physics": true
+      }
+    ],
+    "edges": [
+      {
+        "id": "bulk_edge_1763764084656_0",
+        "from": "bulk_node_1763764074673_1",
+        "to": "bulk_node_1763764074673_6",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084656_1",
+        "from": "bulk_node_1763764074673_6",
+        "to": "bulk_node_1763764074673_0",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084656_2",
+        "from": "bulk_node_1763764074673_1",
+        "to": "bulk_node_1763764074673_7",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084657_3",
+        "from": "bulk_node_1763764074673_7",
+        "to": "bulk_node_1763764074673_0",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084657_4",
+        "from": "bulk_node_1763764074673_4",
+        "to": "bulk_node_1763764074673_7",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084657_5",
+        "from": "bulk_node_1763764074673_7",
+        "to": "bulk_node_1763764074673_0",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084657_6",
+        "from": "bulk_node_1763764074673_0",
+        "to": "bulk_node_1763764074673_8",
+        "label": "없음",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084658_7",
+        "from": "bulk_node_1763764074673_1",
+        "to": "bulk_node_1763764074673_9",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084658_8",
+        "from": "bulk_node_1763764074673_2",
+        "to": "bulk_node_1763764074673_10",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084658_9",
+        "from": "bulk_node_1763764074673_3",
+        "to": "bulk_node_1763764074673_10",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084658_10",
+        "from": "bulk_node_1763764074673_4",
+        "to": "bulk_node_1763764074673_12",
+        "label": "회의",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084659_11",
+        "from": "bulk_node_1763764074673_5",
+        "to": "bulk_node_1763764074673_13",
+        "label": "없음",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084659_12",
+        "from": "bulk_node_1763764074673_0",
+        "to": "bulk_node_1763764074673_6",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084659_13",
+        "from": "bulk_node_1763764074673_6",
+        "to": "bulk_node_1763764074673_9",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084659_14",
+        "from": "bulk_node_1763764074673_8",
+        "to": "bulk_node_1763764074673_4",
+        "label": "없음",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084660_15",
+        "from": "bulk_node_1763764074673_7",
+        "to": "bulk_node_1763764074673_2",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084660_16",
+        "from": "bulk_node_1763764074673_10",
+        "to": "bulk_node_1763764074673_0",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084660_17",
+        "from": "bulk_node_1763764074673_9",
+        "to": "bulk_node_1763764074673_1",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084660_18",
+        "from": "bulk_node_1763764074673_5",
+        "to": "bulk_node_1763764074673_7",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084660_19",
+        "from": "bulk_node_1763764074673_1",
+        "to": "bulk_node_1763764074673_13",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084661_20",
+        "from": "bulk_node_1763764074673_13",
+        "to": "bulk_node_1763764074673_2",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084661_21",
+        "from": "bulk_node_1763764074673_0",
+        "to": "bulk_node_1763764074673_14",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084661_22",
+        "from": "bulk_node_1763764074673_14",
+        "to": "bulk_node_1763764074673_4",
+        "label": "회의",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084661_23",
+        "from": "bulk_node_1763764074673_6",
+        "to": "bulk_node_1763764074673_5",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084661_24",
+        "from": "bulk_node_1763764074673_2",
+        "to": "bulk_node_1763764074673_13",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084662_25",
+        "from": "bulk_node_1763764074673_3",
+        "to": "bulk_node_1763764074673_8",
+        "label": "없음",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084662_26",
+        "from": "bulk_node_1763764074673_8",
+        "to": "bulk_node_1763764074673_0",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084662_27",
+        "from": "bulk_node_1763764074673_4",
+        "to": "bulk_node_1763764074673_15",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084662_28",
+        "from": "bulk_node_1763764074673_15",
+        "to": "bulk_node_1763764074673_5",
+        "label": "회의",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084662_29",
+        "from": "bulk_node_1763764074673_7",
+        "to": "bulk_node_1763764074673_3",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084663_30",
+        "from": "bulk_node_1763764074673_10",
+        "to": "bulk_node_1763764074673_9",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084663_31",
+        "from": "bulk_node_1763764074673_5",
+        "to": "bulk_node_1763764074673_14",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084663_33",
+        "from": "bulk_node_1763764074673_1",
+        "to": "bulk_node_1763764074673_3",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084664_34",
+        "from": "bulk_node_1763764074673_3",
+        "to": "bulk_node_1763764074673_9",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084664_35",
+        "from": "bulk_node_1763764074673_2",
+        "to": "bulk_node_1763764074673_12",
+        "label": "회의",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084664_36",
+        "from": "bulk_node_1763764074673_12",
+        "to": "bulk_node_1763764074673_8",
+        "label": "없음",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084664_37",
+        "from": "bulk_node_1763764074673_6",
+        "to": "bulk_node_1763764074673_10",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084664_38",
+        "from": "bulk_node_1763764074673_9",
+        "to": "bulk_node_1763764074673_0",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084665_39",
+        "from": "bulk_node_1763764074673_13",
+        "to": "bulk_node_1763764074673_3",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084665_40",
+        "from": "bulk_node_1763764074673_4",
+        "to": "bulk_node_1763764074673_6",
+        "label": "회의",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084665_41",
+        "from": "bulk_node_1763764074673_7",
+        "to": "bulk_node_1763764074673_9",
+        "label": "Email",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084665_42",
+        "from": "bulk_node_1763764074673_14",
+        "to": "bulk_node_1763764074673_13",
+        "label": "없음",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084666_43",
+        "from": "bulk_node_1763764074673_5",
+        "to": "bulk_node_1763764074673_9",
+        "label": "요청",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084666_44",
+        "from": "bulk_node_1763764074673_1",
+        "to": "bulk_node_1763764074673_14",
+        "label": "CIS",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084666_45",
+        "from": "bulk_node_1763764074673_9",
+        "to": "bulk_node_1763764074673_2",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      },
+      {
+        "id": "bulk_edge_1763764084667_48",
+        "from": "bulk_node_1763764074673_16",
+        "to": "bulk_node_1763764074673_0",
+        "label": "Excel",
+        "type": "require",
+        "properties": {},
+        "color": "#F97316",
+        "width": 2,
+        "arrows": {
+          "to": {
+            "enabled": true,
+            "scaleFactor": 1,
+            "type": "arrow"
+          }
+        },
+        "smooth": {
+          "type": "continuous"
+        }
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "bulk_node_1763764074673_0",
+      "label": "기구설계그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -300.260287053435,
+      "y": 0.398966059757809,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_1",
+      "label": "회로설계그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -150.26028705343498,
+      "y": 0.398966059757809,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_2",
+      "label": "시장품질그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -0.2602870534349829,
+      "y": 0.398966059757809,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_3",
+      "label": "부품품질그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 149.73971294656502,
+      "y": 0.398966059757809,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_4",
+      "label": "공정기술그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 299.739712946565,
+      "y": 0.398966059757809,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_5",
+      "label": "제품기술그룹",
+      "type": "group",
+      "properties": {},
+      "color": {
+        "background": "#f50a0a",
+        "border": "#c40808",
+        "highlight": {
+          "background": "#f62323",
+          "border": "#ac0707"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -300.260287053435,
+      "y": 100.39896605975781,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_6",
+      "label": "MCAD Data",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -150.26028705343498,
+      "y": 100.39896605975781,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_7",
+      "label": "BOM",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -0.2602870534349829,
+      "y": 100.39896605975781,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_8",
+      "label": "BOP",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 149.73971294656502,
+      "y": 100.39896605975781,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_9",
+      "label": "ECAD Data",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 299.739712946565,
+      "y": 100.39896605975781,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_10",
+      "label": "불량데이터",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -300.260287053435,
+      "y": 200.3989660597578,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_11",
+      "label": "불량데이터",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -150.26028705343498,
+      "y": 200.3989660597578,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_12",
+      "label": "택 타임",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -0.2602870534349829,
+      "y": 200.3989660597578,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_13",
+      "label": "불량모드",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 149.73971294656502,
+      "y": 200.3989660597578,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_14",
+      "label": "브라켓데이터",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": 299.739712946565,
+      "y": 200.3989660597578,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_15",
+      "label": "라인정보",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -300.260287053435,
+      "y": 300.3989660597578,
+      "physics": true
+    },
+    {
+      "id": "bulk_node_1763764074673_16",
+      "label": "마켓 데이터",
+      "type": "requireddata",
+      "properties": {},
+      "color": {
+        "background": "#3B82F6",
+        "border": "#2f68c5",
+        "highlight": {
+          "background": "#4f8ff7",
+          "border": "#295bac"
+        }
+      },
+      "size": 25,
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      },
+      "x": -150.26028705343498,
+      "y": 300.3989660597578,
+      "physics": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "bulk_edge_1763764084656_0",
+      "from": "bulk_node_1763764074673_1",
+      "to": "bulk_node_1763764074673_6",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084656_1",
+      "from": "bulk_node_1763764074673_6",
+      "to": "bulk_node_1763764074673_0",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084656_2",
+      "from": "bulk_node_1763764074673_1",
+      "to": "bulk_node_1763764074673_7",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084657_3",
+      "from": "bulk_node_1763764074673_7",
+      "to": "bulk_node_1763764074673_0",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084657_4",
+      "from": "bulk_node_1763764074673_4",
+      "to": "bulk_node_1763764074673_7",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084657_5",
+      "from": "bulk_node_1763764074673_7",
+      "to": "bulk_node_1763764074673_0",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084657_6",
+      "from": "bulk_node_1763764074673_0",
+      "to": "bulk_node_1763764074673_8",
+      "label": "없음",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084658_7",
+      "from": "bulk_node_1763764074673_1",
+      "to": "bulk_node_1763764074673_9",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084658_8",
+      "from": "bulk_node_1763764074673_2",
+      "to": "bulk_node_1763764074673_10",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084658_9",
+      "from": "bulk_node_1763764074673_3",
+      "to": "bulk_node_1763764074673_10",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084658_10",
+      "from": "bulk_node_1763764074673_4",
+      "to": "bulk_node_1763764074673_12",
+      "label": "회의",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084659_11",
+      "from": "bulk_node_1763764074673_5",
+      "to": "bulk_node_1763764074673_13",
+      "label": "없음",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084659_12",
+      "from": "bulk_node_1763764074673_0",
+      "to": "bulk_node_1763764074673_6",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084659_13",
+      "from": "bulk_node_1763764074673_6",
+      "to": "bulk_node_1763764074673_9",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084659_14",
+      "from": "bulk_node_1763764074673_8",
+      "to": "bulk_node_1763764074673_4",
+      "label": "없음",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084660_15",
+      "from": "bulk_node_1763764074673_7",
+      "to": "bulk_node_1763764074673_2",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084660_16",
+      "from": "bulk_node_1763764074673_10",
+      "to": "bulk_node_1763764074673_0",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084660_17",
+      "from": "bulk_node_1763764074673_9",
+      "to": "bulk_node_1763764074673_1",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084660_18",
+      "from": "bulk_node_1763764074673_5",
+      "to": "bulk_node_1763764074673_7",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084660_19",
+      "from": "bulk_node_1763764074673_1",
+      "to": "bulk_node_1763764074673_13",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084661_20",
+      "from": "bulk_node_1763764074673_13",
+      "to": "bulk_node_1763764074673_2",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084661_21",
+      "from": "bulk_node_1763764074673_0",
+      "to": "bulk_node_1763764074673_14",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084661_22",
+      "from": "bulk_node_1763764074673_14",
+      "to": "bulk_node_1763764074673_4",
+      "label": "회의",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084661_23",
+      "from": "bulk_node_1763764074673_6",
+      "to": "bulk_node_1763764074673_5",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084661_24",
+      "from": "bulk_node_1763764074673_2",
+      "to": "bulk_node_1763764074673_13",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084662_25",
+      "from": "bulk_node_1763764074673_3",
+      "to": "bulk_node_1763764074673_8",
+      "label": "없음",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084662_26",
+      "from": "bulk_node_1763764074673_8",
+      "to": "bulk_node_1763764074673_0",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084662_27",
+      "from": "bulk_node_1763764074673_4",
+      "to": "bulk_node_1763764074673_15",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084662_28",
+      "from": "bulk_node_1763764074673_15",
+      "to": "bulk_node_1763764074673_5",
+      "label": "회의",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084662_29",
+      "from": "bulk_node_1763764074673_7",
+      "to": "bulk_node_1763764074673_3",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084663_30",
+      "from": "bulk_node_1763764074673_10",
+      "to": "bulk_node_1763764074673_9",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084663_31",
+      "from": "bulk_node_1763764074673_5",
+      "to": "bulk_node_1763764074673_14",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084663_33",
+      "from": "bulk_node_1763764074673_1",
+      "to": "bulk_node_1763764074673_3",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084664_34",
+      "from": "bulk_node_1763764074673_3",
+      "to": "bulk_node_1763764074673_9",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084664_35",
+      "from": "bulk_node_1763764074673_2",
+      "to": "bulk_node_1763764074673_12",
+      "label": "회의",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084664_36",
+      "from": "bulk_node_1763764074673_12",
+      "to": "bulk_node_1763764074673_8",
+      "label": "없음",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084664_37",
+      "from": "bulk_node_1763764074673_6",
+      "to": "bulk_node_1763764074673_10",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084664_38",
+      "from": "bulk_node_1763764074673_9",
+      "to": "bulk_node_1763764074673_0",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084665_39",
+      "from": "bulk_node_1763764074673_13",
+      "to": "bulk_node_1763764074673_3",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084665_40",
+      "from": "bulk_node_1763764074673_4",
+      "to": "bulk_node_1763764074673_6",
+      "label": "회의",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084665_41",
+      "from": "bulk_node_1763764074673_7",
+      "to": "bulk_node_1763764074673_9",
+      "label": "Email",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084665_42",
+      "from": "bulk_node_1763764074673_14",
+      "to": "bulk_node_1763764074673_13",
+      "label": "없음",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084666_43",
+      "from": "bulk_node_1763764074673_5",
+      "to": "bulk_node_1763764074673_9",
+      "label": "요청",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084666_44",
+      "from": "bulk_node_1763764074673_1",
+      "to": "bulk_node_1763764074673_14",
+      "label": "CIS",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084666_45",
+      "from": "bulk_node_1763764074673_9",
+      "to": "bulk_node_1763764074673_2",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    },
+    {
+      "id": "bulk_edge_1763764084667_48",
+      "from": "bulk_node_1763764074673_16",
+      "to": "bulk_node_1763764074673_0",
+      "label": "Excel",
+      "type": "require",
+      "properties": {},
+      "color": "#F97316",
+      "width": 2,
+      "arrows": {
+        "to": {
+          "enabled": true,
+          "scaleFactor": 1,
+          "type": "arrow"
+        }
+      },
+      "smooth": {
+        "type": "continuous"
+      }
+    }
+  ]
+}

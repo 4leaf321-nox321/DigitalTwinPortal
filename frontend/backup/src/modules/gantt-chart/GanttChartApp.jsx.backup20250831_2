@@ -1,0 +1,94 @@
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Home, BarChart3 } from 'lucide-react';
+import './GanttChartApp.css';
+
+const GanttChartApp = () => {
+  const navigate = useNavigate();
+
+  const handleGoHome = () => {
+    navigate('/');
+  };
+
+  const features = [
+    '작업 계획 및 일정 관리',
+    '진행 상황 시각적 추적',
+    '의존성 관계 설정',
+    '리소스 할당 최적화',
+    '마일스톤 관리',
+    '팀 협업 기능'
+  ];
+
+  return (
+    <div className="gantt-layout">
+      {/* Header */}
+      <header className="gantt-header">
+        <div className="header-left">
+          <div className="logo">
+            <Calendar size={24} strokeWidth={2} />
+            <h1>Gantt Chart</h1>
+          </div>
+        </div>
+
+        <div className="header-center">
+          <div className="development-badge">
+            개발 중
+          </div>
+        </div>
+
+        <div className="header-right">
+          <button 
+            className="header-btn home-btn"
+            onClick={handleGoHome}
+            title="메인 화면으로 돌아가기"
+            aria-label="메인 화면으로 돌아가기"
+          >
+            <Home size={18} strokeWidth={2} />
+            <span>홈</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="gantt-main">
+        <div className="content-container">
+          <div className="coming-soon-section">
+            <div className="icon-wrapper">
+              <BarChart3 size={80} strokeWidth={1.5} />
+            </div>
+            
+            <h2>프로젝트 관리 도구</h2>
+            <p className="description">
+              효율적인 프로젝트 관리를 위한 간트 차트 도구입니다.<br />
+              작업 일정을 시각적으로 계획하고 추적하여 프로젝트 성공률을 높여보세요.
+            </p>
+
+            <div className="features-section">
+              <h3>예정 기능</h3>
+              <div className="features-grid">
+                {features.map((feature, index) => (
+                  <div key={index} className="feature-item">
+                    <div className="feature-icon">📊</div>
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="coming-soon-message">
+              <div className="message-box">
+                <h4>🚀 곧 출시 예정</h4>
+                <p>
+                  더 나은 프로젝트 관리 경험을 위해 열심히 개발 중입니다.<br />
+                  조금만 더 기다려주세요!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default GanttChartApp;

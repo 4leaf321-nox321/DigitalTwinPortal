@@ -1,0 +1,1179 @@
+{
+  "version": "1.0",
+  "timestamp": "2025-11-20T10:32:57.060Z",
+  "settings": {
+    "nodeTypes": [
+      {
+        "id": "person",
+        "label": "Person",
+        "color": "#3498db"
+      },
+      {
+        "id": "company",
+        "label": "Company",
+        "color": "#e74c3c"
+      },
+      {
+        "id": "project",
+        "label": "Project",
+        "color": "#2ecc71"
+      },
+      {
+        "id": "skill",
+        "label": "Skill",
+        "color": "#f39c12"
+      },
+      {
+        "id": "department",
+        "label": "Department",
+        "color": "#9b59b6"
+      },
+      {
+        "id": "technology",
+        "label": "Technology",
+        "color": "#f39c12"
+      },
+      {
+        "id": "team",
+        "label": "Team",
+        "color": "#1abc9c"
+      },
+      {
+        "id": "product",
+        "label": "Product",
+        "color": "#34495e"
+      },
+      {
+        "id": "service",
+        "label": "Service",
+        "color": "#95a5a6"
+      },
+      {
+        "id": "location",
+        "label": "Location",
+        "color": "#e67e22"
+      },
+      {
+        "id": "unknown",
+        "label": "Unknown",
+        "color": "#cccccc"
+      }
+    ],
+    "edgeTypes": [
+      {
+        "id": "works_for",
+        "label": "근무"
+      },
+      {
+        "id": "participates_in",
+        "label": "참여"
+      },
+      {
+        "id": "has_skill",
+        "label": "보유"
+      },
+      {
+        "id": "belongs_to",
+        "label": "소속"
+      },
+      {
+        "id": "uses_technology",
+        "label": "사용"
+      },
+      {
+        "id": "utilizes",
+        "label": "활용"
+      },
+      {
+        "id": "part_of",
+        "label": "부분"
+      },
+      {
+        "id": "collaborates_with",
+        "label": "협업"
+      },
+      {
+        "id": "unknown",
+        "label": "알 수 없음"
+      }
+    ]
+  },
+  "data": {
+    "nodes": [
+      {
+        "id": "person_1",
+        "label": "김철수",
+        "type": "person",
+        "properties": {
+          "age": 30,
+          "occupation": "소프트웨어 엔지니어",
+          "location": "서울",
+          "department": "개발팀"
+        },
+        "size": 25,
+        "color": {
+          "background": "#4CAF50",
+          "border": "#3d8c40",
+          "highlight": {
+            "background": "#5eb762",
+            "border": "#357a38"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "person_2",
+        "label": "박영희",
+        "type": "person",
+        "properties": {
+          "age": 28,
+          "occupation": "데이터 분석가",
+          "location": "부산",
+          "department": "분석팀"
+        },
+        "size": 25,
+        "color": {
+          "background": "#4CAF50",
+          "border": "#3d8c40",
+          "highlight": {
+            "background": "#5eb762",
+            "border": "#357a38"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "company_1",
+        "label": "테크코프",
+        "type": "company",
+        "properties": {
+          "industry": "정보기술",
+          "employees": 500,
+          "founded": 2015,
+          "location": "서울 강남구"
+        },
+        "size": 35,
+        "color": {
+          "background": "#2196F3",
+          "border": "#1a78c2",
+          "highlight": {
+            "background": "#37a1f4",
+            "border": "#1769aa"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "project_1",
+        "label": "지식그래프 시스템",
+        "type": "project",
+        "properties": {
+          "status": "진행중",
+          "startDate": "2024-01-01",
+          "budget": 50000000,
+          "priority": "high"
+        },
+        "size": 30,
+        "color": {
+          "background": "#FF9800",
+          "border": "#cc7a00",
+          "highlight": {
+            "background": "#ffa21a",
+            "border": "#b36a00"
+          }
+        },
+        "font": {
+          "color": "#333333",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#ffffff"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "skill_1",
+        "label": "React",
+        "type": "skill",
+        "properties": {
+          "category": "Frontend",
+          "difficulty": "intermediate",
+          "popularity": 95
+        },
+        "size": 20,
+        "color": {
+          "background": "#9C27B0",
+          "border": "#7d1f8d",
+          "highlight": {
+            "background": "#a63db8",
+            "border": "#6d1b7b"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "skill_2",
+        "label": "Python",
+        "type": "skill",
+        "properties": {
+          "category": "Backend",
+          "difficulty": "intermediate",
+          "popularity": 98
+        },
+        "size": 20,
+        "color": {
+          "background": "#9C27B0",
+          "border": "#7d1f8d",
+          "highlight": {
+            "background": "#a63db8",
+            "border": "#6d1b7b"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "skill_3",
+        "label": "D3.js",
+        "type": "skill",
+        "properties": {
+          "category": "Data Visualization",
+          "difficulty": "advanced",
+          "popularity": 75
+        },
+        "size": 20,
+        "color": {
+          "background": "#9C27B0",
+          "border": "#7d1f8d",
+          "highlight": {
+            "background": "#a63db8",
+            "border": "#6d1b7b"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "department_1",
+        "label": "개발부",
+        "type": "department",
+        "properties": {
+          "headCount": 25,
+          "budget": 200000000,
+          "location": "본사 3층"
+        },
+        "size": 30,
+        "color": {
+          "background": "#FF5722",
+          "border": "#cc461b",
+          "highlight": {
+            "background": "#ff6838",
+            "border": "#b33d18"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "department_2",
+        "label": "분석부",
+        "type": "department",
+        "properties": {
+          "headCount": 15,
+          "budget": 100000000,
+          "location": "본사 2층"
+        },
+        "size": 25,
+        "color": {
+          "background": "#FF5722",
+          "border": "#cc461b",
+          "highlight": {
+            "background": "#ff6838",
+            "border": "#b33d18"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      },
+      {
+        "id": "technology_1",
+        "label": "Graph Database",
+        "type": "technology",
+        "properties": {
+          "type": "Database",
+          "maturity": "emerging",
+          "adoptionRate": 25
+        },
+        "size": 25,
+        "color": {
+          "background": "#607D8B",
+          "border": "#4d646f",
+          "highlight": {
+            "background": "#708a97",
+            "border": "#435861"
+          }
+        },
+        "font": {
+          "color": "#ffffff",
+          "size": 14,
+          "face": "Arial, sans-serif",
+          "strokeWidth": 2,
+          "strokeColor": "#000000"
+        },
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.3)",
+          "size": 10,
+          "x": 2,
+          "y": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_1",
+        "from": "person_1",
+        "to": "company_1",
+        "label": "근무",
+        "type": "works_for",
+        "properties": {
+          "startDate": "2020-03-01",
+          "position": "Senior Developer",
+          "salary": 6000
+        },
+        "color": "#3498db",
+        "width": 2
+      },
+      {
+        "id": "edge_2",
+        "from": "person_2",
+        "to": "company_1",
+        "label": "근무",
+        "type": "works_for",
+        "properties": {
+          "startDate": "2021-06-15",
+          "position": "Data Analyst",
+          "salary": 5500
+        },
+        "color": "#3498db",
+        "width": 2
+      },
+      {
+        "id": "edge_3",
+        "from": "person_1",
+        "to": "project_1",
+        "label": "참여",
+        "type": "participates_in",
+        "properties": {
+          "role": "Lead Developer",
+          "allocation": 80,
+          "startDate": "2024-01-01"
+        },
+        "color": "#2ecc71",
+        "width": 2
+      },
+      {
+        "id": "edge_4",
+        "from": "person_2",
+        "to": "project_1",
+        "label": "참여",
+        "type": "participates_in",
+        "properties": {
+          "role": "Data Analyst",
+          "allocation": 60,
+          "startDate": "2024-02-01"
+        },
+        "color": "#2ecc71",
+        "width": 2
+      },
+      {
+        "id": "edge_5",
+        "from": "person_1",
+        "to": "skill_1",
+        "label": "보유",
+        "type": "has_skill",
+        "properties": {
+          "level": "expert",
+          "experience": 5,
+          "certified": true
+        },
+        "color": "#f39c12",
+        "width": 1.5
+      },
+      {
+        "id": "edge_6",
+        "from": "person_1",
+        "to": "skill_3",
+        "label": "보유",
+        "type": "has_skill",
+        "properties": {
+          "level": "intermediate",
+          "experience": 2,
+          "certified": false
+        },
+        "color": "#f39c12",
+        "width": 1.5
+      },
+      {
+        "id": "edge_7",
+        "from": "person_2",
+        "to": "skill_2",
+        "label": "보유",
+        "type": "has_skill",
+        "properties": {
+          "level": "expert",
+          "experience": 4,
+          "certified": true
+        },
+        "color": "#f39c12",
+        "width": 1.5
+      },
+      {
+        "id": "edge_8",
+        "from": "person_1",
+        "to": "department_1",
+        "label": "소속",
+        "type": "belongs_to",
+        "properties": {
+          "joinDate": "2020-03-01",
+          "role": "Senior Member"
+        },
+        "color": "#9b59b6",
+        "width": 2
+      },
+      {
+        "id": "edge_9",
+        "from": "person_2",
+        "to": "department_2",
+        "label": "소속",
+        "type": "belongs_to",
+        "properties": {
+          "joinDate": "2021-06-15",
+          "role": "Member"
+        },
+        "color": "#9b59b6",
+        "width": 2
+      },
+      {
+        "id": "edge_10",
+        "from": "project_1",
+        "to": "skill_3",
+        "label": "사용",
+        "type": "uses_technology",
+        "properties": {
+          "importance": "high",
+          "version": "latest"
+        },
+        "color": "#e67e22",
+        "width": 1.5
+      },
+      {
+        "id": "edge_11",
+        "from": "project_1",
+        "to": "technology_1",
+        "label": "활용",
+        "type": "utilizes",
+        "properties": {
+          "implementation": "core",
+          "percentage": 70
+        },
+        "color": "#1abc9c",
+        "width": 2
+      },
+      {
+        "id": "edge_12",
+        "from": "department_1",
+        "to": "company_1",
+        "label": "부서",
+        "type": "part_of",
+        "properties": {
+          "established": "2015-01-01"
+        },
+        "color": "#34495e",
+        "width": 3
+      },
+      {
+        "id": "edge_13",
+        "from": "department_2",
+        "to": "company_1",
+        "label": "부서",
+        "type": "part_of",
+        "properties": {
+          "established": "2017-06-01"
+        },
+        "color": "#34495e",
+        "width": 3
+      },
+      {
+        "id": "edge_14",
+        "from": "person_1",
+        "to": "person_2",
+        "label": "협업",
+        "type": "collaborates_with",
+        "properties": {
+          "frequency": "daily",
+          "projects": [
+            "지식그래프 시스템"
+          ],
+          "relationship": "colleague"
+        },
+        "color": "#e74c3c",
+        "width": 1
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "person_1",
+      "label": "김철수",
+      "type": "person",
+      "properties": {
+        "age": 30,
+        "occupation": "소프트웨어 엔지니어",
+        "location": "서울",
+        "department": "개발팀"
+      },
+      "size": 25,
+      "color": {
+        "background": "#4CAF50",
+        "border": "#3d8c40",
+        "highlight": {
+          "background": "#5eb762",
+          "border": "#357a38"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "person_2",
+      "label": "박영희",
+      "type": "person",
+      "properties": {
+        "age": 28,
+        "occupation": "데이터 분석가",
+        "location": "부산",
+        "department": "분석팀"
+      },
+      "size": 25,
+      "color": {
+        "background": "#4CAF50",
+        "border": "#3d8c40",
+        "highlight": {
+          "background": "#5eb762",
+          "border": "#357a38"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "company_1",
+      "label": "테크코프",
+      "type": "company",
+      "properties": {
+        "industry": "정보기술",
+        "employees": 500,
+        "founded": 2015,
+        "location": "서울 강남구"
+      },
+      "size": 35,
+      "color": {
+        "background": "#2196F3",
+        "border": "#1a78c2",
+        "highlight": {
+          "background": "#37a1f4",
+          "border": "#1769aa"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "project_1",
+      "label": "지식그래프 시스템",
+      "type": "project",
+      "properties": {
+        "status": "진행중",
+        "startDate": "2024-01-01",
+        "budget": 50000000,
+        "priority": "high"
+      },
+      "size": 30,
+      "color": {
+        "background": "#FF9800",
+        "border": "#cc7a00",
+        "highlight": {
+          "background": "#ffa21a",
+          "border": "#b36a00"
+        }
+      },
+      "font": {
+        "color": "#333333",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#ffffff"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "skill_1",
+      "label": "React",
+      "type": "skill",
+      "properties": {
+        "category": "Frontend",
+        "difficulty": "intermediate",
+        "popularity": 95
+      },
+      "size": 20,
+      "color": {
+        "background": "#9C27B0",
+        "border": "#7d1f8d",
+        "highlight": {
+          "background": "#a63db8",
+          "border": "#6d1b7b"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "skill_2",
+      "label": "Python",
+      "type": "skill",
+      "properties": {
+        "category": "Backend",
+        "difficulty": "intermediate",
+        "popularity": 98
+      },
+      "size": 20,
+      "color": {
+        "background": "#9C27B0",
+        "border": "#7d1f8d",
+        "highlight": {
+          "background": "#a63db8",
+          "border": "#6d1b7b"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "skill_3",
+      "label": "D3.js",
+      "type": "skill",
+      "properties": {
+        "category": "Data Visualization",
+        "difficulty": "advanced",
+        "popularity": 75
+      },
+      "size": 20,
+      "color": {
+        "background": "#9C27B0",
+        "border": "#7d1f8d",
+        "highlight": {
+          "background": "#a63db8",
+          "border": "#6d1b7b"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "department_1",
+      "label": "개발부",
+      "type": "department",
+      "properties": {
+        "headCount": 25,
+        "budget": 200000000,
+        "location": "본사 3층"
+      },
+      "size": 30,
+      "color": {
+        "background": "#FF5722",
+        "border": "#cc461b",
+        "highlight": {
+          "background": "#ff6838",
+          "border": "#b33d18"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "department_2",
+      "label": "분석부",
+      "type": "department",
+      "properties": {
+        "headCount": 15,
+        "budget": 100000000,
+        "location": "본사 2층"
+      },
+      "size": 25,
+      "color": {
+        "background": "#FF5722",
+        "border": "#cc461b",
+        "highlight": {
+          "background": "#ff6838",
+          "border": "#b33d18"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    },
+    {
+      "id": "technology_1",
+      "label": "Graph Database",
+      "type": "technology",
+      "properties": {
+        "type": "Database",
+        "maturity": "emerging",
+        "adoptionRate": 25
+      },
+      "size": 25,
+      "color": {
+        "background": "#607D8B",
+        "border": "#4d646f",
+        "highlight": {
+          "background": "#708a97",
+          "border": "#435861"
+        }
+      },
+      "font": {
+        "color": "#ffffff",
+        "size": 14,
+        "face": "Arial, sans-serif",
+        "strokeWidth": 2,
+        "strokeColor": "#000000"
+      },
+      "borderWidth": 2,
+      "shadow": {
+        "enabled": true,
+        "color": "rgba(0,0,0,0.3)",
+        "size": 10,
+        "x": 2,
+        "y": 2
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "from": "person_1",
+      "to": "company_1",
+      "label": "근무",
+      "type": "works_for",
+      "properties": {
+        "startDate": "2020-03-01",
+        "position": "Senior Developer",
+        "salary": 6000
+      },
+      "color": "#3498db",
+      "width": 2
+    },
+    {
+      "id": "edge_2",
+      "from": "person_2",
+      "to": "company_1",
+      "label": "근무",
+      "type": "works_for",
+      "properties": {
+        "startDate": "2021-06-15",
+        "position": "Data Analyst",
+        "salary": 5500
+      },
+      "color": "#3498db",
+      "width": 2
+    },
+    {
+      "id": "edge_3",
+      "from": "person_1",
+      "to": "project_1",
+      "label": "참여",
+      "type": "participates_in",
+      "properties": {
+        "role": "Lead Developer",
+        "allocation": 80,
+        "startDate": "2024-01-01"
+      },
+      "color": "#2ecc71",
+      "width": 2
+    },
+    {
+      "id": "edge_4",
+      "from": "person_2",
+      "to": "project_1",
+      "label": "참여",
+      "type": "participates_in",
+      "properties": {
+        "role": "Data Analyst",
+        "allocation": 60,
+        "startDate": "2024-02-01"
+      },
+      "color": "#2ecc71",
+      "width": 2
+    },
+    {
+      "id": "edge_5",
+      "from": "person_1",
+      "to": "skill_1",
+      "label": "보유",
+      "type": "has_skill",
+      "properties": {
+        "level": "expert",
+        "experience": 5,
+        "certified": true
+      },
+      "color": "#f39c12",
+      "width": 1.5
+    },
+    {
+      "id": "edge_6",
+      "from": "person_1",
+      "to": "skill_3",
+      "label": "보유",
+      "type": "has_skill",
+      "properties": {
+        "level": "intermediate",
+        "experience": 2,
+        "certified": false
+      },
+      "color": "#f39c12",
+      "width": 1.5
+    },
+    {
+      "id": "edge_7",
+      "from": "person_2",
+      "to": "skill_2",
+      "label": "보유",
+      "type": "has_skill",
+      "properties": {
+        "level": "expert",
+        "experience": 4,
+        "certified": true
+      },
+      "color": "#f39c12",
+      "width": 1.5
+    },
+    {
+      "id": "edge_8",
+      "from": "person_1",
+      "to": "department_1",
+      "label": "소속",
+      "type": "belongs_to",
+      "properties": {
+        "joinDate": "2020-03-01",
+        "role": "Senior Member"
+      },
+      "color": "#9b59b6",
+      "width": 2
+    },
+    {
+      "id": "edge_9",
+      "from": "person_2",
+      "to": "department_2",
+      "label": "소속",
+      "type": "belongs_to",
+      "properties": {
+        "joinDate": "2021-06-15",
+        "role": "Member"
+      },
+      "color": "#9b59b6",
+      "width": 2
+    },
+    {
+      "id": "edge_10",
+      "from": "project_1",
+      "to": "skill_3",
+      "label": "사용",
+      "type": "uses_technology",
+      "properties": {
+        "importance": "high",
+        "version": "latest"
+      },
+      "color": "#e67e22",
+      "width": 1.5
+    },
+    {
+      "id": "edge_11",
+      "from": "project_1",
+      "to": "technology_1",
+      "label": "활용",
+      "type": "utilizes",
+      "properties": {
+        "implementation": "core",
+        "percentage": 70
+      },
+      "color": "#1abc9c",
+      "width": 2
+    },
+    {
+      "id": "edge_12",
+      "from": "department_1",
+      "to": "company_1",
+      "label": "부서",
+      "type": "part_of",
+      "properties": {
+        "established": "2015-01-01"
+      },
+      "color": "#34495e",
+      "width": 3
+    },
+    {
+      "id": "edge_13",
+      "from": "department_2",
+      "to": "company_1",
+      "label": "부서",
+      "type": "part_of",
+      "properties": {
+        "established": "2017-06-01"
+      },
+      "color": "#34495e",
+      "width": 3
+    },
+    {
+      "id": "edge_14",
+      "from": "person_1",
+      "to": "person_2",
+      "label": "협업",
+      "type": "collaborates_with",
+      "properties": {
+        "frequency": "daily",
+        "projects": [
+          "지식그래프 시스템"
+        ],
+        "relationship": "colleague"
+      },
+      "color": "#e74c3c",
+      "width": 1
+    }
+  ]
+}

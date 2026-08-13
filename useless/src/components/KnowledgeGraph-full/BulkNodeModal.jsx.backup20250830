@@ -1,0 +1,196 @@
+import React, { useState } from 'react';
+import { X, Plus, Minus, Database } from 'lucide-react';
+import './BulkNodeModal.css';
+
+const BulkNodeModal = ({ 
+  isOpen, 
+  onClose, 
+  onBulkAdd, 
+  nodeTypes = [], 
+  onTypeUpdate 
+}) => {
+  const [nodes, setNodes] = useState([
+    { label: '', type: 'unknown' }
+  ]);
+
+  const addRow = () => {
+    setNodes([...nodes, { label: '', type: 'unknown' }]);
+  };
+
+  const removeRow = (index) => {
+    if (nodes.length > 1) {
+      const newNodes = nodes.filter((_, i) => i !== index);
+      setNodes(newNodes);
+    }
+  };
+
+  const updateNode = (index, field, value) => {
+    const newNodes = [...nodes];
+    newNodes[index][field] = value;
+    setNodes(newNodes);
+  };
+
+  const handleSubmit = () => {
+    // 유효한 노드만 필터링 (라벨이 있는 것들)
+    const validNodes = nodes.filter(node => node.label.trim() !== '');
+    
+    if (validNodes.length === 0) {
+      alert('최소 하나의 유효한 노드가 필요합니다.');
+      return;
+    }
+
+    // 새로운 타입들을 수집
+    const newTypes = new Set();
+    validNodes.forEach(node => {
+      if (!nodeTypes.find(type => type.id === node.type)) {
+        newTypes.add(node.type);
+      }
+    });
+
+    // 새로운 타입이 있으면 타입 설정에 추가
+    if (newTypes.size > 0) {
+      const newTypeSettings = Array.from(newTypes).map(typeId => ({
+        id: typeId,
+        label: typeId.charAt(0).toUpperCase() + typeId.slice(1),
+        color: getRandomColor()
+      }));
+      
+      onTypeUpdate(newTypeSettings);
+    }
+
+    onBulkAdd(validNodes);
+    handleClose();
+  };
+
+  const handleClose = () => {
+    setNodes([{ label: '', type: 'unknown' }]);
+    onClose();
+  };
+
+  const getRandomColor = () => {
+    const colors = [
+      '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+      '#1abc9c', '#34495e', '#95a5a6', '#e67e22', '#16a085'
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
+
+  const getUniqueTypes = () => {
+    const existingTypes = nodeTypes.map(type => type.id);
+    const customTypes = [...new Set(nodes.map(node => node.type))];
+    return [...new Set([...existingTypes, ...customTypes])];
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-backdrop" onClick={handleClose}>
+      <div className="modal-container bulk-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-header-content">
+            <Database size={24} />
+            <h2 className="modal-title">일괄 노드 추가</h2>
+          </div>
+          <button className="modal-close-btn" onClick={handleClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="modal-content">
+          <div className="bulk-instructions">
+            <p>여러 노드를 한번에 추가할 수 있습니다. 새로운 타입을 입력하면 자동으로 설정에 추가됩니다.</p>
+          </div>
+
+          <div className="bulk-table-container">
+            <table className="bulk-table">
+              <thead>
+                <tr>
+                  <th>노드 이름</th>
+                  <th>타입</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nodes.map((node, index) => (
+                  <tr key={index}>
+                    <td>
+                      <input
+                        type="text"
+                        value={node.label}
+                        onChange={(e) => updateNode(index, 'label', e.target.value)}
+                        placeholder="노드 이름을 입력하세요"
+                        className="bulk-input"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={node.type}
+                        onChange={(e) => updateNode(index, 'type', e.target.value)}
+                        className="bulk-select"
+                      >
+                        {getUniqueTypes().map(typeId => (
+                          <option key={typeId} value={typeId}>
+                            {typeId}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={node.type}
+                        onChange={(e) => updateNode(index, 'type', e.target.value)}
+                        placeholder="새 타입 입력"
+                        className="bulk-input-small"
+                        style={{ marginTop: '5px', fontSize: '12px' }}
+                      />
+                    </td>
+                    <td>
+                      <div className="bulk-actions">
+                        <button
+                          type="button"
+                          onClick={addRow}
+                          className="bulk-action-btn add"
+                          title="행 추가"
+                        >
+                          <Plus size={16} />
+                        </button>
+                        {nodes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeRow(index)}
+                            className="bulk-action-btn remove"
+                            title="행 제거"
+                          >
+                            <Minus size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="bulk-summary">
+            <p>총 {nodes.filter(n => n.label.trim()).length}개의 유효한 노드가 추가됩니다.</p>
+          </div>
+
+          <div className="bulk-modal-footer">
+            <button className="btn btn-secondary" onClick={handleClose}>
+              취소
+            </button>
+            <button 
+              className="btn btn-primary" 
+              onClick={handleSubmit}
+              disabled={nodes.filter(n => n.label.trim()).length === 0}
+            >
+              {nodes.filter(n => n.label.trim()).length}개 노드 추가
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BulkNodeModal;
