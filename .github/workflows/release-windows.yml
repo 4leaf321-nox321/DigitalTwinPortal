@@ -29,8 +29,21 @@ jobs:
           tag_name: ${{ github.ref_name }}
           release_name: ${{ github.ref_name }}
           body: 'Windows deploy package'
+          # Use a PAT with repo permissions when greater privileges are required
+          token: ${{ secrets.PUBLISH_PAT }}
           draft: false
           prerelease: false
+
+      - name: Upload deploy zip to release
+        # ensure the artifact exists before attempting upload
+      - name: Check deploy artifact
+        shell: pwsh
+        run: |
+          if (-not (Test-Path './deploy/deploy_package.zip')) {
+            Write-Error "deploy/deploy_package.zip not found"
+            exit 1
+          }
+          Write-Output "deploy artifact exists"
 
       - name: Upload deploy zip to release
         uses: actions/upload-release-asset@v1
