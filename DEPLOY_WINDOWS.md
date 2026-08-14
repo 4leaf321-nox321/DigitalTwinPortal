@@ -153,9 +153,39 @@ Rename-Item 'C:\Server\digitaltwinportal12' 'DigitalTwinPortal'
 
 ## B-1. 개발 PC — 릴리스 만들기
 
+`frontend/package.json`의 `version`을 올려서 `main`에 푸시하면 끝입니다.
+태그를 손으로 밀 필요가 없습니다.
+
+```jsonc
+// frontend/package.json
+"version": "0.1.19",   // 올린다
+```
+
 ```powershell
-git tag -a v0.1.16 -m "v0.1.16"
-git push origin v0.1.16
+git add frontend/package.json
+git commit -m "release: v0.1.19"
+git push origin main
+```
+
+그러면 이렇게 이어집니다.
+
+```
+main 푸시
+   ↓  Auto-tag on version bump  (version 이 바뀐 경우에만)
+v0.1.19 태그 자동 생성
+   ↓  Release - Windows package
+릴리스 발행 (deploy_package.zip 첨부)
+```
+
+**버전을 올리지 않은 커밋은 릴리스를 만들지 않습니다.** 즉 버전을 올리는
+행위가 "이걸 배포하겠다"는 결정입니다. 같은 버전으로 다시 푸시하면 태그가
+이미 있으므로 조용히 넘어갑니다.
+
+특정 버전을 손으로 만들고 싶으면 예전처럼 태그를 직접 밀어도 됩니다.
+
+```powershell
+git tag -a v0.1.19 -m "v0.1.19"
+git push origin v0.1.19
 ```
 
 1~2분 뒤 릴리스가 발행됩니다. Actions에서 `Release - Windows package`가
