@@ -56,7 +56,9 @@ class StrategyAssessment(BaseModel):
         nullable=False, index=True
     )
     division_id = db.Column(db.Integer, nullable=False, index=True)
-    # 성숙도 차원 (data / model / integration / analysis / application)
+    # technical: 기술 성숙도 / organization: 조직 역량
+    # 둘 다 1~5 로 매기지만 레벨의 뜻이 다르다(definitions.py 참고).
+    category = db.Column(db.String(20), nullable=False, default='technical')
     dimension = db.Column(db.String(50), nullable=False)
     current_level = db.Column(db.Integer, nullable=True)   # 1~5, 미입력이면 None
     target_level = db.Column(db.Integer, nullable=True)
@@ -66,8 +68,8 @@ class StrategyAssessment(BaseModel):
 
     __table_args__ = (
         db.UniqueConstraint(
-            'plan_id', 'division_id', 'dimension',
-            name='uq_assessment_plan_division_dimension'
+            'plan_id', 'division_id', 'category', 'dimension',
+            name='uq_assessment_plan_division_category_dimension'
         ),
     )
 
@@ -82,6 +84,35 @@ class StrategyAssessment(BaseModel):
         d = super().to_dict()
         d['gap'] = self.gap
         return d
+
+
+class StrategyMetricTarget(BaseModel):
+    """
+    B. 활용·성과 지표의 목표값.
+
+    관측값은 저장하지 않는다 — 포탈 데이터에서 매번 계산한다(metrics.py).
+    저장하면 원본이 바뀌었을 때 조용히 낡은 값을 보여주게 된다.
+
+    목표만 사람이 정하므로 그것만 남긴다. 목표가 없으면 관측값만 보이고
+    격차는 없다.
+    """
+    __tablename__ = 'strategy_metric_target'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+    division_id = db.Column(db.Integer, nullable=False, index=True)
+    metric_key = db.Column(db.String(50), nullable=False)
+    target_value = db.Column(db.Float, nullable=True)
+    note = db.Column(db.Text)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'plan_id', 'division_id', 'metric_key',
+            name='uq_metric_target_plan_division_key'
+        ),
+    )
 
 
 class StrategyEvidence(BaseModel):

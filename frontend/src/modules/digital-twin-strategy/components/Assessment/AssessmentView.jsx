@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, ClipboardList } from 'lucide-react';
+import MetricPanel from './MetricPanel';
 
-// ① 현재 상태 진단.
-// 사업부 × 차원으로 현재/목표 수준을 매긴다. 목표에서 현재를 뺀 격차가
-// 다음 단계의 이슈 후보가 된다.
+// ① 현재 상태 진단. 세 겹이다.
+//   A. 기술 성숙도  사업부 × 5차원, 사람이 매김
+//   B. 활용과 성과  포탈 데이터로 자동 산출
+//   C. 조직 역량    사업부 × 5축, 설문 위주
 //
-// 차원과 레벨의 정의를 화면에 붙인다. 정의 없이 1~5 만 두면 사람마다 다르게
-// 매겨 격차 숫자가 의미를 잃는다.
+// 기술만 재면 "만들어놓고 아무도 안 쓰는" 상태를 잡아내지 못한다.
 
 const Wrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 `;
 
 const DivisionTabs = styled.div`
@@ -34,15 +35,38 @@ const DivisionTab = styled.button`
   align-items: center;
   gap: 0.5rem;
 
-  &:hover {
-    border-color: #7c3aed;
-  }
+  &:hover { border-color: #7c3aed; }
 `;
 
 const FilledCount = styled.span`
   font-size: 0.75rem;
   font-weight: 600;
   opacity: 0.75;
+`;
+
+const Section = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+`;
+
+const SectionHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+`;
+
+const SectionTitle = styled.h3`
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1e293b;
+`;
+
+const SectionHint = styled.span`
+  font-size: 0.8125rem;
+  color: #94a3b8;
 `;
 
 const Table = styled.div`
@@ -54,15 +78,13 @@ const Table = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: 200px 1fr 1fr 90px minmax(180px, 1.2fr);
+  grid-template-columns: 200px 1fr 1fr 90px minmax(160px, 1.1fr);
   align-items: center;
   gap: 1rem;
   padding: 0.875rem 1.25rem;
   border-bottom: 1px solid #f1f5f9;
 
-  &:last-child {
-    border-bottom: none;
-  }
+  &:last-child { border-bottom: none; }
 `;
 
 const HeadRow = styled(Row)`
@@ -88,10 +110,12 @@ const HintIcon = styled(HelpCircle)`
   color: #cbd5e1;
   cursor: help;
   flex-shrink: 0;
+  &:hover { color: #7c3aed; }
+`;
 
-  &:hover {
-    color: #7c3aed;
-  }
+const SurveyMark = styled(ClipboardList)`
+  color: #a78bfa;
+  flex-shrink: 0;
 `;
 
 const LevelPicker = styled.div`
@@ -129,10 +153,7 @@ const ClearButton = styled.button`
   font-size: 0.75rem;
   cursor: pointer;
 
-  &:hover {
-    color: #64748b;
-    border-color: #94a3b8;
-  }
+  &:hover { color: #64748b; border-color: #94a3b8; }
 `;
 
 const Gap = styled.div`
@@ -153,18 +174,14 @@ const NoteInput = styled.input`
   border-radius: 0.375rem;
   font-size: 0.875rem;
   color: #334155;
-
-  &:focus {
-    outline: none;
-    border-color: #7c3aed;
-  }
+  &:focus { outline: none; border-color: #7c3aed; }
 `;
 
 const LevelLegend = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
-  padding: 0.875rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 0.5rem;
@@ -183,37 +200,38 @@ const LegendNum = styled.span`
   color: #7c3aed;
 `;
 
-const AssessmentView = ({ dimensions, levels, divisions, assessments, onChange }) => {
+const AssessmentView = ({
+  categories, divisions, assessments,
+  metricDefinitions, metrics, metricsError,
+  onChange, onTargetChange,
+}) => {
   const [activeDivision, setActiveDivision] = useState(divisions?.[0]?.id ?? null);
 
   if (!divisions?.length) {
     return <Table><Row>진단 대상 사업부가 없습니다.</Row></Table>;
   }
 
-  const currentDivision = divisions.find(d => d.id === activeDivision) || divisions[0];
+  const division = divisions.find(d => d.id === activeDivision) || divisions[0];
 
-  const byKey = {};
+  const lookup = {};
   (assessments || [])
-    .filter(a => a.division_id === currentDivision.id)
-    .forEach(a => { byKey[a.dimension] = a; });
+    .filter(a => a.division_id === division.id)
+    .forEach(a => { lookup[`${a.category}:${a.dimension}`] = a; });
 
-  // 사업부 탭에 진행 정도를 보여준다. 25칸을 채우는 일이라 어디까지 했는지가 보여야 한다.
+  const totalSlots = (categories || []).reduce((n, c) => n + c.dimensions.length, 0);
   const filledCount = (divisionId) =>
     (assessments || []).filter(
-      a => a.division_id === divisionId && a.current_level !== null && a.current_level !== undefined
+      a => a.division_id === divisionId &&
+        a.current_level !== null && a.current_level !== undefined
     ).length;
 
-  const levelTitle = (levels || [])
-    .map(l => `${l.value} ${l.label} — ${l.detail}`)
-    .join('\n');
-
-  const renderLevels = (dimension, field, value) => (
+  const renderLevels = (category, dimension, field, value, levels) => (
     <LevelPicker>
-      {(levels || []).map(level => (
+      {levels.map(level => (
         <LevelButton
           key={level.value}
           $active={value === level.value}
-          onClick={() => onChange(currentDivision.id, dimension, { [field]: level.value })}
+          onClick={() => onChange(division.id, category, dimension, { [field]: level.value })}
           title={`${level.value} ${level.label}\n${level.detail}`}
         >
           {level.value}
@@ -222,7 +240,7 @@ const AssessmentView = ({ dimensions, levels, divisions, assessments, onChange }
       {value !== null && value !== undefined && (
         // 0 과 미입력은 다른 뜻이다. 지우면 null 로 되돌린다.
         <ClearButton
-          onClick={() => onChange(currentDivision.id, dimension, { [field]: null })}
+          onClick={() => onChange(division.id, category, dimension, { [field]: null })}
           title="미입력으로 되돌리기"
         >
           지움
@@ -237,60 +255,88 @@ const AssessmentView = ({ dimensions, levels, divisions, assessments, onChange }
         {divisions.map(d => (
           <DivisionTab
             key={d.id}
-            $active={d.id === currentDivision.id}
+            $active={d.id === division.id}
             onClick={() => setActiveDivision(d.id)}
           >
             {d.name}
-            <FilledCount>{filledCount(d.id)}/{dimensions.length}</FilledCount>
+            <FilledCount>{filledCount(d.id)}/{totalSlots}</FilledCount>
           </DivisionTab>
         ))}
       </DivisionTabs>
 
-      <LevelLegend>
-        {(levels || []).map(l => (
-          <LegendItem key={l.value} title={l.detail}>
-            <LegendNum>{l.value}</LegendNum>
-            {l.label}
-          </LegendItem>
-        ))}
-      </LevelLegend>
+      {(categories || []).map(cat => (
+        <Section key={cat.key}>
+          <SectionHead>
+            <SectionTitle>{cat.label}</SectionTitle>
+            <SectionHint>{cat.hint}</SectionHint>
+          </SectionHead>
 
-      <Table>
-        <HeadRow>
-          <div>차원</div>
-          <div title={levelTitle}>현재 수준</div>
-          <div title={levelTitle}>목표 수준</div>
-          <div style={{ textAlign: 'center' }}>격차</div>
-          <div>메모</div>
-        </HeadRow>
+          <LevelLegend>
+            {cat.levels.map(l => (
+              <LegendItem key={l.value} title={l.detail}>
+                <LegendNum>{l.value}</LegendNum>
+                {l.label}
+              </LegendItem>
+            ))}
+          </LevelLegend>
 
-        {dimensions.map(dim => {
-          const a = byKey[dim.key] || {};
-          return (
-            <Row key={dim.key}>
-              <DimensionCell>
-                <DimensionName>{dim.label}</DimensionName>
-                <HintIcon size={14} title={`${dim.question}\n${dim.detail}`} />
-              </DimensionCell>
-              {renderLevels(dim.key, 'current_level', a.current_level)}
-              {renderLevels(dim.key, 'target_level', a.target_level)}
-              <Gap $value={a.gap}>
-                {a.gap === null || a.gap === undefined ? '—' : (a.gap > 0 ? `+${a.gap}` : a.gap)}
-              </Gap>
-              <NoteInput
-                key={`${currentDivision.id}-${dim.key}-${a.note || ''}`}
-                defaultValue={a.note || ''}
-                placeholder="판단 근거나 메모"
-                onBlur={e => {
-                  if ((a.note || '') !== e.target.value) {
-                    onChange(currentDivision.id, dim.key, { note: e.target.value });
-                  }
-                }}
-              />
-            </Row>
-          );
-        })}
-      </Table>
+          <Table>
+            <HeadRow>
+              <div>차원</div>
+              <div>현재 수준</div>
+              <div>목표 수준</div>
+              <div style={{ textAlign: 'center' }}>격차</div>
+              <div>메모</div>
+            </HeadRow>
+
+            {cat.dimensions.map(dim => {
+              const a = lookup[`${cat.key}:${dim.key}`] || {};
+              return (
+                <Row key={dim.key}>
+                  <DimensionCell>
+                    <DimensionName>{dim.label}</DimensionName>
+                    <HintIcon size={14} title={`${dim.question}\n${dim.detail}`} />
+                    {dim.survey_recommended && (
+                      <SurveyMark size={13} title="설문으로 채우는 것이 정석인 항목입니다." />
+                    )}
+                  </DimensionCell>
+                  {renderLevels(cat.key, dim.key, 'current_level', a.current_level, cat.levels)}
+                  {renderLevels(cat.key, dim.key, 'target_level', a.target_level, cat.levels)}
+                  <Gap $value={a.gap}>
+                    {a.gap === null || a.gap === undefined
+                      ? '—'
+                      : (a.gap > 0 ? `+${a.gap}` : a.gap)}
+                  </Gap>
+                  <NoteInput
+                    key={`${division.id}-${cat.key}-${dim.key}-${a.note || ''}`}
+                    defaultValue={a.note || ''}
+                    placeholder="판단 근거나 메모"
+                    onBlur={e => {
+                      if ((a.note || '') !== e.target.value) {
+                        onChange(division.id, cat.key, dim.key, { note: e.target.value });
+                      }
+                    }}
+                  />
+                </Row>
+              );
+            })}
+          </Table>
+        </Section>
+      ))}
+
+      <Section>
+        <SectionHead>
+          <SectionTitle>활용과 성과</SectionTitle>
+          <SectionHint>포탈 데이터로 계산된 관측값. 사람이 매기지 않는다.</SectionHint>
+        </SectionHead>
+        <MetricPanel
+          metrics={metrics}
+          definitions={metricDefinitions}
+          divisionId={division.id}
+          error={metricsError}
+          onTargetChange={onTargetChange}
+        />
+      </Section>
     </Wrap>
   );
 };

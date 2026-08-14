@@ -8,6 +8,11 @@ from .routes import bp
 
 # 마이그레이션이 테이블을 인식하려면 모델이 import 되어 있어야 한다.
 # routes 가 쓰지 않는 모델도 여기서 잡아준다.
-from .models import StrategyPlan, StrategyAssessment, StrategyEvidence  # noqa: F401
+from .models import (  # noqa: F401
+    StrategyPlan, StrategyAssessment, StrategyMetricTarget, StrategyEvidence,
+)
 
-__all__ = ['bp', 'StrategyPlan', 'StrategyAssessment', 'StrategyEvidence']
+__all__ = [
+    'bp', 'StrategyPlan', 'StrategyAssessment',
+    'StrategyMetricTarget', 'StrategyEvidence',
+]

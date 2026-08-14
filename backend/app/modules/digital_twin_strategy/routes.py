@@ -12,10 +12,12 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.extensions import db
 from app.modules.auth.models import User, UserRole
-from .models import StrategyPlan, StrategyAssessment
+from .models import StrategyPlan, StrategyAssessment, StrategyMetricTarget
 from .evidence import get_evidence_source
+from .metrics import compute_metrics
 from .definitions import (
-    DIMENSIONS, DIMENSION_KEYS, LEVELS, LEVEL_MIN, LEVEL_MAX,
+    CATEGORIES, DIMENSION_KEYS_BY_CATEGORY, ALL_ASSESSMENT_SLOTS,
+    METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
     get_target_divisions,
 )
 
@@ -56,8 +58,8 @@ def get_meta():
     return jsonify({
         'success': True,
         'data': {
-            'dimensions': DIMENSIONS,
-            'levels': LEVELS,
+            'categories': CATEGORIES,
+            'metrics': METRICS,
             'divisions': [{'id': d.id, 'name': d.name, 'color': d.color} for d in divisions],
             'evidenceMode': source.mode,
         }
@@ -75,17 +77,21 @@ def get_plan(year):
             return jsonify({'success': True, 'data': None})
 
         divisions = get_target_divisions()
-        saved = {(a.division_id, a.dimension): a for a in plan.assessments.all()}
+        saved = {
+            (a.division_id, a.category, a.dimension): a
+            for a in plan.assessments.all()
+        }
 
         # 사업부 × 차원 격자를 항상 채워서 내려준다. 빈 칸도 자리가 보여야
         # 무엇을 아직 안 매겼는지 알 수 있다.
         assessments = []
         for division in divisions:
-            for key in DIMENSION_KEYS:
-                a = saved.get((division.id, key))
+            for category, dimension in ALL_ASSESSMENT_SLOTS:
+                a = saved.get((division.id, category, dimension))
                 assessments.append(a.to_dict() if a else {
                     'division_id': division.id,
-                    'dimension': key,
+                    'category': category,
+                    'dimension': dimension,
                     'current_level': None,
                     'target_level': None,
                     'gap': None,
@@ -93,9 +99,46 @@ def get_plan(year):
                     'note': None,
                 })
 
+        # B 는 저장하지 않고 매번 계산한다. 원본이 바뀌면 따라 바뀌어야 한다.
+        source = get_evidence_source()
+        try:
+            observed = compute_metrics(source, year, divisions)
+            metric_error = None
+        except NotImplementedError as e:
+            observed = {d.id: {k: None for k in METRIC_KEYS} for d in divisions}
+            metric_error = str(e)
+
+        targets = {
+            (t.division_id, t.metric_key): t
+            for t in StrategyMetricTarget.query.filter_by(plan_id=plan.id).all()
+        }
+        metrics = []
+        for division in divisions:
+            for key in METRIC_KEYS:
+                t = targets.get((division.id, key))
+                value = observed.get(division.id, {}).get(key)
+                target_value = t.target_value if t else None
+                gap = None
+                if value is not None and target_value is not None:
+                    gap = round(target_value - value, 1)
+                metrics.append({
+                    'division_id': division.id,
+                    'metric_key': key,
+                    'value': value,
+                    'target_value': target_value,
+                    'gap': gap,
+                    'note': t.note if t else None,
+                })
+
         return jsonify({
             'success': True,
-            'data': {**plan.to_dict(), 'assessments': assessments}
+            'data': {
+                **plan.to_dict(),
+                'assessments': assessments,
+                'metrics': metrics,
+                'metricsMode': source.mode,
+                'metricsError': metric_error,
+            }
         })
     except Exception as e:
         return _error(str(e))
@@ -128,9 +171,10 @@ def create_plan():
 
         # 사업부 × 차원 칸을 미리 만들어 둔다. 빈 화면보다 채울 칸이 보이는 편이 낫다.
         for division in divisions:
-            for key in DIMENSION_KEYS:
+            for category, dimension in ALL_ASSESSMENT_SLOTS:
                 db.session.add(StrategyAssessment(
-                    plan_id=plan.id, division_id=division.id, dimension=key
+                    plan_id=plan.id, division_id=division.id,
+                    category=category, dimension=dimension,
                 ))
 
         db.session.commit()
@@ -140,13 +184,17 @@ def create_plan():
         return _error(str(e))
 
 
-@bp.route('/plans/<int:year>/assessments/<int:division_id>/<dimension>', methods=['PUT'])
+@bp.route('/plans/<int:year>/assessments/<int:division_id>/<category>/<dimension>',
+          methods=['PUT'])
 @office_required
-def update_assessment(year, division_id, dimension):
+def update_assessment(year, division_id, category, dimension):
     """진단 항목 수정."""
     try:
-        if dimension not in DIMENSION_KEYS:
-            return _error(f'알 수 없는 차원입니다: {dimension}', 400)
+        valid = DIMENSION_KEYS_BY_CATEGORY.get(category)
+        if not valid:
+            return _error(f'알 수 없는 구분입니다: {category}', 400)
+        if dimension not in valid:
+            return _error(f'{category} 에 없는 차원입니다: {dimension}', 400)
 
         if division_id not in {d.id for d in get_target_divisions()}:
             return _error('진단 대상 사업부가 아닙니다.', 400)
@@ -156,11 +204,13 @@ def update_assessment(year, division_id, dimension):
             return _error(f'{year}년 전략이 없습니다.', 404)
 
         assessment = StrategyAssessment.query.filter_by(
-            plan_id=plan.id, division_id=division_id, dimension=dimension
+            plan_id=plan.id, division_id=division_id,
+            category=category, dimension=dimension,
         ).first()
         if not assessment:
             assessment = StrategyAssessment(
-                plan_id=plan.id, division_id=division_id, dimension=dimension
+                plan_id=plan.id, division_id=division_id,
+                category=category, dimension=dimension,
             )
             db.session.add(assessment)
 
@@ -184,14 +234,51 @@ def update_assessment(year, division_id, dimension):
         return _error(str(e))
 
 
+@bp.route('/plans/<int:year>/metric-targets/<int:division_id>/<metric_key>',
+          methods=['PUT'])
+@office_required
+def update_metric_target(year, division_id, metric_key):
+    """활용·성과 지표의 목표값 설정. 관측값은 계산되므로 저장하지 않는다."""
+    try:
+        if metric_key not in METRIC_KEYS:
+            return _error(f'알 수 없는 지표입니다: {metric_key}', 400)
+        if division_id not in {d.id for d in get_target_divisions()}:
+            return _error('진단 대상 사업부가 아닙니다.', 400)
+
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        row = StrategyMetricTarget.query.filter_by(
+            plan_id=plan.id, division_id=division_id, metric_key=metric_key
+        ).first()
+        if not row:
+            row = StrategyMetricTarget(
+                plan_id=plan.id, division_id=division_id, metric_key=metric_key
+            )
+            db.session.add(row)
+
+        payload = request.get_json() or {}
+        if 'target_value' in payload:
+            value = payload['target_value']
+            row.target_value = None if value is None else float(value)
+        if 'note' in payload:
+            row.note = payload['note']
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': row.to_dict()})
+    except (TypeError, ValueError):
+        db.session.rollback()
+        return _error('target_value 는 숫자여야 합니다.', 400)
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
 @bp.route('/evidence-preview/<int:year>', methods=['GET'])
 @office_required
 def evidence_preview(year):
-    """근거 원천이 실제로 무엇을 돌려주는지 확인용.
-
-    Phase 2 에서 진단 자동 채움을 붙이기 전에, 원천 계층이 붙어 있는지부터
-    눈으로 보기 위한 것이다. local 모드에서는 아직 NotImplementedError 가 난다.
-    """
+    """근거 원천이 실제로 무엇을 돌려주는지 확인용."""
     source = get_evidence_source()
     try:
         projects = source.get_projects(year)

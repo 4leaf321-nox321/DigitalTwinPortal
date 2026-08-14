@@ -37,8 +37,15 @@ export const strategyApi = {
       body: JSON.stringify({ year, title }),
     }),
 
-  updateAssessment: (year, divisionId, dimension, payload) =>
-    request(`/plans/${year}/assessments/${divisionId}/${dimension}`, {
+  updateAssessment: (year, divisionId, category, dimension, payload) =>
+    request(`/plans/${year}/assessments/${divisionId}/${category}/${dimension}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  /** 활용·성과 지표의 목표값. 관측값은 계산되므로 저장하지 않는다. */
+  updateMetricTarget: (year, divisionId, metricKey, payload) =>
+    request(`/plans/${year}/metric-targets/${divisionId}/${metricKey}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),

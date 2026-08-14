@@ -199,12 +199,22 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
-  const handleAssessmentChange = async (divisionId, dimension, payload) => {
+  const handleAssessmentChange = async (divisionId, category, dimension, payload) => {
     // 낙관적 갱신 없이 저장 후 다시 읽는다. 격차(gap)는 서버가 계산하므로
     // 화면에서 흉내 내면 규칙이 두 곳으로 갈린다.
     setError(null);
     try {
-      await strategyApi.updateAssessment(currentYear, divisionId, dimension, payload);
+      await strategyApi.updateAssessment(currentYear, divisionId, category, dimension, payload);
+      await loadPlan(currentYear);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const handleMetricTargetChange = async (divisionId, metricKey, payload) => {
+    setError(null);
+    try {
+      await strategyApi.updateMetricTarget(currentYear, divisionId, metricKey, payload);
       await loadPlan(currentYear);
     } catch (e) {
       setError(e.message);
@@ -229,11 +239,14 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     if (stage === 'assessment') {
       return (
         <AssessmentView
-          dimensions={meta?.dimensions || []}
-          levels={meta?.levels || []}
+          categories={meta?.categories || []}
           divisions={meta?.divisions || []}
+          metricDefinitions={meta?.metrics || []}
           assessments={plan.assessments}
+          metrics={plan.metrics}
+          metricsError={plan.metricsError}
           onChange={handleAssessmentChange}
+          onTargetChange={handleMetricTargetChange}
         />
       );
     }
