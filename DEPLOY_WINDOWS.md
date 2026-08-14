@@ -24,7 +24,7 @@
 ## 폴더 구조
 
 ```
-C:\apps\
+C:\Server\
   tools\                          배포 스크립트 (앱 폴더 바깥에 둘 것)
     deploy.ps1
     rollback.ps1
@@ -39,7 +39,7 @@ C:\apps\
 
 ### 경로는 어디까지 마음대로 정해도 되나
 
-아래 예시의 `C:\apps\...`는 예시일 뿐입니다.
+아래 예시의 `C:\Server\...`는 예시일 뿐입니다.
 
 | 경로 | 자유도 |
 |---|---|
@@ -51,9 +51,9 @@ C:\apps\
 `run_server.ps1`도 자기 위치에서 `_venvs`를 계산해 찾습니다.
 
 ```
--AppPath 'C:\apps\DigitalTwinPortal'
-    → C:\apps\DigitalTwinPortal_prev
-    → C:\apps\DigitalTwinPortal_venvs\
+-AppPath 'C:\Server\DigitalTwinPortal'
+    → C:\Server\DigitalTwinPortal_prev
+    → C:\Server\DigitalTwinPortal_venvs\
 ```
 
 한 번 정한 뒤 바꾸면 기존 가상환경과 `_prev`가 고아가 됩니다. 옮기시려면
@@ -113,21 +113,27 @@ gh auth login
 배포 스크립트는 패키지 안에 들어 있습니다. 한 번만 손으로 꺼내면,
 이후 배포는 그 스크립트가 전부 처리합니다.
 
-아래 폴더 이름은 예시입니다. 첫 폴더는 압축을 잠깐 푸는 용도라 어디든
-상관없고 끝나면 지웁니다.
+압축은 임시 폴더에 풉니다. 목적은 `deploy.ps1`과 `rollback.ps1` 두 개를
+꺼내는 것뿐이라, 끝나면 폴더째 지웁니다. **운영 폴더에는 풀지 마세요** —
+그 폴더는 배포할 때마다 통째로 교체되는 자리입니다.
 
 ```powershell
-New-Item -ItemType Directory -Force -Path 'C:\apps\bootstrap'
-cd C:\apps\bootstrap
+New-Item -ItemType Directory -Force -Path "$env:TEMP\dtp-bootstrap"
+cd "$env:TEMP\dtp-bootstrap"
 
 gh release download --repo 4leaf321-nox321/DigitalTwinPortal --pattern deploy_package.zip
 Expand-Archive -Path .\deploy_package.zip -DestinationPath .\unpacked -Force
 
-New-Item -ItemType Directory -Force -Path 'C:\apps\tools'
-Copy-Item .\unpacked\deploy.ps1, .\unpacked\rollback.ps1 'C:\apps\tools\'
+New-Item -ItemType Directory -Force -Path 'C:\Server\tools'
+Copy-Item .\unpacked\deploy.ps1, .\unpacked\rollback.ps1 'C:\Server\tools\'
 ```
 
-끝나면 `C:\apps\bootstrap`은 지워도 됩니다.
+꺼냈으면 임시 폴더는 지웁니다.
+
+```powershell
+cd C:\Server\tools
+Remove-Item -Recurse -Force "$env:TEMP\dtp-bootstrap"
+```
 
 ## A-4. 기존 폴더를 고정 경로로 전환
 
@@ -135,7 +141,7 @@ Copy-Item .\unpacked\deploy.ps1, .\unpacked\rollback.ps1 'C:\apps\tools\'
 **앱을 중지한 뒤** 현재 쓰고 계신 폴더의 이름만 바꾸면 됩니다.
 
 ```powershell
-Rename-Item 'C:\apps\digitaltwinportal12' 'DigitalTwinPortal'
+Rename-Item 'C:\Server\digitaltwinportal12' 'DigitalTwinPortal'
 ```
 
 첫 배포 때 이 폴더의 `backend\uploads`와 `backend\.env`가 새 버전으로
@@ -166,8 +172,8 @@ MCP 서버를 함께 쓰고 계시면 그 창도 닫습니다.
 ## B-3. 배포
 
 ```powershell
-cd C:\apps\tools
-.\deploy.ps1 -AppPath 'C:\apps\DigitalTwinPortal'
+cd C:\Server\tools
+.\deploy.ps1 -AppPath 'C:\Server\DigitalTwinPortal'
 ```
 
 수행 내용:
@@ -187,14 +193,14 @@ cd C:\apps\tools
 ## B-4. 앱 시작
 
 ```powershell
-cd C:\apps\DigitalTwinPortal
+cd C:\Server\DigitalTwinPortal
 .\run_server.ps1
 ```
 
 MCP 서버는 **다른 창**에서:
 
 ```powershell
-cd C:\apps\DigitalTwinPortal
+cd C:\Server\DigitalTwinPortal
 .\run_mcp_server.ps1
 ```
 
@@ -212,23 +218,23 @@ $env:DT_API_BASE = 'http://localhost:5000'
 
 ```powershell
 # 특정 버전 배포
-.\deploy.ps1 -AppPath 'C:\apps\DigitalTwinPortal' -Tag v0.1.15
+.\deploy.ps1 -AppPath 'C:\Server\DigitalTwinPortal' -Tag v0.1.15
 
 # DB는 건드리지 않고 폴더 교체·가상환경 준비만
-.\deploy.ps1 -AppPath 'C:\apps\DigitalTwinPortal' -SkipMigrations
+.\deploy.ps1 -AppPath 'C:\Server\DigitalTwinPortal' -SkipMigrations
 
 # 미리 받아둔 zip 사용 (gh를 못 쓰는 환경)
-.\deploy.ps1 -AppPath 'C:\apps\DigitalTwinPortal' -ZipPath 'C:\tmp\deploy_package.zip'
+.\deploy.ps1 -AppPath 'C:\Server\DigitalTwinPortal' -ZipPath 'C:\tmp\deploy_package.zip'
 
 # 인터프리터 직접 지정 (py 런처가 없을 때)
-.\deploy.ps1 -AppPath 'C:\apps\DigitalTwinPortal' -PythonExe 'C:\Python313\python.exe'
+.\deploy.ps1 -AppPath 'C:\Server\DigitalTwinPortal' -PythonExe 'C:\Python313\python.exe'
 ```
 
 가상환경만 강제로 다시 만들려면 패키지 안의 스크립트를 씁니다.
 
 ```powershell
-cd C:\apps\DigitalTwinPortal
-.\venv_sync.ps1 -AppPath 'C:\apps\DigitalTwinPortal' -Force
+cd C:\Server\DigitalTwinPortal
+.\venv_sync.ps1 -AppPath 'C:\Server\DigitalTwinPortal' -Force
 ```
 
 ---
@@ -237,10 +243,10 @@ cd C:\apps\DigitalTwinPortal
 
 ```powershell
 # 앱 중지 후
-cd C:\apps\tools
-.\rollback.ps1 -AppPath 'C:\apps\DigitalTwinPortal'
+cd C:\Server\tools
+.\rollback.ps1 -AppPath 'C:\Server\DigitalTwinPortal'
 
-cd C:\apps\DigitalTwinPortal
+cd C:\Server\DigitalTwinPortal
 .\run_server.ps1
 ```
 
