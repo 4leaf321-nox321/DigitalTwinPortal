@@ -14,17 +14,15 @@ Push-Location $scriptDir
 
 $sitePackagesPath = Join-Path $scriptDir 'site-packages'
 if (Test-Path $sitePackagesPath) {
-  # No ternary here: Windows PowerShell 5.1 is the default shell on the server
-  # and would fail to parse "? :", taking the whole script with it.
-  if ($env:PYTHONPATH) {
-    $env:PYTHONPATH = $sitePackagesPath + [System.IO.Path]::PathSeparator + $env:PYTHONPATH
-  } else {
-    $env:PYTHONPATH = $sitePackagesPath
-  }
-  Write-Host "PYTHONPATH set to $env:PYTHONPATH"
+  Write-Host "Dependency set: $sitePackagesPath"
 } else {
   Write-Host 'Warning: site-packages not found in package. Ensure dependencies are installed.'
 }
+
+# PYTHONPATH is cleared so an inherited value cannot pull in another copy;
+# _launch.py puts the bundled set ahead of the interpreter's own site-packages.
+$env:PYTHONPATH = ''
+$launcher = Join-Path $scriptDir '_launch.py'
 
 # Pick the interpreter this package was built for. Bare "python" is not safe:
 # a server can have a newer Python first on PATH while the app is meant to run
@@ -53,12 +51,16 @@ if ($buildPython -and $actual -and $actual -ne $buildPython) {
 }
 
 # Adjust this to your actual backend entrypoint (run.py or module)
-if (Test-Path .\\backend\\run.py) {
-  Write-Host 'Starting backend via backend\\run.py'
-  & $pythonExe .\\backend\\run.py
-} elseif (Test-Path .\\backend\\run\\__main__.py) {
-  Write-Host 'Starting backend via python -m backend.run'
-  & $pythonExe -m backend.run
+$entrypoint = Join-Path $scriptDir 'backend\run.py'
+if (Test-Path $entrypoint) {
+  Write-Host 'Starting backend via backend\run.py'
+  if (Test-Path $launcher) {
+    & $pythonExe $launcher $sitePackagesPath $entrypoint
+  } else {
+    Write-Warning '_launch.py not found; falling back to PYTHONPATH.'
+    $env:PYTHONPATH = $sitePackagesPath
+    & $pythonExe $entrypoint
+  }
 } else {
   Write-Host 'No recognized backend entrypoint found. Please edit run_server.ps1 to start your server.'
 }

@@ -64,7 +64,8 @@ if (Test-Path .\\mcp_server) {
   }
 }
 
-Write-Host 'Adding run_server.ps1 template'
+Write-Host 'Adding launcher and run_server.ps1 template'
+Copy-Item -Force .\\scripts\\ci\\launch_template.py .\\deploy\\_launch.py
 Copy-Item -Force .\\scripts\\ci\\run_server_template.ps1 .\\deploy\\run_server.ps1
 
 if (Test-Path .\\deploy\\mcp_server) {

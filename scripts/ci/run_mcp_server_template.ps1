@@ -50,17 +50,25 @@ if ($buildPython -and $actual -and $actual -ne $buildPython) {
   Write-Warning "This package was built for Python $buildPython but $actual is being used. Imports will likely fail."
 }
 
-# Only the MCP dependency set is on the path here. The backend's site-packages
-# is deliberately left out so the two cannot shadow each other.
-$env:PYTHONPATH = Join-Path $mcpDir 'site-packages'
-Write-Host "PYTHONPATH set to $env:PYTHONPATH"
+# Only the MCP dependency set is used here. The backend's site-packages is
+# deliberately left out so the two cannot shadow each other.
+#
+# _launch.py rather than PYTHONPATH: pywin32 ships a .pth file that PYTHONPATH
+# would ignore, and without it `import mcp` fails on Windows. See _launch.py.
+$launcher = Join-Path $scriptDir '_launch.py'
+if (-not (Test-Path $launcher)) { Write-Error "_launch.py not found next to this script."; exit 1 }
+$mcpSitePackages = Join-Path $mcpDir 'site-packages'
+Write-Host "Dependency set: $mcpSitePackages"
 
 if (-not $env:DT_API_BASE) { $env:DT_API_BASE = 'http://localhost:5174' }
 Write-Host "DT_API_BASE = $env:DT_API_BASE"
 
+# PYTHONPATH is cleared so an inherited value cannot pull in another copy.
+$env:PYTHONPATH = ''
+
 Push-Location $mcpDir
 try {
-  & $pythonExe server.py
+  & $pythonExe $launcher $mcpSitePackages (Join-Path $mcpDir 'server.py')
 } finally {
   Pop-Location
 }
