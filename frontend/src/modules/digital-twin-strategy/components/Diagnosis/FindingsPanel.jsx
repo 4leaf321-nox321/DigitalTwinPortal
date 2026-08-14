@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { ArrowUpRight } from 'lucide-react';
 
 // 시스템이 짚은 것. 결론이 아니라 눈에 띄는 사실이다.
-// 왜 그런지는 사람이 답하고, 무엇이 크럭스인지도 사람이 고른다.
+// 왜 그런지는 사람이 답하고, 무엇이 핵심 난제인지도 사람이 고른다.
 
 const List = styled.div`
   display: flex;
@@ -97,10 +97,10 @@ const FindingsPanel = ({ findings, onPromote }) => {
           </Body>
           <PromoteButton
             onClick={() => onPromote(f)}
-            title="이것을 올해의 크럭스 후보로 올립니다"
+            title="이것을 올해의 핵심 난제 후보로 올립니다"
           >
             <ArrowUpRight size={14} />
-            크럭스로
+            핵심 난제로
           </PromoteButton>
         </Item>
       ))}

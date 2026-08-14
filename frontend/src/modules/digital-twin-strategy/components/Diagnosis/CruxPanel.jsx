@@ -137,7 +137,7 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
     <Wrap>
       {!cruxes?.length && !adding && (
         <Empty>
-          아직 고른 크럭스가 없습니다.<br />
+          아직 고른 핵심 난제가 없습니다.<br />
           위에서 짚인 것 중 <strong>올해 넘어야 할 결정적 지점</strong>을 1~3개 고르세요.
           여기 남는 것이 다음 단계로 넘어갑니다.
         </Empty>
@@ -159,7 +159,7 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
             <RationaleInput
               defaultValue={c.rationale || ''}
               key={`r-${c.id}-${c.rationale || ''}`}
-              placeholder="왜 이것이 크럭스인가. 근거 없이 고르면 그냥 인상입니다."
+              placeholder="왜 이것이 핵심 난제인가. 근거 없이 고르면 그냥 인상입니다."
               onBlur={e => {
                 if ((c.rationale || '') !== e.target.value) {
                   onUpdate(c.id, { rationale: e.target.value });
@@ -175,7 +175,7 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
 
       {cruxes?.length > RECOMMENDED_MAX && (
         <Warn>
-          크럭스가 {cruxes.length}개입니다. 전부가 중요하면 아무것도 중요하지 않습니다 —
+          핵심 난제가 {cruxes.length}개입니다. 전부가 중요하면 아무것도 중요하지 않습니다 —
           {RECOMMENDED_MAX}개 이하로 좁히는 것을 권합니다.
         </Warn>
       )}
@@ -200,7 +200,7 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
       ) : (
         <AddButton onClick={() => setAdding(true)}>
           <Plus size={16} />
-          크럭스 직접 추가
+          핵심 난제 직접 추가
         </AddButton>
       )}
     </Wrap>

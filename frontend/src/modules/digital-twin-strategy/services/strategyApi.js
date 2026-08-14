@@ -57,7 +57,7 @@ export const strategyApi = {
       body: JSON.stringify({ thresholds }),
     }),
 
-  /** 크럭스 — 진단의 산출물. 다음 단계의 입력이 된다. */
+  /** 핵심 난제(crux) — 진단의 산출물. 다음 단계의 입력이 된다. */
   createCrux: (year, payload) =>
     request(`/plans/${year}/cruxes`, {
       method: 'POST',
