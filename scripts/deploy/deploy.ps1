@@ -88,6 +88,15 @@ foreach ($component in @('backend', 'mcp_server')) {
     Write-Log "$component wheel bundle: $($wheels.Count) wheels"
 }
 
+# The backend serves the SPA from frontend/dist. Without it every page returns
+# the API's JSON 404, which looks like a routing bug rather than a bad package.
+$stagedIndex = Join-Path $stagingPath 'frontend\dist\index.html'
+if (-not (Test-Path $stagedIndex)) {
+    Remove-Item -Recurse -Force $stagingPath
+    throw "Package has no frontend\dist\index.html. Aborting before the live folder is touched."
+}
+Write-Log 'Frontend present'
+
 # The bundled wheels carry ABI tags tied to the Python that built them, so a
 # minor-version mismatch fails at install time. Catch it here, while the live
 # folder is still untouched.

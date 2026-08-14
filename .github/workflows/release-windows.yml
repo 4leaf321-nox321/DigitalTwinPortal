@@ -19,6 +19,13 @@ jobs:
         with:
           python-version: '3.13'
 
+      # The backend serves the built frontend from <package root>/frontend/dist,
+      # so packaging has to be able to build it.
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '18'
+
       - name: Run packaging script
         shell: pwsh
         run: |

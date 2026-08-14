@@ -15,6 +15,32 @@ Copy-Item -Recurse -Force .\\backend .\\deploy\\backend
 Write-Host 'Copying mcp_server if exists'
 if (Test-Path .\\mcp_server) { Copy-Item -Recurse -Force .\\mcp_server .\\deploy\\mcp_server }
 
+# The backend serves the SPA itself: create_app sets
+# static_folder=<backend's parent>/frontend/dist and '/' returns index.html
+# from there. Without this the deployed app answers every page with the API's
+# JSON 404.
+if (Test-Path .\\frontend\\package.json) {
+  Write-Host 'Building frontend'
+  Push-Location .\\frontend
+  # ~4.3k modules exhaust Node's default heap while rendering chunks.
+  $env:NODE_OPTIONS = '--max-old-space-size=4096'
+  npm ci
+  if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Error "npm ci failed (exit $LASTEXITCODE)"; exit 1 }
+  npm run build
+  if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Error "npm run build failed (exit $LASTEXITCODE)"; exit 1 }
+  Pop-Location
+
+  if (-not (Test-Path .\\frontend\\dist\\index.html)) {
+    Write-Error 'frontend build produced no dist/index.html.'
+    exit 1
+  }
+  New-Item -ItemType Directory -Force -Path .\\deploy\\frontend | Out-Null
+  Copy-Item -Recurse -Force .\\frontend\\dist .\\deploy\\frontend\\dist
+  Write-Host 'Frontend packaged'
+} else {
+  Write-Host 'No frontend/package.json; skipping frontend build.'
+}
+
 # Build a wheel bundle per component rather than installing into the package.
 #
 # The server creates real virtualenvs from these with
