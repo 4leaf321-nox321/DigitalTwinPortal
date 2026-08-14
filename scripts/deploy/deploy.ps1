@@ -2,14 +2,17 @@
 Deploy a release to a fixed operating folder.
 
 Replaces the numbered-folder scheme (digitaltwinportal11, 12, ...) with one
-stable path plus a single previous copy for rollback:
+stable path, a single previous copy for rollback, and virtualenvs that outlive
+both:
 
-    <AppPath>          the folder you always run from
-    <AppPath>_prev     the version replaced by the last deploy
+    <AppPath>                    the folder you always run from
+    <AppPath>_prev               the version replaced by the last deploy
+    <AppPath>_venvs\backend      rebuilt only when requirements.txt changes
+    <AppPath>_venvs\mcp_server
 
-No virtualenv is created. The release package ships every dependency under
-site-packages, and run_server.ps1 puts it on PYTHONPATH, so the server needs
-no pip install and no internet access.
+Dependencies install from the wheel bundle shipped in the package
+(`pip install --no-index`), so a deploy never depends on the network being
+able to reach PyPI.
 
 Stop the running app before deploying; Windows locks files that are in use.
 
@@ -73,18 +76,21 @@ Write-Log "Extracting to $stagingPath"
 Expand-Archive -Path $ZipPath -DestinationPath $stagingPath -Force
 if ($tempZipDir) { Remove-Item -Recurse -Force $tempZipDir }
 
-$stagedSitePackages = Join-Path $stagingPath 'site-packages'
-foreach ($mod in @('werkzeug', 'itsdangerous', 'blinker', 'alembic', 'flask')) {
-    if (-not (Get-ChildItem -Path $stagedSitePackages -Filter $mod -Force -ErrorAction SilentlyContinue)) {
+foreach ($component in @('backend', 'mcp_server')) {
+    $req = Join-Path $stagingPath "$component\requirements.txt"
+    if (-not (Test-Path $req)) { continue }
+    $wheelDir = Join-Path $stagingPath "$component\packages"
+    $wheels = Get-ChildItem -Path $wheelDir -Filter '*.whl' -ErrorAction SilentlyContinue
+    if (-not $wheels) {
         Remove-Item -Recurse -Force $stagingPath
-        throw "Package is missing '$mod' in site-packages. Aborting before the live folder is touched."
+        throw "Package has no wheel bundle for $component. Aborting before the live folder is touched."
     }
+    Write-Log "$component wheel bundle: $($wheels.Count) wheels"
 }
-Write-Log 'Package dependency check passed'
 
 # The bundled wheels carry ABI tags tied to the Python that built them, so a
-# minor-version mismatch fails at import time with an unhelpful error. Catch it
-# here, while the live folder is still untouched.
+# minor-version mismatch fails at install time. Catch it here, while the live
+# folder is still untouched.
 #
 # Do not assume PATH's python is the right one: a server can have a newer
 # python first on PATH while the app is meant to run on an older one. Ask the
@@ -175,6 +181,21 @@ if (-not (Test-Path (Join-Path $AppPath 'backend\.env'))) {
     Write-Warning "backend\.env is missing. Migrations and startup need DATABASE_URL - create it before continuing."
 }
 
+# --- virtualenvs ------------------------------------------------------------
+# They live beside the app folder, so a deploy reuses them untouched unless
+# requirements.txt changed. Installs come from the bundled wheels and never
+# reach the network.
+$syncScript = Join-Path $AppPath 'venv_sync.ps1'
+if (-not (Test-Path $syncScript)) {
+    throw "venv_sync.ps1 not found in the package at $syncScript."
+}
+& $syncScript -AppPath $AppPath -PythonExe $pythonExe
+if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+    throw "Preparing the virtualenvs failed (exit $LASTEXITCODE)"
+}
+
+$backendPython = Join-Path ($AppPath + '_venvs') 'backend\Scripts\python.exe'
+
 # --- migrations -------------------------------------------------------------
 if ($SkipMigrations) {
     Write-Log 'Skipping migrations as requested'
@@ -183,9 +204,10 @@ if ($SkipMigrations) {
     $backend = Join-Path $AppPath 'backend'
     Push-Location $backend
     try {
-        $env:PYTHONPATH = (Join-Path $AppPath 'site-packages')
+        if (-not (Test-Path $backendPython)) { throw "Backend venv not found at $backendPython" }
+        $env:PYTHONPATH = ''
         $env:FLASK_APP = 'run.py'
-        & $pythonExe -m flask db upgrade
+        & $backendPython -m flask db upgrade
         if ($LASTEXITCODE -ne 0) { throw "flask db upgrade failed (exit $LASTEXITCODE)" }
         Write-Log 'Migrations applied'
     } catch {
