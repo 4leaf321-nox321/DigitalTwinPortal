@@ -25,6 +25,7 @@ param(
     [string]$Repo = '4leaf321-nox321/DigitalTwinPortal',
     [string]$Tag,
     [string]$ZipPath,
+    [string]$PythonExe,
     [switch]$SkipMigrations
 )
 
@@ -84,28 +85,62 @@ Write-Log 'Package dependency check passed'
 # The bundled wheels carry ABI tags tied to the Python that built them, so a
 # minor-version mismatch fails at import time with an unhelpful error. Catch it
 # here, while the live folder is still untouched.
-$serverPython = & python -c "import sys; print('{}.{}'.format(sys.version_info[0], sys.version_info[1]))"
-if ($LASTEXITCODE -ne 0) {
-    Remove-Item -Recurse -Force $stagingPath
-    throw "Could not run python. Make sure it is installed and on PATH."
-}
+#
+# Do not assume PATH's python is the right one: a server can have a newer
+# python first on PATH while the app is meant to run on an older one. Ask the
+# py launcher for the exact version the package declares, and fall back to
+# PATH only when that is unavailable.
 $buildInfoPath = Join-Path $stagingPath 'BUILD_INFO.txt'
+$buildPython = $null
 if (Test-Path $buildInfoPath) {
     $buildPython = ((Get-Content $buildInfoPath | Where-Object { $_ -match '^python=' }) -replace '^python=', '').Trim()
-    if ($buildPython -and $buildPython -ne $serverPython) {
+}
+
+$pythonExe = $null
+if ($PythonExe) {
+    $pythonExe = $PythonExe
+    Write-Log "Using the interpreter given by -PythonExe: $pythonExe"
+} elseif ($buildPython) {
+    try {
+        $resolved = & py "-$buildPython" -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $resolved) {
+            $pythonExe = $resolved.Trim()
+            Write-Log "Using Python $buildPython via the py launcher: $pythonExe"
+        }
+    } catch {
+        # py launcher absent or has no such version; fall through to PATH
+    }
+}
+if (-not $pythonExe) { $pythonExe = 'python' }
+
+try {
+    $serverPython = & $pythonExe -c "import sys; print('{}.{}'.format(sys.version_info[0], sys.version_info[1]))"
+} catch {
+    Remove-Item -Recurse -Force $stagingPath
+    throw "Could not run '$pythonExe'. Make sure Python is installed and on PATH, or pass -PythonExe."
+}
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item -Recurse -Force $stagingPath
+    throw "Could not run '$pythonExe'. Make sure Python is installed and on PATH, or pass -PythonExe."
+}
+
+if ($buildPython) {
+    if ($buildPython -ne $serverPython) {
         Remove-Item -Recurse -Force $stagingPath
         Write-Host ''
-        Write-Host "  This server's Python : $serverPython"
+        Write-Host "  Interpreter used     : $pythonExe"
+        Write-Host "  Its version          : $serverPython"
         Write-Host "  Package was built on : $buildPython"
         Write-Host ''
-        Write-Host "  Set python-version to '$serverPython' in .github/workflows/release-windows.yml"
-        Write-Host "  and ci-windows.yml, then cut a new release."
+        Write-Host "  Either install Python $buildPython on this server so 'py -$buildPython' finds it,"
+        Write-Host "  point -PythonExe at the right python.exe, or set python-version to"
+        Write-Host "  '$serverPython' in the CI and release workflows and cut a new release."
         Write-Host ''
         throw "Python version mismatch. Nothing was changed on this server."
     }
     Write-Log "Python version matches ($serverPython)"
 } else {
-    Write-Warning "Package has no BUILD_INFO.txt (built before version stamping). This server runs Python $serverPython."
+    Write-Warning "Package has no BUILD_INFO.txt (built before version stamping). Using Python $serverPython."
 }
 
 # --- swap ------------------------------------------------------------------
@@ -150,7 +185,7 @@ if ($SkipMigrations) {
     try {
         $env:PYTHONPATH = (Join-Path $AppPath 'site-packages')
         $env:FLASK_APP = 'run.py'
-        & python -m flask db upgrade
+        & $pythonExe -m flask db upgrade
         if ($LASTEXITCODE -ne 0) { throw "flask db upgrade failed (exit $LASTEXITCODE)" }
         Write-Log 'Migrations applied'
     } catch {
