@@ -27,6 +27,7 @@ import {
   Users2,
   Network,
   Target,
+  Compass,
   LogOut,
   User as UserIcon,
   X,
@@ -1112,6 +1113,17 @@ const SIMULATION_FEATURES = [
     gridRow: "span 1",
     icon: Home,
     route: "/digital-twin-dashboard"
+  },
+  {
+    id: "digital-twin-strategy",
+    name: "디지털 트윈 전략 기획",
+    desc: "연도별 전략 수립",
+    color: 4,
+    gridColumn: "span 1",
+    gridRow: "span 1",
+    icon: Compass,
+    route: "/digital-twin-strategy",
+    allowedRoles: ['admin', 'dt_office']  // 전략 산출물은 사무국/관리자 전용
   },
   {
     id: "office-management",

@@ -1,0 +1,108 @@
+"""
+Digital Twin Strategy Models
+연도별 전략 기획 — 진단 / 이슈 / 근거
+
+계획서: frontend/src/modules/digital-twin-strategy/PLAN.md
+Phase 1 범위는 진단(assessment)까지다. 이슈 이후 단계는 뒤 Phase 에서 붙인다.
+"""
+from app.extensions import db
+from app.shared.models import BaseModel
+from sqlalchemy.dialects.postgresql import JSON
+
+
+class StrategyPlan(BaseModel):
+    """연도별 전략 1건. 이 모듈의 모든 데이터가 여기에 매달린다."""
+    __tablename__ = 'strategy_plan'
+
+    year = db.Column(db.Integer, nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    # draft: 작성 중 / review: 검토 / confirmed: 확정
+    status = db.Column(db.String(20), nullable=False, default='draft')
+    owner_id = db.Column(db.Integer, nullable=True)
+
+    __table_args__ = (
+        # 한 해에 전략은 하나다. 여러 벌을 두면 어느 것이 정본인지 갈린다.
+        db.UniqueConstraint('year', name='uq_strategy_plan_year'),
+    )
+
+    assessments = db.relationship(
+        'StrategyAssessment', backref='plan', lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['assessment_count'] = self.assessments.count()
+        return d
+
+
+class StrategyAssessment(BaseModel):
+    """
+    ① 현재 상태 진단. 성숙도 차원별로 현재 수준과 목표 수준을 매긴다.
+
+    이슈를 격차(gap)로 정의하기 위한 출발점이다. 목표에서 현재를 뺀 값이
+    다음 단계의 이슈 후보가 된다.
+    """
+    __tablename__ = 'strategy_assessment'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+    # 성숙도 차원 (data / model / integration / analysis / application)
+    dimension = db.Column(db.String(50), nullable=False)
+    current_level = db.Column(db.Integer, nullable=True)   # 1~5, 미입력이면 None
+    target_level = db.Column(db.Integer, nullable=True)
+    # auto: 포탈 데이터로 채움 / survey: 설문 / manual: 손으로 입력
+    basis = db.Column(db.String(20), nullable=False, default='manual')
+    note = db.Column(db.Text)
+
+    __table_args__ = (
+        db.UniqueConstraint('plan_id', 'dimension', name='uq_assessment_plan_dimension'),
+    )
+
+    @property
+    def gap(self):
+        """목표 - 현재. 둘 중 하나라도 없으면 격차를 말할 수 없다."""
+        if self.current_level is None or self.target_level is None:
+            return None
+        return self.target_level - self.current_level
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['gap'] = self.gap
+        return d
+
+
+class StrategyEvidence(BaseModel):
+    """
+    모든 단계 공용 근거. 포탈 데이터와 설문 결과가 함께 들어온다.
+
+    snapshot 이 핵심이다. 근거로 삼은 **시점의 값을 복사**해 둔다. 원본 과제
+    데이터가 나중에 바뀌어도 "그때 이 숫자를 보고 이렇게 판단했다"가 남아야
+    전략 문서가 검증 가능하다.
+
+    source_mode 는 그 근거가 진짜 데이터인지 개발용 합성 데이터인지 구분한다.
+    fixture 로 만든 전략이 운영 산출물로 오인되면 안 된다.
+    """
+    __tablename__ = 'strategy_evidence'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+    # 어느 항목에 붙은 근거인가 (assessment / issue / element / solution)
+    target_type = db.Column(db.String(30), nullable=False)
+    target_id = db.Column(db.Integer, nullable=False)
+
+    kind = db.Column(db.String(20), nullable=False, default='portal')  # portal | survey
+    source_module = db.Column(db.String(50), nullable=False)  # digital_twin_dashboard 등
+    source_ref = db.Column(db.String(200))                    # 원본 식별자
+    source_mode = db.Column(db.String(20), nullable=False, default='local')  # local | fixture
+
+    snapshot = db.Column(JSON, nullable=False, default=dict)
+    label = db.Column(db.String(300))  # 화면에 보일 한 줄 요약
+
+    __table_args__ = (
+        db.Index('ix_evidence_target', 'target_type', 'target_id'),
+    )

@@ -19,6 +19,10 @@ def register_all_blueprints(app):
     from app.modules.digital_twin_dashboard import bp_v2 as dt_v2_bp
     app.register_blueprint(dt_v2_bp, url_prefix='/api/dt-v2')
 
+    # Digital Twin Strategy (연도별 전략 기획 — 사무국/관리자 전용)
+    from app.modules.digital_twin_strategy import bp as digital_twin_strategy_bp
+    app.register_blueprint(digital_twin_strategy_bp)
+
     # Digital Twin Solution
     from app.modules.digital_twin_solution import bp as digital_twin_solution_bp
     app.register_blueprint(digital_twin_solution_bp, url_prefix='/api/digital-twin-solution')

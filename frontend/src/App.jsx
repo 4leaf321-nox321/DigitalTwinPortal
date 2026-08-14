@@ -15,6 +15,7 @@ import SwimlaneChartApp from './modules/swimlane-chart/SwimlaneChartApp';
 import TechArchiveApp from './modules/tech-archive/TechArchiveApp';
 import DigitalTwinSolutionApp from './modules/digital-twin-solution/DigitalTwinSolutionApp';
 import DigitalTwinDashboardApp from './modules/digital-twin-dashboard/DigitalTwinDashboardApp';
+import DigitalTwinStrategyApp from './modules/digital-twin-strategy/DigitalTwinStrategyApp';
 import DxWorkProcessApp from './modules/dx-work-process/KnowledgeGraphApp';
 import OrganizationChartApp from './modules/organization-chart/OrganizationChartApp';
 import OfficeManagementApp from './modules/office-management/OfficeManagementApp';
@@ -134,6 +135,16 @@ const AppWithNav = () => {
         element={
           <ProtectedRoute>
             <DigitalTwinDashboardApp onGoHome={handleGoHome} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Digital Twin Strategy 모듈 (보호됨) */}
+      <Route
+        path="/digital-twin-strategy"
+        element={
+          <ProtectedRoute>
+            <DigitalTwinStrategyApp onGoHome={handleGoHome} />
           </ProtectedRoute>
         }
       />
