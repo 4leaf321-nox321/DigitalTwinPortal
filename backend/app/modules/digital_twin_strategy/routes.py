@@ -105,10 +105,11 @@ def get_plan(year):
         # B 는 저장하지 않고 매번 계산한다. 원본이 바뀌면 따라 바뀌어야 한다.
         source = get_evidence_source()
         try:
-            observed = compute_metrics(source, year, divisions)
+            observed, observed_context = compute_metrics(source, year, divisions)
             metric_error = None
         except NotImplementedError as e:
             observed = {d.id: {k: None for k in METRIC_KEYS} for d in divisions}
+            observed_context = {}
             metric_error = str(e)
 
         targets = {
@@ -134,7 +135,10 @@ def get_plan(year):
                 })
 
         # 데이터가 먼저 말하는 부분. 사람이 아무것도 안 매겨도 볼 것이 있어야 한다.
-        findings = derive_findings(observed, divisions) if not metric_error else []
+        findings = (
+            derive_findings(observed, divisions, observed_context)
+            if not metric_error else []
+        )
 
         cruxes = StrategyCrux.query.filter_by(plan_id=plan.id) \
             .order_by(StrategyCrux.order, StrategyCrux.id).all()

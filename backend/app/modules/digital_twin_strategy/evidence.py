@@ -129,10 +129,14 @@ class FixtureSource(EvidenceSource):
                     for _ in range(rng.randint(1, 3))
                 ]
 
+            # 부서를 고르게 뽑지 않는다. 실제로는 한 부서가 대부분을 맡는 경우가
+            # 흔하고, 고르게 만들면 편중도 규칙이 도는지 확인할 수 없다.
+            dept = rng.choices(_DEPT_SUFFIX, weights=[6, 2, 1])[0]
+
             projects.append({
                 '과제명': f'{rng.choice(_PROCESS)} {rng.choice(_SUBJECT)} {rng.choice(_METHOD)}',
                 '사업부': division,
-                '담당부서목록': [f'{division}{rng.choice(_DEPT_SUFFIX)}'],
+                '담당부서목록': [f'{division}{dept}'],
                 '진행상태': rng.choice(_STATUS),
                 '과제년도': year,
                 '과제구분': rng.choice(_CLASSIFICATION),

@@ -28,7 +28,11 @@ def _pct(part, whole):
 def compute_metrics(source, year, divisions):
     """사업부별 관측값을 계산한다.
 
-    반환: { division_id: { metric_key: value|None } }
+    반환: (values, context)
+      values  { division_id: { metric_key: value|None } }
+      context { division_id: { ... } }  숫자만으로는 부족한 부가 정보.
+              편중도가 높을 때 "어느 부서인가"를 말해주려면 이름이 필요하다.
+
     값이 None 인 것은 '계산할 근거가 없음'이다. 0 과 구분해야 한다 —
     과제가 0건인 것과 데이터를 못 읽은 것은 다른 뜻이다.
     """
@@ -37,6 +41,7 @@ def compute_metrics(source, year, divisions):
 
     by_name = {d.name: d.id for d in divisions}
     result = {d.id: {k: None for k in METRIC_KEYS} for d in divisions}
+    context = {d.id: {} for d in divisions}
 
     grouped = {d.id: [] for d in divisions}
     for p in projects:
@@ -51,12 +56,27 @@ def compute_metrics(source, year, divisions):
         if not total:
             continue
 
-        depts = set()
+        # 부서별 과제 수. 한 과제에 여러 부서가 걸리면 각 부서에 한 번씩 센다 —
+        # 참여했는지를 보는 것이지 지분을 나누는 것이 아니다.
+        dept_counts = {}
         for p in items:
             for dept in (p.get('담당부서목록') or []):
                 if dept:
-                    depts.add(dept)
-        m['dept_spread'] = len(depts)
+                    dept_counts[dept] = dept_counts.get(dept, 0) + 1
+
+        m['dept_spread'] = len(dept_counts)
+
+        if dept_counts:
+            top_dept, top_count = max(dept_counts.items(), key=lambda kv: kv[1])
+            total_assignments = sum(dept_counts.values())
+            m['dept_concentration'] = _pct(top_count, total_assignments)
+            context[division_id]['top_dept'] = top_dept
+            context[division_id]['top_dept_count'] = top_count
+            # 상위 3개까지 남긴다. "어느 부서만 많다"를 말하려면 목록이 있어야 한다.
+            context[division_id]['dept_ranking'] = [
+                {'name': n, 'count': c}
+                for n, c in sorted(dept_counts.items(), key=lambda kv: -kv[1])[:3]
+            ]
 
         # 무엇을 이루려는지 적지 않은 채 진행 중인 과제.
         # 끝나도 무엇이 좋아졌는지 말할 수 없다.
@@ -116,4 +136,4 @@ def compute_metrics(source, year, divisions):
         if t['seen'] and t['target'] > 0:
             result[division_id]['kpi_achievement'] = round(t['actual'] * 100 / t['target'], 1)
 
-    return result
+    return result, context

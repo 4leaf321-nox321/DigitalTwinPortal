@@ -181,8 +181,18 @@ METRICS = [
         'key': 'dept_spread',
         'label': '참여 부서',
         'unit': '개',
-        'detail': '과제에 이름을 올린 부서 수. 소수에 몰려 있으면 조직 역량으로 남지 않는다.',
+        'detail': '과제에 이름을 올린 부서 수. 몇 곳이 참여하는지만 본다.',
         'direction': 'higher',
+    },
+    {
+        # 개수만으로는 "부서 5개인데 그중 한 곳이 80%" 를 못 잡는다.
+        # 이름만 여럿이고 실제로는 한 부서가 다 하는 상태를 가려낸다.
+        'key': 'dept_concentration',
+        'label': '부서 편중도',
+        'unit': '%',
+        'detail': '가장 많은 과제를 가진 부서 한 곳이 차지하는 비율. '
+                  '참여 부서가 많아도 이 값이 높으면 실제로는 한 곳이 다 하는 것이다.',
+        'direction': 'lower',
     },
     {
         'key': 'no_performance_rate',

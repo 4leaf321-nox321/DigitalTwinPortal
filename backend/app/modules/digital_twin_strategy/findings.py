@@ -22,19 +22,40 @@ NO_PERFORMANCE = 30.0        # 성과 미정의 비율이 이 위면 짚는다
 NO_KPI_LINK = 30.0           # KPI 미연결 비율
 UNCLASSIFIED_LINK = 40.0     # 연결 등급 미지정 비율
 PL_CONCENTRATION = 25.0      # 한 PL 이 차지하는 비율
+DEPT_CONCENTRATION = 50.0    # 한 부서가 차지하는 비율
 DEADLINE_CROWDING = 50.0     # 한 분기에 몰린 비율
 ISOLATED = 50.0              # 고립 과제 비율
 KPI_SHORTFALL = 80.0         # KPI 달성률이 이 아래면 미달
 SPREAD_CONCENTRATED = 4      # 참여 부서가 이 이하면 확산 정체
 
 
-def derive_findings(metrics_by_division, divisions):
+def _subject_particle(word):
+    """받침 유무로 '이/가'를 고른다.
+
+    부서명이 데이터에서 오므로 문장에 그대로 끼워 넣으면 'DA1팀가' 같은 것이
+    나온다. 화면에 보이는 문장이라 어색하면 신뢰가 깎인다.
+    영문·숫자로 끝나면 판단이 어려우니 안전하게 '이(가)' 로 둔다.
+    """
+    if not word:
+        return '가'
+    last = word[-1]
+    code = ord(last)
+    if 0xAC00 <= code <= 0xD7A3:              # 한글 음절
+        return '이' if (code - 0xAC00) % 28 else '가'
+    if last.isdigit() or last.isascii():
+        return '이(가)'
+    return '가'
+
+
+def derive_findings(metrics_by_division, divisions, context=None):
     """관측값에서 눈에 띄는 것을 뽑는다.
 
     metrics_by_division: { division_id: { metric_key: value|None } }
+    context: { division_id: {...} }  숫자만으로 부족한 부가 정보(예: 최다 부서명)
     반환: 각 항목에 왜 짚였는지(evidence)를 붙인 목록.
     """
     name = {d.id: d.name for d in divisions}
+    context = context or {}
     findings = []
 
     def add(key, severity, title, detail, division_id=None, evidence=None):
@@ -97,13 +118,40 @@ def derive_findings(metrics_by_division, divisions):
                 '떨어지거나 일정이 밀릴 가능성이 큽니다.',
                 d.id, {'deadline_crowding': v})
 
-        v = m.get('dept_spread')
-        if v is not None and v <= SPREAD_CONCENTRATED:
+        # 참여 부서 수와 편중도는 서로 다른 것을 말한다.
+        #   부서 2개              → 애초에 몇 곳만 한다
+        #   부서 6개 · 편중 70%   → 이름만 여럿이고 실제로는 한 곳이 다 한다
+        # 다만 둘 다 걸리면 같은 이야기를 두 번 하게 되므로 하나로 합쳐 말한다.
+        spread = m.get('dept_spread')
+        skew = m.get('dept_concentration')
+        ctx = context.get(d.id, {})
+        top = ctx.get('top_dept')
+        ranking = ctx.get('dept_ranking') or []
+        others = ', '.join(f"{r['name']} {r['count']}건" for r in ranking[1:3])
+
+        narrow = spread is not None and spread <= SPREAD_CONCENTRATED
+        skewed = skew is not None and skew >= DEPT_CONCENTRATION
+
+        if skewed:
+            actor = top or '한 부서'
+            head = f'{d.name} 과제의 {skew}% 를 {actor}{_subject_particle(actor)} 맡고 있습니다'
+            body = (
+                f'참여 부서가 {spread}곳뿐인 데다 그중 한 곳에 몰려 있습니다. '
+                if narrow else
+                f'참여 부서는 {spread}곳이지만 한 곳이 대부분을 맡고 있어, '
+                '이름만 여럿이고 실제로는 한 부서가 하는 상태입니다. '
+            )
+            if others:
+                body += f'다음은 {others}.'
+            add('concentration_dept_skew', 'medium', head, body.strip(), d.id,
+                {'dept_concentration': skew, 'dept_spread': spread,
+                 'top_dept': top, 'ranking': ranking})
+        elif narrow:
             add('concentration_dept', 'medium',
-                f'{d.name} 참여 부서 {v}개',
-                '소수 부서에 몰려 있습니다. 확산되지 않으면 조직 역량으로 '
+                f'{d.name} 참여 부서 {spread}곳',
+                '소수 부서만 참여하고 있습니다. 확산되지 않으면 조직 역량으로 '
                 '남지 않습니다.',
-                d.id, {'dept_spread': v})
+                d.id, {'dept_spread': spread})
 
     # ── 연결의 부재 ────────────────────────────────────────────────────
     for d in divisions:
