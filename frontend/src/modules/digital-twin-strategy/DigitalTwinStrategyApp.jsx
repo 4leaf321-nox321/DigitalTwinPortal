@@ -199,12 +199,12 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
-  const handleAssessmentChange = async (dimension, payload) => {
+  const handleAssessmentChange = async (divisionId, dimension, payload) => {
     // 낙관적 갱신 없이 저장 후 다시 읽는다. 격차(gap)는 서버가 계산하므로
     // 화면에서 흉내 내면 규칙이 두 곳으로 갈린다.
     setError(null);
     try {
-      await strategyApi.updateAssessment(currentYear, dimension, payload);
+      await strategyApi.updateAssessment(currentYear, divisionId, dimension, payload);
       await loadPlan(currentYear);
     } catch (e) {
       setError(e.message);
@@ -230,6 +230,8 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       return (
         <AssessmentView
           dimensions={meta?.dimensions || []}
+          levels={meta?.levels || []}
+          divisions={meta?.divisions || []}
           assessments={plan.assessments}
           onChange={handleAssessmentChange}
         />

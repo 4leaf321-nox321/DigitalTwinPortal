@@ -38,10 +38,16 @@ class StrategyPlan(BaseModel):
 
 class StrategyAssessment(BaseModel):
     """
-    ① 현재 상태 진단. 성숙도 차원별로 현재 수준과 목표 수준을 매긴다.
+    ① 현재 상태 진단. 사업부별로, 성숙도 차원별로 현재 수준과 목표 수준을 매긴다.
 
     이슈를 격차(gap)로 정의하기 위한 출발점이다. 목표에서 현재를 뺀 값이
     다음 단계의 이슈 후보가 된다.
+
+    사업부 단위인 이유: 포탈 데이터가 전부 사업부로 쌓이고 성숙도도 사업부마다
+    크게 다르다. 전사 하나로 뭉치면 "평균 3단계" 같은 쓸모없는 숫자만 남는다.
+
+    division_id 에 FK 를 걸지 않는다. divisions 는 대시보드 모듈의 테이블이라
+    하드 결합을 만들지 않고, 이름은 읽을 때 붙인다(사업부명이 바뀌어도 따라간다).
     """
     __tablename__ = 'strategy_assessment'
 
@@ -49,6 +55,7 @@ class StrategyAssessment(BaseModel):
         db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
         nullable=False, index=True
     )
+    division_id = db.Column(db.Integer, nullable=False, index=True)
     # 성숙도 차원 (data / model / integration / analysis / application)
     dimension = db.Column(db.String(50), nullable=False)
     current_level = db.Column(db.Integer, nullable=True)   # 1~5, 미입력이면 None
@@ -58,7 +65,10 @@ class StrategyAssessment(BaseModel):
     note = db.Column(db.Text)
 
     __table_args__ = (
-        db.UniqueConstraint('plan_id', 'dimension', name='uq_assessment_plan_dimension'),
+        db.UniqueConstraint(
+            'plan_id', 'division_id', 'dimension',
+            name='uq_assessment_plan_division_dimension'
+        ),
     )
 
     @property

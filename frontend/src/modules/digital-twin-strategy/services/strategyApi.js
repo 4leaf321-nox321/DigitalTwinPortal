@@ -37,8 +37,8 @@ export const strategyApi = {
       body: JSON.stringify({ year, title }),
     }),
 
-  updateAssessment: (year, dimension, payload) =>
-    request(`/plans/${year}/assessments/${dimension}`, {
+  updateAssessment: (year, divisionId, dimension, payload) =>
+    request(`/plans/${year}/assessments/${divisionId}/${dimension}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),

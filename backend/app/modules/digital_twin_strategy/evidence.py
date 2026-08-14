@@ -18,16 +18,6 @@ import random
 from flask import current_app
 
 
-# 성숙도 차원. 디지털 트윈 성숙도 연구들이 공통으로 쓰는 축이다.
-DIMENSIONS = [
-    ('data', '데이터'),
-    ('model', '모델'),
-    ('integration', '통합'),
-    ('analysis', '분석'),
-    ('application', '응용'),
-]
-
-
 class EvidenceSource:
     """근거 원천 인터페이스. 전략 모듈은 이 타입만 안다."""
 
@@ -64,8 +54,25 @@ class LocalDbSource(EvidenceSource):
 # 운영 데이터를 흉내 낸 것이 아니다. 실제 과제명도 부서명도 모르므로 지어낸다.
 # 규모와 형태만 같다.
 
-_DIVISIONS = ['생산기술', '차체', '의장', '파워트레인', '품질', '연구개발']
+# 사업부명은 조직 구조라 지어내면 화면이 실제와 동떨어진다. 개발 DB 에 이미
+# 마스터가 있으므로 그걸 쓰고, 없을 때만 대체 목록으로 넘어간다.
+_FALLBACK_DIVISIONS = ['MX', 'VD', 'DA', 'NW', '의료기기']
 _DEPT_SUFFIX = ['1팀', '2팀', '3팀']
+
+
+def _division_names():
+    try:
+        from app.modules.digital_twin_dashboard.models import Division
+        names = [
+            d.name for d in Division.query
+            .filter_by(is_active=True)
+            .order_by(Division.order, Division.id).all()
+        ]
+        if names:
+            return names
+    except Exception:
+        pass
+    return list(_FALLBACK_DIVISIONS)
 _STATUS = ['기획', '진행중', '완료', '보류']
 _CLASSIFICATION = ['신규', '계속', '고도화']
 _PROCESS = ['성형', '용접', '도장', '조립', '검사', '물류']
@@ -92,10 +99,11 @@ class FixtureSource(EvidenceSource):
     def get_projects(self, year):
         rng = self._rng(year)
         count = rng.randint(*self.PROJECT_COUNT_RANGE)
+        divisions = _division_names()
 
         projects = []
         for i in range(count):
-            division = rng.choice(_DIVISIONS)
+            division = rng.choice(divisions)
             projects.append({
                 '과제명': f'{rng.choice(_PROCESS)} {rng.choice(_SUBJECT)} {rng.choice(_METHOD)}',
                 '사업부': division,
@@ -121,7 +129,7 @@ class FixtureSource(EvidenceSource):
                 '실적': rng.randint(60, 105),
                 '_fixture_id': f'FXK-{year}-{idx + 1:02d}',
             }
-            for idx, division in enumerate(_DIVISIONS)
+            for idx, division in enumerate(_division_names())
         ]
 
 

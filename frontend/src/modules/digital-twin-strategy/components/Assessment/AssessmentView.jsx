@@ -1,9 +1,49 @@
-import React from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
+import { HelpCircle } from 'lucide-react';
 
 // ① 현재 상태 진단.
-// 이슈를 격차(gap)로 정의하기 위한 출발점이다. 목표에서 현재를 뺀 값이
+// 사업부 × 차원으로 현재/목표 수준을 매긴다. 목표에서 현재를 뺀 격차가
 // 다음 단계의 이슈 후보가 된다.
+//
+// 차원과 레벨의 정의를 화면에 붙인다. 정의 없이 1~5 만 두면 사람마다 다르게
+// 매겨 격차 숫자가 의미를 잃는다.
+
+const Wrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const DivisionTabs = styled.div`
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+`;
+
+const DivisionTab = styled.button`
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid ${p => (p.$active ? '#7c3aed' : '#e2e8f0')};
+  background: ${p => (p.$active ? '#7c3aed' : 'white')};
+  color: ${p => (p.$active ? 'white' : '#475569')};
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    border-color: #7c3aed;
+  }
+`;
+
+const FilledCount = styled.span`
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.75;
+`;
 
 const Table = styled.div`
   background: white;
@@ -14,7 +54,7 @@ const Table = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: 140px 1fr 1fr 90px minmax(200px, 1.5fr);
+  grid-template-columns: 200px 1fr 1fr 90px minmax(180px, 1.2fr);
   align-items: center;
   gap: 1rem;
   padding: 0.875rem 1.25rem;
@@ -33,14 +73,31 @@ const HeadRow = styled(Row)`
   color: #475569;
 `;
 
+const DimensionCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+`;
+
 const DimensionName = styled.div`
   font-weight: 600;
   color: #1e293b;
 `;
 
+const HintIcon = styled(HelpCircle)`
+  color: #cbd5e1;
+  cursor: help;
+  flex-shrink: 0;
+
+  &:hover {
+    color: #7c3aed;
+  }
+`;
+
 const LevelPicker = styled.div`
   display: flex;
   gap: 0.25rem;
+  align-items: center;
 `;
 
 const LevelButton = styled.button`
@@ -103,30 +160,69 @@ const NoteInput = styled.input`
   }
 `;
 
-const LEVELS = [1, 2, 3, 4, 5];
+const LevelLegend = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.875rem 1.25rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+`;
 
-const AssessmentView = ({ dimensions, assessments, onChange, disabled }) => {
+const LegendItem = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+`;
+
+const LegendNum = styled.span`
+  font-weight: 700;
+  color: #7c3aed;
+`;
+
+const AssessmentView = ({ dimensions, levels, divisions, assessments, onChange }) => {
+  const [activeDivision, setActiveDivision] = useState(divisions?.[0]?.id ?? null);
+
+  if (!divisions?.length) {
+    return <Table><Row>진단 대상 사업부가 없습니다.</Row></Table>;
+  }
+
+  const currentDivision = divisions.find(d => d.id === activeDivision) || divisions[0];
+
   const byKey = {};
-  (assessments || []).forEach(a => { byKey[a.dimension] = a; });
+  (assessments || [])
+    .filter(a => a.division_id === currentDivision.id)
+    .forEach(a => { byKey[a.dimension] = a; });
+
+  // 사업부 탭에 진행 정도를 보여준다. 25칸을 채우는 일이라 어디까지 했는지가 보여야 한다.
+  const filledCount = (divisionId) =>
+    (assessments || []).filter(
+      a => a.division_id === divisionId && a.current_level !== null && a.current_level !== undefined
+    ).length;
+
+  const levelTitle = (levels || [])
+    .map(l => `${l.value} ${l.label} — ${l.detail}`)
+    .join('\n');
 
   const renderLevels = (dimension, field, value) => (
     <LevelPicker>
-      {LEVELS.map(level => (
+      {(levels || []).map(level => (
         <LevelButton
-          key={level}
-          $active={value === level}
-          disabled={disabled}
-          onClick={() => onChange(dimension, { [field]: level })}
-          title={`${level}단계`}
+          key={level.value}
+          $active={value === level.value}
+          onClick={() => onChange(currentDivision.id, dimension, { [field]: level.value })}
+          title={`${level.value} ${level.label}\n${level.detail}`}
         >
-          {level}
+          {level.value}
         </LevelButton>
       ))}
       {value !== null && value !== undefined && (
         // 0 과 미입력은 다른 뜻이다. 지우면 null 로 되돌린다.
         <ClearButton
-          disabled={disabled}
-          onClick={() => onChange(dimension, { [field]: null })}
+          onClick={() => onChange(currentDivision.id, dimension, { [field]: null })}
           title="미입력으로 되돌리기"
         >
           지움
@@ -136,39 +232,66 @@ const AssessmentView = ({ dimensions, assessments, onChange, disabled }) => {
   );
 
   return (
-    <Table>
-      <HeadRow>
-        <div>차원</div>
-        <div>현재 수준</div>
-        <div>목표 수준</div>
-        <div style={{ textAlign: 'center' }}>격차</div>
-        <div>메모</div>
-      </HeadRow>
+    <Wrap>
+      <DivisionTabs>
+        {divisions.map(d => (
+          <DivisionTab
+            key={d.id}
+            $active={d.id === currentDivision.id}
+            onClick={() => setActiveDivision(d.id)}
+          >
+            {d.name}
+            <FilledCount>{filledCount(d.id)}/{dimensions.length}</FilledCount>
+          </DivisionTab>
+        ))}
+      </DivisionTabs>
 
-      {dimensions.map(dim => {
-        const a = byKey[dim.key] || {};
-        return (
-          <Row key={dim.key}>
-            <DimensionName>{dim.label}</DimensionName>
-            {renderLevels(dim.key, 'current_level', a.current_level)}
-            {renderLevels(dim.key, 'target_level', a.target_level)}
-            <Gap $value={a.gap}>
-              {a.gap === null || a.gap === undefined ? '—' : (a.gap > 0 ? `+${a.gap}` : a.gap)}
-            </Gap>
-            <NoteInput
-              defaultValue={a.note || ''}
-              placeholder="판단 근거나 메모"
-              disabled={disabled}
-              onBlur={e => {
-                if ((a.note || '') !== e.target.value) {
-                  onChange(dim.key, { note: e.target.value });
-                }
-              }}
-            />
-          </Row>
-        );
-      })}
-    </Table>
+      <LevelLegend>
+        {(levels || []).map(l => (
+          <LegendItem key={l.value} title={l.detail}>
+            <LegendNum>{l.value}</LegendNum>
+            {l.label}
+          </LegendItem>
+        ))}
+      </LevelLegend>
+
+      <Table>
+        <HeadRow>
+          <div>차원</div>
+          <div title={levelTitle}>현재 수준</div>
+          <div title={levelTitle}>목표 수준</div>
+          <div style={{ textAlign: 'center' }}>격차</div>
+          <div>메모</div>
+        </HeadRow>
+
+        {dimensions.map(dim => {
+          const a = byKey[dim.key] || {};
+          return (
+            <Row key={dim.key}>
+              <DimensionCell>
+                <DimensionName>{dim.label}</DimensionName>
+                <HintIcon size={14} title={`${dim.question}\n${dim.detail}`} />
+              </DimensionCell>
+              {renderLevels(dim.key, 'current_level', a.current_level)}
+              {renderLevels(dim.key, 'target_level', a.target_level)}
+              <Gap $value={a.gap}>
+                {a.gap === null || a.gap === undefined ? '—' : (a.gap > 0 ? `+${a.gap}` : a.gap)}
+              </Gap>
+              <NoteInput
+                key={`${currentDivision.id}-${dim.key}-${a.note || ''}`}
+                defaultValue={a.note || ''}
+                placeholder="판단 근거나 메모"
+                onBlur={e => {
+                  if ((a.note || '') !== e.target.value) {
+                    onChange(currentDivision.id, dim.key, { note: e.target.value });
+                  }
+                }}
+              />
+            </Row>
+          );
+        })}
+      </Table>
+    </Wrap>
   );
 };
 

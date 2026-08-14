@@ -13,7 +13,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.modules.auth.models import User, UserRole
 from .models import StrategyPlan, StrategyAssessment
-from .evidence import get_evidence_source, DIMENSIONS
+from .evidence import get_evidence_source
+from .definitions import (
+    DIMENSIONS, DIMENSION_KEYS, LEVELS, LEVEL_MIN, LEVEL_MAX,
+    get_target_divisions,
+)
 
 bp = Blueprint('digital_twin_strategy', __name__, url_prefix='/api/digital-twin-strategy')
 
@@ -42,17 +46,20 @@ def _error(message, status=500):
 @bp.route('/meta', methods=['GET'])
 @office_required
 def get_meta():
-    """성숙도 차원 목록과 현재 근거 원천 모드.
+    """진단 기준과 대상 사업부, 근거 원천 모드.
 
-    화면은 mode 가 fixture 면 합성 데이터 경고 띠를 띄운다.
+    차원·레벨 정의를 함께 내려 화면이 툴팁으로 띄운다. 정의 없이 1~5 만 두면
+    사람마다 다르게 매겨 격차 숫자가 의미를 잃는다.
     """
     source = get_evidence_source()
+    divisions = get_target_divisions()
     return jsonify({
         'success': True,
         'data': {
-            'dimensions': [{'key': k, 'label': l} for k, l in DIMENSIONS],
+            'dimensions': DIMENSIONS,
+            'levels': LEVELS,
+            'divisions': [{'id': d.id, 'name': d.name, 'color': d.color} for d in divisions],
             'evidenceMode': source.mode,
-            'levelRange': {'min': 1, 'max': 5},
         }
     })
 
@@ -67,25 +74,28 @@ def get_plan(year):
         if not plan:
             return jsonify({'success': True, 'data': None})
 
-        assessments = plan.assessments.all()
-        by_dimension = {a.dimension: a.to_dict() for a in assessments}
+        divisions = get_target_divisions()
+        saved = {(a.division_id, a.dimension): a for a in plan.assessments.all()}
+
+        # 사업부 × 차원 격자를 항상 채워서 내려준다. 빈 칸도 자리가 보여야
+        # 무엇을 아직 안 매겼는지 알 수 있다.
+        assessments = []
+        for division in divisions:
+            for key in DIMENSION_KEYS:
+                a = saved.get((division.id, key))
+                assessments.append(a.to_dict() if a else {
+                    'division_id': division.id,
+                    'dimension': key,
+                    'current_level': None,
+                    'target_level': None,
+                    'gap': None,
+                    'basis': 'manual',
+                    'note': None,
+                })
 
         return jsonify({
             'success': True,
-            'data': {
-                **plan.to_dict(),
-                'assessments': [
-                    by_dimension.get(key) or {
-                        'dimension': key,
-                        'current_level': None,
-                        'target_level': None,
-                        'gap': None,
-                        'basis': 'manual',
-                        'note': None,
-                    }
-                    for key, _ in DIMENSIONS
-                ],
-            }
+            'data': {**plan.to_dict(), 'assessments': assessments}
         })
     except Exception as e:
         return _error(str(e))
@@ -104,6 +114,10 @@ def create_plan():
         if StrategyPlan.query.filter_by(year=year).first():
             return _error(f'{year}년 전략이 이미 있습니다.', 409)
 
+        divisions = get_target_divisions()
+        if not divisions:
+            return _error('진단 대상 사업부가 없습니다. 사업부 설정을 확인하세요.', 400)
+
         plan = StrategyPlan(
             year=year,
             title=payload.get('title') or f'{year}년 디지털 트윈 전략',
@@ -112,9 +126,12 @@ def create_plan():
         db.session.add(plan)
         db.session.flush()
 
-        # 차원별 진단 칸을 미리 만들어 둔다. 빈 화면보다 채울 칸이 보이는 편이 낫다.
-        for key, _ in DIMENSIONS:
-            db.session.add(StrategyAssessment(plan_id=plan.id, dimension=key))
+        # 사업부 × 차원 칸을 미리 만들어 둔다. 빈 화면보다 채울 칸이 보이는 편이 낫다.
+        for division in divisions:
+            for key in DIMENSION_KEYS:
+                db.session.add(StrategyAssessment(
+                    plan_id=plan.id, division_id=division.id, dimension=key
+                ))
 
         db.session.commit()
         return jsonify({'success': True, 'data': plan.to_dict()}), 201
@@ -123,24 +140,28 @@ def create_plan():
         return _error(str(e))
 
 
-@bp.route('/plans/<int:year>/assessments/<dimension>', methods=['PUT'])
+@bp.route('/plans/<int:year>/assessments/<int:division_id>/<dimension>', methods=['PUT'])
 @office_required
-def update_assessment(year, dimension):
+def update_assessment(year, division_id, dimension):
     """진단 항목 수정."""
     try:
-        valid = {k for k, _ in DIMENSIONS}
-        if dimension not in valid:
+        if dimension not in DIMENSION_KEYS:
             return _error(f'알 수 없는 차원입니다: {dimension}', 400)
+
+        if division_id not in {d.id for d in get_target_divisions()}:
+            return _error('진단 대상 사업부가 아닙니다.', 400)
 
         plan = StrategyPlan.query.filter_by(year=year).first()
         if not plan:
             return _error(f'{year}년 전략이 없습니다.', 404)
 
         assessment = StrategyAssessment.query.filter_by(
-            plan_id=plan.id, dimension=dimension
+            plan_id=plan.id, division_id=division_id, dimension=dimension
         ).first()
         if not assessment:
-            assessment = StrategyAssessment(plan_id=plan.id, dimension=dimension)
+            assessment = StrategyAssessment(
+                plan_id=plan.id, division_id=division_id, dimension=dimension
+            )
             db.session.add(assessment)
 
         payload = request.get_json() or {}
@@ -148,8 +169,8 @@ def update_assessment(year, dimension):
             if field in payload:
                 value = payload[field]
                 # 0 과 미입력은 다른 뜻이다. None 은 그대로 둔다.
-                if value is not None and not (1 <= int(value) <= 5):
-                    return _error(f'{field} 는 1~5 여야 합니다.', 400)
+                if value is not None and not (LEVEL_MIN <= int(value) <= LEVEL_MAX):
+                    return _error(f'{field} 는 {LEVEL_MIN}~{LEVEL_MAX} 여야 합니다.', 400)
                 setattr(assessment, field, value if value is None else int(value))
         if 'note' in payload:
             assessment.note = payload['note']
@@ -176,11 +197,7 @@ def evidence_preview(year):
         projects = source.get_projects(year)
         kpis = source.get_kpis(year)
     except NotImplementedError as e:
-        return jsonify({
-            'success': False,
-            'mode': source.mode,
-            'message': str(e),
-        }), 501
+        return jsonify({'success': False, 'mode': source.mode, 'message': str(e)}), 501
 
     return jsonify({
         'success': True,
