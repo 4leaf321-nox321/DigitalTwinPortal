@@ -12,9 +12,12 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.extensions import db
 from app.modules.auth.models import User, UserRole
-from .models import StrategyPlan, StrategyAssessment, StrategyMetricTarget
+from .models import (
+    StrategyPlan, StrategyAssessment, StrategyMetricTarget, StrategyCrux,
+)
 from .evidence import get_evidence_source
 from .metrics import compute_metrics
+from .findings import derive_findings
 from .definitions import (
     CATEGORIES, DIMENSION_KEYS_BY_CATEGORY, ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
@@ -130,17 +133,90 @@ def get_plan(year):
                     'note': t.note if t else None,
                 })
 
+        # 데이터가 먼저 말하는 부분. 사람이 아무것도 안 매겨도 볼 것이 있어야 한다.
+        findings = derive_findings(observed, divisions) if not metric_error else []
+
+        cruxes = StrategyCrux.query.filter_by(plan_id=plan.id) \
+            .order_by(StrategyCrux.order, StrategyCrux.id).all()
+
         return jsonify({
             'success': True,
             'data': {
                 **plan.to_dict(),
                 'assessments': assessments,
                 'metrics': metrics,
+                'findings': findings,
+                'cruxes': [c.to_dict() for c in cruxes],
                 'metricsMode': source.mode,
                 'metricsError': metric_error,
             }
         })
     except Exception as e:
+        return _error(str(e))
+
+
+@bp.route('/plans/<int:year>/cruxes', methods=['POST'])
+@office_required
+def create_crux(year):
+    """크럭스 추가. 진단의 산출물이며 다음 단계의 입력이 된다."""
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        payload = request.get_json() or {}
+        title = (payload.get('title') or '').strip()
+        if not title:
+            return _error('title 이 필요합니다.', 400)
+
+        existing = StrategyCrux.query.filter_by(plan_id=plan.id).count()
+        crux = StrategyCrux(
+            plan_id=plan.id,
+            title=title,
+            rationale=payload.get('rationale'),
+            division_id=payload.get('division_id'),
+            source_finding=payload.get('source_finding'),
+            order=existing,
+        )
+        db.session.add(crux)
+        db.session.commit()
+        return jsonify({'success': True, 'data': crux.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
+@bp.route('/plans/<int:year>/cruxes/<int:crux_id>', methods=['PUT', 'DELETE'])
+@office_required
+def modify_crux(year, crux_id):
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        crux = StrategyCrux.query.filter_by(id=crux_id, plan_id=plan.id).first()
+        if not crux:
+            return _error('크럭스를 찾을 수 없습니다.', 404)
+
+        if request.method == 'DELETE':
+            db.session.delete(crux)
+            db.session.commit()
+            return jsonify({'success': True})
+
+        payload = request.get_json() or {}
+        if 'title' in payload:
+            title = (payload['title'] or '').strip()
+            if not title:
+                return _error('title 은 비울 수 없습니다.', 400)
+            crux.title = title
+        for field in ('rationale', 'division_id', 'source_finding'):
+            if field in payload:
+                setattr(crux, field, payload[field])
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': crux.to_dict()})
+    except Exception as e:
+        db.session.rollback()
         return _error(str(e))
 
 

@@ -161,40 +161,79 @@ LEVEL_MAX = 5
 #
 # 진단 화면에서 A 옆에 놓인다. "기술은 4단계인데 활용은 바닥"이 한눈에 보여야
 # 이슈 후보로 이어진다. target 은 선택이다 — 넣으면 격차가 생긴다.
+#
+# ⚠️ 진행률·완료율은 넣지 않는다.
+#    시간이 지나면 어차피 100% 로 수렴하므로, 연말에 보면 모든 사업부가 비슷해진다.
+#    "지금 몇 %인가"는 시점의 함수일 뿐 전략적 판단 근거가 못 된다.
+#
+#    대신 **시간이 지나도 저절로 해결되지 않는 구조적 문제**를 잰다. 성과를
+#    정의하지 않고 진행하는 과제, KPI 에 걸리지 않은 과제, 소수 부서 집중,
+#    특정 시기 일정 쏠림 같은 것들이다. 이런 것은 놔두면 그대로 남는다.
 METRICS = [
     {
         'key': 'project_count',
         'label': '과제 수',
         'unit': '건',
-        'detail': '해당 연도에 등록된 과제 수.',
-        'direction': 'higher',
+        'detail': '해당 연도에 등록된 과제 수. 규모를 보는 값이며 좋고 나쁨의 대상이 아니다.',
+        'direction': 'neutral',
     },
     {
         'key': 'dept_spread',
         'label': '참여 부서',
         'unit': '개',
-        'detail': '과제에 이름을 올린 부서 수. 한두 부서에 몰려 있으면 확산이 안 된 것이다.',
+        'detail': '과제에 이름을 올린 부서 수. 소수에 몰려 있으면 조직 역량으로 남지 않는다.',
         'direction': 'higher',
     },
     {
-        'key': 'avg_progress',
-        'label': '평균 진행률',
+        'key': 'no_performance_rate',
+        'label': '성과 미정의 비율',
         'unit': '%',
-        'detail': '진행 중인 과제의 평균 진행률.',
-        'direction': 'higher',
+        'detail': '무엇을 이루려는지 적지 않은 채 진행 중인 과제의 비율. '
+                  '끝나도 무엇이 좋아졌는지 말할 수 없다.',
+        'direction': 'lower',
     },
     {
-        'key': 'completion_rate',
-        'label': '완료 비율',
+        'key': 'no_kpi_link_rate',
+        'label': 'KPI 미연결 비율',
         'unit': '%',
-        'detail': '완료로 표시된 과제의 비율.',
-        'direction': 'higher',
+        'detail': '어느 지표에도 걸려 있지 않은 과제의 비율. 전략과 실행이 끊긴 지점이다.',
+        'direction': 'lower',
+    },
+    {
+        'key': 'unclassified_link_rate',
+        'label': '연결 등급 미지정',
+        'unit': '%',
+        'detail': 'KPI 에 걸었지만 어떻게 기여하는지(주/보조/간접) 정하지 않은 연결의 비율. '
+                  '연결이 전부 동등해 보이면 아무것도 읽을 수 없다.',
+        'direction': 'lower',
+    },
+    {
+        'key': 'pl_concentration',
+        'label': 'PL 집중도',
+        'unit': '%',
+        'detail': '가장 많은 과제를 맡은 PL 한 명이 차지하는 비율. 사람에 묶인 조직은 취약하다.',
+        'direction': 'lower',
+    },
+    {
+        'key': 'deadline_crowding',
+        'label': '일정 쏠림',
+        'unit': '%',
+        'detail': '종료가 같은 분기에 몰린 과제의 비율. 검증 부하가 한꺼번에 닥친다.',
+        'direction': 'lower',
+    },
+    {
+        'key': 'isolated_rate',
+        'label': '고립 과제 비율',
+        'unit': '%',
+        'detail': '선행·후속 어느 쪽과도 연결되지 않은 과제의 비율. '
+                  '따로 도는 과제가 많으면 축적이 되지 않는다.',
+        'direction': 'lower',
     },
     {
         'key': 'kpi_achievement',
         'label': 'KPI 달성률',
         'unit': '%',
-        'detail': '목표 대비 실적. 100% 를 넘으면 목표를 넘긴 것이다.',
+        'detail': '목표 대비 실적.',
         'direction': 'higher',
     },
 ]

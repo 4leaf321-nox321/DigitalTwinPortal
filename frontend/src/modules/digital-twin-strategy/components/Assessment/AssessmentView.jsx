@@ -203,7 +203,7 @@ const LegendNum = styled.span`
 const AssessmentView = ({
   categories, divisions, assessments,
   metricDefinitions, metrics, metricsError,
-  onChange, onTargetChange,
+  onChange, onTargetChange, hideMetrics = false,
 }) => {
   const [activeDivision, setActiveDivision] = useState(divisions?.[0]?.id ?? null);
 
@@ -324,19 +324,37 @@ const AssessmentView = ({
         </Section>
       ))}
 
-      <Section>
-        <SectionHead>
-          <SectionTitle>활용과 성과</SectionTitle>
-          <SectionHint>포탈 데이터로 계산된 관측값. 사람이 매기지 않는다.</SectionHint>
-        </SectionHead>
-        <MetricPanel
-          metrics={metrics}
-          definitions={metricDefinitions}
-          divisionId={division.id}
-          error={metricsError}
-          onTargetChange={onTargetChange}
-        />
-      </Section>
+      {/* 진단 화면에서는 관측값을 맨 위 행렬로 이미 보여준다. 여기서는 목표를
+          정할 때만 쓰이므로 중복 표시를 피한다. */}
+      {!hideMetrics ? (
+        <Section>
+          <SectionHead>
+            <SectionTitle>활용과 성과</SectionTitle>
+            <SectionHint>포탈 데이터로 계산된 관측값. 사람이 매기지 않는다.</SectionHint>
+          </SectionHead>
+          <MetricPanel
+            metrics={metrics}
+            definitions={metricDefinitions}
+            divisionId={division.id}
+            error={metricsError}
+            onTargetChange={onTargetChange}
+          />
+        </Section>
+      ) : (
+        <Section>
+          <SectionHead>
+            <SectionTitle>지표 목표</SectionTitle>
+            <SectionHint>관측값은 위 표에 있습니다. 여기서는 목표만 정합니다.</SectionHint>
+          </SectionHead>
+          <MetricPanel
+            metrics={metrics}
+            definitions={metricDefinitions}
+            divisionId={division.id}
+            error={metricsError}
+            onTargetChange={onTargetChange}
+          />
+        </Section>
+      )}
     </Wrap>
   );
 };

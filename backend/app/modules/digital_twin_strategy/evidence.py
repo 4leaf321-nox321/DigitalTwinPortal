@@ -24,6 +24,14 @@ class EvidenceSource:
     mode = 'unknown'
 
     def get_projects(self, year):
+        """과제 목록.
+
+        구조 진단에 쓰는 항목을 함께 담는다:
+          performance_count   성과를 몇 개나 정의했나 (0 이면 무엇을 이룰지 안 적은 것)
+          kpi_links           [{'relation_type': 'primary'|'support'|'indirect'|None}, ...]
+          dependency_count    선행·후속 연결 수 (0 이면 따로 도는 과제)
+          end_quarter         종료 분기 (일정 쏠림 판단)
+        """
         raise NotImplementedError
 
     def get_kpis(self, year):
@@ -101,9 +109,26 @@ class FixtureSource(EvidenceSource):
         count = rng.randint(*self.PROJECT_COUNT_RANGE)
         divisions = _division_names()
 
+        # 구조적 결함이 있는 데이터를 일부러 섞는다. 전부 깔끔하면 진단 규칙이
+        # 아무것도 못 잡아 화면이 비어 보이고, 규칙이 도는지 확인할 수 없다.
         projects = []
         for i in range(count):
             division = rng.choice(divisions)
+
+            # 성과를 정의하지 않은 과제가 섞이게 한다.
+            performance_count = 0 if rng.random() < 0.35 else rng.randint(1, 3)
+
+            # KPI 연결과 등급. 등급 미지정도 섞는다.
+            if rng.random() < 0.25:
+                kpi_links = []
+            else:
+                kpi_links = [
+                    {'relation_type': rng.choice(
+                        ['primary', 'support', 'indirect', None, None]
+                    )}
+                    for _ in range(rng.randint(1, 3))
+                ]
+
             projects.append({
                 '과제명': f'{rng.choice(_PROCESS)} {rng.choice(_SUBJECT)} {rng.choice(_METHOD)}',
                 '사업부': division,
@@ -111,10 +136,15 @@ class FixtureSource(EvidenceSource):
                 '진행상태': rng.choice(_STATUS),
                 '과제년도': year,
                 '과제구분': rng.choice(_CLASSIFICATION),
-                '과제PL': f'담당자{rng.randint(1, 60):02d}',
+                # PL 을 좁은 풀에서 뽑아 집중도가 생기게 한다.
+                '과제PL': f'담당자{rng.randint(1, 18):02d}',
                 'PoC과제여부': rng.random() < 0.2,
                 '중점과제여부': rng.random() < 0.15,
-                'progress': rng.randint(0, 100),
+                # 종료를 4분기에 몰리게 한다 — 실제로 흔한 패턴이다.
+                'end_quarter': rng.choices([1, 2, 3, 4], weights=[1, 1, 2, 6])[0],
+                'performance_count': performance_count,
+                'kpi_links': kpi_links,
+                'dependency_count': 0 if rng.random() < 0.4 else rng.randint(1, 3),
                 '_fixture_id': f'FX-{year}-{i + 1:03d}',
             })
         return projects

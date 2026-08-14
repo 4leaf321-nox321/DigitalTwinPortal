@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { AlertTriangle } from 'lucide-react';
 import Header from './components/Layout/Header';
-import AssessmentView from './components/Assessment/AssessmentView';
+import DiagnosisView from './components/Diagnosis/DiagnosisView';
 import strategyApi from './services/strategyApi';
 
 // 전략은 연도 단위로 세운다. 연도가 이 모듈의 최상위 상태이고, 모든 단계는
@@ -221,6 +221,25 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
+  const runCrux = async (fn) => {
+    setError(null);
+    try {
+      await fn();
+      await loadPlan(currentYear);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const handleCruxAdd = (payload) =>
+    runCrux(() => strategyApi.createCrux(currentYear, payload));
+
+  const handleCruxUpdate = (cruxId, payload) =>
+    runCrux(() => strategyApi.updateCrux(currentYear, cruxId, payload));
+
+  const handleCruxDelete = (cruxId) =>
+    runCrux(() => strategyApi.deleteCrux(currentYear, cruxId));
+
   const isFixture = meta?.evidenceMode === 'fixture';
 
   const renderStage = () => {
@@ -238,15 +257,20 @@ function DigitalTwinStrategyApp({ onGoHome }) {
 
     if (stage === 'assessment') {
       return (
-        <AssessmentView
+        <DiagnosisView
           categories={meta?.categories || []}
           divisions={meta?.divisions || []}
           metricDefinitions={meta?.metrics || []}
           assessments={plan.assessments}
           metrics={plan.metrics}
           metricsError={plan.metricsError}
+          findings={plan.findings}
+          cruxes={plan.cruxes}
           onChange={handleAssessmentChange}
           onTargetChange={handleMetricTargetChange}
+          onCruxAdd={handleCruxAdd}
+          onCruxUpdate={handleCruxUpdate}
+          onCruxDelete={handleCruxDelete}
         />
       );
     }

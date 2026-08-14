@@ -115,6 +115,33 @@ class StrategyMetricTarget(BaseModel):
     )
 
 
+class StrategyCrux(BaseModel):
+    """
+    진단의 산출물. 올해 넘어야 할 결정적 지점 1~3개.
+
+    격자를 다 채우는 것이 진단의 끝이 아니다. Rumelt 가 말하는 진단은 "무슨 일이
+    벌어지고 있는가"에 대한 정직한 설명과 그 안의 **크럭스** — 노력이 실제로
+    결실을 맺는 지점 — 를 짚는 것이다. 점수 75개가 아니라 이 몇 줄이 다음 단계
+    (② 이슈)로 넘어간다.
+
+    많이 만들지 않는 것이 핵심이다. 전부가 중요하면 아무것도 중요하지 않다.
+    """
+    __tablename__ = 'strategy_crux'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+    title = db.Column(db.String(300), nullable=False)
+    # 왜 이것이 크럭스인가. 근거 없이 고르면 그냥 인상이다.
+    rationale = db.Column(db.Text)
+    # 특정 사업부의 문제면 지정, 전사면 비운다.
+    division_id = db.Column(db.Integer, nullable=True, index=True)
+    # 어느 관측에서 출발했는지. findings 의 key 를 담는다(계산값이라 FK 가 없다).
+    source_finding = db.Column(db.String(50))
+    order = db.Column(db.Integer, nullable=False, default=0)
+
+
 class StrategyEvidence(BaseModel):
     """
     모든 단계 공용 근거. 포탈 데이터와 설문 결과가 함께 들어온다.

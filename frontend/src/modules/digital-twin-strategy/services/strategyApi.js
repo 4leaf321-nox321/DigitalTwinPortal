@@ -50,6 +50,22 @@ export const strategyApi = {
       body: JSON.stringify(payload),
     }),
 
+  /** 크럭스 — 진단의 산출물. 다음 단계의 입력이 된다. */
+  createCrux: (year, payload) =>
+    request(`/plans/${year}/cruxes`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateCrux: (year, cruxId, payload) =>
+    request(`/plans/${year}/cruxes/${cruxId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteCrux: (year, cruxId) =>
+    request(`/plans/${year}/cruxes/${cruxId}`, { method: 'DELETE' }),
+
   /** 근거 원천이 무엇을 돌려주는지 확인용 (Phase 1 점검) */
   previewEvidence: (year) => request(`/evidence-preview/${year}`),
 };
