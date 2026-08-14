@@ -242,6 +242,30 @@ $env:DT_API_BASE = 'http://localhost:5000'
 .\run_mcp_server.ps1
 ```
 
+### MCP 서버는 외부에서 접속합니다
+
+사용자가 **자기 PC의 AI 클라이언트**에서 붙기 때문에, 서버 안에서만 열려 있으면
+안 됩니다. `run_mcp_server.ps1`이 `MCP_HOST=0.0.0.0`으로 바인딩하지만,
+**방화벽은 따로 열어야 합니다.**
+
+```powershell
+netsh advfirewall firewall add rule name="DT MCP 3003" dir=in action=allow protocol=TCP localport=3003
+```
+
+기동하면 접속 주소를 알려줍니다.
+
+```
+Binding     = 0.0.0.0:3003
+Clients connect to http://10.x.x.x:3003/mcp (verify from another machine)
+```
+
+**확인은 반드시 다른 PC에서 하세요.** 서버 장비에서 `curl http://localhost:3003/mcp`는
+`MCP_HOST`가 무엇이든 응답하므로 판정 근거가 되지 못합니다.
+
+노출해도 되는 이유는 인증 구조 때문입니다. 이 서버는 만능 토큰을 갖지 않고,
+**호출자가 보낸 `Authorization` 헤더를 백엔드로 그대로 넘깁니다.** 권한 판정은
+백엔드가 웹 화면과 똑같은 기준으로 합니다.
+
 ---
 
 # C. 자주 쓰는 옵션
