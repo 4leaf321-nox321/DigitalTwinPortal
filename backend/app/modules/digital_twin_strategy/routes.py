@@ -21,7 +21,9 @@ from .findings import derive_findings, derive_kpi_findings
 from .definitions import (
     CATEGORIES, DIMENSION_KEYS_BY_CATEGORY, ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
-    get_target_divisions,
+    THRESHOLDS, THRESHOLD_KEYS, DEFAULT_THRESHOLDS,
+    MODULE_KEY, THRESHOLD_SETTINGS_KEY,
+    get_target_divisions, get_thresholds,
 )
 
 bp = Blueprint('digital_twin_strategy', __name__, url_prefix='/api/digital-twin-strategy')
@@ -65,8 +67,64 @@ def get_meta():
             'metrics': METRICS,
             'divisions': [{'id': d.id, 'name': d.name, 'color': d.color} for d in divisions],
             'evidenceMode': source.mode,
+            'thresholdDefinitions': THRESHOLDS,
+            'thresholds': get_thresholds(),
         }
     })
+
+
+@bp.route('/settings/thresholds', methods=['PUT'])
+@office_required
+def update_thresholds():
+    """진단 임계값 저장.
+
+    기본값과 다른 값만 저장한다. 전부 저장하면 배포로 기본값이 바뀌어도 옛 값이
+    그대로 남아, 손대지 않은 항목까지 과거에 묶인다.
+    """
+    from app.modules.digital_twin_dashboard.models import ModuleSettings
+
+    try:
+        payload = request.get_json() or {}
+        incoming = payload.get('thresholds')
+        if not isinstance(incoming, dict):
+            return _error('thresholds 가 필요합니다.', 400)
+
+        cleaned = {}
+        for key, value in incoming.items():
+            if key not in THRESHOLD_KEYS:
+                return _error(f'알 수 없는 항목입니다: {key}', 400)
+            if value is None:
+                continue          # 기본값으로 되돌리기
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return _error(f'{key} 는 숫자여야 합니다.', 400)
+            if number < 0:
+                return _error(f'{key} 는 0 이상이어야 합니다.', 400)
+            if key != 'spread_concentrated' and number > 100:
+                return _error(f'{key} 는 100 이하여야 합니다(비율).', 400)
+            if number != DEFAULT_THRESHOLDS[key]:
+                cleaned[key] = number
+
+        row = ModuleSettings.query.filter_by(
+            module_name=MODULE_KEY, settings_key=THRESHOLD_SETTINGS_KEY
+        ).first()
+        if not row:
+            row = ModuleSettings(
+                module_name=MODULE_KEY, settings_key=THRESHOLD_SETTINGS_KEY,
+                description='전략 진단 임계값 (기본값과 다른 항목만 저장)',
+            )
+            db.session.add(row)
+        row.settings_data = cleaned
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': {
+            'thresholds': get_thresholds(),
+            'overridden': sorted(cleaned),
+        }})
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
 
 
 @bp.route('/plans/<int:year>', methods=['GET'])
@@ -143,7 +201,7 @@ def get_plan(year):
             # 사업부에서 본 것과 지표에서 본 것을 합친다. 뒤집어 봐야만
             # 드러나는 공백이 있다 — 아무도 주기여로 밀지 않는 지표 같은 것.
             findings = (
-                derive_findings(observed, divisions, observed_context)
+                derive_findings(observed, divisions, observed_context, get_thresholds())
                 + derive_kpi_findings(kpi_coverage)
             )
             order = {'high': 0, 'medium': 1, 'info': 2}

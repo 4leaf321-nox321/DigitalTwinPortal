@@ -264,6 +264,62 @@ METRICS = [
 METRIC_KEYS = [m['key'] for m in METRICS]
 
 
+# ── 진단 임계값 ────────────────────────────────────────────────────────────
+# 여기 값은 **기본값**이다. 운영에서 화면으로 덮어쓸 수 있다(ModuleSettings).
+#
+# 코드에만 두면 조정할 때마다 배포가 필요한데, 어느 값이 맞는지는 실제 데이터를
+# 봐야 알 수 있다. 개발에서 운영 데이터를 볼 수 없는 이상 튜닝은 운영에서
+# 이뤄져야 한다 — PLAN.md 4절의 프롬프트와 같은 이유다.
+MODULE_KEY = 'digital_twin_strategy'
+THRESHOLD_SETTINGS_KEY = 'finding_thresholds'
+
+THRESHOLDS = [
+    {'key': 'no_performance', 'label': '성과 미정의 비율', 'unit': '%', 'default': 30.0,
+     'detail': '이 비율을 넘으면 짚는다. 성과를 적지 않은 과제가 얼마나 되는가.'},
+    {'key': 'no_kpi_link', 'label': 'KPI 미연결 비율', 'unit': '%', 'default': 30.0,
+     'detail': '어느 지표에도 걸리지 않은 과제 비율.'},
+    {'key': 'unclassified_link', 'label': '연결 등급 미지정', 'unit': '%', 'default': 40.0,
+     'detail': '주·보조·간접을 정하지 않은 연결의 비율.'},
+    {'key': 'primary_link_low', 'label': '주기여 비율 하한', 'unit': '%', 'default': 20.0,
+     'detail': '등급 연결 중 주기여가 이 아래면 짚는다. 낮을수록 덜 민감해진다.'},
+    {'key': 'pl_concentration', 'label': 'PL 집중도', 'unit': '%', 'default': 25.0,
+     'detail': '한 사람이 맡은 과제 비율이 이 위면 짚는다.'},
+    {'key': 'dept_concentration', 'label': '부서 편중도', 'unit': '%', 'default': 50.0,
+     'detail': '한 부서가 차지하는 비율이 이 위면 짚는다.'},
+    {'key': 'deadline_crowding', 'label': '일정 쏠림', 'unit': '%', 'default': 50.0,
+     'detail': '한 분기에 종료가 몰린 비율.'},
+    {'key': 'isolated', 'label': '고립 과제 비율', 'unit': '%', 'default': 50.0,
+     'detail': '선후 관계가 없는 과제 비율.'},
+    {'key': 'kpi_shortfall', 'label': 'KPI 달성률 하한', 'unit': '%', 'default': 80.0,
+     'detail': '달성률이 이 아래면 미달로 본다.'},
+    {'key': 'spread_concentrated', 'label': '참여 부서 하한', 'unit': '개', 'default': 4,
+     'detail': '참여 부서가 이 이하면 확산이 안 된 것으로 본다.'},
+]
+
+DEFAULT_THRESHOLDS = {t['key']: t['default'] for t in THRESHOLDS}
+THRESHOLD_KEYS = set(DEFAULT_THRESHOLDS)
+
+
+def get_thresholds():
+    """기본값 위에 운영에서 저장한 값을 덮어쓴다.
+
+    저장된 것이 없으면 기본값이 그대로 쓰인다. 값 하나만 바꿔 두어도 나머지는
+    기본값을 따라가므로, 배포로 기본값이 바뀌면 손대지 않은 항목은 새 기본값을
+    받는다.
+    """
+    from app.modules.digital_twin_dashboard.models import ModuleSettings
+
+    values = dict(DEFAULT_THRESHOLDS)
+    row = ModuleSettings.query.filter_by(
+        module_name=MODULE_KEY, settings_key=THRESHOLD_SETTINGS_KEY
+    ).first()
+    if row and isinstance(row.settings_data, dict):
+        for key, value in row.settings_data.items():
+            if key in THRESHOLD_KEYS and isinstance(value, (int, float)):
+                values[key] = value
+    return values
+
+
 def get_target_divisions():
     """진단 대상 사업부.
 

@@ -17,17 +17,10 @@
 못 잡는 결합을 AI 에게 맡기는 편이 검증 가능하다.
 """
 
-# 임계값은 코드에 둔다. 나중에 방법론 정의처럼 운영에서 조정하게 만든다.
-NO_PERFORMANCE = 30.0        # 성과 미정의 비율이 이 위면 짚는다
-NO_KPI_LINK = 30.0           # KPI 미연결 비율
-UNCLASSIFIED_LINK = 40.0     # 연결 등급 미지정 비율
-PL_CONCENTRATION = 25.0      # 한 PL 이 차지하는 비율
-DEPT_CONCENTRATION = 50.0    # 한 부서가 차지하는 비율
-PRIMARY_LINK_LOW = 20.0      # 등급 연결 중 주기여가 이 아래면 짚는다
-DEADLINE_CROWDING = 50.0     # 한 분기에 몰린 비율
-ISOLATED = 50.0              # 고립 과제 비율
-KPI_SHORTFALL = 80.0         # KPI 달성률이 이 아래면 미달
-SPREAD_CONCENTRATED = 4      # 참여 부서가 이 이하면 확산 정체
+# 임계값은 인자로 받는다. 기본값과 운영 오버라이드는 definitions.get_thresholds()
+# 가 합쳐서 준다 — 어느 값이 맞는지는 실제 데이터를 봐야 알 수 있고, 그 판단은
+# 운영에서 이뤄지므로 배포 없이 바꿀 수 있어야 한다.
+from .definitions import DEFAULT_THRESHOLDS
 
 
 def _subject_particle(word):
@@ -77,13 +70,15 @@ def _topic_particle(word):
 def _all_divisions_hit(metrics_by_division, divisions, metric_key, threshold, worse='higher'):
     """모든 사업부가 임계값을 넘었는가.
 
-    실제 데이터를 붙여 보니 전 사업부가 똑같이 걸리는 항목이 있었다. 예를 들어
-    과제 대부분이 연말에 끝나서 일정 쏠림이 어디나 100% 였고, 선행연결 기능이
-    거의 안 쓰여 고립 비율도 어디나 100% 였다.
+    개발 DB(시드 데이터)를 붙여 보니 전 사업부가 똑같이 걸리는 항목이 나왔다 —
+    과제 대부분의 종료월이 12월이라 일정 쏠림이 어디나 100%, 선행연결 행이 두
+    개뿐이라 고립 비율도 어디나 100%.
 
-    그런 항목을 사업부마다 한 줄씩 내보내면 화면이 같은 말로 가득 차고, 정작
-    사업부 간 차이가 있는 항목이 묻힌다. **전부 걸리면 개별 사정이 아니라
-    관행이나 구조의 문제**이므로 전사로 한 번만 말한다.
+    ⚠️ 그 값들은 시드가 만든 것이라 현실을 말해주지 않는다. 그래도 이 처리는
+       필요하다 — 어떤 항목이든 전 사업부가 같은 값이면 사업부 비교에 쓸 수
+       없고, 사업부마다 한 줄씩 내보내면 정작 차이가 있는 항목이 묻힌다.
+       **전부 걸리면 개별 사정이 아니라 관행이나 구조의 문제**이므로 전사로
+       한 번만 말한다. 실제 데이터에 편차가 있으면 이 처리는 자동으로 비켜간다.
     """
     values = [metrics_by_division.get(d.id, {}).get(metric_key) for d in divisions]
     valid = [v for v in values if v is not None]
@@ -93,7 +88,7 @@ def _all_divisions_hit(metrics_by_division, divisions, metric_key, threshold, wo
         else all(v <= threshold for v in valid)
 
 
-def derive_findings(metrics_by_division, divisions, context=None):
+def derive_findings(metrics_by_division, divisions, context=None, thresholds=None):
     """관측값에서 눈에 띄는 것을 뽑는다.
 
     metrics_by_division: { division_id: { metric_key: value|None } }
@@ -102,17 +97,18 @@ def derive_findings(metrics_by_division, divisions, context=None):
     """
     name = {d.id: d.name for d in divisions}
     context = context or {}
+    T = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     findings = []
 
     # 전 사업부가 걸리는 항목은 사업부별로 반복하지 않는다.
     universal = {
         key: _all_divisions_hit(metrics_by_division, divisions, key, threshold)
         for key, threshold in (
-            ('no_performance_rate', NO_PERFORMANCE),
-            ('no_kpi_link_rate', NO_KPI_LINK),
-            ('unclassified_link_rate', UNCLASSIFIED_LINK),
-            ('deadline_crowding', DEADLINE_CROWDING),
-            ('isolated_rate', ISOLATED),
+            ('no_performance_rate', T['no_performance']),
+            ('no_kpi_link_rate', T['no_kpi_link']),
+            ('unclassified_link_rate', T['unclassified_link']),
+            ('deadline_crowding', T['deadline_crowding']),
+            ('isolated_rate', T['isolated']),
         )
     }
 
@@ -133,7 +129,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
         m = metrics_by_division.get(d.id, {})
 
         v = m.get('no_performance_rate')
-        if v is not None and v >= NO_PERFORMANCE and not universal['no_performance_rate']:
+        if v is not None and v >= T['no_performance'] and not universal['no_performance_rate']:
             add('gap_performance', 'high',
                 f'{d.name} 과제 {v}% 가 성과를 정의하지 않았습니다',
                 '무엇을 이루려는지 적지 않은 채 진행 중입니다. 끝나도 무엇이 '
@@ -141,7 +137,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
                 d.id, {'no_performance_rate': v})
 
         v = m.get('no_kpi_link_rate')
-        if v is not None and v >= NO_KPI_LINK and not universal['no_kpi_link_rate']:
+        if v is not None and v >= T['no_kpi_link'] and not universal['no_kpi_link_rate']:
             add('gap_kpi_link', 'high',
                 f'{d.name} 과제 {v}% 가 어느 KPI 에도 걸려 있지 않습니다',
                 '전략과 실행이 끊긴 지점입니다. 지표를 밀지 않는 과제가 많다면 '
@@ -149,7 +145,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
                 d.id, {'no_kpi_link_rate': v})
 
         v = m.get('unclassified_link_rate')
-        if v is not None and v >= UNCLASSIFIED_LINK and not universal['unclassified_link_rate']:
+        if v is not None and v >= T['unclassified_link'] and not universal['unclassified_link_rate']:
             add('gap_link_grade', 'medium',
                 f'{d.name} KPI 연결 {v}% 가 등급 미지정입니다',
                 '주·보조·간접을 정하지 않아 연결이 전부 동등해 보입니다. '
@@ -160,7 +156,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
         # 기반·간접만 쌓고 있다는 뜻이다.
         v = m.get('primary_link_rate')
         grades = context.get(d.id, {}).get('link_grades') or {}
-        if v is not None and v <= PRIMARY_LINK_LOW and grades.get('graded_total', 0) >= 5:
+        if v is not None and v <= T['primary_link_low'] and grades.get('graded_total', 0) >= 5:
             add('few_primary_links', 'medium',
                 f'{d.name} 등급 연결 중 주기여가 {v}% 뿐입니다',
                 (f"주 {grades.get('primary', 0)} · 보조 {grades.get('support', 0)} · "
@@ -173,7 +169,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
         m = metrics_by_division.get(d.id, {})
 
         v = m.get('pl_concentration')
-        if v is not None and v >= PL_CONCENTRATION:
+        if v is not None and v >= T['pl_concentration']:
             add('concentration_pl', 'medium',
                 f'{d.name} 과제의 {v}% 를 한 사람이 맡고 있습니다',
                 '사람에 묶인 조직은 그 사람이 빠지면 멈춥니다. 지식이 개인에게 '
@@ -181,7 +177,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
                 d.id, {'pl_concentration': v})
 
         v = m.get('deadline_crowding')
-        if v is not None and v >= DEADLINE_CROWDING and not universal['deadline_crowding']:
+        if v is not None and v >= T['deadline_crowding'] and not universal['deadline_crowding']:
             add('concentration_deadline', 'medium',
                 f'{d.name} 과제의 {v}% 가 같은 분기에 끝납니다',
                 '검증과 마무리 부하가 한꺼번에 닥칩니다. 그 시기에 품질이 '
@@ -199,8 +195,8 @@ def derive_findings(metrics_by_division, divisions, context=None):
         ranking = ctx.get('dept_ranking') or []
         others = ', '.join(f"{r['name']} {r['count']}건" for r in ranking[1:3])
 
-        narrow = spread is not None and spread <= SPREAD_CONCENTRATED
-        skewed = skew is not None and skew >= DEPT_CONCENTRATION
+        narrow = spread is not None and spread <= T['spread_concentrated']
+        skewed = skew is not None and skew >= T['dept_concentration']
 
         if skewed:
             actor = top or '한 부서'
@@ -227,7 +223,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
     for d in divisions:
         m = metrics_by_division.get(d.id, {})
         v = m.get('isolated_rate')
-        if v is not None and v >= ISOLATED and not universal['isolated_rate']:
+        if v is not None and v >= T['isolated'] and not universal['isolated_rate']:
             add('isolated_projects', 'medium',
                 f'{d.name} 과제 {v}% 가 다른 과제와 이어지지 않습니다',
                 '선행·후속 관계가 없는 과제가 많습니다. 각자 따로 돌면 결과가 '
@@ -239,7 +235,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
         m = metrics_by_division.get(d.id, {})
         kpi = m.get('kpi_achievement')
         count = m.get('project_count')
-        if kpi is not None and kpi < KPI_SHORTFALL:
+        if kpi is not None and kpi < T['kpi_shortfall']:
             counts = [metrics_by_division.get(x.id, {}).get('project_count') for x in divisions]
             valid = [c for c in counts if c is not None]
             avg_count = sum(valid) / len(valid) if valid else None
@@ -252,7 +248,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
             else:
                 add('kpi_shortfall', 'high',
                     f'{d.name} KPI 달성률 {kpi}%',
-                    f'목표의 {KPI_SHORTFALL:.0f}% 에 못 미칩니다.',
+                    f'목표의 {T['kpi_shortfall']:.0f}% 에 못 미칩니다.',
                     d.id, {'kpi_achievement': kpi})
 
     # ── 전사로 보는 것 ─────────────────────────────────────────────────
@@ -260,21 +256,21 @@ def derive_findings(metrics_by_division, divisions, context=None):
     # 심각도를 항목마다 따로 준다. 전사에 걸린다고 다 급한 것은 아니다 —
     # 연말 종료 쏠림은 연간 과제 관행의 결과일 수 있어 사실 확인이 먼저다.
     for key, metric_key, threshold, severity, title, detail in (
-        ('company_gap_performance', 'no_performance_rate', NO_PERFORMANCE, 'high',
+        ('company_gap_performance', 'no_performance_rate', T['no_performance'], 'high',
          '전 사업부에서 성과 정의가 비어 있습니다',
          '특정 사업부의 습관이 아니라 양식이나 절차가 그것을 요구하지 않는 것일 수 있습니다.'),
-        ('company_gap_kpi_link', 'no_kpi_link_rate', NO_KPI_LINK, 'high',
+        ('company_gap_kpi_link', 'no_kpi_link_rate', T['no_kpi_link'], 'high',
          '전 사업부에서 KPI 연결이 비어 있습니다',
          '지표 체계가 현장 과제를 담지 못하고 있을 가능성이 있습니다.'),
-        ('company_gap_link_grade', 'unclassified_link_rate', UNCLASSIFIED_LINK, 'medium',
+        ('company_gap_link_grade', 'unclassified_link_rate', T['unclassified_link'], 'medium',
          '전 사업부에서 KPI 연결 등급이 비어 있습니다',
          '등급을 매기는 절차가 자리잡지 않은 것으로 보입니다. '
          '연결이 전부 동등해 보여 무엇이 지표를 떠받치는지 읽을 수 없습니다.'),
-        ('company_deadline_crowding', 'deadline_crowding', DEADLINE_CROWDING, 'info',
+        ('company_deadline_crowding', 'deadline_crowding', T['deadline_crowding'], 'info',
          '과제가 전사적으로 같은 분기에 끝납니다',
          '연간 과제 관행이라면 자연스러운 결과입니다. 사업부 비교에는 쓸 수 없고, '
          '검증 부하가 연말에 몰리는 것이 문제인지만 따로 보면 됩니다.'),
-        ('company_isolated', 'isolated_rate', ISOLATED, 'medium',
+        ('company_isolated', 'isolated_rate', T['isolated'], 'medium',
          '과제 간 선후 관계가 거의 기록돼 있지 않습니다',
          '특정 사업부가 아니라 전사적으로 비어 있습니다. 과제가 실제로 따로 도는 '
          '것인지, 선행과제 기능을 쓰지 않는 것인지 먼저 가려야 합니다.'),
@@ -287,7 +283,7 @@ def derive_findings(metrics_by_division, divisions, context=None):
 
     spreads = [metrics_by_division.get(d.id, {}).get('dept_spread') for d in divisions]
     valid_spreads = [s for s in spreads if s is not None]
-    if valid_spreads and max(valid_spreads) <= SPREAD_CONCENTRATED:
+    if valid_spreads and max(valid_spreads) <= T['spread_concentrated']:
         add('spread_stalled_company', 'high',
             '전 사업부에서 확산이 정체돼 있습니다',
             f'모든 사업부의 참여 부서가 {max(valid_spreads)}개 이하입니다. '

@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { AlertTriangle } from 'lucide-react';
 import Header from './components/Layout/Header';
 import DiagnosisView from './components/Diagnosis/DiagnosisView';
+import ThresholdModal from './components/Settings/ThresholdModal';
 import strategyApi from './services/strategyApi';
 
 // 전략은 연도 단위로 세운다. 연도가 이 모듈의 최상위 상태이고, 모든 단계는
@@ -165,6 +166,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   const [meta, setMeta] = useState(null);
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -231,6 +233,13 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
+  const handleThresholdSave = async (thresholds) => {
+    await strategyApi.updateThresholds(thresholds);
+    const meta = await strategyApi.getMeta();
+    setMeta(meta.data);
+    await loadPlan(currentYear);
+  };
+
   const handleCruxAdd = (payload) =>
     runCrux(() => strategyApi.createCrux(currentYear, payload));
 
@@ -286,7 +295,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
 
   return (
     <Container>
-      <Header onGoHome={onGoHome} />
+      <Header onGoHome={onGoHome} onOpenSettings={() => setShowSettings(true)} />
 
       {isFixture && (
         <FixtureBanner>
@@ -320,6 +329,15 @@ function DigitalTwinStrategyApp({ onGoHome }) {
 
         {renderStage()}
       </MainContent>
+
+      {showSettings && (
+        <ThresholdModal
+          definitions={meta?.thresholdDefinitions || []}
+          values={meta?.thresholds || {}}
+          onSave={handleThresholdSave}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </Container>
   );
 }

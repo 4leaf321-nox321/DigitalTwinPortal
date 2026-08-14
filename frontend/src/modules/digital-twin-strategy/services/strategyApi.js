@@ -50,6 +50,13 @@ export const strategyApi = {
       body: JSON.stringify(payload),
     }),
 
+  /** 진단 임계값. 기본값과 다른 항목만 저장된다. */
+  updateThresholds: (thresholds) =>
+    request('/settings/thresholds', {
+      method: 'PUT',
+      body: JSON.stringify({ thresholds }),
+    }),
+
   /** 크럭스 — 진단의 산출물. 다음 단계의 입력이 된다. */
   createCrux: (year, payload) =>
     request(`/plans/${year}/cruxes`, {
