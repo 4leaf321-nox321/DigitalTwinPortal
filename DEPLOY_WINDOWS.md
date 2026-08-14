@@ -142,6 +142,27 @@ Remove-Item -Recurse -Force 'C:\Server\_bootstrap'
 > 쓰면 이 문제가 없습니다. `deploy.ps1` 도 같은 이유로 `%TEMP%` 를 쓰지 않고
 > 앱 폴더 옆에 내려받습니다.
 
+### 더 간단한 방법 — 개발 PC 에서 그냥 복사
+
+`deploy.ps1` 과 `rollback.ps1` 은 **빌드가 필요 없는 텍스트 스크립트**입니다.
+저장소에 있는 것과 패키지에 들어가는 것이 같은 파일이므로, 릴리스를 받지 않고
+개발 PC 에서 바로 가져가도 됩니다.
+
+```
+<저장소>\scripts\deploy\deploy.ps1
+<저장소>\scripts\deploy\rollback.ps1
+```
+
+이 둘을 서버의 `C:\Server\tools\` 에 두면 A-3 은 끝입니다.
+
+> ⚠️ `deploy.ps1` 은 **UTF-8** 입니다(한글 메시지 포함). 메일 본문에 붙여넣으면
+> 인코딩이나 따옴표가 바뀔 수 있으니 **압축해서** 옮기세요. 옮긴 뒤 한글이
+> 제대로 보이는지 확인하면 됩니다.
+>
+> ```powershell
+> Get-Content C:\Server\tools\deploy.ps1 | Select-String '단축경로' | Select-Object -First 1
+> ```
+
 ## A-4. 기존 폴더를 고정 경로로 전환
 
 번호 폴더(`digitaltwinportal11`, `12` …)를 고정 경로 하나로 바꿉니다.
@@ -226,6 +247,23 @@ cd C:\Server\tools
 
 2단계까지는 **운영 폴더를 건드리지 않습니다.** 패키지에 문제가 있으면
 기존 설치는 그대로 남습니다.
+
+### 배포 스크립트 자신을 갱신하기
+
+`deploy.ps1` 과 `rollback.ps1` 도 패키지에 함께 들어옵니다. 스크립트가 개선되면
+배포 후 앱 폴더에서 `tools` 로 복사하세요.
+
+```powershell
+Copy-Item 'C:\Server\DigitalTwinPortal\deploy.ps1', `
+          'C:\Server\DigitalTwinPortal\rollback.ps1' 'C:\Server\tools\' -Force
+```
+
+매번 할 필요는 없고, 릴리스 노트나 안내에 스크립트가 바뀌었다고 적혀 있을 때만
+하면 됩니다.
+
+> **`deploy.ps1` 자체가 고장나서 배포가 안 되는 경우**에는 이 방법을 쓸 수
+> 없습니다(자기 자신을 갱신하지 못하므로). 그때는 A-3 처럼 손으로 한 번 꺼내거나,
+> 개발 PC 의 `scripts\deploy\` 에서 복사하면 됩니다.
 
 ## B-4. 앱 시작
 
