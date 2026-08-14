@@ -66,6 +66,25 @@ class Config:
     # 운영에서 실수로 켜지는 경로 자체를 만들지 않기 위해서다.
     DT2_ALLOW_TEST_WRITE_HEADER = False
 
+    # ── 전략 기획 모듈의 근거 원천 ────────────────────────────────────────
+    #
+    #   local     포탈 DB 를 실제로 읽는다
+    #   fixture   합성 데이터 (기본값)
+    #
+    # 기본이 fixture 인 이유는 안전 쪽이다 — 잘못 켜서 남의 DB 를 긁는 것보다,
+    # 안 켜서 가짜 데이터가 나오는 편이 되돌리기 쉽다.
+    #
+    # ⚠️ 그래서 **운영 .env 에 STRATEGY_EVIDENCE_SOURCE=local 을 넣어야** 진짜
+    #    데이터를 본다. 안 넣으면 운영에서도 합성 데이터가 나오고, 화면 상단에
+    #    "개발용 합성 데이터로 동작 중" 띠가 뜬다. 그 띠가 안내다.
+    #
+    # 개발에서 local 로 두는 것도 유효하다. 개발 DB 는 시드라 **숫자는 현실이
+    # 아니지만**, LocalDbSource 의 조인·KPI 매칭 경로가 실제로 돌아 쿼리 버그를
+    # 잡는다. fixture 로는 그 코드가 아예 안 탄다.
+    STRATEGY_EVIDENCE_SOURCE = os.environ.get(
+        'STRATEGY_EVIDENCE_SOURCE', 'fixture'
+    ).strip().lower()
+
     # ── 사내 LLM (Phase 5 — AI 에이전트) ──────────────────────────────────
     #
     # OpenAI 호환 `/v1/chat/completions` 를 쓴다. 운영은 GPU 서버의 GLM-5.2 이고,
