@@ -17,6 +17,8 @@
 import random
 from flask import current_app
 
+from app.extensions import db
+
 
 class EvidenceSource:
     """근거 원천 인터페이스. 전략 모듈은 이 타입만 안다."""
@@ -39,23 +41,125 @@ class EvidenceSource:
 
 
 class LocalDbSource(EvidenceSource):
-    """운영. 실제 포탈 DB 를 읽는다.
+    """실제 포탈 DB 를 읽는다.
 
-    Phase 2 에서 대시보드·KPI 커넥터를 붙인다. 지금은 자리만 잡아둔다 —
-    실제 스키마와 맞는지는 운영에 배포해야 알 수 있고, 그때 채운다.
+    dt2_* 가 과제의 정본이다(V2 컷오버 완료). 연결 정보는 각각 다른 표에 있어
+    과제마다 따로 물으면 N+1 이 되므로, 연도 단위로 한 번에 모아 붙인다.
+
+    ⚠️ 여기서 읽는 것은 전부 **읽기 전용**이다. 진단은 관찰이지 개입이 아니다.
     """
 
     mode = 'local'
 
     def get_projects(self, year):
-        raise NotImplementedError(
-            'Phase 2 에서 구현한다. 실제 스키마 확인이 필요해 운영 배포와 함께 붙인다.'
+        from app.modules.digital_twin_dashboard.models_v2 import (
+            Dt2Project, Dt2ProjectKpi, Dt2ProjectPerformance, Dt2ProjectDependency,
         )
+        from app.modules.dx_kpi_management.models import KpiDefinition
+
+        projects = Dt2Project.query.filter_by(year=year).all()
+        if not projects:
+            return []
+
+        uuids = [p.uuid for p in projects]
+
+        # 성과 건수 — 무엇을 이루려는지 적었는가
+        perf_counts = {}
+        for row in Dt2ProjectPerformance.query.filter(
+            Dt2ProjectPerformance.project_uuid.in_(uuids)
+        ).all():
+            perf_counts[row.project_uuid] = perf_counts.get(row.project_uuid, 0) + 1
+
+        # KPI 연결 — 지표명으로 붙인다. 화면과 진단이 같은 이름을 봐야 한다.
+        kpi_labels = {k.id: k.label for k in KpiDefinition.query.all()}
+        kpi_links = {}
+        for row in Dt2ProjectKpi.query.filter(
+            Dt2ProjectKpi.project_uuid.in_(uuids)
+        ).all():
+            kpi_links.setdefault(row.project_uuid, []).append({
+                'kpi': kpi_labels.get(row.kpi_definition_id, f'#{row.kpi_definition_id}'),
+                'relation_type': row.relation_type,
+                'target_division': row.target_division,
+            })
+
+        # 선행·후속 양쪽을 센다. 어느 방향이든 이어져 있으면 고립이 아니다.
+        dep_counts = {}
+        for row in Dt2ProjectDependency.query.filter(
+            db.or_(
+                Dt2ProjectDependency.project_uuid.in_(uuids),
+                Dt2ProjectDependency.depends_on_uuid.in_(uuids),
+            )
+        ).all():
+            for uuid in (row.project_uuid, row.depends_on_uuid):
+                dep_counts[uuid] = dep_counts.get(uuid, 0) + 1
+
+        result = []
+        for p in projects:
+            # 부서는 depts_json 이 정본이고, 비었으면 dept_name 을 쓴다.
+            depts = [d for d in (p.depts_json or []) if d]
+            if not depts and p.dept_name:
+                depts = [p.dept_name]
+
+            result.append({
+                '과제명': p.title,
+                '사업부': p.division,
+                '담당부서목록': depts,
+                '진행상태': p.status,
+                '과제년도': p.year,
+                '과제구분': p.category,
+                '과제PL': p.pl_name,
+                'PoC과제여부': bool(p.is_poc),
+                '중점과제여부': bool(p.is_key),
+                # end_month 는 1~12. 분기로 접어 일정 쏠림을 본다.
+                'end_quarter': ((p.end_month - 1) // 3 + 1) if p.end_month else None,
+                'performance_count': perf_counts.get(p.uuid, 0),
+                'kpi_links': kpi_links.get(p.uuid, []),
+                'dependency_count': dep_counts.get(p.uuid, 0),
+                '_uuid': p.uuid,
+            })
+        return result
 
     def get_kpis(self, year):
-        raise NotImplementedError(
-            'Phase 2 에서 구현한다. 실제 스키마 확인이 필요해 운영 배포와 함께 붙인다.'
-        )
+        """사업부별 목표와 실적.
+
+        목표는 kpi_targets, 실적은 kpi_records 에 있고 서로 다른 표다.
+        (사업부, 지표) 로 맞춰 붙인다. 실적이 여러 시점이면 가장 최근 것을 쓴다 —
+        base_date 가 문자열이라 사전순으로 비교하는데, YYYY-MM-DD 형식이라
+        사전순이 곧 시간순이다.
+        """
+        from app.modules.dx_kpi_management.models import KpiRecord, KpiTarget
+
+        targets = {}
+        for t in KpiTarget.query.filter_by(year=year).all():
+            if t.target_value is None:
+                continue
+            targets[(t.division, t.kpi)] = t.target_value
+
+        if not targets:
+            return []
+
+        latest = {}
+        for r in KpiRecord.query.all():
+            key = (r.division, r.kpi)
+            if key not in targets:
+                continue
+            prev = latest.get(key)
+            if prev is None or (r.base_date or '') > (prev.base_date or ''):
+                latest[key] = r
+
+        rows = []
+        for (division, kpi), target_value in targets.items():
+            record = latest.get((division, kpi))
+            if record is None:
+                continue
+            rows.append({
+                '사업부': division,
+                '지표': kpi,
+                '과제년도': year,
+                '목표': target_value,
+                '실적': record.value,
+            })
+        return rows
 
 
 # ── 합성 데이터 ────────────────────────────────────────────────────────────
