@@ -84,10 +84,13 @@ ORGANIZATION_DIMENSIONS = [
         'survey_recommended': True,
     },
     {
+        # AX-5R 의 redesign 축이지만 '업무 재설계'로 부르지 않는다. AX 맥락에서
+        # 그 말은 인력 감축 뉘앙스를 달고 다녀서, 그렇게 읽히면 답변 자체가
+        # 왜곡된다. 묻는 것은 조직 축소가 아니라 '실제 업무에 녹아들었는가'다.
         'key': 'redesign',
-        'label': '업무 재설계',
-        'question': '일하는 방식을 바꿨는가',
-        'detail': '기존 절차에 도구만 얹었는가, 업무 흐름 자체를 다시 짰는가.',
+        'label': '업무 정착',
+        'question': '실제 업무 흐름에 녹아 있는가',
+        'detail': '따로 돌리는 별도 활동인가, 평소 일하는 과정 안에 들어와 있는가.',
         'survey_recommended': True,
     },
     {
