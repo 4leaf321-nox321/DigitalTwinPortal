@@ -34,6 +34,19 @@ if (Test-Path .\\frontend\\package.json) {
     Write-Error 'frontend build produced no dist/index.html.'
     exit 1
   }
+
+  # The API base is baked in at build time. If VITE_API_URL is missing the code
+  # falls back to a hardcoded http://localhost:5000/api, which in a browser
+  # means the viewer's own machine -- login and every other call then fail
+  # against a server that is not there. frontend/.env.production supplies the
+  # relative /api; fail here if it did not take effect.
+  $leaked = Get-ChildItem .\\frontend\\dist\\assets -Filter '*.js' -ErrorAction SilentlyContinue |
+    Where-Object { Select-String -Path $_.FullName -Pattern 'localhost:5000' -Quiet -SimpleMatch }
+  if ($leaked) {
+    Write-Error "Built bundle points at localhost:5000 ($($leaked[0].Name)). VITE_API_URL was not applied - check frontend/.env.production."
+    exit 1
+  }
+  Write-Host 'Frontend API base check passed'
   New-Item -ItemType Directory -Force -Path .\\deploy\\frontend | Out-Null
   Copy-Item -Recurse -Force .\\frontend\\dist .\\deploy\\frontend\\dist
   Write-Host 'Frontend packaged'
