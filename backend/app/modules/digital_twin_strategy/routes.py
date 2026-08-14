@@ -16,8 +16,8 @@ from .models import (
     StrategyPlan, StrategyAssessment, StrategyMetricTarget, StrategyCrux,
 )
 from .evidence import get_evidence_source
-from .metrics import compute_metrics
-from .findings import derive_findings
+from .metrics import compute_metrics, compute_kpi_coverage
+from .findings import derive_findings, derive_kpi_findings
 from .definitions import (
     CATEGORIES, DIMENSION_KEYS_BY_CATEGORY, ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
@@ -106,10 +106,12 @@ def get_plan(year):
         source = get_evidence_source()
         try:
             observed, observed_context = compute_metrics(source, year, divisions)
+            kpi_coverage = compute_kpi_coverage(source, year, divisions)
             metric_error = None
         except NotImplementedError as e:
             observed = {d.id: {k: None for k in METRIC_KEYS} for d in divisions}
             observed_context = {}
+            kpi_coverage = []
             metric_error = str(e)
 
         targets = {
@@ -135,10 +137,17 @@ def get_plan(year):
                 })
 
         # 데이터가 먼저 말하는 부분. 사람이 아무것도 안 매겨도 볼 것이 있어야 한다.
-        findings = (
-            derive_findings(observed, divisions, observed_context)
-            if not metric_error else []
-        )
+        if metric_error:
+            findings = []
+        else:
+            # 사업부에서 본 것과 지표에서 본 것을 합친다. 뒤집어 봐야만
+            # 드러나는 공백이 있다 — 아무도 주기여로 밀지 않는 지표 같은 것.
+            findings = (
+                derive_findings(observed, divisions, observed_context)
+                + derive_kpi_findings(kpi_coverage)
+            )
+            order = {'high': 0, 'medium': 1, 'info': 2}
+            findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
 
         cruxes = StrategyCrux.query.filter_by(plan_id=plan.id) \
             .order_by(StrategyCrux.order, StrategyCrux.id).all()
@@ -149,6 +158,7 @@ def get_plan(year):
                 **plan.to_dict(),
                 'assessments': assessments,
                 'metrics': metrics,
+                'kpiCoverage': kpi_coverage,
                 'findings': findings,
                 'cruxes': [c.to_dict() for c in cruxes],
                 'metricsMode': source.mode,

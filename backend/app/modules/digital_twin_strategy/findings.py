@@ -23,6 +23,7 @@ NO_KPI_LINK = 30.0           # KPI 미연결 비율
 UNCLASSIFIED_LINK = 40.0     # 연결 등급 미지정 비율
 PL_CONCENTRATION = 25.0      # 한 PL 이 차지하는 비율
 DEPT_CONCENTRATION = 50.0    # 한 부서가 차지하는 비율
+PRIMARY_LINK_LOW = 20.0      # 등급 연결 중 주기여가 이 아래면 짚는다
 DEADLINE_CROWDING = 50.0     # 한 분기에 몰린 비율
 ISOLATED = 50.0              # 고립 과제 비율
 KPI_SHORTFALL = 80.0         # KPI 달성률이 이 아래면 미달
@@ -97,6 +98,18 @@ def derive_findings(metrics_by_division, divisions, context=None):
                 '주·보조·간접을 정하지 않아 연결이 전부 동등해 보입니다. '
                 '어느 과제가 그 지표를 실제로 떠받치는지 읽을 수 없습니다.',
                 d.id, {'unclassified_link_rate': v})
+
+        # 등급을 매긴 것 중 주기여가 적으면, 지표를 직접 미는 과제 없이
+        # 기반·간접만 쌓고 있다는 뜻이다.
+        v = m.get('primary_link_rate')
+        grades = context.get(d.id, {}).get('link_grades') or {}
+        if v is not None and v <= PRIMARY_LINK_LOW and grades.get('graded_total', 0) >= 5:
+            add('few_primary_links', 'medium',
+                f'{d.name} 등급 연결 중 주기여가 {v}% 뿐입니다',
+                (f"주 {grades.get('primary', 0)} · 보조 {grades.get('support', 0)} · "
+                 f"간접 {grades.get('indirect', 0)} 건입니다. 지표를 직접 밀어붙이는 "
+                 '과제 없이 기반과 간접 기여만 쌓이고 있을 수 있습니다.'),
+                d.id, {'primary_link_rate': v, **grades})
 
     # ── 쏠림 ──────────────────────────────────────────────────────────
     for d in divisions:
@@ -219,6 +232,52 @@ def derive_findings(metrics_by_division, divisions, context=None):
             f'{best.name} 와 {worst.name} 의 차이가 큽니다. 잘 되는 쪽에서 '
             '가져올 것이 있는지 볼 만합니다.',
             None, {'best': best.name, 'worst': worst.name})
+
+    order = {'high': 0, 'medium': 1, 'info': 2}
+    findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
+    return findings
+
+
+def derive_kpi_findings(coverage):
+    """지표 쪽에서 본 공백.
+
+    사업부별 집계로는 안 드러나는 것이 있다. 어느 사업부도 그 지표를 주기여로
+    밀지 않으면, 사업부별 숫자는 다 멀쩡해 보여도 그 지표는 아무도 책임지지
+    않는 상태다. 목표만 있고 달성할 과제가 없는 것이다.
+    """
+    findings = []
+
+    for row in coverage or []:
+        kpi = row['kpi']
+        if row['total_links'] == 0:
+            continue
+
+        if row['primary'] == 0:
+            findings.append({
+                'key': 'kpi_no_primary',
+                'severity': 'high',
+                'title': f'"{kpi}" 를 주기여로 미는 과제가 없습니다',
+                'detail': (
+                    f"연결 {row['total_links']}건이 모두 보조·간접이거나 등급 미지정입니다"
+                    f"(보조 {row['support']} · 간접 {row['indirect']} · 미지정 {row['unset']}). "
+                    '목표는 있는데 그것을 직접 달성할 과제가 없는 상태일 수 있습니다.'
+                ),
+                'division_id': None,
+                'division_name': None,
+                'evidence': dict(row),
+            })
+
+        if len(row['divisions']) == 1:
+            findings.append({
+                'key': 'kpi_single_division',
+                'severity': 'info',
+                'title': f'"{kpi}" 는 {row["divisions"][0]} 에서만 다룹니다',
+                'detail': '한 사업부만 이 지표에 걸려 있습니다. 전사 지표라면 '
+                          '나머지가 손대지 않고 있는 것이고, 사업부 전용이라면 정상입니다.',
+                'division_id': None,
+                'division_name': None,
+                'evidence': dict(row),
+            })
 
     order = {'high': 0, 'medium': 1, 'info': 2}
     findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))

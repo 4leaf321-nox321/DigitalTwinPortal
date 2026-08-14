@@ -218,6 +218,19 @@ METRICS = [
         'direction': 'lower',
     },
     {
+        # 등급을 매긴 연결 중 '주기여'가 얼마나 되는가.
+        # 낮으면 지표를 직접 밀어붙이는 과제 없이 기반만 쌓고 있다는 뜻이다.
+        #
+        # ⚠️ 등급은 순서척도라 주=3·보조=2 처럼 점수로 합치면 안 된다
+        #    (Dt2ProjectKpi.relation_type 주석). 그래서 평균이 아니라 비율로 본다.
+        'key': 'primary_link_rate',
+        'label': '주기여 연결 비율',
+        'unit': '%',
+        'detail': '등급이 매겨진 KPI 연결 중 주기여의 비율. 낮으면 지표를 직접 '
+                  '밀어붙이는 과제 없이 기반·간접 기여만 쌓고 있는 것이다.',
+        'direction': 'higher',
+    },
+    {
         'key': 'pl_concentration',
         'label': 'PL 집중도',
         'unit': '%',

@@ -94,6 +94,22 @@ def compute_metrics(source, year, divisions):
             unclassified = sum(1 for l in links if not l.get('relation_type'))
             m['unclassified_link_rate'] = _pct(unclassified, len(links))
 
+            # 등급별로 따로 센다. 순서척도라 주=3·보조=2 로 합치면
+            # '간접 3건'과 '주 1건'이 같아진다(Dt2ProjectKpi 주석).
+            graded = [l for l in links if l.get('relation_type')]
+            if graded:
+                by_grade = {}
+                for l in graded:
+                    g = l['relation_type']
+                    by_grade[g] = by_grade.get(g, 0) + 1
+                m['primary_link_rate'] = _pct(by_grade.get('primary', 0), len(graded))
+                context[division_id]['link_grades'] = {
+                    'primary': by_grade.get('primary', 0),
+                    'support': by_grade.get('support', 0),
+                    'indirect': by_grade.get('indirect', 0),
+                    'graded_total': len(graded),
+                }
+
         # 한 사람에게 몰린 정도. 사람에 묶인 조직은 그 사람이 빠지면 멈춘다.
         pl_counts = {}
         for p in items:
@@ -137,3 +153,45 @@ def compute_metrics(source, year, divisions):
             result[division_id]['kpi_achievement'] = round(t['actual'] * 100 / t['target'], 1)
 
     return result, context
+
+
+def compute_kpi_coverage(source, year, divisions):
+    """지표 쪽에서 본 공백.
+
+    사업부 관점(compute_metrics)이 "이 조직이 지표에 얼마나 걸려 있나"를 본다면,
+    여기서는 뒤집어 **"이 지표를 실제로 미는 과제가 있는가"** 를 본다.
+
+    주기여가 하나도 없는 지표는 아무도 책임지고 밀지 않는 지표다. 목표만 있고
+    그것을 달성할 과제가 없는 상태이며, 사업부별 집계로는 드러나지 않는다.
+
+    반환: [{ kpi, total_links, primary, support, indirect, unset,
+             divisions: [사업부명...] }]
+    """
+    projects = source.get_projects(year) or []
+    target_names = {d.name for d in divisions}
+
+    rows = {}
+    for p in projects:
+        division = p.get('사업부')
+        for link in (p.get('kpi_links') or []):
+            kpi = link.get('kpi')
+            if not kpi:
+                continue
+            row = rows.setdefault(kpi, {
+                'kpi': kpi, 'total_links': 0,
+                'primary': 0, 'support': 0, 'indirect': 0, 'unset': 0,
+                'divisions': set(),
+            })
+            row['total_links'] += 1
+            grade = link.get('relation_type')
+            row[grade if grade in ('primary', 'support', 'indirect') else 'unset'] += 1
+            if division in target_names:
+                row['divisions'].add(division)
+
+    out = []
+    for row in rows.values():
+        row['divisions'] = sorted(row['divisions'])
+        out.append(row)
+    # 미는 과제가 없는 지표부터 보여준다.
+    out.sort(key=lambda r: (r['primary'], r['total_links']))
+    return out

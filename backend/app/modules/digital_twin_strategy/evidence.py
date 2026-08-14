@@ -85,6 +85,22 @@ _STATUS = ['기획', '진행중', '완료', '보류']
 _CLASSIFICATION = ['신규', '계속', '고도화']
 _PROCESS = ['성형', '용접', '도장', '조립', '검사', '물류']
 _SUBJECT = ['공정', '설비', '품질', '물류', '에너지', '작업자']
+# 실제 지표명은 운영에만 있다. 형태만 그럴듯하게 지어낸다.
+_KPI_NAMES = [
+    '가상 검증률', 'One Time Pass율', '시험 완료 리드타임',
+    '설계 변경 건수', '시뮬레이션 활용률',
+]
+
+# (주, 보조, 간접, 미지정) 가중치. 지표마다 성격이 다르게 나오도록 한다.
+# '시뮬레이션 활용률'은 주기여가 아예 안 나오게 해서, 아무도 직접 밀지 않는
+# 지표를 규칙이 잡아내는지 확인할 수 있게 한다.
+_KPI_GRADE_WEIGHTS = {
+    '가상 검증률':        (5, 3, 2, 2),
+    'One Time Pass율':  (4, 3, 2, 3),
+    '시험 완료 리드타임':   (3, 3, 3, 4),
+    '설계 변경 건수':      (2, 3, 4, 4),
+    '시뮬레이션 활용률':    (0, 2, 5, 4),
+}
 _METHOD = ['디지털 트윈 구축', '시뮬레이션 모델링', '데이터 연계', '가상검증', '최적화']
 
 
@@ -119,15 +135,25 @@ class FixtureSource(EvidenceSource):
             performance_count = 0 if rng.random() < 0.35 else rng.randint(1, 3)
 
             # KPI 연결과 등급. 등급 미지정도 섞는다.
+            # 어느 지표에 걸렸는지도 담는다 — 지표별로 "이걸 직접 미는 과제가
+            # 있는가"를 보려면 지표 이름이 있어야 한다.
             if rng.random() < 0.25:
                 kpi_links = []
             else:
-                kpi_links = [
-                    {'relation_type': rng.choice(
-                        ['primary', 'support', 'indirect', None, None]
-                    )}
-                    for _ in range(rng.randint(1, 3))
-                ]
+                kpi_links = []
+                for _ in range(rng.randint(1, 3)):
+                    kpi = rng.choice(_KPI_NAMES)
+                    # 지표마다 성격을 다르게 준다. 전부 고르게 만들면 "주기여로
+                    # 미는 과제가 없는 지표" 같은 경우가 안 생겨 규칙이 도는지
+                    # 확인할 수 없다.
+                    weights = _KPI_GRADE_WEIGHTS.get(kpi, (2, 2, 2, 3))
+                    kpi_links.append({
+                        'kpi': kpi,
+                        'relation_type': rng.choices(
+                            ['primary', 'support', 'indirect', None],
+                            weights=weights,
+                        )[0],
+                    })
 
             # 부서를 고르게 뽑지 않는다. 실제로는 한 부서가 대부분을 맡는 경우가
             # 흔하고, 고르게 만들면 편중도 규칙이 도는지 확인할 수 없다.

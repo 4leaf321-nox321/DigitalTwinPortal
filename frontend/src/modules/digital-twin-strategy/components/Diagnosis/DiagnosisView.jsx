@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import ObservedMatrix from './ObservedMatrix';
+import KpiCoverage from './KpiCoverage';
 import FindingsPanel from './FindingsPanel';
 import CruxPanel from './CruxPanel';
 import AssessmentGrid from '../Assessment/AssessmentView';
@@ -92,7 +93,7 @@ const Collapsed = styled.div`
 
 const DiagnosisView = ({
   categories, divisions, metricDefinitions,
-  assessments, metrics, metricsError, findings, cruxes,
+  assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
   onChange, onTargetChange, onCruxAdd, onCruxUpdate, onCruxDelete,
 }) => {
   const [showGrid, setShowGrid] = useState(false);
@@ -130,6 +131,20 @@ const DiagnosisView = ({
             />
           )}
       </Section>
+
+      {!metricsError && (
+        <Section>
+          <Head>
+            <StepBadge>1</StepBadge>
+            <Title>지표별 연결</Title>
+            <Hint>
+              사업부에서 보면 안 드러납니다 — 아무도 주기여로 밀지 않는 지표는
+              뒤집어 봐야 보입니다.
+            </Hint>
+          </Head>
+          <KpiCoverage coverage={kpiCoverage} />
+        </Section>
+      )}
 
       <Section>
         <Head>
