@@ -705,6 +705,16 @@ class Dt2AgentRun(BaseModel):
     verdict = db.Column(db.String(10), index=True)
     verdict_note = db.Column(db.Text)
 
+    # created_at 은 BaseModel 것이라 컬럼에 index=True 를 못 단다(달면 모든 표에
+    # 붙는다). DB 에는 이 인덱스가 실재하는데 모델이 선언하지 않아,
+    # autogenerate 가 **관계없는 마이그레이션마다 이걸 드롭하려 들었다**
+    # (2026-08 기준 다섯 번 걷어냄). 여기서 선언해 어긋남을 없앤다.
+    #
+    # 인덱스 자체는 필요하다 — 최근 실행부터 훑는 것이 이 표의 주 조회다.
+    __table_args__ = (
+        db.Index('ix_dt2_agent_runs_created_at', 'created_at'),
+    )
+
 
 class Dt2WorklistDismissal(BaseModel):
     """
