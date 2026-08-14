@@ -60,6 +60,13 @@ foreach ($bundle in $bundles) {
 Write-Host 'Adding run scripts'
 Copy-Item -Force .\\scripts\\ci\\run_server_template.ps1 .\\deploy\\run_server.ps1
 Copy-Item -Force .\\scripts\\deploy\\venv_sync.ps1 .\\deploy\\venv_sync.ps1
+
+# deploy.ps1 and rollback.ps1 ship too, so a server that only ever downloads
+# releases can bootstrap itself: unpack one package by hand, copy these out,
+# and every later deploy is driven by them. Without this the first deploy on a
+# new machine has no way to get them short of cloning the repo.
+Copy-Item -Force .\\scripts\\deploy\\deploy.ps1 .\\deploy\\deploy.ps1
+Copy-Item -Force .\\scripts\\deploy\\rollback.ps1 .\\deploy\\rollback.ps1
 if (Test-Path .\\deploy\\mcp_server) {
   Copy-Item -Force .\\scripts\\ci\\run_mcp_server_template.ps1 .\\deploy\\run_mcp_server.ps1
 }
