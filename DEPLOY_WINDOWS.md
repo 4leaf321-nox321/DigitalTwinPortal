@@ -118,8 +118,8 @@ gh auth login
 그 폴더는 배포할 때마다 통째로 교체되는 자리입니다.
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "$env:TEMP\dtp-bootstrap"
-cd "$env:TEMP\dtp-bootstrap"
+New-Item -ItemType Directory -Force -Path 'C:\Server\_bootstrap'
+cd C:\Server\_bootstrap
 
 gh release download --repo 4leaf321-nox321/DigitalTwinPortal --pattern deploy_package.zip
 Expand-Archive -Path .\deploy_package.zip -DestinationPath .\unpacked -Force
@@ -132,8 +132,15 @@ Copy-Item .\unpacked\deploy.ps1, .\unpacked\rollback.ps1 'C:\Server\tools\'
 
 ```powershell
 cd C:\Server\tools
-Remove-Item -Recurse -Force "$env:TEMP\dtp-bootstrap"
+Remove-Item -Recurse -Force 'C:\Server\_bootstrap'
 ```
+
+> **`%TEMP%` 를 쓰지 마세요.** Windows 계정명이 한글이면 `%TEMP%` 가 8.3 단축경로
+> (`C:\Users\계정~1\...`)로 잡히는 일이 있습니다. 그 문자열을 그대로 넘겨받아
+> 다루는 도구에서 경로가 어긋납니다 — `Scripting.FileSystemObject` 의 `.Path` 는
+> 단축형을 풀어주지 않고 준 값을 그대로 돌려줍니다. 위처럼 **직접 만든 폴더**를
+> 쓰면 이 문제가 없습니다. `deploy.ps1` 도 같은 이유로 `%TEMP%` 를 쓰지 않고
+> 앱 폴더 옆에 내려받습니다.
 
 ## A-4. 기존 폴더를 고정 경로로 전환
 

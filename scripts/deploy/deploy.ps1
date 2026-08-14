@@ -35,6 +35,38 @@ param(
 $ErrorActionPreference = 'Stop'
 function Write-Log([string]$m) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $m" }
 
+# 8.3 단축경로(C:\Users\계정~1\...)를 원래 경로로 되돌린다.
+#
+# 계정명이 한글이면 경로가 단축형으로 잡히는 일이 있는데, 그걸 그대로 넘기면
+# 중간에 문자열을 다루는 도구에서 어긋난다. .NET 의 GetFullPath 도
+# Scripting.FileSystemObject 의 .Path 도 단축형을 풀어주지 않으므로 Win32
+# GetLongPathName 을 직접 부른다.
+Add-Type -MemberDefinition @'
+[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern uint GetLongPathName(string lpszShortPath,
+                                          System.Text.StringBuilder lpszLongPath,
+                                          uint cchBuffer);
+'@ -Name NativePath -Namespace Deploy -ErrorAction SilentlyContinue
+
+function Resolve-LongPath([string]$path) {
+    if (-not $path) { return $path }
+    try {
+        $buffer = New-Object System.Text.StringBuilder 32768
+        $length = [Deploy.NativePath]::GetLongPathName($path, $buffer, $buffer.Capacity)
+        # 경로가 아직 없으면 0 이 온다. 그때는 준 값을 그대로 쓴다.
+        if ($length -gt 0 -and $length -lt $buffer.Capacity) { return $buffer.ToString() }
+    } catch {
+        # 확장에 실패해도 배포를 막지는 않는다.
+    }
+    return $path
+}
+
+$AppPath = Resolve-LongPath $AppPath
+if ($ZipPath) { $ZipPath = Resolve-LongPath $ZipPath }
+if ($AppPath -like '*~*') {
+    Write-Warning "경로에 단축형이 남아 있습니다: $AppPath — 긴 경로로 다시 지정하는 것이 안전합니다."
+}
+
 $prevPath    = $AppPath + '_prev'
 $stagingPath = $AppPath + '_staging'
 $isFirstRun  = -not (Test-Path $AppPath)
@@ -53,12 +85,19 @@ if (-not $isFirstRun) {
 }
 
 # --- obtain the release zip -------------------------------------------------
+# %TEMP% is deliberately not used. When the Windows account name is non-ASCII,
+# %TEMP% resolves to an 8.3 short path (C:\Users\계정~1\...), and tools that
+# hand the string around without expanding it -- Scripting.FileSystemObject's
+# .Path returns whatever it was given -- end up working against a path that
+# does not resolve. Stage beside the app folder instead: that path is chosen by
+# whoever runs the deploy, and this script already requires write access there.
 $tempZipDir = $null
 if (-not $ZipPath) {
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
         throw "gh CLI not found. Install it and run 'gh auth login' (this repo is private), or pass -ZipPath."
     }
-    $tempZipDir = Join-Path $env:TEMP ('dtp_zip_' + [guid]::NewGuid().ToString('N'))
+    $tempZipDir = $AppPath + '_download'
+    if (Test-Path $tempZipDir) { Remove-Item -Recurse -Force $tempZipDir }
     New-Item -ItemType Directory -Force -Path $tempZipDir | Out-Null
     $ghArgs = @('release', 'download')
     if ($Tag) { $ghArgs += $Tag }
