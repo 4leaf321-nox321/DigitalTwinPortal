@@ -213,8 +213,12 @@
 .\deploy.ps1 -AppPath 'C:\apps\DigitalTwinPortal'
 ```
 
-다운로드·검증·폴더 교체·`uploads`/`.env` 이관·마이그레이션까지 한 번에 처리하며,
-직전 버전은 `_prev`에 남아 `rollback.ps1`로 되돌릴 수 있습니다.
+다운로드·검증·폴더 교체·`uploads`/`.env` 이관·가상환경 동기화·마이그레이션까지
+한 번에 처리하며, 직전 버전은 `_prev`에 남아 `rollback.ps1`로 되돌릴 수 있습니다.
+
+의존성은 패키지에 동봉된 wheel 묶음에서 `--no-index`로 설치하므로 배포가
+사내망 pip 상태에 좌우되지 않습니다. 백엔드와 MCP는 각각 별도 가상환경을
+쓰며(`<앱경로>_venvs\`), `requirements.txt`가 바뀔 때만 다시 만듭니다.
 
 필요 작업(간단)
 1. 이 저장소를 ReportArchive 계정으로 등록(레포 생성) — 권한은 담당자와 협의
