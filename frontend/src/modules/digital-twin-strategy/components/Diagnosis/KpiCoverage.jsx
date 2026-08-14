@@ -7,11 +7,14 @@ import styled from 'styled-components';
 //
 // ⚠️ 등급은 순서척도라 합치지 않는다. 주/보조/간접을 각각 센다.
 
+// 가운데 4칸이 72px 고정이라 폭이 남으면 지표명 칸이 그걸 다 먹는다.
+// 표 자체의 폭을 잡아 남는 자리는 비워 둔다 — 늘리는 것보다 낫다.
 const Wrap = styled.div`
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 0.75rem;
   overflow-x: auto;
+  max-width: 940px;
 `;
 
 const Grid = styled.div`

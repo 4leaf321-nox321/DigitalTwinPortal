@@ -14,10 +14,12 @@ from app.extensions import db
 from app.modules.auth.models import User, UserRole
 from .models import (
     StrategyPlan, StrategyAssessment, StrategyMetricTarget, StrategyCrux,
+    StrategyIssue,
 )
 from .evidence import get_evidence_source
 from .metrics import compute_metrics, compute_kpi_coverage
 from .findings import derive_findings, derive_kpi_findings
+from .issues import derive_issue_candidates, summarize_coverage
 from .definitions import (
     CATEGORIES, DIMENSION_KEYS_BY_CATEGORY, ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
@@ -207,8 +209,25 @@ def get_plan(year):
             order = {'high': 0, 'medium': 1, 'info': 2}
             findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
 
-        cruxes = StrategyCrux.query.filter_by(plan_id=plan.id) \
+        cruxes = [
+            c.to_dict() for c in StrategyCrux.query.filter_by(plan_id=plan.id)
             .order_by(StrategyCrux.order, StrategyCrux.id).all()
+        ]
+        issues = [
+            i.to_dict() for i in StrategyIssue.query.filter_by(plan_id=plan.id)
+            .order_by(StrategyIssue.order, StrategyIssue.id).all()
+        ]
+
+        # 이미 이슈로 만든 후보는 목록에서 뺀다. 같은 격차가 계속 남아 있으면
+        # 무엇을 아직 안 다뤘는지 읽을 수 없다.
+        taken = {
+            f"{i['source_type']}:{i['source_ref']}:{i['division_id']}"
+            for i in issues if i.get('source_ref')
+        }
+        candidates = [
+            c for c in derive_issue_candidates(assessments, metrics, divisions)
+            if c['key'] not in taken
+        ]
 
         return jsonify({
             'success': True,
@@ -218,7 +237,10 @@ def get_plan(year):
                 'metrics': metrics,
                 'kpiCoverage': kpi_coverage,
                 'findings': findings,
-                'cruxes': [c.to_dict() for c in cruxes],
+                'cruxes': cruxes,
+                'issues': issues,
+                'issueCandidates': candidates,
+                'issueCoverage': summarize_coverage(cruxes, issues),
                 'metricsMode': source.mode,
                 'metricsError': metric_error,
             }
@@ -287,6 +309,132 @@ def modify_crux(year, crux_id):
 
         db.session.commit()
         return jsonify({'success': True, 'data': crux.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
+# ── ② 이슈 ────────────────────────────────────────────────────────────────
+
+ISSUE_SOURCE_TYPES = {'crux', 'gap', 'metric', 'manual'}
+ISSUE_STATUSES = {'open', 'dropped'}
+SCORE_MIN, SCORE_MAX = 1, 5
+
+
+def _apply_issue_fields(issue, payload, plan):
+    """이슈의 수정 가능한 필드를 payload 에서 옮긴다.
+
+    생성과 수정이 같은 규칙을 써야 한다. 두 곳에 나눠 쓰면 한쪽만 고쳐진다.
+    돌려주는 값은 오류 메시지이며, None 이면 통과다.
+    """
+    if 'title' in payload:
+        title = (payload['title'] or '').strip()
+        if not title:
+            return 'title 은 비울 수 없습니다.'
+        issue.title = title
+
+    if 'crux_id' in payload:
+        crux_id = payload['crux_id']
+        if crux_id is not None:
+            # 남의 전략에 달린 난제에 매달 수 없다.
+            crux = StrategyCrux.query.filter_by(id=crux_id, plan_id=plan.id).first()
+            if not crux:
+                return '핵심 난제를 찾을 수 없습니다.'
+        issue.crux_id = crux_id
+
+    for field in ('impact', 'feasibility'):
+        if field not in payload:
+            continue
+        value = payload[field]
+        # 비우는 것과 1점은 다른 뜻이다. None 은 "아직 안 매김"이다.
+        if value is None:
+            setattr(issue, field, None)
+            continue
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return f'{field} 는 숫자여야 합니다.'
+        if not (SCORE_MIN <= number <= SCORE_MAX):
+            return f'{field} 는 {SCORE_MIN}~{SCORE_MAX} 여야 합니다.'
+        setattr(issue, field, number)
+
+    if 'status' in payload:
+        status = payload['status']
+        if status not in ISSUE_STATUSES:
+            return f'알 수 없는 상태입니다: {status}'
+        issue.status = status
+
+    if 'source_type' in payload:
+        source_type = payload['source_type']
+        if source_type not in ISSUE_SOURCE_TYPES:
+            return f'알 수 없는 출처입니다: {source_type}'
+        issue.source_type = source_type
+
+    for field in ('description', 'root_cause', 'division_id', 'source_ref'):
+        if field in payload:
+            setattr(issue, field, payload[field])
+
+    return None
+
+
+@bp.route('/plans/<int:year>/issues', methods=['POST'])
+@office_required
+def create_issue(year):
+    """이슈 추가. 핵심 난제를 쪼갠 것이거나, 진단 격차에서 가져온 것이다."""
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        payload = request.get_json() or {}
+        if not (payload.get('title') or '').strip():
+            return _error('title 이 필요합니다.', 400)
+
+        issue = StrategyIssue(
+            plan_id=plan.id,
+            title='',   # _apply_issue_fields 가 채운다
+            order=StrategyIssue.query.filter_by(plan_id=plan.id).count(),
+        )
+        error = _apply_issue_fields(issue, payload, plan)
+        if error:
+            return _error(error, 400)
+
+        db.session.add(issue)
+        db.session.commit()
+        return jsonify({'success': True, 'data': issue.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
+@bp.route('/plans/<int:year>/issues/<int:issue_id>', methods=['PUT', 'DELETE'])
+@office_required
+def modify_issue(year, issue_id):
+    """이슈 수정·삭제.
+
+    '올해는 안 한다'는 삭제가 아니라 status='dropped' 다. 지우면 왜 안 하기로
+    했는지가 남지 않는다 — 그것도 전략의 일부다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        issue = StrategyIssue.query.filter_by(id=issue_id, plan_id=plan.id).first()
+        if not issue:
+            return _error('이슈를 찾을 수 없습니다.', 404)
+
+        if request.method == 'DELETE':
+            db.session.delete(issue)
+            db.session.commit()
+            return jsonify({'success': True})
+
+        error = _apply_issue_fields(issue, request.get_json() or {}, plan)
+        if error:
+            return _error(error, 400)
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': issue.to_dict()})
     except Exception as e:
         db.session.rollback()
         return _error(str(e))

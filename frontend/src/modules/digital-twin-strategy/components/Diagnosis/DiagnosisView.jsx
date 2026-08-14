@@ -21,13 +21,28 @@ import AssessmentGrid from '../Assessment/AssessmentView';
 const Wrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 1.25rem;
 `;
 
 const Section = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.625rem;
+  min-width: 0;   /* 표가 넓어도 격자 칸을 밀어내지 않게 */
+`;
+
+// 짚인 것 → 핵심 난제는 흐름이다. [핵심 난제로 →] 버튼이 왼쪽에서 오른쪽으로
+// 보내는 것이므로, 세로로 쌓아 스크롤로 갈라놓으면 그 관계가 안 보인다.
+// 좁은 화면에서는 한 줄로 되돌아간다.
+const Columns = styled.div`
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: 1fr;
+  align-items: start;
+
+  @media (min-width: 1200px) {
+    grid-template-columns: 1.4fr 1fr;
+  }
 `;
 
 const Head = styled.div`
@@ -92,7 +107,7 @@ const Collapsed = styled.div`
 `;
 
 const DiagnosisView = ({
-  categories, divisions, metricDefinitions,
+  categories, divisions, metricDefinitions, thresholds,
   assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
   onChange, onTargetChange, onCruxAdd, onCruxUpdate, onCruxDelete,
 }) => {
@@ -119,7 +134,10 @@ const DiagnosisView = ({
         <Head>
           <StepBadge>1</StepBadge>
           <Title>관측</Title>
-          <Hint>포탈 데이터로 계산된 값. 사람이 매기지 않습니다.</Hint>
+          <Hint>
+            디지털 트윈 대시보드·DX KPI 관리에서 계산합니다.
+            붉은 칸이 ⚙설정의 기준을 넘은 값입니다 — 칸에 대면 기준이 보입니다.
+          </Hint>
         </Head>
         {metricsError
           ? <Collapsed>{metricsError}</Collapsed>
@@ -128,6 +146,7 @@ const DiagnosisView = ({
               definitions={metricDefinitions}
               divisions={divisions}
               metrics={metrics}
+              thresholds={thresholds}
             />
           )}
       </Section>
@@ -138,37 +157,39 @@ const DiagnosisView = ({
             <StepBadge>1</StepBadge>
             <Title>지표별 연결</Title>
             <Hint>
-              사업부에서 보면 안 드러납니다 — 아무도 주기여로 밀지 않는 지표는
-              뒤집어 봐야 보입니다.
+              지표마다 그것을 미는 과제가 있는지 봅니다. '주'가 0이면 목표만
+              있고 그 지표를 직접 미는 과제는 없다는 뜻입니다.
             </Hint>
           </Head>
           <KpiCoverage coverage={kpiCoverage} />
         </Section>
       )}
 
-      <Section>
-        <Head>
-          <StepBadge>2</StepBadge>
-          <Title>짚인 것</Title>
-          {findings?.length > 0 && <Count>{findings.length}건</Count>}
-          <Hint>결론이 아니라 눈에 띄는 사실입니다. 왜 그런지는 사람이 답합니다.</Hint>
-        </Head>
-        <FindingsPanel findings={findings} onPromote={promote} />
-      </Section>
+      <Columns>
+        <Section>
+          <Head>
+            <StepBadge>2</StepBadge>
+            <Title>짚인 것</Title>
+            {findings?.length > 0 && <Count>{findings.length}건</Count>}
+            <Hint>위 값 중 ⚙설정의 기준을 넘은 것을 골랐습니다. 중요한 것을 오른쪽으로 올리세요.</Hint>
+          </Head>
+          <FindingsPanel findings={findings} onPromote={promote} />
+        </Section>
 
-      <Section>
-        <Head>
-          <StepBadge>3</StepBadge>
-          <Title>핵심 난제</Title>
-          <Hint>올해 넘어야 할 결정적 지점. 여기 남는 것이 다음 단계로 넘어갑니다.</Hint>
-        </Head>
-        <CruxPanel
-          cruxes={cruxes}
-          onAdd={onCruxAdd}
-          onUpdate={onCruxUpdate}
-          onDelete={onCruxDelete}
-        />
-      </Section>
+        <Section>
+          <Head>
+            <StepBadge>3</StepBadge>
+            <Title>핵심 난제</Title>
+            <Hint>올해 이것만은 넘겠다고 정하는 자리. 1~3개. ② 이슈에서 할 일로 이어집니다.</Hint>
+          </Head>
+          <CruxPanel
+            cruxes={cruxes}
+            onAdd={onCruxAdd}
+            onUpdate={onCruxUpdate}
+            onDelete={onCruxDelete}
+          />
+        </Section>
+      </Columns>
 
       <Section>
         <Head>

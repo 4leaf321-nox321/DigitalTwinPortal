@@ -62,24 +62,41 @@ const Unit = styled.span`
   margin-left: 0.15rem;
 `;
 
-// 방향에 따라 나쁜 쪽을 붉게 칠한다. neutral 은 크기만 보는 값이라 칠하지 않는다.
-function tone(value, direction) {
+// 근접으로 볼 범위. 기준의 10% 안쪽이면 아직 안 걸렸어도 노랗게 둔다.
+const NEAR = 0.1;
+
+// 색은 **⚙설정의 임계값을 그대로 쓴다.** 여기에 숫자를 따로 박으면 설정에서
+// 기준을 바꿔도 색이 안 따라가서, 짚인 것에서는 사라졌는데 칸은 계속 붉은
+// 상태가 된다. 지표↔임계값 짝은 백엔드가 /meta 로 내려준다(definitions.py).
+//
+//   붉음   기준을 넘음 — 짚인 것에 뜨는 것과 같은 값
+//   노랑   아직 안 넘었지만 기준에 가까움
+//   초록   여유 있음
+function tone(value, direction, limit) {
   if (value === null || value === undefined) return { color: '#cbd5e1' };
   if (direction === 'neutral') return { color: '#0f172a' };
+  // 짝이 없거나 설정을 아직 못 받았으면 칠하지 않는다.
+  // 근거 없이 칠하느니 안 칠하는 편이 낫다.
+  if (typeof limit !== 'number') return { color: '#0f172a' };
 
-  const bad = direction === 'lower' ? value >= 40 : value <= 60;
-  const warn = direction === 'lower' ? value >= 25 : value <= 80;
+  const lower = direction === 'lower';       // 낮을수록 좋은 지표
+  const bad = lower ? value >= limit : value <= limit;
+  const near = lower
+    ? value >= limit * (1 - NEAR)
+    : value <= limit * (1 + NEAR);
 
   if (bad) return { color: '#b91c1c', bg: '#fef2f2' };
-  if (warn) return { color: '#b45309', bg: '#fffbeb' };
+  if (near) return { color: '#b45309', bg: '#fffbeb' };
   return { color: '#047857' };
 }
 
-const ObservedMatrix = ({ definitions, divisions, metrics }) => {
+const ObservedMatrix = ({ definitions, divisions, metrics, thresholds }) => {
   const byKey = {};
   (metrics || []).forEach(m => {
     byKey[`${m.division_id}:${m.metric_key}`] = m;
   });
+
+  const limitOf = (def) => (thresholds || {})[def.threshold_key];
 
   return (
     <Wrap>
@@ -95,14 +112,21 @@ const ObservedMatrix = ({ definitions, divisions, metrics }) => {
             </NameCell>
             {divisions.map(d => {
               const m = byKey[`${d.id}:${def.key}`] || {};
-              const t = tone(m.value, def.direction);
+              const limit = limitOf(def);
+              const t = tone(m.value, def.direction, limit);
+              const empty = m.value === null || m.value === undefined;
+              // 왜 이 색인지 칸에서 바로 확인되게 한다. 기준을 모르면
+              // 붉은 칸을 보고도 얼마나 나쁜지 알 수 없다.
+              const limitText = typeof limit === 'number'
+                ? ` · 기준 ${def.direction === 'lower' ? '≥' : '≤'} ${limit}${def.unit}`
+                : '';
               return (
                 <ValueCell key={d.id} $color={t.color} $bg={t.bg}
-                  title={m.value === null || m.value === undefined
+                  title={empty
                     ? '계산할 근거가 없습니다'
-                    : `${def.label}: ${m.value}${def.unit}`}>
-                  {m.value === null || m.value === undefined ? '—' : m.value}
-                  {m.value !== null && m.value !== undefined && <Unit>{def.unit}</Unit>}
+                    : `${def.label}: ${m.value}${def.unit}${limitText}`}>
+                  {empty ? '—' : m.value}
+                  {!empty && <Unit>{def.unit}</Unit>}
                 </ValueCell>
               );
             })}

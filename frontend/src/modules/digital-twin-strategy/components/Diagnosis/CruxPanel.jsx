@@ -138,8 +138,9 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
       {!cruxes?.length && !adding && (
         <Empty>
           아직 고른 핵심 난제가 없습니다.<br />
-          위에서 짚인 것 중 <strong>올해 넘어야 할 결정적 지점</strong>을 1~3개 고르세요.
-          여기 남는 것이 다음 단계로 넘어갑니다.
+          왼쪽 <strong>짚인 것</strong>에서 <strong>[핵심 난제로 →]</strong>를 눌러
+          1~3개만 옮기세요. 여기 적은 것이 <strong>② 이슈</strong>에서 할 일로
+          이어집니다.
         </Empty>
       )}
 

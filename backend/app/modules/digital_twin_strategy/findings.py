@@ -235,7 +235,11 @@ def derive_findings(metrics_by_division, divisions, context=None, thresholds=Non
         m = metrics_by_division.get(d.id, {})
         kpi = m.get('kpi_achievement')
         count = m.get('project_count')
-        if kpi is not None and kpi < T['kpi_shortfall']:
+        # `<` 이 아니라 `<=` 다. 높을수록 좋은 다른 두 규칙(primary_link_low,
+        # spread_concentrated)이 `<=` 를 쓰는데 여기만 `<` 이면, 값이 기준과
+        # 정확히 같을 때 관측 표는 붉은데 목록에는 안 뜬다. 색과 목록이
+        # 갈리면 어느 쪽이 맞는지 아무도 모른다.
+        if kpi is not None and kpi <= T['kpi_shortfall']:
             counts = [metrics_by_division.get(x.id, {}).get('project_count') for x in divisions]
             valid = [c for c in counts if c is not None]
             avg_count = sum(valid) / len(valid) if valid else None

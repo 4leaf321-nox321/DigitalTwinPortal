@@ -8,14 +8,14 @@ import { ArrowUpRight } from 'lucide-react';
 const List = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.375rem;
 `;
 
 const Item = styled.div`
   display: flex;
   align-items: flex-start;
-  gap: 0.875rem;
-  padding: 0.875rem 1.125rem;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
   background: white;
   border: 1px solid #e2e8f0;
   border-left: 3px solid ${p => p.$accent};
@@ -83,7 +83,12 @@ const LABEL = { high: '높음', medium: '보통', info: '참고' };
 
 const FindingsPanel = ({ findings, onPromote }) => {
   if (!findings?.length) {
-    return <Empty>짚인 것이 없습니다. 관측값이 임계값을 넘지 않았거나 근거가 부족합니다.</Empty>;
+    return (
+      <Empty>
+        기준을 넘은 값이 없습니다. 너무 안 잡힌다 싶으면 ⚙설정에서 기준을
+        조이세요 — 예를 들어 'KPI 미연결 비율 30%'를 20%로 낮추면 더 잡힙니다.
+      </Empty>
+    );
   }
 
   return (

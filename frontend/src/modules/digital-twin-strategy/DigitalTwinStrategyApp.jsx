@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { AlertTriangle } from 'lucide-react';
 import Header from './components/Layout/Header';
 import DiagnosisView from './components/Diagnosis/DiagnosisView';
+import IssuesView from './components/Issues/IssuesView';
 import ThresholdModal from './components/Settings/ThresholdModal';
 import strategyApi from './services/strategyApi';
 
@@ -40,17 +41,34 @@ const FixtureBanner = styled.div`
   flex-shrink: 0;
 `;
 
+// 단계 탭과 연도는 **스크롤 밖**에 둔다. 지금 어느 단계의 몇 년도를 보고
+// 있는지는 화면 아래로 내려가도 계속 보여야 한다. 스크롤 막대도 이 아래에서
+// 시작해, 내려가는 것이 '내용'뿐임이 눈에 보인다.
+const StickyBar = styled.div`
+  flex-shrink: 0;
+  padding: 1.25rem 1.5rem 0.875rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+`;
+
 const MainContent = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem 2.5rem;
+`;
+
+// 이 모듈은 글이 많다. 넓은 모니터에서 폭을 안 잡아두면 짧은 문장 한 줄이
+// 2000px 를 차지해 눈이 줄을 놓친다. 표(관측·지표별 연결)에도 1440px 면
+// 6열이 넉넉히 들어간다. 고정 바와 내용이 같은 폭을 써야 세로줄이 맞는다.
+const Bounded = styled.div`
+  max-width: 1440px;
+  margin: 0 auto;
 `;
 
 const TopBar = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
   gap: 1rem;
   flex-wrap: wrap;
 `;
@@ -150,14 +168,16 @@ const CreateButton = styled.button`
   }
 `;
 
+// 고정 바 안에 둔다. 화면 아래에서 저장하다 실패했는데 오류가 맨 위에만
+// 뜨면 아무도 못 본다 — 저장이 안 된 줄 모르고 넘어간다.
 const ErrorBox = styled.div`
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1rem;
   background: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: 0.5rem;
   color: #b91c1c;
   font-size: 0.875rem;
-  margin-bottom: 1rem;
+  margin-top: 0.875rem;
 `;
 
 function DigitalTwinStrategyApp({ onGoHome }) {
@@ -175,19 +195,27 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       .catch(e => setError(e.message));
   }, []);
 
+  // 다시 읽기만 한다. loading 을 건드리지 않는 것이 요점이다.
+  const fetchPlan = useCallback(async (year) => {
+    const res = await strategyApi.getPlan(year);
+    setPlan(res.data);
+  }, []);
+
+  // 화면 전체를 "불러오는 중"으로 덮는다. **처음 열 때와 연도를 바꿀 때만**
+  // 쓴다. 저장할 때마다 이걸 쓰면 내용이 통째로 사라졌다 돌아오면서
+  // 스크롤이 맨 위로 튄다 — 항목 하나 추가했을 뿐인데 보던 자리를 잃는다.
   const loadPlan = useCallback(async (year) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await strategyApi.getPlan(year);
-      setPlan(res.data);
+      await fetchPlan(year);
     } catch (e) {
       setError(e.message);
       setPlan(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchPlan]);
 
   useEffect(() => { loadPlan(currentYear); }, [currentYear, loadPlan]);
 
@@ -201,53 +229,59 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
-  const handleAssessmentChange = async (divisionId, category, dimension, payload) => {
-    // 낙관적 갱신 없이 저장 후 다시 읽는다. 격차(gap)는 서버가 계산하므로
-    // 화면에서 흉내 내면 규칙이 두 곳으로 갈린다.
-    setError(null);
-    try {
-      await strategyApi.updateAssessment(currentYear, divisionId, category, dimension, payload);
-      await loadPlan(currentYear);
-    } catch (e) {
-      setError(e.message);
-    }
-  };
+  // 낙관적 갱신 없이 저장 후 다시 읽는다. 격차(gap)·후보 목록·집계가 전부
+  // 서버 계산이라 화면에서 흉내 내면 규칙이 두 곳으로 갈린다.
+  const handleAssessmentChange = (divisionId, category, dimension, payload) =>
+    runAndReload(() =>
+      strategyApi.updateAssessment(currentYear, divisionId, category, dimension, payload));
 
-  const handleMetricTargetChange = async (divisionId, metricKey, payload) => {
-    setError(null);
-    try {
-      await strategyApi.updateMetricTarget(currentYear, divisionId, metricKey, payload);
-      await loadPlan(currentYear);
-    } catch (e) {
-      setError(e.message);
-    }
-  };
+  const handleMetricTargetChange = (divisionId, metricKey, payload) =>
+    runAndReload(() =>
+      strategyApi.updateMetricTarget(currentYear, divisionId, metricKey, payload));
 
-  const runCrux = async (fn) => {
+  // 저장하고 전체를 다시 읽는다. 격차·후보 목록·난제별 집계가 전부 서버 계산이라
+  // 화면에서 흉내 내면 규칙이 두 곳으로 갈린다.
+  //
+  // 던지지 않고 성공 여부를 돌려준다. 던지면 호출부가 안 잡았을 때 unhandled
+  // rejection 이 되고, 화면은 저장된 것처럼 보인다.
+  const runAndReload = async (fn) => {
     setError(null);
     try {
       await fn();
-      await loadPlan(currentYear);
+      // loadPlan 이 아니라 fetchPlan 이다. 화면을 덮지 않아야 보던 자리가 남는다.
+      await fetchPlan(currentYear);
+      return true;
     } catch (e) {
       setError(e.message);
+      return false;
     }
   };
 
   const handleThresholdSave = async (thresholds) => {
     await strategyApi.updateThresholds(thresholds);
-    const meta = await strategyApi.getMeta();
-    setMeta(meta.data);
-    await loadPlan(currentYear);
+    // meta 도 다시 읽는다 — 관측 표의 색이 이 임계값을 쓰므로 같이 바뀌어야 한다.
+    const refreshed = await strategyApi.getMeta();
+    setMeta(refreshed.data);
+    await fetchPlan(currentYear);
   };
 
   const handleCruxAdd = (payload) =>
-    runCrux(() => strategyApi.createCrux(currentYear, payload));
+    runAndReload(() => strategyApi.createCrux(currentYear, payload));
 
   const handleCruxUpdate = (cruxId, payload) =>
-    runCrux(() => strategyApi.updateCrux(currentYear, cruxId, payload));
+    runAndReload(() => strategyApi.updateCrux(currentYear, cruxId, payload));
 
   const handleCruxDelete = (cruxId) =>
-    runCrux(() => strategyApi.deleteCrux(currentYear, cruxId));
+    runAndReload(() => strategyApi.deleteCrux(currentYear, cruxId));
+
+  const handleIssueCreate = (payload) =>
+    runAndReload(() => strategyApi.createIssue(currentYear, payload));
+
+  const handleIssueUpdate = (issueId, payload) =>
+    runAndReload(() => strategyApi.updateIssue(currentYear, issueId, payload));
+
+  const handleIssueDelete = (issueId) =>
+    runAndReload(() => strategyApi.deleteIssue(currentYear, issueId));
 
   const isFixture = meta?.evidenceMode === 'fixture';
 
@@ -270,6 +304,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           categories={meta?.categories || []}
           divisions={meta?.divisions || []}
           metricDefinitions={meta?.metrics || []}
+          thresholds={meta?.thresholds || {}}
           assessments={plan.assessments}
           metrics={plan.metrics}
           metricsError={plan.metricsError}
@@ -285,10 +320,25 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       );
     }
 
+    if (stage === 'issue') {
+      return (
+        <IssuesView
+          cruxes={plan.cruxes || []}
+          issues={plan.issues || []}
+          candidates={plan.issueCandidates || []}
+          coverage={plan.issueCoverage}
+          divisions={meta?.divisions || []}
+          onCreate={handleIssueCreate}
+          onUpdate={handleIssueUpdate}
+          onDelete={handleIssueDelete}
+        />
+      );
+    }
+
     return (
       <Panel>
         <PanelTitle>{STAGES.find(s => s.key === stage)?.label} 단계는 준비 중입니다</PanelTitle>
-        <div>Phase 1 은 진단까지입니다. 계획은 PLAN.md 를 참고하세요.</div>
+        <div>지금은 ① 진단 ~ ② 이슈까지입니다. 계획은 PLAN.md 를 참고하세요.</div>
       </Panel>
     );
   };
@@ -304,7 +354,8 @@ function DigitalTwinStrategyApp({ onGoHome }) {
         </FixtureBanner>
       )}
 
-      <MainContent>
+      <StickyBar>
+       <Bounded>
         <TopBar>
           <StageTabs>
             {STAGES.map(s => (
@@ -326,8 +377,13 @@ function DigitalTwinStrategyApp({ onGoHome }) {
         </TopBar>
 
         {error && <ErrorBox>{error}</ErrorBox>}
+       </Bounded>
+      </StickyBar>
 
+      <MainContent>
+       <Bounded>
         {renderStage()}
+       </Bounded>
       </MainContent>
 
       {showSettings && (

@@ -73,6 +73,23 @@ export const strategyApi = {
   deleteCrux: (year, cruxId) =>
     request(`/plans/${year}/cruxes/${cruxId}`, { method: 'DELETE' }),
 
+  /** ② 이슈 — 핵심 난제를 풀 수 있는 크기로 쪼갠 것 */
+  createIssue: (year, payload) =>
+    request(`/plans/${year}/issues`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateIssue: (year, issueId, payload) =>
+    request(`/plans/${year}/issues/${issueId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  /** 지우면 왜 안 하기로 했는지가 안 남는다. 보통은 status='dropped' 를 쓴다. */
+  deleteIssue: (year, issueId) =>
+    request(`/plans/${year}/issues/${issueId}`, { method: 'DELETE' }),
+
   /** 근거 원천이 무엇을 돌려주는지 확인용 (Phase 1 점검) */
   previewEvidence: (year) => request(`/evidence-preview/${year}`),
 };

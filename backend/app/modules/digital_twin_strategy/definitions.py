@@ -264,6 +264,40 @@ METRICS = [
 METRIC_KEYS = [m['key'] for m in METRICS]
 
 
+# 관측 지표 ↔ 임계값. 이름이 비슷하지만 같지 않아서 짝을 명시한다.
+#
+# 이 표가 있어야 **기준이 한 곳에서만 관리된다.** 없으면 화면이 색칠할 기준을
+# 따로 들고 있게 되고, 설정에서 임계값을 바꿔도 표의 색은 안 따라간다 —
+# 짚인 것에서는 사라졌는데 칸은 계속 붉은 상태가 된다.
+#
+# project_count 는 규모를 보는 값이라 좋고 나쁨이 없다. 그래서 짝이 없다.
+METRIC_THRESHOLD_KEY = {
+    'dept_spread': 'spread_concentrated',
+    'dept_concentration': 'dept_concentration',
+    'no_performance_rate': 'no_performance',
+    'no_kpi_link_rate': 'no_kpi_link',
+    'unclassified_link_rate': 'unclassified_link',
+    'primary_link_rate': 'primary_link_low',
+    'pl_concentration': 'pl_concentration',
+    'deadline_crowding': 'deadline_crowding',
+    'isolated_rate': 'isolated',
+    'kpi_achievement': 'kpi_shortfall',
+}
+
+# 화면이 /meta 로 받아 쓴다. 지표 정의에 붙여 보내면 프론트가 짝을 다시
+# 만들 필요가 없다.
+for _m in METRICS:
+    _m['threshold_key'] = METRIC_THRESHOLD_KEY.get(_m['key'])
+
+# 지표를 새로 넣고 짝을 잊으면 그 칸만 조용히 색이 안 칠해진다.
+# 여기서 바로 터뜨려 배포 전에 알게 한다.
+_unmatched = [
+    m['key'] for m in METRICS
+    if m['direction'] != 'neutral' and not m['threshold_key']
+]
+assert not _unmatched, f'임계값 짝이 없는 지표: {_unmatched}'
+
+
 # ── 진단 임계값 ────────────────────────────────────────────────────────────
 # 여기 값은 **기본값**이다. 운영에서 화면으로 덮어쓸 수 있다(ModuleSettings).
 #
@@ -298,6 +332,11 @@ THRESHOLDS = [
 
 DEFAULT_THRESHOLDS = {t['key']: t['default'] for t in THRESHOLDS}
 THRESHOLD_KEYS = set(DEFAULT_THRESHOLDS)
+
+# 지표가 가리키는 임계값이 실재하는지. 오타 하나면 그 칸만 색이 안 칠해지고
+# 아무 오류도 안 난다 — 눈으로는 못 잡는다.
+_missing = sorted(set(METRIC_THRESHOLD_KEY.values()) - THRESHOLD_KEYS)
+assert not _missing, f'METRIC_THRESHOLD_KEY 가 없는 임계값을 가리킴: {_missing}'
 
 
 def get_thresholds():
