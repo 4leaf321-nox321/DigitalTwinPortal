@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import styled from 'styled-components';
 import { Table2, Wand2, AlertTriangle, CheckCircle2, Loader2, ListPlus } from 'lucide-react';
 import surveyApi from '../../services/surveyApi';
+import AxisPicker from './AxisPicker';
 import { linkKeyLabel, STRATEGY_DIMENSION_LINK } from '../../constants/questionTemplates';
 import { ACCENT, ACCENT_DARK, ACCENT_LINE, ACCENT_TINT } from '../../theme';
 
@@ -480,6 +481,17 @@ const SurveyImport = ({
   //    막힌다.** 그래서 표에서 찾은 값을 기본으로 채우되 손으로 고칠 수 있게 둔다.
   //
   // 빈 문자열이면 서버가 표에서 유도한 값을 쓴다(기존 동작).
+  // 고를 수 있는 값은 **서버가 준다.** 화면이 목록을 들고 있으면 서버가 받는
+  // 값과 갈려서, 화면엔 있는데 저장하면 400 이 나는 상태가 된다.
+  const [axisOptions, setAxisOptions] = useState({ roles: [], processes: [] });
+  useEffect(() => {
+    let alive = true;
+    surveyApi.getOptions()
+      .then(res => { if (alive && res?.data) setAxisOptions(res.data); })
+      .catch(() => {});   // 목록을 못 받아도 표 붙여넣기는 돌아야 한다
+    return () => { alive = false; };
+  }, []);
+
   const [axes, setAxes] = useState({ roles: '', processes: '' });
   // 표를 다시 붙여넣어 새 역할이 나오면 아직 손대지 않은 칸만 따라 채운다.
   const [axesTouched, setAxesTouched] = useState({ roles: false, processes: false });
@@ -942,26 +954,24 @@ const roleCounts = useMemo(() => countAxis(rows, 'roles'), [rows]);
               물을' 것이다. 둘은 다르다 — 전원 대상 문항만 답하는 역할(사무국장
               같은)은 표의 역할 열에 안 나타난다. 그 역할을 여기 안 적으면 그
               사람은 역할을 고를 수 없어 **제출 자체가 막힌다.** */}
-          <Field>
-            응답자가 고를 역할 (쉼표로 구분)
-            <Input
-              value={axes.roles}
-              onChange={e => {
-                setAxes(a => ({ ...a, roles: e.target.value }));
-                setAxesTouched(t => ({ ...t, roles: true }));
-              }}
-              placeholder="비우면 표에 나온 역할을 그대로 씁니다" />
-          </Field>
-          <Field>
-            응답자가 고를 프로세스 (쉼표로 구분)
-            <Input
-              value={axes.processes}
-              onChange={e => {
-                setAxes(a => ({ ...a, processes: e.target.value }));
-                setAxesTouched(t => ({ ...t, processes: true }));
-              }}
-              placeholder="비우면 표에 나온 프로세스를 그대로 씁니다" />
-          </Field>
+          <AxisPicker
+            label="응답자가 고를 역할"
+            options={axisOptions.roles}
+            value={splitAxis(axes.roles)}
+            onChange={list => {
+              setAxes(a => ({ ...a, roles: list.join(', ') }));
+              setAxesTouched(t => ({ ...t, roles: true }));
+            }}
+            emptyMeans="표에 나온 역할을 그대로 씁니다" />
+          <AxisPicker
+            label="응답자가 고를 프로세스"
+            options={axisOptions.processes}
+            value={splitAxis(axes.processes)}
+            onChange={list => {
+              setAxes(a => ({ ...a, processes: list.join(', ') }));
+              setAxesTouched(t => ({ ...t, processes: true }));
+            }}
+            emptyMeans="표에 나온 프로세스를 그대로 씁니다" />
           <Hint>
             표에 <strong>전용 문항이 없는 역할</strong>도 여기 적어야 합니다.
             공통 문항만 답하는 사람도 자기 역할을 골라야 제출할 수 있습니다.

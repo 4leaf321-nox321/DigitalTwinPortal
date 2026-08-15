@@ -74,6 +74,18 @@ export const surveyApi = {
   // manager_required 한 곳이고, 여기서는 403 을 그냥 메시지로 보여준다.
 
   /** context 를 주면 그 전략(등)에 매달린 설문만, 안 주면 전부. */
+  /** 고를 수 있는 역할·프로세스와 사무국장 설정.
+   *
+   * ⚠️ 화면이 목록을 하드코딩하면 서버가 받는 값과 갈린다 — 화면엔 있는데
+   *    저장하면 400 이 나거나, 화면엔 없는 값이 표로는 들어간다. 정본은 서버다. */
+  getOptions: () => request('/manage/options'),
+
+  setOfficeHeads: (userIds) =>
+    request('/manage/options/office-heads', {
+      method: 'PUT',
+      body: JSON.stringify({ user_ids: userIds }),
+    }),
+
   listSurveys: (context) => request(`/manage${contextQuery(context)}`),
 
   /** 목록에는 문항이 없다. 편집하려면 이걸로 문항까지 받아야 한다. */

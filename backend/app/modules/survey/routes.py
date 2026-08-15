@@ -27,7 +27,10 @@ from .importer import (
 from .models import (
     Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
 )
-from .roles import SURVEY_ROLES, derive_roles, process_names
+from .roles import (
+    SURVEY_ROLES, derive_roles, office_head_ids, process_names,
+    set_office_head_ids,
+)
 
 # 만드는 쪽과 답하는 쪽을 경로로 가른다. 만들기는 /manage 아래, 응답은 그 위.
 admin_bp = Blueprint('survey_manage', __name__, url_prefix='/api/surveys/manage')
@@ -526,6 +529,46 @@ def _extend_axes(survey, table_axes, payload):
 
 
 # ══ 관리자용 ═══════════════════════════════════════════════════════════════
+
+@admin_bp.route('/options', methods=['GET'])
+@manager_required
+def survey_options():
+    """설문을 만들 때 **고를 수 있는 값**과 설정.
+
+    화면이 자기 목록을 하드코딩하면 서버가 받는 값과 갈린다 — 화면에는 있는데
+    저장하면 400 이 나거나, 반대로 화면에 없는 값이 표로는 들어간다.
+    목록의 정본은 서버다.
+    """
+    heads = office_head_ids()
+    users = User.query.filter_by(is_active=True).order_by(User.name, User.id).all()
+    return jsonify({'success': True, 'data': {
+        'roles': list(SURVEY_ROLES),
+        'processes': process_names(),
+        # 사무국장은 권한으로 구분되지 않아 사람을 직접 지정한다.
+        'office_head_user_ids': heads,
+        'users': [
+            {'id': u.id, 'name': u.name or u.email, 'email': u.email, 'role': u.role}
+            for u in users
+        ],
+    }})
+
+
+@admin_bp.route('/options/office-heads', methods=['PUT'])
+@manager_required
+def set_office_heads():
+    """사무국장 지정. 실재하는 활성 사용자만 남는다."""
+    try:
+        payload = request.get_json() or {}
+        ids = payload.get('user_ids')
+        if not isinstance(ids, list):
+            return _error('user_ids 가 필요합니다.', 400)
+        saved = set_office_head_ids(ids)
+        db.session.commit()
+        return jsonify({'success': True, 'data': {'office_head_user_ids': saved}})
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
 
 @admin_bp.route('', methods=['GET'])
 @manager_required

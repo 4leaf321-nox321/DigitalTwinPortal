@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { QUESTION_TEMPLATES, linkKeyLabel } from '../../constants/questionTemplates';
 import { ACCENT, ACCENT_DARK, ACCENT_LINE, ACCENT_TINT } from '../../theme';
+import AxisPicker from './AxisPicker';
+import surveyApi from '../../services/surveyApi';
 
 // 설문 하나를 짓는 자리.
 //
@@ -341,6 +343,16 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
   const locked = !!lockReason;
   // 문항 번호 -> 보기 입력의 원문. 문항 개수가 바뀌면(추가·삭제·템플릿)
   // 번호가 밀리므로 통째로 버린다 — 남은 초안이 엉뚱한 문항에 붙는 것보다 낫다.
+  // 고를 수 있는 값의 정본은 서버다(GET /manage/options).
+  const [axisOptions, setAxisOptions] = useState({ roles: [], processes: [] });
+  useEffect(() => {
+    let alive = true;
+    surveyApi.getOptions()
+      .then(res => { if (alive && res?.data) setAxisOptions(res.data); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   const [choiceDraft, setChoiceDraft] = useState({});
   // 역할·프로세스 입력의 원문. choiceDraft 와 같은 이유다 — 쉼표를 찍는 순간
   // 나눴다 다시 합치면 그 쉼표가 사라져서 다음 이름을 못 적는다.
@@ -545,16 +557,22 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
              고칠 곳이 바로 여기다. 문항을 안 건드리므로 이미 받은 답의 뜻도
              안 바뀐다(서버도 축 변경엔 409 를 주지 않는다). */}
       <Row>
-        <Field style={{ flex: 1, minWidth: '16rem' }}>
-          응답자가 고를 역할 (쉼표로 구분)
-          <Input value={form.roles} onChange={set('roles')}
-                 placeholder="예: PL(과제리더), 팀원, 사무국장 — 비우면 역할을 묻지 않습니다" />
-        </Field>
-        <Field style={{ flex: 1, minWidth: '16rem' }}>
-          응답자가 고를 프로세스 (쉼표로 구분)
-          <Input value={form.processes} onChange={set('processes')}
-                 placeholder="예: 설계, 해석, 시험 — 비우면 프로세스를 묻지 않습니다" />
-        </Field>
+        <div style={{ flex: 1, minWidth: '16rem' }}>
+          <AxisPicker
+            label="응답자가 고를 역할"
+            options={axisOptions.roles}
+            value={splitAxis(form.roles)}
+            onChange={list => setForm(f => ({ ...f, roles: list.join(', ') }))}
+            emptyMeans="역할을 묻지 않습니다" />
+        </div>
+        <div style={{ flex: 1, minWidth: '16rem' }}>
+          <AxisPicker
+            label="응답자가 고를 프로세스"
+            options={axisOptions.processes}
+            value={splitAxis(form.processes)}
+            onChange={list => setForm(f => ({ ...f, processes: list.join(', ') }))}
+            emptyMeans="프로세스를 묻지 않습니다" />
+        </div>
       </Row>
       {/* ⚠️ 이 경고를 화면에서 빼지 마라. 이 목록을 문항에서 유도하면(전용
           문항이 있는 역할만 모으면) 공통 문항만 답하는 역할이 빠지는데, 그
@@ -704,21 +722,28 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
                              onChange={e => setBranch(i, { section: e.target.value })}
                              placeholder="예: 공통 · 역할별 · 프로세스별" />
                     </Field>
+                    {/* 고를 수 있는 값을 **설문이 묻는 것**으로 좁힌다.
+                        설문이 안 묻는 역할을 문항에 걸면 그 문항은 아무에게도
+                        안 보인다 — 고를 수 없게 하는 편이 경고보다 낫다.
+                        아직 위에서 아무것도 안 골랐으면 전체 목록을 보여준다
+                        (문항을 먼저 쓰는 순서도 정상이다). */}
                     <Row>
-                      <Field style={{ flex: 1, minWidth: '13rem' }}>
-                        이 문항을 볼 역할 (쉼표로 구분)
-                        <Input value={axisText(i, 'audience_roles', q)}
-                               onChange={onAxis(i, 'audience_roles')}
-                               onBlur={onAxisBlur(i, 'audience_roles')}
-                               placeholder="비우면 전원이 봅니다" />
-                      </Field>
-                      <Field style={{ flex: 1, minWidth: '13rem' }}>
-                        이 문항을 볼 프로세스 (쉼표로 구분)
-                        <Input value={axisText(i, 'audience_processes', q)}
-                               onChange={onAxis(i, 'audience_processes')}
-                               onBlur={onAxisBlur(i, 'audience_processes')}
-                               placeholder="비우면 전원이 봅니다" />
-                      </Field>
+                      <div style={{ flex: 1, minWidth: '13rem' }}>
+                        <AxisPicker
+                          label="이 문항을 볼 역할"
+                          options={definedRoles.length ? definedRoles : axisOptions.roles}
+                          value={q.audience_roles || []}
+                          onChange={list => setBranch(i, { audience_roles: list })}
+                          emptyMeans="전원이 봅니다" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: '13rem' }}>
+                        <AxisPicker
+                          label="이 문항을 볼 프로세스"
+                          options={definedProcesses.length ? definedProcesses : axisOptions.processes}
+                          value={q.audience_processes || []}
+                          onChange={list => setBranch(i, { audience_processes: list })}
+                          emptyMeans="전원이 봅니다" />
+                      </div>
                     </Row>
                     <Hint>
                       비우면 <strong>전원</strong>이 보는 문항입니다 (아무도 안 보는 것이

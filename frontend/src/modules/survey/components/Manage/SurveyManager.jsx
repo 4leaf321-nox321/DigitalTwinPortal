@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X, Table2, ListPlus } from 'lucide-react';
+import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X, Table2, ListPlus, UserCog } from 'lucide-react';
 import SurveyEditor from './SurveyEditor';
 import SurveyResults from './SurveyResults';
 import SurveyImport from './SurveyImport';
+import OfficeHeadSettings from './OfficeHeadSettings';
 import surveyApi from '../../services/surveyApi';
 import { ACCENT, ACCENT_DARK, ACCENT_TINT, ACCENT_LINE } from '../../theme';
 
@@ -342,6 +343,14 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
     );
   }
 
+  if (view.mode === 'office-heads') {
+    return (
+      <Wrap>
+        <OfficeHeadSettings onBack={() => setView({ mode: 'list' })} />
+      </Wrap>
+    );
+  }
+
   if (view.mode === 'import') {
     return (
       <Wrap>
@@ -406,6 +415,13 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
             onClick={() => setView({ mode: 'import', importMode: 'create' })}
             title="엑셀에서 복사한 표를 붙여넣어 문항을 한 번에 만듭니다. 그 화면에서 기존 설문에 덧붙일 수도 있습니다">
             <Table2 size={15} /> 표로 만들기
+          </GhostButton>
+          {/* 사무국장만 권한으로 구분되지 않아 따로 지정한다. 나머지 역할은
+              데이터에서 유도된다. */}
+          <GhostButton
+            onClick={() => setView({ mode: 'office-heads' })}
+            title="사무국장으로 볼 사람을 지정합니다. 나머지 역할은 과제·권한 데이터에서 자동으로 판정됩니다">
+            <UserCog size={15} /> 사무국장 지정
           </GhostButton>
           <AddButton onClick={() => openEditor(null)}>
             <Plus size={15} /> 새 설문
