@@ -172,6 +172,28 @@ export const surveyApi = {
   /** 집계. 응답자 신원은 실리지 않는다. */
   getSurveyResults: (surveyId) => request(`/manage/${surveyId}/results`),
 
+  /** 응답 원자료 CSV 를 내려받는다.
+   *
+   * ⚠️ 다른 함수와 달리 JSON 이 아니다. 브라우저가 파일로 받게 하려면 blob 을
+   *    직접 다뤄야 한다. 응답자 이름은 실리지 않는다(서버가 안 넣는다). */
+  exportResponses: async (surveyId) => {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(`${API_BASE}/manage/${surveyId}/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`내보내기 실패 (${res.status})`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `survey_${surveyId}_responses.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // 안 풀어 주면 파일 하나가 탭이 닫힐 때까지 메모리에 남는다.
+    URL.revokeObjectURL(url);
+  },
+
   /** ⚠️ 응답자 확인. 부르는 순간 감사 로그가 남는다. */
   getSurveyIdentities: (surveyId) => request(`/manage/${surveyId}/identities`),
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X, Table2, ListPlus, UserCog } from 'lucide-react';
+import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X, Table2, ListPlus, UserCog, Eye } from 'lucide-react';
 import SurveyEditor from './SurveyEditor';
 import SurveyResults from './SurveyResults';
 import SurveyImport from './SurveyImport';
 import OfficeHeadSettings from './OfficeHeadSettings';
+import SurveyPreview from './SurveyPreview';
 import surveyApi from '../../services/surveyApi';
 import { ACCENT, ACCENT_DARK, ACCENT_TINT, ACCENT_LINE } from '../../theme';
 
@@ -309,6 +310,17 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
     }
   };
 
+  const openPreview = async (survey) => {
+    // 목록에는 문항이 없다. 미리보기는 문항이 있어야 하므로 단건으로 받는다.
+    setError(null);
+    try {
+      const res = await surveyApi.getSurvey(survey.id);
+      setView({ mode: 'preview', survey: res.data });
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const openResults = async (survey) => {
     setView({ mode: 'results', survey, results: null });
     try {
@@ -338,7 +350,17 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
           divisions={divisions}
           onBack={() => setView({ mode: 'list' })}
           onReveal={reveal}
+          onExport={() => surveyApi.exportResponses(view.survey.id).catch(e => setError(e.message))}
         />
+      </Wrap>
+    );
+  }
+
+  if (view.mode === 'preview') {
+    return (
+      <Wrap>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <SurveyPreview survey={view.survey} onBack={() => setView({ mode: 'list' })} />
       </Wrap>
     );
   }
@@ -457,6 +479,12 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
                 </Meta>
               </Body>
               <Buttons>
+                {/* 배포하면 응답이 드는 순간 문항이 잠긴다. 그 전에
+                    응답자가 뭘 받는지 볼 수 있어야 한다. */}
+                <IconButton onClick={() => openPreview(s)}
+                            title="응답자가 무엇을 보는지 미리 봅니다">
+                  <Eye size={15} />
+                </IconButton>
                 <IconButton onClick={() => openResults(s)} title="집계 보기">
                   <BarChart3 size={15} />
                 </IconButton>

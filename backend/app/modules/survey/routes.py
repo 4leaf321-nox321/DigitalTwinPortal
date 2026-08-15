@@ -22,7 +22,7 @@ from app.modules.auth.models import User
 from app.modules.auth.models import UserRole
 from .importer import (
     MAX_AXIS_VALUE, MAX_LINK_KEY, MAX_SECTION, MAX_TEXT,
-    all_errors, parse_table, rows_to_questions,
+    TableFormatError, all_errors, parse_table, rows_to_questions,
 )
 from .models import (
     Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
@@ -670,9 +670,17 @@ def import_preview():
     그때는 문항을 못 고친다(응답이 있으면 잠긴다).
     """
     payload = request.get_json() or {}
+    text = payload.get('text') or ''
+    if not isinstance(text, str):
+        return _error('text 는 문자열이어야 합니다.', 400)
     # ⚠️ survey_id 가 와도 **무시한다.** 미리보기는 어느 설문에 붙일 표든 읽기만
     #    한다 — 확인하려고 눌렀을 뿐인데 문항이 늘어나면 안 된다.
-    return jsonify({'success': True, 'data': parse_table(payload.get('text') or '')})
+    try:
+        return jsonify({'success': True, 'data': parse_table(text)})
+    except TableFormatError as e:
+        # 표 구조가 깨져 행 단위로 말할 수 없는 경우. 잡지 않으면 메시지 없는
+        # 500 이 나가고, 사용자는 자기 표의 어디가 문제인지 알 방법이 없다.
+        return _error(str(e), 400)
 
 
 def _parse_or_reject(payload, refusal):
@@ -684,7 +692,13 @@ def _parse_or_reject(payload, refusal):
     refusal 은 "그래서 무엇을 안 했는지"다. 새로 만드는 길과 덧붙이는 길이
     같은 문구를 쓰면, 사용자는 기존 문항이 날아갔는지 아닌지 알 수 없다.
     """
-    result = parse_table(payload.get('text') or '')
+    text = payload.get('text') or ''
+    if not isinstance(text, str):
+        return None, _error('text 는 문자열이어야 합니다.', 400)
+    try:
+        result = parse_table(text)
+    except TableFormatError as e:
+        return None, _error(f'{e} {refusal}', 400)
     if not result['rows']:
         return None, _error('표에서 문항을 하나도 읽지 못했습니다. '
                             '첫 줄은 머리글로 보고 건너뜁니다.', 400)
@@ -1110,6 +1124,87 @@ def survey_results(survey_id):
     }})
 
 
+@admin_bp.route('/<int:survey_id>/export', methods=['GET'])
+@manager_required
+def export_responses(survey_id):
+    """응답 원자료를 CSV 로. 한 응답이 한 줄이다.
+
+    운영에서 집계를 따로 돌리거나 보고서에 붙이려면 화면 밖으로 꺼낼 수 있어야
+    한다. 화면에서 눈으로 옮겨 적게 두면 반드시 틀린다.
+
+    ⚠️ **응답자 이름·계정은 넣지 않는다.** 내보낸 파일은 메일로 돌아다니고
+       누가 열지 통제할 수 없다. 신원이 필요하면 화면의 '응답자 확인'을 쓰고,
+       그건 열람 기록이 남는다. 여기서 한 줄 넣어 두면 그 통제가 통째로
+       무의미해진다.
+
+    ⚠️ 엑셀이 UTF-8 CSV 를 cp949 로 열어 한글이 깨지므로 **BOM 을 붙인다.**
+       파일을 열자마자 깨져 보이면 아무도 두 번 쓰지 않는다.
+    """
+    import csv as _csv
+    import io as _io
+    from flask import Response
+
+    survey = Survey.query.get(survey_id)
+    if not survey:
+        return _error('설문을 찾을 수 없습니다.', 404)
+
+    questions = survey.questions.all()
+    responses = survey.responses.filter(
+        SurveyResponse.submitted_at.isnot(None)
+    ).order_by(SurveyResponse.id).all()
+
+    divisions = {}
+    try:
+        from app.modules.digital_twin_dashboard.models import Division
+        divisions = {d.id: d.name for d in Division.query.all()}
+    except Exception:
+        pass
+
+    buf = _io.StringIO()
+    writer = _csv.writer(buf)
+    writer.writerow(
+        ['응답번호', '제출시각', '수정시각', '역할', '역할판정', '프로세스',
+         '부서', '사업부']
+        + [f'{q.section + " / " if q.section else ""}{q.text}' for q in questions]
+    )
+
+    for r in responses:
+        by_q = {}
+        for a in r.answers.all():
+            if a.value_number is not None:
+                by_q[a.question_id] = a.value_number
+            elif a.value_text is not None:
+                by_q[a.question_id] = a.value_text
+            elif a.value_json is not None:
+                # 목록형은 사람이 읽을 수 있게 편다. JSON 그대로 두면 엑셀에서
+                # 세로로 못 센다.
+                v = a.value_json
+                by_q[a.question_id] = ' | '.join(str(x) for x in v)                     if isinstance(v, list) else str(v)
+        writer.writerow([
+            r.id,
+            r.submitted_at.isoformat(sep=' ', timespec='minutes') if r.submitted_at else '',
+            r.updated_at.isoformat(sep=' ', timespec='minutes') if r.updated_at else '',
+            r.respondent_role or '',
+            r.role_source or '',
+            r.respondent_process or '',
+            r.department_name or '',
+            divisions.get(r.division_id, '') if r.division_id else '',
+        ] + [by_q.get(q.id, '') for q in questions])
+
+    db.session.add(SurveyAccessLog(
+        survey_id=survey.id,
+        viewer_id=int(get_jwt_identity()),
+        action='export',
+    ))
+    db.session.commit()
+
+    body = '﻿' + buf.getvalue()
+    name = f'survey_{survey.id}_responses.csv'
+    return Response(body, mimetype='text/csv; charset=utf-8', headers={
+        'Content-Disposition': f'attachment; filename="{name}"',
+    })
+
+
 @admin_bp.route('/<int:survey_id>/identities', methods=['GET'])
 @manager_required
 def survey_identities(survey_id):
@@ -1382,6 +1477,23 @@ def submit_response(survey_id):
                     value = float(value)
                 except (TypeError, ValueError):
                     return _error(f'척도 문항에는 숫자가 필요합니다: {q.text}', 400)
+                # ⚠️ 범위를 여기서 막는다.
+                #
+                # 안 막으면 평균은 그 값을 넣어 계산하는데 분포 막대는 1~5 만
+                # 그리므로, **평균과 막대가 서로 다른 이야기**를 한다. 합계가
+                # 응답 수와 안 맞는데 화면 어디에도 그 사실이 안 나온다.
+                # 범위는 문항이 정한다(options.min/max), 없으면 1~5.
+                opts = q.options or {}
+                low = opts.get('min', 1)
+                high = opts.get('max', 5)
+                try:
+                    low, high = float(low), float(high)
+                except (TypeError, ValueError):
+                    low, high = 1.0, 5.0
+                if not (low <= value <= high):
+                    return _error(
+                        f'척도 문항의 답이 범위를 벗어났습니다({low:g}~{high:g}): '
+                        f'{value:g} — {q.text}', 400)
             prepared[qid] = (q, value)
 
         division_id, source = resolve_division(user)

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import styled from 'styled-components';
-import { Eye, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Eye, AlertTriangle, ArrowLeft, Download } from 'lucide-react';
 import { linkKeyLabel } from '../../constants/questionTemplates';
 import { ACCENT, ACCENT_DARK, ACCENT_TINT, ACCENT_LINE } from '../../theme';
 
@@ -334,6 +334,23 @@ const RevealButton = styled.button`
   &:hover { background: #fee2e2; }
 `;
 
+const ExportButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-start;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  background: white;
+  color: #475569;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  &:hover { border-color: ${ACCENT}; color: ${ACCENT_DARK}; }
+`;
+
 const IdentityTable = styled.div`
   display: flex;
   flex-direction: column;
@@ -399,7 +416,7 @@ function sliceOrder(slices, defined) {
 // divisions 기본값이 [] 인 것이 중요하다. 사업부 목록을 못 받아왔을 때
 // undefined 가 오면 아래 .find 에서 화면이 통째로 터진다 — 집계는 사업부
 // 이름을 몰라도 보여줄 수 있어야 한다.
-const SurveyResults = ({ results, divisions = [], onBack, onReveal }) => {
+const SurveyResults = ({ results, divisions = [], onBack, onReveal, onExport }) => {
   const [identities, setIdentities] = useState(null);
   const [axisKey, setAxisKey] = useState('all');
 
@@ -720,6 +737,13 @@ const SurveyResults = ({ results, divisions = [], onBack, onReveal }) => {
 
       {/* 누르기 **전에** 기록이 남는다고 적어 둔다. 누른 뒤에 알려주면 고지가
           아니라 통보다. */}
+      {response_count > 0 && (
+        <ExportButton onClick={onExport}>
+          <Download size={15} />
+          응답 원자료 내려받기 (CSV) — 응답자 이름은 들어가지 않습니다
+        </ExportButton>
+      )}
+
       {response_count > 0 && !identities && (
         <RevealButton onClick={reveal}>
           <Eye size={15} />

@@ -141,6 +141,15 @@ def parse_qtype(value):
     return QTYPE_ALIASES.get(token)
 
 
+class TableFormatError(ValueError):
+    """표 자체를 못 읽는 경우.
+
+    행 단위 오류(그 줄만 고치면 되는 것)와 다르다. 이건 표 구조가 깨져서
+    **어느 행이 어느 행인지도 알 수 없는** 상태다. 그래서 행 목록이 아니라
+    통째로 실패로 알린다.
+    """
+
+
 def _read_rows(text):
     """붙여넣은 덩어리를 (행번호, 칸목록) 으로 쪼갠다.
 
@@ -151,14 +160,51 @@ def _read_rows(text):
     delimiter = '\t' if '\t' in text else ','
     reader = csv.reader(io.StringIO(text), delimiter=delimiter)
     out = []
-    for row in reader:
-        # 행 번호는 **붙여넣은 원문 기준**이어야 한다. 어느 줄인지 모르면
-        # 수십 행짜리 표를 고칠 수 없다.
-        line = reader.line_num
-        if not any((c or '').strip() for c in row):
-            continue                       # 빈 줄은 없는 셈 친다
-        out.append((line, row))
+    # ⚠️ reader.line_num 을 쓰면 안 된다.
+    #
+    # 그건 **읽은 물리 줄 수**라, 칸 안에 줄바꿈이 든 레코드를 만나면 그 뒤의
+    # 모든 행 번호가 밀린다. 엑셀에서 여러 줄짜리 셀을 복사하면 실제로 그런
+    # 표가 나온다. 사람이 보는 줄 번호와 어긋나면 "4행을 고치세요"가 엉뚱한
+    # 줄을 가리키고, 그건 오류 메시지가 없느니만 못하다.
+    #
+    # 그래서 **레코드를 센다.** 빈 줄도 세어 둬야 사람이 엑셀에서 보는 행과
+    # 맞는다 — 빈 줄을 안 세면 그 아래가 통째로 한 칸씩 당겨진다.
+    record = 0
+    try:
+        for row in reader:
+            record += 1
+            if not any((c or '').strip() for c in row):
+                continue                   # 빈 줄은 없는 셈 친다(번호는 셌다)
+            out.append((record, row))
+    except csv.Error as e:
+        # csv 가 죽는 경우(널 바이트 등). 그대로 두면 라우트까지 올라가
+        # **메시지 없는 500** 이 된다.
+        raise TableFormatError(
+            f'표를 읽다 멈췄습니다({record + 1}행 부근): {e}'
+        ) from e
+
     return out
+
+
+def _check_quotes(text):
+    """따옴표 짝이 맞는지. 안 맞으면 TableFormatError.
+
+    ⚠️ 안 닫힌 따옴표를 csv 는 **오류로 보지 않는다.** 남은 줄을 통째로 한 칸에
+       삼키고 조용히 끝낸다. 그래서 30행짜리 표가 1행이 되는데, 그때 나오는
+       오류는 "문항을 하나도 읽지 못했습니다" 같은 엉뚱한 말이라 원인을 못 짚는다.
+
+    삼켜진 양으로 짐작하려 했더니 칸 안에 줄바꿈이 든 정상 표(엑셀의 여러 줄
+    셀)와 구분이 안 됐다. 대신 **개수를 센다** — CSV 는 칸 안의 따옴표를 두 개로
+    겹쳐 쓰므로 제대로 된 표의 따옴표 수는 **언제나 짝수**다. 홀수면 하나가
+    안 닫힌 것이다.
+    """
+    count = text.count('"')
+    if count % 2 == 1:
+        raise TableFormatError(
+            f'따옴표(")가 {count}개로 짝이 안 맞습니다. 하나가 안 닫히면 '
+            '그 뒤가 통째로 한 칸으로 읽혀 표가 거의 사라집니다. '
+            '칸 안에 따옴표를 쓰시려면 두 번("") 적으세요.'
+        )
 
 
 def parse_table(text):
@@ -171,6 +217,7 @@ def parse_table(text):
     각 행은 오류가 있어도 목록에 남는다. 오류난 행을 빼고 돌려주면 미리보기
     화면에서 "왜 이 줄이 사라졌지"가 되고, 사용자가 고칠 곳을 못 찾는다.
     """
+    _check_quotes(text or '')
     raw_rows = _read_rows(text or '')
     # 구분자 판단은 _read_rows 와 **같은 규칙**이어야 한다. 어긋나면 탭 표를
     # 쉼표로 보고 뒤쪽 빈칸을 안 버려서, 멀쩡한 엑셀 붙여넣기가 전부 거부된다.
