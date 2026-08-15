@@ -22,12 +22,10 @@ def register_all_blueprints(app):
     # Digital Twin Strategy (연도별 전략 기획 — 사무국/관리자 전용)
     from app.modules.digital_twin_strategy import bp as digital_twin_strategy_bp
     app.register_blueprint(digital_twin_strategy_bp)
-    # 설문은 블루프린트가 둘이다. 응답용은 **역할을 안 보고 로그인만** 요구하므로
-    # 위 블루프린트에 섞지 않는다 (survey_routes.py 머리말 참고).
-    from app.modules.digital_twin_strategy import (
-        survey_admin_bp, survey_respond_bp,
-    )
-    app.register_blueprint(survey_admin_bp)
+    # 설문은 독립 모듈이다. 블루프린트가 둘인 이유는 응답용이 **역할을 안 보고
+    # 로그인만** 요구하기 때문이다 (survey/routes.py 머리말 참고).
+    from app.modules.survey import manage_bp, respond_bp as survey_respond_bp
+    app.register_blueprint(manage_bp)
     app.register_blueprint(survey_respond_bp)
 
     # Digital Twin Solution

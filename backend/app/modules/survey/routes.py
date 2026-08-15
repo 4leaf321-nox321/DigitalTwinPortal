@@ -12,23 +12,46 @@
 계획서: frontend/src/modules/digital-twin-strategy/SURVEY_PLAN.md
 """
 from datetime import datetime
+from functools import wraps
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.extensions import db
 from app.modules.auth.models import User
+from app.modules.auth.models import UserRole
 from .models import (
-    StrategyPlan, StrategySurvey, StrategySurveyQuestion,
-    StrategySurveyResponse, StrategySurveyAnswer, StrategySurveyAccessLog,
+    Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
 )
-from .routes import office_required, _error
 
-admin_bp = Blueprint(
-    'strategy_survey_admin', __name__,
-    url_prefix='/api/digital-twin-strategy'
-)
-respond_bp = Blueprint('strategy_survey_respond', __name__, url_prefix='/api/surveys')
+# 만드는 쪽과 답하는 쪽을 경로로 가른다. 만들기는 /manage 아래, 응답은 그 위.
+admin_bp = Blueprint('survey_manage', __name__, url_prefix='/api/surveys/manage')
+respond_bp = Blueprint('survey_respond', __name__, url_prefix='/api/surveys')
+
+MANAGER_ROLES = (UserRole.ADMIN, UserRole.DT_OFFICE_MEMBER)
+
+
+def _error(message, status=500):
+    return jsonify({'success': False, 'message': message}), status
+
+
+def manager_required(fn):
+    """설문을 만들고 집계를 보는 사람.
+
+    전략 모듈의 office_required 를 import 하지 않는다 — 그러면 설문이 다시
+    전략에 매인다. 같은 역할을 쓰지만 판단은 이 모듈이 한다.
+    """
+    @wraps(fn)
+    @jwt_required()
+    def wrapper(*args, **kwargs):
+        user = User.query.get(int(get_jwt_identity()))
+        if not user or user.role not in MANAGER_ROLES:
+            return jsonify({
+                'success': False,
+                'message': '설문 관리는 사무국/관리자만 접근할 수 있습니다.'
+            }), 403
+        return fn(*args, **kwargs)
+    return wrapper
 
 
 QTYPES = {'scale', 'choice', 'rank', 'text'}
@@ -122,10 +145,11 @@ def serialize_response(response, reveal=False, user_names=None):
 def _survey_dict(survey, with_questions=False, counts=None):
     d = {
         'id': survey.id,
-        'plan_id': survey.plan_id,
         'title': survey.title,
         'description': survey.description,
-        'stage': survey.stage,
+        'context_type': survey.context_type,
+        'context_id': survey.context_id,
+        'context_tag': survey.context_tag,
         'target_type': survey.target_type,
         'target_refs': survey.target_refs or [],
         'status': survey.status,
@@ -147,8 +171,8 @@ def _question_dict(q):
         'qtype': q.qtype,
         'required': q.required,
         'options': q.options or {},
-        'link_category': q.link_category,
-        'link_dimension': q.link_dimension,
+        'link_type': q.link_type,
+        'link_key': q.link_key,
     }
 
 
@@ -177,7 +201,7 @@ def _apply_questions(survey, items):
         qtype = item.get('qtype') or 'scale'
         if qtype not in QTYPES:
             return f'{i + 1}번 문항의 유형을 알 수 없습니다: {qtype}'
-        db.session.add(StrategySurveyQuestion(
+        db.session.add(SurveyQuestion(
             survey=survey,
             order=item.get('order', i),
             text=text,
@@ -185,44 +209,48 @@ def _apply_questions(survey, items):
             qtype=qtype,
             required=bool(item.get('required', True)),
             options=item.get('options') or {},
-            link_category=item.get('link_category'),
-            link_dimension=item.get('link_dimension'),
+            link_type=item.get('link_type'),
+            link_key=item.get('link_key'),
         ))
     return None
 
 
 # ══ 관리자용 ═══════════════════════════════════════════════════════════════
 
-@admin_bp.route('/plans/<int:year>/surveys', methods=['GET'])
-@office_required
-def list_surveys(year):
-    plan = StrategyPlan.query.filter_by(year=year).first()
-    if not plan:
-        return jsonify({'success': True, 'data': []})
+@admin_bp.route('', methods=['GET'])
+@manager_required
+def list_surveys():
+    """설문 목록. context 로 좁힐 수 있다.
 
-    surveys = StrategySurvey.query.filter_by(plan_id=plan.id) \
-        .order_by(StrategySurvey.id.desc()).all()
+    ?context_type=strategy_plan&context_id=12 처럼 부르면 그 전략의 설문만
+    나온다. 안 주면 전부 나온다 — 설문은 전략 전용이 아니다.
+    """
+    query = Survey.query
+    context_type = request.args.get('context_type')
+    context_id = request.args.get('context_id', type=int)
+    if context_type:
+        query = query.filter_by(context_type=context_type)
+    if context_id is not None:
+        query = query.filter_by(context_id=context_id)
+
+    surveys = query.order_by(Survey.id.desc()).all()
     out = []
     for s in surveys:
         targets = target_user_ids(s)
         out.append(_survey_dict(s, counts={
             'target_count': len(targets),
             'response_count': s.responses.filter(
-                StrategySurveyResponse.submitted_at.isnot(None)
+                SurveyResponse.submitted_at.isnot(None)
             ).count(),
             'question_count': s.questions.count(),
         }))
     return jsonify({'success': True, 'data': out})
 
 
-@admin_bp.route('/plans/<int:year>/surveys', methods=['POST'])
-@office_required
-def create_survey(year):
+@admin_bp.route('', methods=['POST'])
+@manager_required
+def create_survey():
     try:
-        plan = StrategyPlan.query.filter_by(year=year).first()
-        if not plan:
-            return _error(f'{year}년 전략이 없습니다.', 404)
-
         payload = request.get_json() or {}
         title = (payload.get('title') or '').strip()
         if not title:
@@ -232,11 +260,13 @@ def create_survey(year):
         if target_type not in TARGET_TYPES:
             return _error(f'알 수 없는 대상 구분입니다: {target_type}', 400)
 
-        survey = StrategySurvey(
-            plan_id=plan.id,
+        survey = Survey(
             title=title,
             description=payload.get('description'),
-            stage=payload.get('stage') or 'assessment',
+            # 어디에 매달린 설문인지는 부르는 쪽이 정한다. 비워도 된다.
+            context_type=payload.get('context_type'),
+            context_id=payload.get('context_id'),
+            context_tag=payload.get('context_tag'),
             target_type=target_type,
             target_refs=payload.get('target_refs') or [],
             created_by=int(get_jwt_identity()),
@@ -256,11 +286,11 @@ def create_survey(year):
         return _error(str(e))
 
 
-@admin_bp.route('/surveys/<int:survey_id>', methods=['GET', 'PUT', 'DELETE'])
-@office_required
+@admin_bp.route('/<int:survey_id>', methods=['GET', 'PUT', 'DELETE'])
+@manager_required
 def modify_survey(survey_id):
     try:
-        survey = StrategySurvey.query.get(survey_id)
+        survey = Survey.query.get(survey_id)
         if not survey:
             return _error('설문을 찾을 수 없습니다.', 404)
 
@@ -293,7 +323,8 @@ def modify_survey(survey_id):
             if payload['target_type'] not in TARGET_TYPES:
                 return _error(f"알 수 없는 대상 구분입니다: {payload['target_type']}", 400)
             survey.target_type = payload['target_type']
-        for field in ('description', 'stage', 'target_refs'):
+        for field in ('description', 'target_refs',
+                      'context_type', 'context_id', 'context_tag'):
             if field in payload:
                 setattr(survey, field, payload[field])
 
@@ -310,12 +341,12 @@ def modify_survey(survey_id):
         return _error(str(e))
 
 
-@admin_bp.route('/surveys/<int:survey_id>/status', methods=['PUT'])
-@office_required
+@admin_bp.route('/<int:survey_id>/status', methods=['PUT'])
+@manager_required
 def set_survey_status(survey_id):
     """배포(open)·마감(close). 되돌리는 것도 여기서 한다."""
     try:
-        survey = StrategySurvey.query.get(survey_id)
+        survey = Survey.query.get(survey_id)
         if not survey:
             return _error('설문을 찾을 수 없습니다.', 404)
 
@@ -343,8 +374,8 @@ def set_survey_status(survey_id):
         return _error(str(e))
 
 
-@admin_bp.route('/surveys/<int:survey_id>/results', methods=['GET'])
-@office_required
+@admin_bp.route('/<int:survey_id>/results', methods=['GET'])
+@manager_required
 def survey_results(survey_id):
     """집계. **응답자 신원은 실리지 않는다.**
 
@@ -352,12 +383,12 @@ def survey_results(survey_id):
     소속을 모르는 응답도 따로 센다 — 숨기면 그럴듯한 사업부별 평균이 나오는데
     실은 절반이 어디 것인지 모르는 상태가 된다.
     """
-    survey = StrategySurvey.query.get(survey_id)
+    survey = Survey.query.get(survey_id)
     if not survey:
         return _error('설문을 찾을 수 없습니다.', 404)
 
     responses = survey.responses.filter(
-        StrategySurveyResponse.submitted_at.isnot(None)
+        SurveyResponse.submitted_at.isnot(None)
     ).all()
     questions = survey.questions.all()
 
@@ -365,7 +396,7 @@ def survey_results(survey_id):
     for q in questions:
         entry = {
             'question_id': q.id, 'text': q.text, 'qtype': q.qtype,
-            'link_category': q.link_category, 'link_dimension': q.link_dimension,
+            'link_type': q.link_type, 'link_key': q.link_key,
             'answer_count': 0,
         }
         if q.qtype == 'scale':
@@ -421,20 +452,20 @@ def survey_results(survey_id):
     }})
 
 
-@admin_bp.route('/surveys/<int:survey_id>/identities', methods=['GET'])
-@office_required
+@admin_bp.route('/<int:survey_id>/identities', methods=['GET'])
+@manager_required
 def survey_identities(survey_id):
     """응답자 확인. **고지한 대로 감사 로그를 남긴다.**
 
     남기지 않으면 "관리자는 확인할 수 있습니다"라는 고지가 면피 문구가 된다.
     """
     try:
-        survey = StrategySurvey.query.get(survey_id)
+        survey = Survey.query.get(survey_id)
         if not survey:
             return _error('설문을 찾을 수 없습니다.', 404)
 
         responses = survey.responses.filter(
-            StrategySurveyResponse.submitted_at.isnot(None)
+            SurveyResponse.submitted_at.isnot(None)
         ).all()
         names = {
             u.id: (u.name or u.email)
@@ -443,7 +474,7 @@ def survey_identities(survey_id):
             ).all()
         }
 
-        db.session.add(StrategySurveyAccessLog(
+        db.session.add(SurveyAccessLog(
             survey_id=survey.id,
             viewer_id=int(get_jwt_identity()),
             action='list_identities',
@@ -470,7 +501,7 @@ def _current_user():
 def _my_open_surveys(user):
     """내가 받은, 지금 응답 가능한 설문."""
     now = datetime.utcnow()
-    surveys = StrategySurvey.query.filter_by(status='open').all()
+    surveys = Survey.query.filter_by(status='open').all()
     return [s for s in surveys if _accepting(s, now) and is_target(user, s)]
 
 
@@ -482,8 +513,8 @@ def my_surveys():
         return _error('사용자를 찾을 수 없습니다.', 404)
 
     answered = {
-        r.survey_id for r in StrategySurveyResponse.query.filter_by(user_id=user.id)
-        .filter(StrategySurveyResponse.submitted_at.isnot(None)).all()
+        r.survey_id for r in SurveyResponse.query.filter_by(user_id=user.id)
+        .filter(SurveyResponse.submitted_at.isnot(None)).all()
     }
     out = []
     for s in _my_open_surveys(user):
@@ -509,8 +540,8 @@ def my_pending_count():
         return jsonify({'success': True, 'data': {'pending': 0}})
 
     answered = {
-        r.survey_id for r in StrategySurveyResponse.query.filter_by(user_id=user.id)
-        .filter(StrategySurveyResponse.submitted_at.isnot(None)).all()
+        r.survey_id for r in SurveyResponse.query.filter_by(user_id=user.id)
+        .filter(SurveyResponse.submitted_at.isnot(None)).all()
     }
     pending = sum(1 for s in _my_open_surveys(user) if s.id not in answered)
     return jsonify({'success': True, 'data': {'pending': pending}})
@@ -521,13 +552,13 @@ def my_pending_count():
 def survey_form(survey_id):
     """응답 화면이 쓸 문항. **대상자가 아니면 존재 자체를 알려주지 않는다.**"""
     user = _current_user()
-    survey = StrategySurvey.query.get(survey_id)
+    survey = Survey.query.get(survey_id)
     if not survey or not user or not is_target(user, survey):
         return _error('설문을 찾을 수 없습니다.', 404)
     if not _accepting(survey):
         return _error('지금은 응답을 받지 않는 설문입니다.', 409)
 
-    existing = StrategySurveyResponse.query.filter_by(
+    existing = SurveyResponse.query.filter_by(
         survey_id=survey.id, user_id=user.id
     ).first()
     division_id, source = resolve_division(user)
@@ -551,15 +582,15 @@ def submit_response(survey_id):
     """
     try:
         user = _current_user()
-        survey = StrategySurvey.query.get(survey_id)
+        survey = Survey.query.get(survey_id)
         if not survey or not user or not is_target(user, survey):
             return _error('설문을 찾을 수 없습니다.', 404)
         if not _accepting(survey):
             return _error('지금은 응답을 받지 않는 설문입니다.', 409)
 
-        if StrategySurveyResponse.query.filter_by(
+        if SurveyResponse.query.filter_by(
             survey_id=survey.id, user_id=user.id
-        ).filter(StrategySurveyResponse.submitted_at.isnot(None)).first():
+        ).filter(SurveyResponse.submitted_at.isnot(None)).first():
             return _error('이미 응답하셨습니다.', 409)
 
         payload = request.get_json() or {}
@@ -598,7 +629,7 @@ def submit_response(survey_id):
         if picked:
             division_id, source = int(picked), 'picked'
 
-        response = StrategySurveyResponse(
+        response = SurveyResponse(
             survey_id=survey.id,
             user_id=user.id,
             department_name=user.department,
@@ -610,7 +641,7 @@ def submit_response(survey_id):
         db.session.flush()
 
         for q, value in prepared:
-            answer = StrategySurveyAnswer(response_id=response.id, question_id=q.id)
+            answer = SurveyAnswer(response_id=response.id, question_id=q.id)
             if q.qtype == 'scale':
                 answer.value_number = value
             elif q.qtype == 'text':

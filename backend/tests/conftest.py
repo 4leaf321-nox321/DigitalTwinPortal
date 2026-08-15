@@ -20,6 +20,7 @@ import os
 import sys
 
 import pytest
+import sqlalchemy as sa
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
@@ -41,7 +42,15 @@ def app():
         pytest.exit(f'테스트 DB 가 아닙니다. TEST_DATABASE_URL 을 확인하세요: {uri}')
 
     with application.app_context():
-        _db.drop_all()
+        # drop_all() 이 아니라 스키마째 비운다.
+        #
+        # drop_all() 은 **지금 모델이 아는 표만** 지운다. 모델을 지우거나 이름을
+        # 바꾸면 옛 표가 DB 에 남고, 그 표가 FK 로 다른 표를 붙잡아 다음
+        # drop_all() 이 통째로 실패한다(2026-08-15 실제로 겪음).
+        # 테스트 DB 는 언제든 처음부터 만들 수 있어야 한다.
+        _db.session.execute(sa.text('DROP SCHEMA public CASCADE'))
+        _db.session.execute(sa.text('CREATE SCHEMA public'))
+        _db.session.commit()
         _db.create_all()
         yield application
         _db.session.remove()
