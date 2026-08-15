@@ -141,6 +141,13 @@ class SurveyResponse(BaseModel):
     # '미지정'으로 따로 센다(routes.survey_results).
     respondent_role = db.Column(db.String(50))
     respondent_process = db.Column(db.String(50))
+    # 역할을 **어떻게 정했나.** derived: 데이터에서 유도 / picked: 응답자가 고름
+    #
+    # ⚠️ 이 구분이 없으면 '자칭 PL'을 걸러볼 수 없다. knoxId 가 안 채워진
+    #    과제가 많아 유도가 안 되는 사람이 실제로 많고(개발 DB 기준 과제의 3/4),
+    #    그 사람들은 직접 고른다. 집계에서 둘을 섞으면 "PL 이 이렇게 답했다"가
+    #    실제로는 "PL 이라고 고른 사람이 이렇게 답했다"가 된다.
+    role_source = db.Column(db.String(20))
 
     submitted_at = db.Column(db.DateTime, nullable=True)
 

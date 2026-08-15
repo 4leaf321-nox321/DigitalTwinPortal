@@ -27,6 +27,7 @@ from .importer import (
 from .models import (
     Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
 )
+from .roles import SURVEY_ROLES, derive_roles, process_names
 
 # 만드는 쪽과 답하는 쪽을 경로로 가른다. 만들기는 /manage 아래, 응답은 그 위.
 admin_bp = Blueprint('survey_manage', __name__, url_prefix='/api/surveys/manage')
@@ -69,11 +70,28 @@ STATUSES = {'draft', 'open', 'closed'}
 UNSET_BUCKET = '미지정'
 
 
-def _axis_list(value, label):
+def allowed_axis_values(field):
+    """이 축에 쓸 수 있는 값. **서버가 아는 것만이다.**
+
+    자유 텍스트를 허용하면 오타 하나로 '개발'과 '개발 '이 다른 대상이 되어
+    한쪽 문항이 아무에게도 안 보이고, 응답자는 자기 역할을 마음대로 고를 수
+    있게 되어 역할별 집계가 의미를 잃는다.
+
+    프로세스는 대시보드의 마스터를 그대로 쓴다 — 설문이 자기 목록을 따로 들면
+    조직이 프로세스를 바꿔도 안 따라간다.
+    """
+    return list(SURVEY_ROLES) if field == 'roles' else process_names()
+
+
+def _axis_list(value, label, allowed=None):
     """역할/프로세스 목록을 정규화한다. 돌려주는 값은 (목록, 오류메시지).
 
     빈 값·None·리스트 아닌 값 모두 **빈 목록**으로 떨어진다. 빈 목록의 뜻은
     한 곳에서만 정한다 — '제한 없음'이다(models.SurveyQuestion 주석 참조).
+
+    allowed 를 주면 **그 안의 값만** 받는다. 모르는 값은 조용히 버리지 않고
+    오류로 낸다 — 버리면 표를 넣은 사람은 자기가 적은 역할이 사라진 줄 모르고,
+    그 역할을 고른 응답자에게만 문항이 안 보이는 상태가 된다.
     """
     if value is None or value == '':
         return [], None
@@ -86,6 +104,9 @@ def _axis_list(value, label):
             continue
         if len(token) > MAX_AXIS_VALUE:
             return None, f'{label} 이름이 너무 깁니다({MAX_AXIS_VALUE}자까지): {token}'
+        if allowed is not None and token not in allowed:
+            return None, (f'알 수 없는 {label}입니다: {token} '
+                          f"(쓸 수 있는 값: {', '.join(allowed) or '없음'})")
         if token not in out:
             out.append(token)
     return out, None
@@ -384,12 +405,16 @@ def _add_questions(survey, items, order_base=None):
             if value and len(value) > limit:
                 return f'{i + 1}번 문항의 {label} 너무 깁니다({limit}자까지).'
 
-        audience_roles, error = _axis_list(item.get('audience_roles'),
-                                           f'{i + 1}번 문항의 대상 역할')
+        # 문항의 대상도 **아는 값만** 받는다. 여기가 뚫리면 설문의 목록에는
+        # 없는 이름을 가리키는 문항이 만들어지고, 그 문항은 아무에게도 안 보인다.
+        audience_roles, error = _axis_list(
+            item.get('audience_roles'), f'{i + 1}번 문항의 대상 역할',
+            allowed_axis_values('roles'))
         if error:
             return error
-        audience_processes, error = _axis_list(item.get('audience_processes'),
-                                               f'{i + 1}번 문항의 대상 프로세스')
+        audience_processes, error = _axis_list(
+            item.get('audience_processes'), f'{i + 1}번 문항의 대상 프로세스',
+            allowed_axis_values('processes'))
         if error:
             return error
 
@@ -460,7 +485,8 @@ def _apply_axes(survey, payload):
     for field, label in (('roles', '역할'), ('processes', '프로세스')):
         if field not in payload:
             continue
-        values, error = _axis_list(payload[field], label)
+        values, error = _axis_list(payload[field], label,
+                                   allowed_axis_values(field))
         if error:
             return error
         setattr(survey, field, values)
@@ -483,13 +509,15 @@ def _extend_axes(survey, table_axes, payload):
     덧붙일 때마다 뒤바뀌면 응답자가 헷갈린다.
     """
     for field, label in (('roles', '역할'), ('processes', '프로세스')):
-        explicit, error = _axis_list(payload.get(field), label)
+        allowed = allowed_axis_values(field)
+        explicit, error = _axis_list(payload.get(field), label, allowed)
         if error:
             return error
+        # 표에서 나온 값도 아는 것만 더한다. 문항 검증이 이미 막지만, 여기서
+        # 한 번 더 거르지 않으면 설문 목록에 모르는 이름이 들어앉는다.
+        from_table = [v for v in (table_axes.get(field) or []) if v in allowed]
         merged = []
-        for source in (getattr(survey, field) or [],
-                       table_axes.get(field) or [],
-                       explicit):
+        for source in (getattr(survey, field) or [], from_table, explicit):
             for value in source:
                 if value not in merged:
                     merged.append(value)
@@ -1145,6 +1173,11 @@ def survey_form(survey_id):
     ).first()
     division_id, source = resolve_division(user)
 
+    # 이 사람이 실제로 해당하는 역할. 설문이 묻는 목록과 겹치는 것만 준다 —
+    # 설문이 안 묻는 역할을 기본값으로 주면 제출이 막힌다(_pick_axis).
+    asked_roles = survey.roles or []
+    derived = [r for r in derive_roles(user) if r in asked_roles]
+
     return jsonify({'success': True, 'data': {
         **_survey_dict(survey, with_questions=True),
         'already_answered': bool(existing and existing.submitted_at),
@@ -1152,6 +1185,12 @@ def survey_form(survey_id):
         'suggested_division_id': division_id,
         'division_source': source,
         'department_name': user.department,
+        # ⚠️ 역할은 **데이터에서 유도한다.** 자유롭게 고르게 두면 역할별 집계가
+        #    자칭이 되어 의미를 잃는다. 다만 knoxId 가 안 채워진 과제가 많아
+        #    유도가 안 되는 사람이 실제로 많으므로(SURVEY_PLAN 7절), 그때는
+        #    고르게 하고 **고른 것인지 유도된 것인지를 응답에 남긴다.**
+        'derived_roles': derived,
+        'role_source': 'derived' if derived else 'picked',
     }})
 
 
@@ -1189,6 +1228,12 @@ def submit_response(survey_id):
                                  survey.roles or [], '역할')
         if error:
             return _error(error, 400)
+        # 고른 역할이 데이터로 뒷받침되는가. 화면이 보낸 말을 믿지 않고
+        # **서버가 다시 유도해서** 판정한다 — 화면 값을 그대로 저장하면
+        # 자칭 PL 이 'derived' 로 기록될 수 있다.
+        role_source = None
+        if role:
+            role_source = 'derived' if role in derive_roles(user) else 'picked'
         process, error = _pick_axis(payload.get('respondent_process'),
                                     survey.processes or [], '프로세스')
         if error:
@@ -1265,6 +1310,7 @@ def submit_response(survey_id):
             division_source=source,
             respondent_role=role,
             respondent_process=process,
+            role_source=role_source,
             submitted_at=datetime.utcnow(),
         )
         db.session.add(response)

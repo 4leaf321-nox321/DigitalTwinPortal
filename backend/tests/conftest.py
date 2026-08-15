@@ -56,13 +56,27 @@ def app():
         _db.session.remove()
 
 
+# 설문이 고를 수 있는 프로세스는 **대시보드 마스터**에서 온다. 운영에 있는
+# 값과 같은 것을 쓴다(2026-08-15 확인).
+PROCESS_NAMES = ['개발', '제조', '품질', '디자인', '연계']
+
+
 @pytest.fixture()
 def db(app):
-    """테스트마다 데이터를 비운다.
+    """테스트마다 데이터를 비우고, 마스터 데이터를 다시 심는다.
 
     표를 다시 만들지 않고 내용만 지운다 — create_all 은 느리고, 표 구조는
     테스트 사이에 바뀌지 않는다.
+
+    ⚠️ 마스터는 **매번 다시 심어야 한다.** 아래 비우기가 모든 표를 훑으므로
+       세션 시작 때 한 번 심어 두면 첫 테스트가 끝나는 순간 사라지고, 그
+       뒤로는 "쓸 수 있는 프로세스가 없음" 이 되어 관련 테스트가 전부 막힌다.
     """
+    from app.modules.digital_twin_dashboard.models import ProcessCategory
+    for i, name in enumerate(PROCESS_NAMES):
+        _db.session.add(ProcessCategory(name=name, order=i, is_active=True))
+    _db.session.commit()
+
     yield _db
     _db.session.rollback()
     for table in reversed(_db.metadata.sorted_tables):

@@ -55,7 +55,7 @@ TABLE_ROWS = [
      '1: 낮음, 5: 높음', 'organization:readiness'],
     ['', '', '', '가장 큰 걸림돌은?', '서술', '', '아니오', '', ''],
     ['역할별', 'PL', '', 'PL 로서 리소스는 충분한가?', '척도', '', '예', '', ''],
-    ['', '과제 멤버', '', '맡은 과제의 목표가 분명한가?', '척도', '', 'Y', '', ''],
+    ['', '과제 참여인력', '', '맡은 과제의 목표가 분명한가?', '척도', '', 'Y', '', ''],
     ['프로세스별', '', '개발', '개발 단계에서 쓰는 도구는?', '객관식',
      'CATIA|NX|기타', '예', '', ''],
 ]
@@ -112,7 +112,7 @@ def test_역할과_프로세스가_비면_전원이_본다():
 
 def test_표에_나온_역할과_프로세스가_모인다():
     result = parse_table(_tsv(TABLE_ROWS))
-    assert result['roles'] == ['PL', '과제 멤버']      # 등장 순서
+    assert result['roles'] == ['PL', '과제 참여인력']      # 등장 순서
     assert result['processes'] == ['개발']
 
 
@@ -194,7 +194,7 @@ def test_미리보기는_아무것도_저장하지_않는다(client, office, aut
     assert res.status_code == 200
     data = res.get_json()['data']
     assert data['ok_count'] == 5 and data['error_count'] == 0
-    assert data['roles'] == ['PL', '과제 멤버']
+    assert data['roles'] == ['PL', '과제 참여인력']
     assert Survey.query.count() == 0          # ← 요점
 
 
@@ -206,7 +206,7 @@ def test_표에서_설문이_통째로_만들어진다(client, office, auth):
 
     data = res.get_json()['data']
     assert data['status'] == 'draft'           # 만들자마자 배포되지 않는다
-    assert data['roles'] == ['PL', '과제 멤버']
+    assert data['roles'] == ['PL', '과제 참여인력']
     assert data['processes'] == ['개발']
     assert len(data['questions']) == 5
 
@@ -259,13 +259,13 @@ def test_문항은_걸러지지_않고_통째로_내려간다(client, office, st
     data = client.get(f'{RESPOND_BASE}/{survey_id}/form',
                       headers=auth(staff)).get_json()['data']
     assert len(data['questions']) == 5                 # 하나도 안 걸렀다
-    assert data['roles'] == ['PL', '과제 멤버']         # 물을 선택지가 같이 온다
+    assert data['roles'] == ['PL', '과제 참여인력']         # 물을 선택지가 같이 온다
     assert data['processes'] == ['개발']
     assert data['questions'][2]['audience_roles'] == ['PL']
 
 
 def test_다른_역할의_필수_문항이_제출을_막지_않는다(client, office, staff, auth):
-    """PL 용 필수 문항 때문에 과제 멤버가 영영 제출을 못 하면 안 된다.
+    """PL 용 필수 문항 때문에 과제 참여인력가 영영 제출을 못 하면 안 된다.
 
     화면에는 안 보이는 문항을 서버가 요구하는 꼴이라, 사용자는 왜 막혔는지
     알 방법조차 없다.
@@ -276,7 +276,7 @@ def test_다른_역할의_필수_문항이_제출을_막지_않는다(client, of
     qs = {q['text']: q['id'] for q in data['questions']}
 
     res = client.post(f'{RESPOND_BASE}/{survey_id}/responses', json={
-        'respondent_role': '과제 멤버',
+        'respondent_role': '과제 참여인력',
         'respondent_process': '개발',
         'answers': {
             str(qs['디지털 전환 준비도는?']): 4,
@@ -288,7 +288,7 @@ def test_다른_역할의_필수_문항이_제출을_막지_않는다(client, of
 
     assert res.status_code == 201, res.get_json()
     saved = SurveyResponse.query.one()
-    assert saved.respondent_role == '과제 멤버'
+    assert saved.respondent_role == '과제 참여인력'
     assert saved.respondent_process == '개발'
 
 
@@ -347,12 +347,12 @@ def test_해당_없는_문항의_답은_조용히_버려진다(client, office, s
     stale = qs['PL 로서 리소스는 충분한가?']
 
     res = client.post(f'{RESPOND_BASE}/{survey_id}/responses', json={
-        'respondent_role': '과제 멤버', 'respondent_process': '개발',
+        'respondent_role': '과제 참여인력', 'respondent_process': '개발',
         'answers': {
             str(qs['디지털 전환 준비도는?']): 4,
             str(qs['맡은 과제의 목표가 분명한가?']): 5,
             str(qs['개발 단계에서 쓰는 도구는?']): 'CATIA',
-            str(stale): 2,                       # ← PL 문항. 나는 과제 멤버다.
+            str(stale): 2,                       # ← PL 문항. 나는 과제 참여인력다.
         },
     }, headers=auth(staff))
 
@@ -390,8 +390,10 @@ def test_아무도_못_보는_문항이_있으면_배포가_막힌다(client, of
     """
     res = client.post(f'{ADMIN_BASE}/import', json={
         'title': '어긋난 설문', 'text': _tsv(TABLE_ROWS),
-        # 표에는 'PL'·'과제 멤버'가 있는데 설문은 다른 이름만 묻는다.
-        'roles': ['PL(과제리더)', '과제 멤버'],
+        # 표에는 PL 문항이 있는데 설문은 그 역할을 안 묻는다.
+        # (오타 이름은 이제 임포트에서 막히므로 — 아래 테스트 참고 —
+        #  '아무도 못 보는 문항'은 이렇게 **목록에서 빠뜨렸을 때** 생긴다.)
+        'roles': ['과제 참여인력'],
     }, headers=auth(office))
     assert res.status_code == 201
     survey_id = res.get_json()['data']['id']
@@ -435,7 +437,7 @@ def test_집계가_역할별로_갈린다(client, office, staff, staff2, auth):
                     str(qs['개발 단계에서 쓰는 도구는?']): 'NX'},
     }, headers=auth(staff))
     client.post(f'{RESPOND_BASE}/{survey_id}/responses', json={
-        'respondent_role': '과제 멤버', 'respondent_process': '개발',
+        'respondent_role': '과제 참여인력', 'respondent_process': '개발',
         'answers': {str(common): 4,
                     str(qs['맡은 과제의 목표가 분명한가?']): 5,
                     str(qs['개발 단계에서 쓰는 도구는?']): 'CATIA'},
@@ -450,10 +452,10 @@ def test_집계가_역할별로_갈린다(client, office, staff, staff2, auth):
     assert body['questions'][0]['section'] == '공통'
 
     by_role = body['by_role']
-    assert set(by_role) == {'PL', '과제 멤버'}
+    assert set(by_role) == {'PL', '과제 참여인력'}
     assert by_role['PL']['count'] == 1
     assert by_role['PL']['questions'][str(common)]['average'] == 2.0
-    assert by_role['과제 멤버']['questions'][str(common)]['average'] == 4.0
+    assert by_role['과제 참여인력']['questions'][str(common)]['average'] == 4.0
     # 역할별 칸에는 원문을 싣지 않는다 — 한 명까지 좁혀지면 기명이 된다.
     assert 'values' not in by_role['PL']['questions'][str(common)]
 
@@ -531,9 +533,9 @@ def test_기존_설문은_그대로_동작한다(client, office, staff, auth):
 
 EXTRA_ROWS = [
     HEADER,
-    ['품질', '품질 담당', '품질', '검사 데이터는 자동으로 쌓이나?', '척도', '',
+    ['품질', '사업부 사무국', '품질', '검사 데이터는 자동으로 쌓이나?', '척도', '',
      '예', '', 'quality:data'],
-    ['품질', '품질 담당', '품질', '불량 원인을 어디서 보나?', '객관식',
+    ['품질', '사업부 사무국', '품질', '불량 원인을 어디서 보나?', '객관식',
      'MES|엑셀|기타', '아니오', '', ''],
 ]
 
@@ -582,7 +584,7 @@ def test_덧붙이면_기존_문항이_남고_뒤에_붙는다(client, office, a
         [q['text'] for q in survey['questions']]  # 앞의 5개는 그대로
     assert questions[5]['text'] == '검사 데이터는 자동으로 쌓이나?'
     assert questions[5]['section'] == '품질'
-    assert questions[5]['audience_roles'] == ['품질 담당']
+    assert questions[5]['audience_roles'] == ['사업부 사무국']
     assert questions[6]['options']['choices'] == ['MES', '엑셀', '기타']
     assert questions[6]['required'] is False
 
@@ -598,16 +600,17 @@ def test_덧붙이면_축이_합집합으로_넓어진다(client, office, auth):
     막힌다.
     """
     survey = _import_new(client, office, auth,
-                         roles=['PL', '과제 멤버', '사무국장'])
-    assert survey['roles'] == ['PL', '과제 멤버', '사무국장']
+                         roles=['PL', '과제 참여인력'])
+    assert survey['roles'] == ['PL', '과제 참여인력']
 
-    # 표에는 '품질 담당'이 나오고, payload 로 '감사'를 따로 명시한다.
-    res = _append(client, office, auth, survey['id'], roles=['감사'])
+    # 덧붙이는 표에는 '사업부 사무국'이 나오고, payload 로 '사무국장'을 따로
+    # 명시한다. 사무국장은 전용 문항이 없어 표에는 안 나타나는 역할이다.
+    res = _append(client, office, auth, survey['id'], roles=['사무국장'])
     assert res.status_code == 200, res.get_json()
 
     data = res.get_json()['data']
-    # 기존 → 표 → payload 순으로 이어 붙는다. 사무국장이 살아 있는 것이 요점.
-    assert data['roles'] == ['PL', '과제 멤버', '사무국장', '품질 담당', '감사']
+    # 기존 → 표 → payload 순으로 이어 붙는다. 기존 것이 안 사라지는 것이 요점.
+    assert data['roles'] == ['PL', '과제 참여인력', '사업부 사무국', '사무국장']
     assert data['processes'] == ['개발', '품질']
 
 
@@ -712,3 +715,31 @@ def test_survey_id_없이_부르면_예전처럼_새_설문이_만들어진다(c
     assert len(first['questions']) == 5
     assert len(second['questions']) == 2
     assert [q['order'] for q in second['questions']] == [0, 1]
+
+
+def test_모르는_역할_이름은_임포트에서_막힌다(client, office, auth):
+    """역할·프로세스는 **서버가 아는 값만** 쓴다.
+
+    자유 텍스트로 두면 오타 하나로 'PL'과 'PL(과제리더)'가 다른 대상이 되어 그
+    문항이 아무에게도 안 보이고, 응답자는 자기 역할을 마음대로 고를 수 있어
+    역할별 집계가 의미를 잃는다. 배포 직전 검사보다 **여기서 막는 편**이 낫다 —
+    표를 고쳐 다시 넣으면 그만인 시점이기 때문이다.
+    """
+    res = client.post(f'{ADMIN_BASE}/import', json={
+        'title': '오타 설문', 'text': _tsv(TABLE_ROWS),
+        'roles': ['PL(과제리더)'],
+    }, headers=auth(office))
+    assert res.status_code == 400
+    assert 'PL(과제리더)' in res.get_json()['message']
+    assert Survey.query.count() == 0
+
+
+def test_모르는_프로세스는_임포트에서_막힌다(client, office, auth):
+    """프로세스 목록은 대시보드 마스터(process_categories)가 정본이다."""
+    rows = [HEADER, ['프로세스별', '', '설계', '문항', '척도', '', '예', '', '']]
+    res = client.post(f'{ADMIN_BASE}/import', json={
+        'title': '없는 프로세스', 'text': _tsv(rows),
+    }, headers=auth(office))
+    assert res.status_code == 400
+    assert '설계' in res.get_json()['message']
+    assert Survey.query.count() == 0
