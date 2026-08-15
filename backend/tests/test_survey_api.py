@@ -163,16 +163,57 @@ def test_응답을_제출하면_저장된다(client, staff, auth):
     assert saved.answers.one().value_number == 4
 
 
-def test_한_사람은_한_번만_응답할_수_있다(client, staff, auth):
+def test_한_사람의_응답은_한_벌이고_마감_전엔_고칠_수_있다(client, staff, auth):
+    """다시 내면 **갈아끼운다.** 여러 벌 쌓이면 어느 것이 정본인지 갈린다.
+
+    한 번 내면 끝이면 오타 하나에도 손쓸 방법이 없고, 그러면 사람들은 확신이
+    설 때까지 안 내고 미루거나 잘못 낸 채로 둔다. 둘 다 응답 품질을 떨어뜨린다.
+    """
     survey = _make_survey()
     qid = survey.questions.first().id
-    body = {'answers': {str(qid): 4}}
 
     assert client.post(f'{RESPOND_BASE}/{survey.id}/responses',
-                       json=body, headers=auth(staff)).status_code == 201
+                       json={'answers': {str(qid): 4}},
+                       headers=auth(staff)).status_code == 201
     assert client.post(f'{RESPOND_BASE}/{survey.id}/responses',
-                       json=body, headers=auth(staff)).status_code == 409
+                       json={'answers': {str(qid): 2}},
+                       headers=auth(staff)).status_code == 201
+
     assert SurveyResponse.query.count() == 1
+    saved = SurveyResponse.query.one()
+    assert saved.answers.count() == 1          # 답이 쌓이지 않는다
+    assert saved.answers.one().value_number == 2
+    first_submitted = saved.submitted_at
+    assert first_submitted is not None         # 처음 낸 때가 남는다
+
+
+def test_마감한_뒤에는_고칠_수_없다(client, staff, office, auth):
+    """마감은 '더 안 받는다'는 뜻이다. 그 뒤에 답이 바뀌면 집계가 뒤에서 움직인다."""
+    survey = _make_survey()
+    qid = survey.questions.first().id
+    client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                json={'answers': {str(qid): 4}}, headers=auth(staff))
+
+    client.put(f'{ADMIN_BASE}/{survey.id}/status',
+               json={'status': 'closed'}, headers=auth(office))
+
+    res = client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                      json={'answers': {str(qid): 1}}, headers=auth(staff))
+    assert res.status_code == 409
+    assert SurveyResponse.query.one().answers.one().value_number == 4
+
+
+def test_이미_낸_답이_폼에_실려_온다(client, staff, auth):
+    """안 실어 주면 고치려는 사람이 처음부터 다시 적어야 한다."""
+    survey = _make_survey()
+    qid = survey.questions.first().id
+    client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                json={'answers': {str(qid): 3}}, headers=auth(staff))
+
+    data = client.get(f'{RESPOND_BASE}/{survey.id}/form',
+                      headers=auth(staff)).get_json()['data']
+    assert data['already_answered'] is True
+    assert data['my_answers'] == {str(qid): 3.0}
 
 
 def test_필수_문항을_비우면_거부된다(client, staff, auth):

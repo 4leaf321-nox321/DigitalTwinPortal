@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
-import { ArrowLeft, CheckCircle2, AlertTriangle, Clock, ListChecks } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Clock, ListChecks, RotateCcw } from 'lucide-react';
 import surveyApi from '../../services/surveyApi';
 import AnonymityNotice from './AnonymityNotice';
 import QuestionField, { hasAnswer } from './QuestionField';
@@ -270,6 +270,19 @@ const formatDeadline = (iso) => {
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 };
 
+const Answered = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.5rem;
+  color: #15803d;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+`;
+
 const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
   const [form, setForm] = useState(null);
   // ⚠️ 문항 id → 값의 **평면 맵**이다. 역할·프로세스로 문항을 걸러도 이 맵은
@@ -306,6 +319,12 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
         // 앞선 것)을 쓰고, 본인이 바꿀 수 있게 둔다.
         const derived = res.data?.derived_roles || [];
         if (derived.length > 0) setRole(derived[0]);
+        // 이미 낸 적이 있으면 **그때 고른 역할·프로세스와 답을 그대로 채운다.**
+        // 유도값보다 본인이 실제로 낸 것이 우선이다 — 고치러 온 사람에게
+        // 다른 역할을 들이밀면 문항이 바뀌어 버린다.
+        if (res.data?.my_role) setRole(res.data.my_role);
+        if (res.data?.my_process) setProcess(res.data.my_process);
+        if (res.data?.my_answers) setAnswers(res.data.my_answers);
         setError(null);
       })
       .catch(e => alive && setError(e.message))
@@ -466,17 +485,21 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
       {/* 고지는 문항보다 위, 항상. 답을 적기 시작한 뒤에 알려주면 늦다. */}
       <AnonymityNotice />
 
-      {form.already_answered ? (
-        // 서버도 409 로 막지만, 다 적고 나서 거절당하는 것보다 처음부터 못
-        // 적게 하는 편이 낫다.
-        <Blocked>
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+      {/* 이미 냈어도 **마감 전이면 고칠 수 있다.** 그래서 막지 않고, 낸 적이
+          있다는 것과 다시 내면 갈아끼워진다는 것만 알린다. 한 번 내면 끝이면
+          사람들은 확신이 설 때까지 안 내고 미루거나 잘못 낸 채로 둔다. */}
+      {form.already_answered && (
+        <Answered>
+          <RotateCcw size={16} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
           <span>
-            <strong>이미 응답하신 설문입니다.</strong> 응답은 1인 1회라 다시 낼 수
-            없습니다. 낸 답은 집계에 이미 들어가 있습니다.
+            <strong>이미 응답하셨습니다. 아래에 낸 답이 그대로 있습니다.</strong>{' '}
+            마감 전까지는 고쳐서 다시 내실 수 있고, 다시 내시면 이전 답을
+            갈아끼웁니다. 답이 여러 벌 쌓이지는 않습니다.
           </span>
-        </Blocked>
-      ) : (
+        </Answered>
+      )}
+
+      {false ? null : (
         <>
           {/* 문항보다 **먼저**. 무엇을 묻는지가 이 선택으로 정해진다. */}
           <RoleSelect

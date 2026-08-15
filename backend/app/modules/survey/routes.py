@@ -1205,6 +1205,25 @@ def my_pending_count():
     return jsonify({'success': True, 'data': {'pending': pending}})
 
 
+def _my_answers(response):
+    """내가 낸 답을 {문항id: 값} 으로. 화면이 그대로 폼에 채운다.
+
+    유형마다 값이 담긴 칸이 다르므로(models.SurveyAnswer) 여기서 하나로 편다.
+    화면이 세 칸을 다 뒤지게 두면 그 규칙이 두 곳으로 갈린다.
+    """
+    if response is None:
+        return {}
+    out = {}
+    for a in response.answers.all():
+        if a.value_number is not None:
+            out[str(a.question_id)] = a.value_number
+        elif a.value_text is not None:
+            out[str(a.question_id)] = a.value_text
+        elif a.value_json is not None:
+            out[str(a.question_id)] = a.value_json
+    return out
+
+
 @respond_bp.route('/<int:survey_id>/form', methods=['GET'])
 @jwt_required()
 def survey_form(survey_id):
@@ -1247,6 +1266,13 @@ def survey_form(survey_id):
         #    고르게 하고 **고른 것인지 유도된 것인지를 응답에 남긴다.**
         'derived_roles': derived,
         'role_source': 'derived' if derived else 'picked',
+        # 이미 낸 답. **마감 전이면 고칠 수 있으므로 되돌려 준다** — 안 주면
+        # 고치려는 사람이 처음부터 다시 적어야 하고, 그러면 대충 적거나 아예
+        # 안 고친다. 고친 값만 보내는 것이 아니라 통째로 다시 내는 구조라
+        # (답을 갈아끼운다) 이전 답이 화면에 있어야 한다.
+        'my_answers': _my_answers(existing),
+        'my_role': existing.respondent_role if existing else None,
+        'my_process': existing.respondent_process if existing else None,
     }})
 
 
@@ -1265,10 +1291,20 @@ def submit_response(survey_id):
         if not _accepting(survey):
             return _error('지금은 응답을 받지 않는 설문입니다.', 409)
 
-        if SurveyResponse.query.filter_by(
+        # ⚠️ **마감 전이면 고칠 수 있다.**
+        #
+        # 예전에는 한 번 내면 끝이라 오타 하나에도 손쓸 방법이 없었다. 그러면
+        # 사람들은 확신이 설 때까지 안 내고 미루거나, 잘못 낸 채로 둔다 —
+        # 둘 다 응답 품질을 떨어뜨린다. 받는 중(_accepting)이면 다시 낸 것으로
+        # 갈아끼운다. 마감 뒤에는 위에서 이미 막혔다.
+        #
+        # 새로 만들지 않고 **같은 행을 고친다.** (survey_id, user_id) 유니크가
+        # 걸려 있어 새로 만들면 터지고, 무엇보다 응답이 여러 벌 쌓이면 어느
+        # 것이 정본인지 갈린다.
+        response = SurveyResponse.query.filter_by(
             survey_id=survey.id, user_id=user.id
-        ).filter(SurveyResponse.submitted_at.isnot(None)).first():
-            return _error('이미 응답하셨습니다.', 409)
+        ).first()
+        editing = response is not None
 
         payload = request.get_json() or {}
         answers = payload.get('answers')
@@ -1358,18 +1394,34 @@ def submit_response(survey_id):
                 # 예전에는 여기서 int() 가 그대로 터져 500 이 나갔다.
                 return _error(f'division_id 가 올바르지 않습니다: {picked}', 400)
 
-        response = SurveyResponse(
-            survey_id=survey.id,
-            user_id=user.id,
-            department_name=user.department,
-            division_id=division_id,
-            division_source=source,
-            respondent_role=role,
-            respondent_process=process,
-            role_source=role_source,
-            submitted_at=datetime.utcnow(),
-        )
-        db.session.add(response)
+        if editing:
+            # 답을 통째로 갈아끼운다. 남겨 두면 이번에 해당 없는 문항의 옛 답이
+            # 남아, 역할을 바꿔 다시 낸 사람의 응답에 두 역할의 답이 섞인다.
+            for old_answer in response.answers.all():
+                db.session.delete(old_answer)
+            response.department_name = user.department
+            response.division_id = division_id
+            response.division_source = source
+            response.respondent_role = role
+            response.respondent_process = process
+            response.role_source = role_source
+            # submitted_at 은 **처음 낸 때**로 둔다. 고친 시각은 updated_at 이
+            # 들고 있으므로, 덮어쓰면 "언제 처음 답했나"를 잃는다.
+            if response.submitted_at is None:
+                response.submitted_at = datetime.utcnow()
+        else:
+            response = SurveyResponse(
+                survey_id=survey.id,
+                user_id=user.id,
+                department_name=user.department,
+                division_id=division_id,
+                division_source=source,
+                respondent_role=role,
+                respondent_process=process,
+                role_source=role_source,
+                submitted_at=datetime.utcnow(),
+            )
+            db.session.add(response)
         db.session.flush()
 
         for q, value in prepared.values():
