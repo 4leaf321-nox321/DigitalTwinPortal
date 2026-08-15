@@ -73,6 +73,17 @@ STATUSES = {'draft', 'open', 'closed'}
 UNSET_BUCKET = '미지정'
 
 
+def _object_particle(word):
+    """받침에 따라 을/를. 전략 모듈에도 같은 것이 있지만 import 하지 않는다 —
+    그러면 설문이 다시 전략에 매인다. 열 줄짜리 규칙이라 옮겨 두는 편이 싸다."""
+    if not word:
+        return '를'
+    code = ord(word[-1])
+    if 0xAC00 <= code <= 0xD7A3:              # 한글 음절
+        return '을' if (code - 0xAC00) % 28 else '를'
+    return '을' if word[-1].isdigit() else '를'
+
+
 def allowed_axis_values(field):
     """이 축에 쓸 수 있는 값. **서버가 아는 것만이다.**
 
@@ -108,7 +119,9 @@ def _axis_list(value, label, allowed=None):
         if len(token) > MAX_AXIS_VALUE:
             return None, f'{label} 이름이 너무 깁니다({MAX_AXIS_VALUE}자까지): {token}'
         if allowed is not None and token not in allowed:
-            return None, (f'알 수 없는 {label}입니다: {token} '
+            # 라벨이 '3번 문항의 대상 역할' 처럼 길어서 "알 수 없는 …입니다" 에
+            # 끼우면 말이 꼬인다. 라벨을 앞에 세운다.
+            return None, (f"{label}{_object_particle(label)} 알 수 없습니다: {token} "
                           f"(쓸 수 있는 값: {', '.join(allowed) or '없음'})")
         if token not in out:
             out.append(token)
