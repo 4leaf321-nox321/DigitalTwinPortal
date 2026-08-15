@@ -28,7 +28,7 @@ from .models import (
     Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
 )
 from .roles import (
-    SURVEY_ROLES, derive_roles, office_head_ids, process_names,
+    OFFICE_ROLES, SURVEY_ROLES, derive_roles, office_head_ids, process_names,
     set_office_head_ids,
 )
 
@@ -36,7 +36,14 @@ from .roles import (
 admin_bp = Blueprint('survey_manage', __name__, url_prefix='/api/surveys/manage')
 respond_bp = Blueprint('survey_respond', __name__, url_prefix='/api/surveys')
 
-MANAGER_ROLES = (UserRole.ADMIN, UserRole.DT_OFFICE_MEMBER)
+# 설문을 만들고 집계를 보는 권한.
+#
+# ⚠️ **사무국의 정의를 여기서 따로 적지 않는다.** 예전에는 이 자리에
+#    dt_office 만 적혀 있어서, roles.py 가 사무국으로 인정하는 manager 계정이
+#    정작 설문 관리 화면에서 403 으로 튕겼다. "당신은 사업부 사무국입니다"
+#    라고 역할까지 붙여 주면서 관리 화면은 안 열어 주는 상태였다.
+#    사무국이 누구인지는 roles.OFFICE_ROLES 한 곳에서만 정한다.
+MANAGER_ROLES = (UserRole.ADMIN,) + tuple(OFFICE_ROLES)
 
 
 def _error(message, status=500):
@@ -257,12 +264,16 @@ def is_target(user, survey):
     return False
 
 
-def target_user_ids(survey):
+def target_user_ids(survey, users=None):
     """대상자 id 목록. 응답률을 말하려면 분모가 있어야 한다.
 
     "3.2점"만 보여주는 집계는 몇 명이 답했는지 모르는 평균이라 판단에 못 쓴다.
+
+    users 를 주면 그것을 쓴다. 목록 화면은 설문마다 이 함수를 부르는데, 그때
+    매번 사용자 표를 통째로 다시 읽으면 설문 수만큼 전수 조회가 나간다.
     """
-    users = User.query.filter_by(is_active=True).all()
+    if users is None:
+        users = User.query.filter_by(is_active=True).all()
     return [u.id for u in users if is_target(u, survey)]
 
 
@@ -514,6 +525,33 @@ def _append_questions(survey, items):
     return _add_questions(survey, items, order_base=_next_order(survey))
 
 
+def axis_narrowing_error(survey, payload):
+    """잠긴 설문에서 역할·프로세스를 **빼려는지** 본다. 빼지 않으면 None.
+
+    ⚠️ 문항은 응답이 들어오면 잠그면서 축은 안 잠갔다. 그래서 'PL' 로 답한
+       사람이 있는데 목록에서 PL 을 빼는 것이 그냥 됐다. 그러면 그 응답의
+       respondent_role 은 'PL' 인데 설문은 PL 을 모르는 상태가 되고, 집계에서
+       그 응답은 갈 곳을 잃는다. 답을 받는 중이었다면 그 역할인 사람은 그
+       순간부터 제출도 못 한다.
+
+    **더하는 것은 막지 않는다.** 전용 문항이 없는 역할(사무국장처럼)을 뒤늦게
+    추가해야 그 사람이 답할 수 있다 — 덧붙이기가 합집합만 하는 것과 같은 규칙이다.
+    """
+    for field, label in (('roles', '역할'), ('processes', '프로세스')):
+        if field not in payload:
+            continue
+        incoming, error = _axis_list(payload[field], label,
+                                     allowed_axis_values(field))
+        if error:
+            return error
+        dropped = [v for v in (getattr(survey, field) or []) if v not in (incoming or [])]
+        if dropped:
+            return (f"이미 응답이 있어 {label} 목록에서 뺄 수 없습니다: "
+                    f"{', '.join(dropped)}. 그 {label}로 답한 응답이 집계에서 "
+                    f"갈 곳을 잃습니다. 더하는 것은 됩니다.")
+    return None
+
+
 def _apply_axes(survey, payload):
     """설문이 물을 역할·프로세스를 payload 에서 받아 반영한다.
 
@@ -622,9 +660,12 @@ def list_surveys():
         query = query.filter_by(context_id=context_id)
 
     surveys = query.order_by(Survey.id.desc()).all()
+    # 사용자 표는 **한 번만** 읽는다. 설문마다 읽으면 목록 한 번에 전수 조회가
+    # 설문 수만큼 나간다.
+    users = User.query.filter_by(is_active=True).all()
     out = []
     for s in surveys:
-        targets = target_user_ids(s)
+        targets = target_user_ids(s, users)
         out.append(_survey_dict(s, counts={
             'target_count': len(targets),
             'response_count': s.responses.filter(
@@ -902,6 +943,20 @@ def modify_survey(survey_id):
             )})
 
         if request.method == 'DELETE':
+            # ⚠️ **응답이 있으면 지우지 않는다.**
+            #
+            # 문항 한 줄은 잠가서 못 고치게 하면서 설문 통째로는 지워졌다.
+            # 지우면 응답과 함께 **열람 기록(SurveyAccessLog)까지** 사라진다 —
+            # "관리자가 응답자를 확인하면 기록이 남습니다"라고 고지해 놓고,
+            # 그 기록을 지우는 버튼이 관리자에게 있는 셈이었다.
+            #
+            # 잘못 만든 설문을 치우는 길은 마감(closed)이다. 지우는 것과 달리
+            # 되돌릴 수 있고, 무엇을 받았는지가 남는다.
+            if survey.responses.count() > 0:
+                return _error(
+                    '이미 응답이 있는 설문은 삭제할 수 없습니다. 받은 응답과 '
+                    '열람 기록이 함께 사라집니다. 더 받지 않으려면 마감해 주세요.',
+                    409)
             db.session.delete(survey)
             db.session.commit()
             return jsonify({'success': True})
@@ -913,6 +968,12 @@ def modify_survey(survey_id):
         lock = question_lock_reason(survey)
         if 'questions' in payload and lock:
             return _error(lock, 409)
+        # 축도 같이 잠근다 — 빼는 것만. 문항만 잠그고 축을 열어 두면 역할
+        # 하나를 빼는 것으로 그 역할 문항이 통째로 사라지는 것과 같아진다.
+        if lock:
+            error = axis_narrowing_error(survey, payload)
+            if error:
+                return _error(error, 409)
 
         if 'title' in payload:
             title = (payload['title'] or '').strip()
@@ -1006,6 +1067,41 @@ def _question_choice_labels(question):
         if label and label not in out:
             out.append(label)
     return out
+
+
+def _choice_answer_error(question, value):
+    """객관식 답이 **보기 안에 있는가.** 문제없으면 None.
+
+    ⚠️ 서버가 이것을 안 봤다. 화면은 버튼만 주지만 서버는 아무 문자열이나
+       받아서 저장했고, 그 답은 집계에서 **새로운 선택지**가 되어 나타난다.
+       객관식으로 물은 이유가 의견을 유형화하기 위한 것인데, 유형이 응답 쪽에서
+       늘어나면 그 목적이 사라진다. 역할·프로세스를 목록으로만 받는 것과 같은
+       이유다(roles.py).
+
+    보기가 없는 객관식은 **일부러 자유 입력으로 내려 준다**(QuestionField.jsx).
+    답할 방법이 없는 막다른 문항을 만들지 않으려는 것이라, 여기서도 통과시킨다.
+    """
+    if question.qtype not in ('choice', 'multi', 'rank'):
+        return None
+    allowed = _question_choice_labels(question)
+    if not allowed:
+        return None
+    if not _has_answer(value):
+        return None            # 필수 검사는 위에서 이미 했다
+
+    picked = _choice_values(value)
+    if question.qtype == 'choice' and len(picked) > 1:
+        return (f'하나만 고르는 문항에 여러 개가 왔습니다: {question.text} '
+                f"({', '.join(picked)})")
+    unknown = [p for p in picked if p not in allowed]
+    if unknown:
+        return (f"보기에 없는 답입니다: {', '.join(unknown)} — {question.text} "
+                f"(고를 수 있는 값: {', '.join(allowed)})")
+    if question.qtype in ('multi', 'rank') and len(set(picked)) != len(picked):
+        # 순위형에서 같은 항목이 두 번 오면 순위가 성립하지 않고, 복수선택에서는
+        # 그 항목만 두 번 세어져 분포가 응답 수를 넘는다.
+        return f'같은 보기를 여러 번 고를 수 없습니다: {question.text}'
+    return None
 
 
 def _choice_values(raw):
@@ -1728,6 +1824,9 @@ def submit_response(survey_id):
                 # 화면에서 역할을 바꾸면 앞서 적은 답이 남아 있을 수 있는데,
                 # 그걸 400 으로 막으면 사용자는 이유를 모른 채 제출이 안 된다.
                 continue
+            error = _choice_answer_error(q, value)
+            if error:
+                return _error(error, 400)
             if q.qtype == 'scale' and value is not None:
                 try:
                     value = float(value)
@@ -1750,6 +1849,14 @@ def submit_response(survey_id):
                     return _error(
                         f'척도 문항의 답이 범위를 벗어났습니다({low:g}~{high:g}): '
                         f'{value:g} — {q.text}', 400)
+                # ⚠️ **정수만 받는다.** 분포 막대는 int() 로 칸을 정하는데 평균은
+                #    소수를 그대로 쓴다. 3.7 이 들어오면 평균은 3.7 로 오르고
+                #    막대는 '3점'에 서서, 같은 화면의 두 숫자가 다른 이야기를
+                #    한다. 화면은 애초에 정수 버튼만 준다(QuestionField.jsx).
+                if value != int(value):
+                    return _error(
+                        f'척도 문항에는 정수를 넣어 주세요: {value:g} — {q.text}',
+                        400)
             prepared[qid] = (q, value)
 
         # ⚠️ payload 의 division_id 는 **일부러 무시한다.** 소속은 계정에서만

@@ -450,3 +450,100 @@ def test_집계표의_숫자는_화면과_같다(client, staff, office, auth):
 
     assert total[cols['평균']] == str(screen['questions'][0]['average'])
     assert total[cols['응답수']] == str(screen['questions'][0]['answer_count'])
+
+
+# ── 잠금과 권한 ────────────────────────────────────────────────────────────
+#
+# 여기 넷은 전부 **한 번씩 실제로 뚫려 있던 것**이다. 화면에서는 멀쩡해 보이고
+# 사고가 난 뒤에야 드러나는 종류라, 재현 테스트로 박아 둔다.
+
+@pytest.fixture()
+def boss(make_user):
+    return make_user('boss@test.local', UserRole.MANAGER)
+
+
+def test_manager도_설문을_관리할_수_있다(client, boss, auth):
+    """roles.py 는 manager 를 '사업부 사무국'으로 인정하는데 관리 화면은 403 을
+    줬다. 역할은 붙여 주면서 그 역할로 할 일은 못 하게 하는 상태였다."""
+    assert client.get(ADMIN_BASE, headers=auth(boss)).status_code == 200
+
+
+def test_응답이_있는_설문은_삭제되지_않는다(client, staff, office, auth):
+    """문항 한 줄은 잠가 놓고 설문 통째로는 지워졌다. 지우면 응답과 함께
+    **열람 기록까지** 사라진다 — '관리자가 열람하면 기록이 남습니다'라고
+    고지해 놓고 그 기록을 지우는 버튼이 관리자에게 있었던 셈이다."""
+    survey = _make_survey()
+    qid = survey.questions.first().id
+    client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                json={'answers': {str(qid): 4}}, headers=auth(staff))
+    client.get(f'{ADMIN_BASE}/{survey.id}/identities', headers=auth(office))
+
+    res = client.delete(f'{ADMIN_BASE}/{survey.id}', headers=auth(office))
+    assert res.status_code == 409
+    assert SurveyResponse.query.count() == 1
+    assert SurveyAccessLog.query.count() == 1
+
+
+def test_응답이_있으면_역할_목록에서_뺄_수_없고_더할_수는_있다(
+        client, staff, office, auth):
+    """'PL'로 답한 응답이 있는데 목록에서 PL 을 빼면, 그 응답은 집계에서 갈 곳을
+    잃고 그 역할인 사람은 그 순간부터 제출도 못 한다. 더하는 것은 막지 않는다 —
+    전용 문항이 없는 역할을 뒤늦게 넣어야 그 사람이 답할 수 있다."""
+    survey = Survey(title='역할 설문', target_type='all', status='open',
+                    roles=['PL', '과제 참여인력'])
+    _db.session.add(survey)
+    _db.session.flush()
+    _db.session.add(SurveyQuestion(survey_id=survey.id, order=0, text='준비도는?',
+                                   qtype='scale', required=True,
+                                   options={'min': 1, 'max': 5}))
+    _db.session.commit()
+    qid = survey.questions.first().id
+    client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                json={'respondent_role': 'PL', 'answers': {str(qid): 4}},
+                headers=auth(staff))
+
+    narrow = client.put(f'{ADMIN_BASE}/{survey.id}',
+                        json={'roles': ['과제 참여인력']}, headers=auth(office))
+    assert narrow.status_code == 409
+    assert Survey.query.get(survey.id).roles == ['PL', '과제 참여인력']
+
+    wider = client.put(f'{ADMIN_BASE}/{survey.id}',
+                       json={'roles': ['PL', '과제 참여인력', '사무국장']},
+                       headers=auth(office))
+    assert wider.status_code == 200
+
+
+def test_보기에_없는_답은_저장되지_않는다(client, staff, auth):
+    """화면은 버튼만 주지만 서버는 아무 문자열이나 받아 저장했다. 그 답은
+    집계에서 **새 선택지**가 되어 나타나고, 객관식으로 물은 이유가 사라진다."""
+    survey = Survey(title='객관식 설문', target_type='all', status='open')
+    _db.session.add(survey)
+    _db.session.flush()
+    q = SurveyQuestion(survey_id=survey.id, order=0, text='가장 큰 걸림돌은?',
+                       qtype='choice', required=True,
+                       options={'choices': ['데이터 정합성', '기준 불일치']})
+    _db.session.add(q)
+    _db.session.commit()
+
+    bad = client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                      json={'answers': {str(q.id): '아무말이나'}},
+                      headers=auth(staff))
+    assert bad.status_code == 400
+    assert '보기에 없는 답' in bad.get_json()['message']
+    assert SurveyResponse.query.count() == 0
+
+    ok = client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                     json={'answers': {str(q.id): '데이터 정합성'}},
+                     headers=auth(staff))
+    assert ok.status_code == 201
+
+
+def test_척도에_소수를_넣을_수_없다(client, staff, auth):
+    """평균은 3.7 로 오르는데 분포 막대는 int() 로 '3점'에 선다. 같은 화면의 두
+    숫자가 다른 이야기를 하게 된다."""
+    survey = _make_survey()
+    qid = survey.questions.first().id
+    res = client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                      json={'answers': {str(qid): 3.7}}, headers=auth(staff))
+    assert res.status_code == 400
+    assert '정수' in res.get_json()['message']
