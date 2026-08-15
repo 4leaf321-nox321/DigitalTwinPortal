@@ -267,7 +267,11 @@ def test_일반_사용자는_응답자를_확인할_수_없다(client, staff, au
     assert SurveyAccessLog.query.count() == 0
 
 
-def test_로그인하지_않으면_아무것도_못_한다(client):
+def test_로그인하지_않으면_아무것도_못_한다(client, db):
+    # db 를 받는 이유는 이 테스트가 쓰지 않아서가 아니라 **치우기 위해서다.**
+    # _make_survey() 가 commit 하는데 db 픽스처가 없으면 그 행이 teardown 되지
+    # 않고 다음 파일까지 살아남는다. 실제로 test_survey_import.py 가 그 유령
+    # 설문 때문에 깨졌다.
     survey = _make_survey()
     assert client.get(f'{RESPOND_BASE}/mine').status_code == 401
     assert client.get(f'{RESPOND_BASE}/{survey.id}/form').status_code == 401

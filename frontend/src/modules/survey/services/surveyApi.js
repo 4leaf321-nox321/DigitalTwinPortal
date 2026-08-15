@@ -92,6 +92,31 @@ export const surveyApi = {
       body: JSON.stringify(payload),
     }),
 
+  // ── 표 일괄 입력 ─────────────────────────────────────────────────────
+  //
+  // **운영 서버에서는 코드를 못 고친다.** 그래서 문항 정의를 표로 받는다.
+  // ⚠️ 파싱은 **서버가** 한다. 미리보기와 생성이 백엔드의 같은 파서를 부르므로
+  //    "미리보기는 통과했는데 생성은 실패"가 생기지 않는다. 프론트에서 따로
+  //    파싱하면 그 순간 규칙이 두 벌이 된다.
+
+  /** 붙여넣은 표를 읽어만 본다. **아무것도 저장하지 않는다.** */
+  previewImport: (text) =>
+    request('/manage/import/preview', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  /**
+   * 표에서 설문을 통째로 만든다.
+   * 오류가 한 줄이라도 있으면 서버가 400 을 주고 **아무것도 만들지 않는다** —
+   * 반쯤 만들어진 설문이 남는 것이 가장 나쁘다.
+   */
+  importSurvey: (payload) =>
+    request('/manage/import', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   deleteSurvey: (surveyId) =>
     request(`/manage/${surveyId}`, { method: 'DELETE' }),
 

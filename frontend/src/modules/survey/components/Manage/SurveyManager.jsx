@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X } from 'lucide-react';
+import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X, Table2 } from 'lucide-react';
 import SurveyEditor from './SurveyEditor';
 import SurveyResults from './SurveyResults';
+import SurveyImport from './SurveyImport';
 import surveyApi from '../../services/surveyApi';
 import { ACCENT, ACCENT_DARK, ACCENT_TINT, ACCENT_LINE } from '../../theme';
 
@@ -73,8 +74,35 @@ const ContextChip = styled.button`
   &:hover { border-color: ${ACCENT}; }
 `;
 
-const AddButton = styled.button`
+// 만들기 버튼 둘을 한 덩어리로 묶어 오른쪽에 붙인다. 「표로 만들기」와
+// 「새 설문」은 같은 일(설문 만들기)의 두 갈래라 떨어져 있으면 안 보인다.
+const HeadActions = styled.div`
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+`;
+
+// 표 붙여넣기는 점선 버튼이다. 한 벌 만들 때의 정석은 「새 설문」이고,
+// 표는 문항이 수십 개일 때 쓰는 길이라 강조를 한 단계 낮춘다.
+const GhostButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px dashed ${ACCENT_LINE};
+  border-radius: 0.375rem;
+  background: transparent;
+  color: ${ACCENT_DARK};
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  &:hover { background: ${ACCENT_TINT}; }
+`;
+
+const AddButton = styled.button`
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -221,6 +249,20 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
     if (ok) setView({ mode: 'list' });
   };
 
+  // 표에서 통째로 만들기. 오류가 하나라도 있으면 서버가 400 을 주고 아무것도
+  // 만들지 않는다 — 그 오류를 화면 안(SurveyImport)에서 줄 단위로 보여줘야
+  // 하므로 여기서 run() 으로 삼키지 않고 promise 를 그대로 넘긴다.
+  const importFromTable = (payload) => (
+    // 새로 만들 때만 context 를 싣는다 — save() 와 같은 규칙이다.
+    surveyApi.importSurvey({ ...payload, ...(context || {}) })
+  );
+
+  const afterImport = async () => {
+    // 만든 설문이 목록에 보여야 한다. 목록으로 먼저 돌아가고 다시 읽는다.
+    setView({ mode: 'list' });
+    await load();
+  };
+
   const openEditor = async (survey) => {
     if (!survey) return setView({ mode: 'edit', survey: null });
     // 목록에는 문항이 없다. 편집하려면 문항까지 받아야 한다.
@@ -270,6 +312,25 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
     );
   }
 
+  if (view.mode === 'import') {
+    return (
+      <Wrap>
+        <Back onClick={() => setView({ mode: 'list' })}>
+          <ArrowLeft size={15} /> 설문 목록
+        </Back>
+        <Title>표로 새 설문 만들기</Title>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <Panel>
+          <SurveyImport
+            onCreate={importFromTable}
+            onCreated={afterImport}
+            onCancel={() => setView({ mode: 'list' })}
+          />
+        </Panel>
+      </Wrap>
+    );
+  }
+
   if (view.mode === 'edit') {
     return (
       <Wrap>
@@ -303,9 +364,16 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
         <Hint>
           시스템이 모르는 것을 사람에게 묻습니다. 응답은 전 직원이 「내 설문」에서 합니다.
         </Hint>
-        <AddButton onClick={() => openEditor(null)}>
-          <Plus size={15} /> 새 설문
-        </AddButton>
+        <HeadActions>
+          <GhostButton
+            onClick={() => setView({ mode: 'import' })}
+            title="엑셀에서 복사한 표를 붙여넣어 문항을 한 번에 만듭니다">
+            <Table2 size={15} /> 표로 만들기
+          </GhostButton>
+          <AddButton onClick={() => openEditor(null)}>
+            <Plus size={15} /> 새 설문
+          </AddButton>
+        </HeadActions>
       </Head>
 
       {error && <ErrorBox>{error}</ErrorBox>}
@@ -317,7 +385,9 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
           아직 설문이 없습니다.<br />
           진단의 <strong>조직 역량 5축</strong>은 시스템이 알 방법이 없어 설문이
           정석입니다 — 새 설문에서 <strong>「조직 역량 5축으로 채우기」</strong>를
-          누르면 문항이 한 번에 만들어집니다.
+          누르면 문항이 한 번에 만들어집니다.<br />
+          역할·프로세스별로 묻는 문항이 수십 개라면 <strong>「표로 만들기」</strong>에
+          엑셀 표를 붙여넣으세요.
         </Empty>
       ) : (
         surveys.map(s => {

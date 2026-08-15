@@ -20,6 +20,9 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.modules.auth.models import User
 from app.modules.auth.models import UserRole
+from .importer import (
+    MAX_AXIS_VALUE, all_errors, parse_table, rows_to_questions,
+)
 from .models import (
     Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
 )
@@ -54,9 +57,117 @@ def manager_required(fn):
     return wrapper
 
 
-QTYPES = {'scale', 'choice', 'rank', 'text'}
+QTYPES = {'scale', 'choice', 'multi', 'rank', 'text'}
 TARGET_TYPES = {'all', 'department', 'role', 'user'}
 STATUSES = {'draft', 'open', 'closed'}
+
+# 역할·프로세스를 안 고른 응답을 담는 칸 이름.
+#
+# ⚠️ **조용히 아무 역할에나 넣지 않는다.** 넣으면 그 역할의 평균이 조용히
+#    바뀌고, 표본이 몇인지도 알 수 없게 된다. 모르는 것은 모르는 자리에 센다.
+UNSET_BUCKET = '미지정'
+
+
+def _axis_list(value, label):
+    """역할/프로세스 목록을 정규화한다. 돌려주는 값은 (목록, 오류메시지).
+
+    빈 값·None·리스트 아닌 값 모두 **빈 목록**으로 떨어진다. 빈 목록의 뜻은
+    한 곳에서만 정한다 — '제한 없음'이다(models.SurveyQuestion 주석 참조).
+    """
+    if value is None or value == '':
+        return [], None
+    if not isinstance(value, list):
+        return None, f'{label} 은(는) 목록이어야 합니다.'
+    out = []
+    for item in value:
+        token = str(item).strip()
+        if not token:
+            continue
+        if len(token) > MAX_AXIS_VALUE:
+            return None, f'{label} 이름이 너무 깁니다({MAX_AXIS_VALUE}자까지): {token}'
+        if token not in out:
+            out.append(token)
+    return out, None
+
+
+# ── 문항이 이 응답자에게 해당하는가 ────────────────────────────────────────
+#
+# ⚠️ **이 함수 하나만 쓴다.** is_target() 과 같은 이유다. 화면과 서버가 각자
+#    판정하면 "화면에는 안 보이는데 서버는 요구하는" 문항이 생기고, 그러면
+#    그 역할의 사람은 이유도 모른 채 영영 제출을 못 한다.
+#
+# ⚠️ **빈 배열은 전원이다.** 비어 있는 것을 '아무도'로 읽으면 임포트 한 번
+#    잘못해서 아무도 답 못 하는 설문이 만들어진다.
+
+def question_applies(question, role, process):
+    """이 문항이 이 역할·프로세스의 응답자에게 해당하는가."""
+    roles = question.audience_roles or []
+    processes = question.audience_processes or []
+    if roles and role not in roles:
+        return False
+    if processes and process not in processes:
+        return False
+    return True
+
+
+def _pick_axis(value, allowed, label):
+    """응답자가 고른 역할·프로세스를 검증한다. 돌려주는 값은 (값, 오류메시지).
+
+    설문이 그 축을 안 물으면(allowed 가 비면) 무엇이 와도 None 으로 버린다 —
+    묻지도 않은 축이 응답에 남으면 집계에 없는 칸이 생긴다.
+
+    ⚠️ 묻는 축이면 **반드시 아는 값이어야 한다.** 아무 문자열이나 받아주면
+       그 값에 걸린 문항이 전부 '해당 없음'이 되어, 오타 하나로 필수 검증이
+       통째로 사라진다.
+    """
+    token = (value or '').strip() if isinstance(value, str) else None
+    if not allowed:
+        return None, None
+    if not token:
+        return None, f'{label}을(를) 골라 주세요.'
+    if token not in allowed:
+        return None, f"알 수 없는 {label}입니다: {token} (가능: {', '.join(allowed)})"
+    return token, None
+
+
+def unreachable_questions(survey):
+    """아무도 볼 수 없는 문항을 찾는다.
+
+    문항이 가리키는 역할·프로세스를 **설문이 묻지 않으면** 그 문항은 누구에게도
+    안 보인다. 표를 잘못 만들었을 때 실제로 나오는 모양이다 — 역할 열에 'PL'을
+    적었는데 설문의 역할 목록에는 'PL(과제리더)'로 들어간 경우 같은 것.
+
+    빈 audience 는 전원이므로 여기 걸리지 않는다. 걸리는 것은 **명시했는데
+    가리키는 곳이 없는** 경우뿐이다. 배포 직전에 한 번 보는 이유는, 응답이
+    들어오기 시작하면 문항이 잠겨서 못 고치기 때문이다.
+    """
+    roles = set(survey.roles or [])
+    processes = set(survey.processes or [])
+    dead = []
+    for q in survey.questions.all():
+        q_roles = set(q.audience_roles or [])
+        q_processes = set(q.audience_processes or [])
+        if (q_roles and not q_roles & roles) or \
+           (q_processes and not q_processes & processes):
+            dead.append(q)
+    return dead
+
+
+def _has_answer(value):
+    """답이 실제로 들어 있는가.
+
+    키만 있으면 답한 것으로 보던 옛 판정은 `null`·`""`·`[]` 를 그대로 통과
+    시켰다. 그렇게 들어온 척도 답은 value_number 가 None 이라 집계에서 조용히
+    빠지고, **"제출은 됐는데 분모에는 없는" 답**이 된다. 그게 제일 잡기 어렵다.
+    응답 화면(QuestionField.jsx 의 hasAnswer)과 같은 규칙이다.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ''
+    if isinstance(value, (list, dict)):
+        return len(value) > 0
+    return True
 
 
 # ── 대상자 판정 ────────────────────────────────────────────────────────────
@@ -139,6 +250,11 @@ def serialize_response(response, reveal=False, user_names=None):
     if reveal:
         data['user_id'] = response.user_id
         data['user_name'] = (user_names or {}).get(response.user_id)
+        # 역할·프로세스는 reveal 쪽에만 둔다. 부서 + 역할 + 프로세스가 겹치면
+        # 한 사람으로 좁혀지는 조합이 실제로 나온다 — 신원을 밝히는 화면에만
+        # 실어야 그 조합이 익명 열람에 섞여 나가지 않는다.
+        data['respondent_role'] = response.respondent_role
+        data['respondent_process'] = response.respondent_process
     return data
 
 
@@ -152,6 +268,9 @@ def _survey_dict(survey, with_questions=False, counts=None):
         'context_tag': survey.context_tag,
         'target_type': survey.target_type,
         'target_refs': survey.target_refs or [],
+        # 응답자에게 물을 축. 비어 있으면 화면이 그 선택을 아예 안 띄운다.
+        'roles': survey.roles or [],
+        'processes': survey.processes or [],
         'status': survey.status,
         'closes_at': survey.closes_at.isoformat() if survey.closes_at else None,
     }
@@ -166,11 +285,15 @@ def _question_dict(q):
     return {
         'id': q.id,
         'order': q.order,
+        'section': q.section,
         'text': q.text,
         'help_text': q.help_text,
         'qtype': q.qtype,
         'required': q.required,
         'options': q.options or {},
+        # 빈 배열이면 전원이 본다. 화면이 이 값으로 문항을 걸러 그린다.
+        'audience_roles': q.audience_roles or [],
+        'audience_processes': q.audience_processes or [],
         'link_type': q.link_type,
         'link_key': q.link_key,
     }
@@ -201,17 +324,48 @@ def _apply_questions(survey, items):
         qtype = item.get('qtype') or 'scale'
         if qtype not in QTYPES:
             return f'{i + 1}번 문항의 유형을 알 수 없습니다: {qtype}'
+
+        audience_roles, error = _axis_list(item.get('audience_roles'),
+                                           f'{i + 1}번 문항의 대상 역할')
+        if error:
+            return error
+        audience_processes, error = _axis_list(item.get('audience_processes'),
+                                               f'{i + 1}번 문항의 대상 프로세스')
+        if error:
+            return error
+
+        section = (item.get('section') or '').strip() or None
         db.session.add(SurveyQuestion(
             survey=survey,
             order=item.get('order', i),
+            section=section,
             text=text,
             help_text=item.get('help_text'),
             qtype=qtype,
             required=bool(item.get('required', True)),
             options=item.get('options') or {},
+            # 빈 목록으로 떨어지는 것이 기본이다 = 전원이 본다.
+            audience_roles=audience_roles,
+            audience_processes=audience_processes,
             link_type=item.get('link_type'),
             link_key=item.get('link_key'),
         ))
+    return None
+
+
+def _apply_axes(survey, payload):
+    """설문이 물을 역할·프로세스를 payload 에서 받아 반영한다.
+
+    돌려주는 값은 오류 메시지이며 None 이면 통과. 생성·수정·임포트 세 경로가
+    같은 함수를 쓴다 — 한 곳만 빠뜨리면 그 경로로 만든 설문만 축을 안 묻는다.
+    """
+    for field, label in (('roles', '역할'), ('processes', '프로세스')):
+        if field not in payload:
+            continue
+        values, error = _axis_list(payload[field], label)
+        if error:
+            return error
+        setattr(survey, field, values)
     return None
 
 
@@ -274,13 +428,105 @@ def create_survey():
         db.session.add(survey)
         db.session.flush()
 
-        error = _apply_questions(survey, payload.get('questions') or [])
+        error = _apply_axes(survey, payload) or \
+            _apply_questions(survey, payload.get('questions') or [])
         if error:
             db.session.rollback()
             return _error(error, 400)
 
         db.session.commit()
         return jsonify({'success': True, 'data': _survey_dict(survey, with_questions=True)}), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
+# ── 표 일괄 입력 ──────────────────────────────────────────────────────────
+#
+# **운영 서버에서는 코드를 못 고친다.** 그래서 문항 정의를 표로 받는다.
+# 미리보기와 생성이 `importer.parse_table` **하나**를 부른다 — 파서가 둘로
+# 갈리면 "미리보기는 통과했는데 생성은 실패"가 생기고, 그때 사용자는 자기
+# 표의 어디가 틀렸는지 알 방법이 없다.
+
+@admin_bp.route('/import/preview', methods=['POST'])
+@manager_required
+def import_preview():
+    """붙여넣은 표를 읽어만 본다. **아무것도 저장하지 않는다.**
+
+    저장 전에 눈으로 확인할 자리를 만드는 것이 요점이다. 수십 문항짜리 표를
+    확인 없이 넣으면, 틀린 것을 응답이 들어온 뒤에야 알게 된다 —
+    그때는 문항을 못 고친다(응답이 있으면 잠긴다).
+    """
+    payload = request.get_json() or {}
+    return jsonify({'success': True, 'data': parse_table(payload.get('text') or '')})
+
+
+@admin_bp.route('/import', methods=['POST'])
+@manager_required
+def import_survey():
+    """표에서 설문을 통째로 만든다.
+
+    ⚠️ **오류가 한 줄이라도 있으면 아무것도 만들지 않는다.** 반쯤 만들어진
+       설문이 남는 것이 가장 나쁘다 — 목록에는 보이는데 문항이 빠져 있고,
+       고치려면 지우고 다시 넣어야 하는데 그 사이 누가 답해 버리면 잠긴다.
+       그래서 DB 를 건드리기 전에 표 전체를 먼저 검증한다.
+    """
+    try:
+        payload = request.get_json() or {}
+        title = (payload.get('title') or '').strip()
+        if not title:
+            return _error('title 이 필요합니다.', 400)
+
+        target_type = payload.get('target_type') or 'all'
+        if target_type not in TARGET_TYPES:
+            return _error(f'알 수 없는 대상 구분입니다: {target_type}', 400)
+
+        result = parse_table(payload.get('text') or '')
+        if not result['rows']:
+            return _error('표에서 문항을 하나도 읽지 못했습니다. '
+                          '첫 줄은 머리글로 보고 건너뜁니다.', 400)
+        if result['error_count']:
+            # 오류를 그대로 실어 보낸다. 개수만 알려주면 사용자는 미리보기를
+            # 다시 불러야 하고, 그 사이 표를 고쳤으면 줄 번호가 어긋난다.
+            return jsonify({
+                'success': False,
+                'message': f"{result['error_count']}개 행에 오류가 있어 "
+                           f'설문을 만들지 않았습니다.',
+                'errors': all_errors(result),
+                'data': result,
+            }), 400
+
+        survey = Survey(
+            title=title,
+            description=payload.get('description'),
+            context_type=payload.get('context_type'),
+            context_id=payload.get('context_id'),
+            context_tag=payload.get('context_tag'),
+            target_type=target_type,
+            target_refs=payload.get('target_refs') or [],
+            created_by=int(get_jwt_identity()),
+        )
+        db.session.add(survey)
+        db.session.flush()
+
+        # 축을 따로 안 주면 **표에 등장한 것**을 그대로 쓴다. 표에 PL 문항이
+        # 있는데 설문이 PL 을 안 물으면 그 문항은 아무에게도 안 보인다.
+        axes = {
+            'roles': payload.get('roles', result['roles']),
+            'processes': payload.get('processes', result['processes']),
+        }
+        error = _apply_axes(survey, axes) or _apply_questions(
+            survey, rows_to_questions(result, link_type=payload.get('link_type'))
+        )
+        if error:
+            db.session.rollback()
+            return _error(error, 400)
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': _survey_dict(survey, with_questions=True),
+        }), 201
     except Exception as e:
         db.session.rollback()
         return _error(str(e))
@@ -328,6 +574,11 @@ def modify_survey(survey_id):
             if field in payload:
                 setattr(survey, field, payload[field])
 
+        error = _apply_axes(survey, payload)
+        if error:
+            db.session.rollback()
+            return _error(error, 400)
+
         if 'questions' in payload:
             error = _apply_questions(survey, payload['questions'])
             if error:
@@ -358,6 +609,19 @@ def set_survey_status(survey_id):
         # 문항 없는 설문을 배포하면 받는 사람이 빈 화면을 본다.
         if status == 'open' and survey.questions.count() == 0:
             return _error('문항이 없는 설문은 배포할 수 없습니다.', 400)
+
+        # 아무도 볼 수 없는 문항이 섞인 채로 배포하면, 그 문항은 조용히 없는
+        # 것이 된다. 응답이 들어온 뒤에는 문항이 잠겨 못 고치므로 **여기서**
+        # 막는다. 배포 전이면 표를 고쳐 다시 넣으면 그만이다.
+        if status == 'open':
+            dead = unreachable_questions(survey)
+            if dead:
+                names = ', '.join(q.text[:30] for q in dead[:3])
+                more = f' 외 {len(dead) - 3}건' if len(dead) > 3 else ''
+                return _error(
+                    f'설문이 묻지 않는 역할·프로세스만 가리키는 문항이 '
+                    f'{len(dead)}개 있어 아무에게도 보이지 않습니다: {names}{more}. '
+                    '설문의 역할·프로세스 목록을 확인해 주세요.', 400)
 
         if 'closes_at' in payload:
             value = payload['closes_at']
@@ -396,6 +660,12 @@ def survey_results(survey_id):
     for q in questions:
         entry = {
             'question_id': q.id, 'text': q.text, 'qtype': q.qtype,
+            'section': q.section,
+            # ⚠️ 이 두 칸이 없으면 집계 화면의 **'묻지 않은 문항'** 표시가
+            #    통째로 죽는다. 그러면 그 역할에게 안 보인 문항이 '응답 0' 과
+            #    같은 모양으로 찍혀서, 아무도 안 답한 것으로 읽힌다.
+            'audience_roles': q.audience_roles or [],
+            'audience_processes': q.audience_processes or [],
             'link_type': q.link_type, 'link_key': q.link_key,
             'answer_count': 0,
         }
@@ -405,24 +675,72 @@ def survey_results(survey_id):
             entry['values'] = []
         by_question[q.id] = entry
 
-    division_totals = {}
+    # 답을 한 번에 읽는다.
+    #
+    # 예전에는 `for r in responses: for a in r.answers.all()` 라 **응답 수만큼
+    # 질의가 나갔다.** 문항 5개짜리 설문에서는 티가 안 나지만, 표로 수십 문항을
+    # 넣은 설문에 수백 명이 답하면 그 자리에서 집계 화면이 멈춘다.
+    answers_by_response = {}
+    if responses:
+        for a in SurveyAnswer.query.filter(
+            SurveyAnswer.response_id.in_([r.id for r in responses])
+        ).all():
+            answers_by_response.setdefault(a.response_id, []).append(a)
+
+    def _slice_add(slice_, question, value_number):
+        """역할·프로세스 칸에 답 하나를 더한다."""
+        # 키를 문자열로 둔다 — JSON 으로 나가면 어차피 문자열이 된다.
+        cell = slice_['questions'].setdefault(str(question.id), {
+            'answer_count': 0,
+            **({'average': None, 'distribution': {}, '_sum': 0.0}
+               if question.qtype == 'scale' else {}),
+        })
+        cell['answer_count'] += 1
+        if question.qtype == 'scale' and value_number is not None:
+            cell['_sum'] += value_number
+            key = str(int(value_number))
+            cell['distribution'][key] = cell['distribution'].get(key, 0) + 1
+
+    role_slices, process_slices = {}, {}
+    totals = {}              # 전체 평균
+    division_totals = {}     # 사업부별
+    question_by_id = {q.id: q for q in questions}
+
     for r in responses:
-        for a in r.answers.all():
+        # 축을 안 고른 응답은 '미지정'에 센다. 아무 역할에나 넣으면 그 역할의
+        # 평균이 조용히 바뀌고, 표본이 몇인지도 알 수 없게 된다.
+        rslice = role_slices.setdefault(
+            r.respondent_role or UNSET_BUCKET, {'count': 0, 'questions': {}})
+        rslice['count'] += 1
+        pslice = process_slices.setdefault(
+            r.respondent_process or UNSET_BUCKET, {'count': 0, 'questions': {}})
+        pslice['count'] += 1
+
+        for a in answers_by_response.get(r.id, []):
             entry = by_question.get(a.question_id)
             if entry is None:
                 continue
+            q = question_by_id[a.question_id]
             if entry['qtype'] == 'scale':
                 if a.value_number is None:
                     continue
                 entry['answer_count'] += 1
                 key = str(int(a.value_number))
                 entry['distribution'][key] = entry['distribution'].get(key, 0) + 1
+
+                agg = totals.setdefault(a.question_id, {'sum': 0.0, 'n': 0})
+                agg['sum'] += a.value_number
+                agg['n'] += 1
+
                 bucket = division_totals.setdefault(a.question_id, {})
                 # 사업부를 모르면 'unknown' 으로 따로 모은다. 아무 데나 넣지 않는다.
                 dkey = str(r.division_id) if r.division_id else 'unknown'
-                agg = bucket.setdefault(dkey, {'sum': 0.0, 'n': 0})
-                agg['sum'] += a.value_number
-                agg['n'] += 1
+                dagg = bucket.setdefault(dkey, {'sum': 0.0, 'n': 0})
+                dagg['sum'] += a.value_number
+                dagg['n'] += 1
+
+                _slice_add(rslice, q, a.value_number)
+                _slice_add(pslice, q, a.value_number)
             else:
                 entry['answer_count'] += 1
                 # 자유서술이면 원문, 객관식·순위면 JSON. 둘 다 원자료 그대로 둔다 —
@@ -430,16 +748,29 @@ def survey_results(survey_id):
                 entry['values'].append(
                     a.value_text if a.value_text is not None else a.value_json
                 )
+                _slice_add(rslice, q, None)
+                _slice_add(pslice, q, None)
 
+    # ⚠️ 전체 평균은 **사업부 집계와 따로** 낸다. 예전에는 사업부 루프 안에서
+    #    나오는 부산물이었다. 그 상태로 축을 하나 더 붙이면, 축을 손댈 때마다
+    #    전체 평균이 조용히 같이 움직인다. 두 관심사를 갈라 둔다.
+    for qid, agg in totals.items():
+        by_question[qid]['average'] = round(agg['sum'] / agg['n'], 2) if agg['n'] else None
     for qid, buckets in division_totals.items():
-        entry = by_question[qid]
-        total_sum = sum(b['sum'] for b in buckets.values())
-        total_n = sum(b['n'] for b in buckets.values())
-        entry['average'] = round(total_sum / total_n, 2) if total_n else None
-        entry['by_division'] = {
+        by_question[qid]['by_division'] = {
             k: {'average': round(v['sum'] / v['n'], 2), 'count': v['n']}
             for k, v in buckets.items() if v['n']
         }
+
+    def _finish(slices):
+        """누적기(_sum)를 평균으로 바꾸고 내부 칸을 지운다."""
+        for slice_ in slices.values():
+            for cell in slice_['questions'].values():
+                if '_sum' in cell:
+                    n = cell['answer_count']
+                    cell['average'] = round(cell['_sum'] / n, 2) if n else None
+                    del cell['_sum']
+        return slices
 
     targets = target_user_ids(survey)
     unknown = sum(1 for r in responses if not r.division_id)
@@ -449,6 +780,14 @@ def survey_results(survey_id):
         'response_count': len(responses),
         'unknown_division_count': unknown,
         'questions': [by_question[q.id] for q in questions],
+        # 역할·프로세스별 집계.
+        #
+        # ⚠️ 여기에는 **원문(values)을 싣지 않는다.** 역할로 한 번 더 자르면
+        #    표본이 한 명까지 내려가는 칸이 나온다. 그 칸에 서술형 원문을
+        #    실으면 "그 역할의 그 사람"이 되어 사실상 기명 응답이 된다.
+        #    원문이 필요하면 위의 questions[] 를 본다.
+        'by_role': _finish(role_slices),
+        'by_process': _finish(process_slices),
     }})
 
 
@@ -550,7 +889,15 @@ def my_pending_count():
 @respond_bp.route('/<int:survey_id>/form', methods=['GET'])
 @jwt_required()
 def survey_form(survey_id):
-    """응답 화면이 쓸 문항. **대상자가 아니면 존재 자체를 알려주지 않는다.**"""
+    """응답 화면이 쓸 문항. **대상자가 아니면 존재 자체를 알려주지 않는다.**
+
+    ⚠️ **역할·프로세스로 문항을 미리 걸러 보내지 않는다.** 응답자는 역할을
+       바꿔가며 볼 수 있어야 하는데, 서버가 걸러 보내면 고를 때마다 다시
+       불러야 하고 그 사이 적어 둔 답이 날아간다. **거르는 것은 화면이 하고,
+       검증은 서버가 한다**(submit_response 의 question_applies).
+       문항 목록 자체는 숨길 것이 아니다 — 숨길 것은 대상자 판정이고, 그건
+       위에서 이미 막았다.
+    """
     user = _current_user()
     survey = Survey.query.get(survey_id)
     if not survey or not user or not is_target(user, survey):
@@ -598,16 +945,53 @@ def submit_response(survey_id):
         if not isinstance(answers, dict):
             return _error('answers 가 필요합니다.', 400)
 
+        # ── 응답자가 고른 축 ─────────────────────────────────────────────
+        #
+        # 설문이 묻는 축이면 반드시 받는다. 안 받으면 그 축이 걸린 필수 문항이
+        # 전부 '해당 없음'이 되어, 아무것도 안 고르는 것만으로 필수 검증을
+        # 통째로 건너뛸 수 있다.
+        role, error = _pick_axis(payload.get('respondent_role'),
+                                 survey.roles or [], '역할')
+        if error:
+            return _error(error, 400)
+        process, error = _pick_axis(payload.get('respondent_process'),
+                                    survey.processes or [], '프로세스')
+        if error:
+            return _error(error, 400)
+
         questions = {q.id: q for q in survey.questions.all()}
-        for qid, q in questions.items():
-            if q.required and str(qid) not in answers and qid not in answers:
+        # 이 응답자가 실제로 받은 문항. **필수 판정은 이 집합에 대해서만 한다** —
+        # 설문 전체로 판정하면 PL 용 필수 문항 때문에 과제 멤버가 영영 제출을
+        # 못 한다. 화면에는 안 보이는 문항을 서버가 요구하는 꼴이라, 사용자는
+        # 왜 막혔는지 알 방법도 없다.
+        asked = {qid: q for qid, q in questions.items()
+                 if question_applies(q, role, process)}
+
+        # ⚠️ 받을 문항이 하나도 없으면 **받지 않는다.**
+        #
+        # 그냥 통과시키면 빈 응답이 201 로 저장되고, (survey, user) 유니크
+        # 때문에 그 사람의 '1인 1회'가 소진된다. 표를 고쳐 문항을 붙여도 그
+        # 사람은 영영 못 낸다. 화면은 애초에 제출을 막으므로, 여기까지 온 것은
+        # 설문 구성이 잘못됐다는 뜻이다 — 그 사실을 말해 준다.
+        if not asked:
+            picked = ' / '.join(x for x in (role, process) if x)
+            return _error(
+                f'{picked or "선택하신 조건"}에 해당하는 문항이 없습니다. '
+                '설문 구성을 확인해 달라고 담당자에게 알려 주세요.', 409)
+        for qid, q in asked.items():
+            if q.required and not _has_answer(
+                answers.get(str(qid), answers.get(qid))
+            ):
                 return _error(f'필수 문항에 답하지 않았습니다: {q.text}', 400)
 
         # ⚠️ **DB 를 건드리기 전에 전부 검증한다.** 넣으면서 검사하면 중간에
         #    걸렸을 때 앞부분이 이미 들어가 있고, 되돌리는 것을 한 번만 빠뜨려도
         #    답이 일부만 남는다. 그런 데이터는 집계를 조용히 틀어뜨려서
         #    가장 잡기 어렵다.
-        prepared = []
+        #
+        # qid 로 모아 둔다. 같은 문항이 두 번 실려 오면 유니크 제약이 commit
+        # 시점에 터지고, 사용자는 400 이 아니라 DB 원문이 섞인 500 을 본다.
+        prepared = {}
         for key, value in answers.items():
             try:
                 qid = int(key)
@@ -616,18 +1000,27 @@ def submit_response(survey_id):
             q = questions.get(qid)
             if q is None:
                 return _error(f'이 설문의 문항이 아닙니다: {qid}', 400)
+            if qid not in asked:
+                # 해당 없는 문항의 답은 **조용히 버린다. 오류가 아니다.**
+                # 화면에서 역할을 바꾸면 앞서 적은 답이 남아 있을 수 있는데,
+                # 그걸 400 으로 막으면 사용자는 이유를 모른 채 제출이 안 된다.
+                continue
             if q.qtype == 'scale' and value is not None:
                 try:
                     value = float(value)
                 except (TypeError, ValueError):
                     return _error(f'척도 문항에는 숫자가 필요합니다: {q.text}', 400)
-            prepared.append((q, value))
+            prepared[qid] = (q, value)
 
         division_id, source = resolve_division(user)
         # 응답자가 직접 고른 값이 유도값보다 우선한다. 본인이 제일 잘 안다.
         picked = payload.get('division_id')
         if picked:
-            division_id, source = int(picked), 'picked'
+            try:
+                division_id, source = int(picked), 'picked'
+            except (TypeError, ValueError):
+                # 예전에는 여기서 int() 가 그대로 터져 500 이 나갔다.
+                return _error(f'division_id 가 올바르지 않습니다: {picked}', 400)
 
         response = SurveyResponse(
             survey_id=survey.id,
@@ -635,12 +1028,14 @@ def submit_response(survey_id):
             department_name=user.department,
             division_id=division_id,
             division_source=source,
+            respondent_role=role,
+            respondent_process=process,
             submitted_at=datetime.utcnow(),
         )
         db.session.add(response)
         db.session.flush()
 
-        for q, value in prepared:
+        for q, value in prepared.values():
             answer = SurveyAnswer(response_id=response.id, question_id=q.id)
             if q.qtype == 'scale':
                 answer.value_number = value

@@ -3,15 +3,20 @@ import styled from 'styled-components';
 import { ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { ACCENT, ACCENT_DARK, ACCENT_TINT, ACCENT_LINE } from '../../theme';
 
-// 문항 하나를 그리는 자리. 유형은 넷이고(scale/choice/rank/text) **넷 다
-// 여기서만 처리한다** — 폼 쪽에 유형별 분기를 흘리면 유형이 늘 때마다 두 군데를
-// 고쳐야 하고, 한쪽을 빠뜨리면 답을 못 내는 문항이 조용히 생긴다.
+// 문항 하나를 그리는 자리. 유형은 다섯이고(scale/choice/multi/rank/text)
+// **다섯 다 여기서만 처리한다** — 폼 쪽에 유형별 분기를 흘리면 유형이 늘 때마다
+// 두 군데를 고쳐야 하고, 한쪽을 빠뜨리면 답을 못 내는 문항이 조용히 생긴다.
 //
-// 답의 모양은 백엔드가 값을 어느 칸에 넣는지에 맞춘다(survey/routes.py:645-650):
+// 답의 모양은 백엔드가 값을 어느 칸에 넣는지에 맞춘다(survey/routes.py):
 //   scale  → 숫자        (value_number)
 //   text   → 문자열      (value_text)
 //   choice → 보기 값     (value_json)
+//   multi  → 보기 값 배열 (value_json)
 //   rank   → 보기 값 배열 (value_json)
+//
+// ⚠️ **문항을 거르는 것은 이 파일이 아니다.** 역할·프로세스 필터는 부모
+//    (SurveyForm)가 걸고, 여기는 받은 문항을 그릴 뿐이다. 번호도 부모가 준
+//    index 를 그대로 쓴다 — 걸러진 뒤 순번이라 1,2,3… 으로 이어진다.
 
 const Wrap = styled.div`
   padding: 1.125rem 1.25rem;
@@ -108,11 +113,13 @@ const Option = styled.button`
   &:hover { border-color: ${ACCENT}; }
 `;
 
+// 하나만 고르는 문항은 동그라미, 여럿 고르는 문항은 네모. 라디오/체크박스의
+// 오랜 관습이라, 이 모양만 보고도 "여러 개 골라도 되나?"가 답이 된다.
 const Mark = styled.span`
   flex-shrink: 0;
   width: 1.1rem;
   height: 1.1rem;
-  border-radius: 999px;
+  border-radius: ${p => (p.$square ? '0.25rem' : '999px')};
   border: 1px solid ${p => (p.$on ? ACCENT : '#cbd5e1')};
   background: ${p => (p.$on ? ACCENT : 'white')};
   color: white;
@@ -285,6 +292,51 @@ const QuestionField = ({ question, index, value, onChange, missing }) => {
               </Option>
             );
           })}
+        </Options>
+      );
+    }
+
+    if (qtype === 'multi') {
+      if (choices.length === 0) {
+        // 객관식과 같은 이유로 자유입력으로 내려 준다. 보기 없는 복수선택은
+        // 답할 방법이 없는 막다른 길이다.
+        return (
+          <>
+            <Textarea
+              value={typeof value === 'string' ? value : ''}
+              onChange={e => onChange(e.target.value)}
+              placeholder="답을 적어 주세요"
+            />
+            <Note>이 문항에는 보기가 등록돼 있지 않아 직접 적도록 두었습니다.</Note>
+          </>
+        );
+      }
+      // 값은 **보기 값의 배열**이다. 배열이 아닌 것이 들어와도(옛 답, 잘못된
+      // 임포트) 빈 선택으로 보고 넘어간다 — 여기서 터지면 문항 하나 때문에
+      // 설문 전체가 안 그려진다.
+      const picked = Array.isArray(value) ? value : [];
+      const toggle = (v) => {
+        const next = picked.includes(v)
+          ? picked.filter(x => x !== v)
+          : [...picked, v];
+        // 다 지우면 빈 배열이 아니라 undefined 로 내린다. hasAnswer 는 빈 배열을
+        // '답 없음'으로 보는데, 그 상태를 payload 에 실으면 서버 집계에서
+        // '답한 것'으로 세어져 응답 수가 부풀어 오른다.
+        onChange(next.length > 0 ? next : undefined);
+      };
+      return (
+        <Options>
+          {choices.map(c => {
+            const on = picked.includes(c.value);
+            return (
+              <Option key={String(c.value)} type="button" $on={on}
+                      aria-pressed={on} onClick={() => toggle(c.value)}>
+                <Mark $on={on} $square>{on && <Check size={12} strokeWidth={3} />}</Mark>
+                {c.label}
+              </Option>
+            );
+          })}
+          <Help style={{ marginTop: 0 }}>해당하는 것을 모두 골라 주세요.</Help>
         </Options>
       );
     }

@@ -147,6 +147,19 @@ const LinkTag = styled.span`
   color: ${ACCENT_DARK};
 `;
 
+// 분기·섹션 표식. 역할·프로세스가 걸린 문항은 테두리를 줘서 '전원이 보는 문항'과
+// 눈으로 갈라 보이게 한다.
+const MetaTag = styled.span`
+  align-self: flex-start;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: ${p => (p.$limit ? '#fffbeb' : '#f1f5f9')};
+  border: 1px solid ${p => (p.$limit ? '#fde68a' : 'transparent')};
+  color: ${p => (p.$limit ? '#b45309' : '#64748b')};
+`;
+
 const Actions = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -265,6 +278,15 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
           // 옛 이름으로 보내면 조용히 버려진다. 이 두 키가 정확해야 한다.
           link_type: q.link_type ?? null,
           link_key: q.link_key ?? null,
+          // ⚠️ **이 세 칸을 빠뜨리면 분기가 통째로 지워진다.**
+          //
+          // 서버의 _apply_questions 는 문항을 통째로 지우고 보낸 것으로 다시
+          // 만든다. 그래서 여기서 안 실은 칸은 기본값(빈 값)이 된다 — 표로
+          // 만든 설문을 이 화면에서 제목만 고치고 저장해도 역할·프로세스
+          // 분기가 전부 날아간다. 화면에 안 보이는 값이라 아무도 눈치 못 챈다.
+          section: q.section ?? null,
+          audience_roles: q.audience_roles || [],
+          audience_processes: q.audience_processes || [],
         }));
     }
     onSave(payload);
@@ -382,6 +404,17 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
                   </Field>
                 )}
 
+                {/* 분기가 걸린 문항은 **보이게** 둔다.
+                    이 화면에서 편집할 수단은 아직 없지만(표로 만든다), 보이지도
+                    않으면 "이 문항은 전원이 본다"고 오해한 채 지우거나 순서를
+                    바꾼다. 값이 있다는 사실만이라도 알려야 한다. */}
+                {q.section && <MetaTag>섹션 · {q.section}</MetaTag>}
+                {q.audience_roles?.length > 0 && (
+                  <MetaTag $limit>역할 · {q.audience_roles.join(', ')}</MetaTag>
+                )}
+                {q.audience_processes?.length > 0 && (
+                  <MetaTag $limit>프로세스 · {q.audience_processes.join(', ')}</MetaTag>
+                )}
                 {q.link_key && (
                   // 'organization:readiness' 를 그대로 찍으면 사람이 못 읽는다.
                   <LinkTag>진단 연결 · {linkKeyLabel(q.link_key)}</LinkTag>

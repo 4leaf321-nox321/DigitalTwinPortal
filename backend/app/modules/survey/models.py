@@ -44,6 +44,18 @@ class Survey(BaseModel):
     target_type = db.Column(db.String(20), nullable=False, default='all')
     target_refs = db.Column(JSON, nullable=False, default=list)
 
+    # ── 응답자에게 물을 축 ────────────────────────────────────────────────
+    #
+    # 한 설문 안에서 역할(과제 멤버·PL·사무국…)과 프로세스(개발·제조·품질…)에
+    # 따라 다른 문항을 묻는다. 여기 담긴 값이 응답 화면의 선택지가 되고,
+    # 문항의 audience_* 가 그 값으로 자기를 보여줄지 정한다.
+    #
+    # ⚠️ **비어 있으면 그 축을 묻지 않는다.** 대상(target_*)과는 다른 것이다 —
+    #    target_* 는 "이 설문을 누가 받는가", 이쪽은 "받은 사람이 자기를 어떻게
+    #    밝히는가"다. 둘을 한 칸에 합치면 부서 타깃 설문 안에서 역할을 못 나눈다.
+    roles = db.Column(JSON, nullable=False, default=list)
+    processes = db.Column(JSON, nullable=False, default=list)
+
     # draft: 작성 중(응답 못 받음) / open: 응답 받는 중 / closed: 마감
     status = db.Column(db.String(20), nullable=False, default='draft')
     closes_at = db.Column(db.DateTime, nullable=True)
@@ -71,7 +83,21 @@ class SurveyQuestion(BaseModel):
     text = db.Column(db.String(500), nullable=False)
     help_text = db.Column(db.Text)
 
-    # scale: 1~5 척도 / choice: 객관식 / rank: 순위 / text: 자유서술
+    # 문항 묶음 이름. 화면에서 소제목이 된다. 표로 한꺼번에 넣을 때 수십 문항이
+    # 한 줄로 늘어서면 응답자가 어디까지가 한 덩어리인지 모른다.
+    section = db.Column(db.String(100))
+
+    # ── 이 문항을 누가 보는가 ─────────────────────────────────────────────
+    #
+    # ⚠️ **빈 배열 = 전원이다.** NULL 과 빈 배열을 다르게 다루지 않는다.
+    #    "비었으니 아무도 못 본다"가 기본이 되면, 임포트를 한 번 잘못한 것만으로
+    #    아무도 답할 수 없는 설문이 만들어지고 그걸 눈치채는 데 며칠 걸린다.
+    #    빈 값은 언제나 '제한 없음'이다.
+    audience_roles = db.Column(JSON, nullable=False, default=list)
+    audience_processes = db.Column(JSON, nullable=False, default=list)
+
+    # scale: 1~5 척도 / choice: 객관식(하나) / multi: 복수선택 /
+    # rank: 순위 / text: 자유서술
     qtype = db.Column(db.String(20), nullable=False, default='scale')
     required = db.Column(db.Boolean, nullable=False, default=True)
     # 유형별 부가 정의(보기 목록, 척도 양끝 이름 등).
@@ -109,6 +135,12 @@ class SurveyResponse(BaseModel):
     #    그때는 응답자가 직접 고르게 하고, 그것도 없으면 unknown 으로 남긴다.
     #    사업부를 모르는 응답을 조용히 아무 데나 넣으면 집계가 거짓말을 한다.
     division_source = db.Column(db.String(20), nullable=False, default='unknown')
+
+    # 응답자가 고른 축. 설문의 roles/processes 가 비어 있으면 묻지 않았으므로
+    # 여기도 비어 있다. **집계에서 비어 있는 것을 아무 역할에나 넣지 않는다** —
+    # '미지정'으로 따로 센다(routes.survey_results).
+    respondent_role = db.Column(db.String(50))
+    respondent_process = db.Column(db.String(50))
 
     submitted_at = db.Column(db.DateTime, nullable=True)
 
