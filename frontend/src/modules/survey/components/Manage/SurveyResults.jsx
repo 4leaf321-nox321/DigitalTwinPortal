@@ -229,6 +229,15 @@ const BarFill = styled.div`
   background: ${ACCENT};
 `;
 
+const ChoiceRow = styled(BarRow)`
+  grid-template-columns: minmax(6rem, 12rem) 1fr auto;
+  > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`;
+
 const Values = styled.ul`
   margin: 0.5rem 0 0;
   padding-left: 1.1rem;
@@ -416,7 +425,8 @@ function sliceOrder(slices, defined) {
 // divisions 기본값이 [] 인 것이 중요하다. 사업부 목록을 못 받아왔을 때
 // undefined 가 오면 아래 .find 에서 화면이 통째로 터진다 — 집계는 사업부
 // 이름을 몰라도 보여줄 수 있어야 한다.
-const SurveyResults = ({ results, divisions = [], onBack, onReveal, onExport }) => {
+const SurveyResults = ({ results, divisions = [], onBack, onReveal, onExport,
+                        onExportSummary }) => {
   const [identities, setIdentities] = useState(null);
   const [axisKey, setAxisKey] = useState('all');
 
@@ -547,11 +557,44 @@ const SurveyResults = ({ results, divisions = [], onBack, onReveal, onExport }) 
           <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
             {q.answer_count}명 응답
           </div>
-          <Values>
-            {(q.values || []).slice(0, 20).map((v, i) => (
-              <li key={i}>{typeof v === 'object' ? JSON.stringify(v) : v}</li>
-            ))}
-          </Values>
+
+          {/* 객관식은 **세어서** 보여준다. 원문만 스무 줄 늘어놓으면 읽다가
+              포기하게 되고, 유형화하려고 객관식으로 만든 이유가 사라진다.
+              아무도 안 고른 보기도 남긴다 — 그것도 결과다. */}
+          {(q.choice_counts || []).length > 0 && (
+            <Bars>
+              {q.choice_counts.map((c, i) => {
+                const pct = q.answer_count ? (c.count * 100 / q.answer_count) : 0;
+                const rank = q.rank_average?.[c.value];
+                return (
+                  <ChoiceRow key={i}>
+                    <span title={c.unlisted ? '보기에 없는 답입니다. 배포 뒤 보기를 고쳤거나 옛 화면으로 낸 응답일 수 있습니다.' : c.value}>
+                      {c.value}{c.unlisted && ' *'}
+                    </span>
+                    <BarTrack><BarFill $pct={pct} /></BarTrack>
+                    <span>
+                      {c.count}명 ({Math.round(pct)}%)
+                      {rank != null && ` · 평균 ${rank}순위`}
+                    </span>
+                  </ChoiceRow>
+                );
+              })}
+            </Bars>
+          )}
+
+          {/* 자유서술 원문. 객관식에도 '기타' 서술이 섞이므로 같이 둔다. */}
+          {(q.values || []).length > 0 && q.qtype === 'text' && (
+            <Values>
+              {q.values.slice(0, 20).map((v, i) => (
+                <li key={i}>{typeof v === 'object' ? JSON.stringify(v) : v}</li>
+              ))}
+              {q.values.length > 20 && (
+                <li style={{ color: '#94a3b8' }}>
+                  … 외 {q.values.length - 20}건. 전부 보시려면 원자료를 내려받으세요.
+                </li>
+              )}
+            </Values>
+          )}
         </>
       )}
     </QCard>
@@ -737,6 +780,13 @@ const SurveyResults = ({ results, divisions = [], onBack, onReveal, onExport }) 
 
       {/* 누르기 **전에** 기록이 남는다고 적어 둔다. 누른 뒤에 알려주면 고지가
           아니라 통보다. */}
+      {response_count > 0 && (
+        <ExportButton onClick={onExportSummary}>
+          <Download size={15} />
+          집계표 내려받기 (CSV) — 화면의 숫자 그대로, 보고서용
+        </ExportButton>
+      )}
+
       {response_count > 0 && (
         <ExportButton onClick={onExport}>
           <Download size={15} />

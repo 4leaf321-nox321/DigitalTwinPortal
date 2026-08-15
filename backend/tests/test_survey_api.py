@@ -361,3 +361,92 @@ def test_로그인하지_않으면_아무것도_못_한다(client, db):
     assert client.get(f'{RESPOND_BASE}/{survey.id}/form').status_code == 401
     assert client.post(f'{RESPOND_BASE}/{survey.id}/responses',
                        json={'answers': {}}).status_code == 401
+
+
+# ── 집계표 내려받기 ────────────────────────────────────────────────────────
+
+def _summary_rows(client, office, auth, survey_id):
+    """집계표 CSV 를 받아 행 목록으로. BOM 은 떼고 본다."""
+    import csv as _csv
+    import io as _io
+
+    res = client.get(f'{ADMIN_BASE}/{survey_id}/export/summary',
+                     headers=auth(office))
+    assert res.status_code == 200, res.data[:200]
+    text = res.data.decode('utf-8-sig')
+    return list(_csv.reader(_io.StringIO(text)))
+
+
+def test_집계표는_객관식을_세고_안_물은_문항을_0으로_찍지_않는다(
+        client, db, staff, office, make_user, auth):
+    """객관식을 세지 않으면 유형화가 안 되고, '묻지 않음'을 0 으로 찍으면
+    아무도 안 답한 것으로 읽힌다. **둘 다 보고서에 그대로 실린다.**
+    """
+    survey = Survey(title='역할별 설문', target_type='all', status='open',
+                    roles=['PL', '과제 참여인력'])
+    _db.session.add(survey)
+    _db.session.flush()
+    common = SurveyQuestion(
+        survey_id=survey.id, order=0, text='가장 큰 걸림돌은?',
+        qtype='choice', required=True,
+        options={'choices': ['데이터 정합성', '기준 불일치', '인력 부족']},
+    )
+    pl_only = SurveyQuestion(
+        survey_id=survey.id, order=1, text='PL 로서 준비도는?',
+        qtype='scale', required=True, options={'min': 1, 'max': 5},
+        audience_roles=['PL'],
+    )
+    _db.session.add_all([common, pl_only])
+    _db.session.commit()
+
+    other = make_user('member@test.local', UserRole.USER)
+    client.post(f'{RESPOND_BASE}/{survey.id}/responses', headers=auth(staff),
+                json={'respondent_role': 'PL',
+                      'answers': {str(common.id): ['데이터 정합성'],
+                                  str(pl_only.id): 4}})
+    client.post(f'{RESPOND_BASE}/{survey.id}/responses', headers=auth(other),
+                json={'respondent_role': '과제 참여인력',
+                      'answers': {str(common.id): ['데이터 정합성']}})
+
+    rows = _summary_rows(client, office, auth, survey.id)
+    head = rows.index([r for r in rows if r and r[0] == '섹션'][0])
+    cols = {name: i for i, name in enumerate(rows[head])}
+    body = [r for r in rows[head + 1:] if r]
+
+    def find(text, kind, value):
+        for r in body:
+            if (r[cols['문항']] == text and r[cols['구분']] == kind
+                    and r[cols['값']] == value):
+                return r
+        raise AssertionError(f'{text} / {kind} / {value} 줄이 없습니다')
+
+    # 객관식이 세어진다. 두 사람 다 같은 보기를 골랐다.
+    assert find('가장 큰 걸림돌은?', '선택지', '데이터 정합성')[cols['응답수']] == '2'
+    assert find('가장 큰 걸림돌은?', '선택지', '데이터 정합성')[cols['비율(%)']] == '100.0'
+    # 아무도 안 고른 보기도 0 으로 남는다 — 그것도 결과다.
+    assert find('가장 큰 걸림돌은?', '선택지', '인력 부족')[cols['응답수']] == '0'
+
+    # ⚠️ 요점. PL 전용 문항은 '과제 참여인력' 에게 **묻지 않았다.**
+    #    응답수 0 으로 찍으면 "물었는데 아무도 안 답했다"로 읽힌다.
+    not_asked = find('PL 로서 준비도는?', '역할', '과제 참여인력')
+    assert not_asked[cols['응답수']] == ''
+    assert not_asked[cols['비고']] == '묻지 않음'
+    assert find('PL 로서 준비도는?', '역할', 'PL')[cols['응답수']] == '1'
+
+
+def test_집계표의_숫자는_화면과_같다(client, staff, office, auth):
+    """따로 세면 어긋난다. 어긋나는 순간 둘 다 못 믿게 된다."""
+    survey = _make_survey()
+    qid = survey.questions.first().id
+    client.post(f'{RESPOND_BASE}/{survey.id}/responses',
+                json={'answers': {str(qid): 4}}, headers=auth(staff))
+
+    screen = client.get(f'{ADMIN_BASE}/{survey.id}/results',
+                        headers=auth(office)).get_json()['data']
+    rows = _summary_rows(client, office, auth, survey.id)
+    head = rows.index([r for r in rows if r and r[0] == '섹션'][0])
+    cols = {name: i for i, name in enumerate(rows[head])}
+    total = [r for r in rows[head + 1:] if r and r[cols['구분']] == '전체'][0]
+
+    assert total[cols['평균']] == str(screen['questions'][0]['average'])
+    assert total[cols['응답수']] == str(screen['questions'][0]['answer_count'])

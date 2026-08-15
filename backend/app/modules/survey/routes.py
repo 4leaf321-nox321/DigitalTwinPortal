@@ -993,19 +993,41 @@ def set_survey_status(survey_id):
         return _error(str(e))
 
 
-@admin_bp.route('/<int:survey_id>/results', methods=['GET'])
-@manager_required
-def survey_results(survey_id):
-    """집계. **응답자 신원은 실리지 않는다.**
+def _question_choice_labels(question):
+    """문항이 제시한 보기 목록. 표에 적힌 **그 순서 그대로.**
 
-    응답 수를 항상 같이 낸다. 몇 명이 답했는지 모르는 평균은 숫자 구경이다.
-    소속을 모르는 응답도 따로 센다 — 숨기면 그럴듯한 사업부별 평균이 나오는데
-    실은 절반이 어디 것인지 모르는 상태가 된다.
+    보기는 대개 문자열이지만 {label, value} 로 들어온 것도 있어 둘 다 받는다.
     """
-    survey = Survey.query.get(survey_id)
-    if not survey:
-        return _error('설문을 찾을 수 없습니다.', 404)
+    raw = (question.options or {}).get('choices') or []
+    out = []
+    for item in raw:
+        label = item.get('label', item.get('value')) if isinstance(item, dict) else item
+        label = str(label).strip() if label is not None else ''
+        if label and label not in out:
+            out.append(label)
+    return out
 
+
+def _choice_values(raw):
+    """객관식 답 하나에서 **고른 항목들**을 뽑는다. 순서를 지킨다(순위형 때문).
+
+    저장 모양이 문항 유형마다 다르다 — 단일선택은 값 하나, 복수선택·순위는
+    목록이다. 세는 쪽에서 그 차이를 알 필요가 없게 여기서 목록으로 맞춘다.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(x) for x in raw if x is not None and str(x) != '']
+    return [str(raw)] if str(raw) != '' else []
+
+
+def compute_results(survey):
+    """집계 한 벌. 화면(survey_results)과 내려받기(export_summary)가 **같이 쓴다.**
+
+    ⚠️ 두 곳이 각자 세면 반드시 어긋난다. 화면에서 3.4 인데 받은 파일은 3.5 인
+       순간 둘 다 못 믿게 되고, 그러면 아무도 이 숫자를 보고서에 안 쓴다.
+       그래서 세는 곳은 여기 하나다.
+    """
     responses = survey.responses.filter(
         SurveyResponse.submitted_at.isnot(None)
     ).all()
@@ -1028,6 +1050,17 @@ def survey_results(survey_id):
             entry.update({'average': None, 'distribution': {}, 'by_division': {}})
         else:
             entry['values'] = []
+        if q.qtype in ('choice', 'multi', 'rank'):
+            # 객관식은 **세어야 뜻이 생긴다.** 원문만 늘어놓으면 스무 줄쯤에서
+            # 사람이 읽기를 포기하고, 유형화하려고 객관식으로 만든 이유가
+            # 사라진다. 선택지 순서를 지켜 0건도 남긴다 — "아무도 안 고른
+            # 선택지"는 그 자체로 결과다.
+            entry['choice_counts'] = [
+                {'value': label, 'count': 0}
+                for label in _question_choice_labels(q)
+            ]
+            if q.qtype == 'rank':
+                entry['rank_average'] = {}
         by_question[q.id] = entry
 
     # 답을 한 번에 읽는다.
@@ -1059,6 +1092,7 @@ def survey_results(survey_id):
     role_slices, process_slices = {}, {}
     totals = {}              # 전체 평균
     division_totals = {}     # 사업부별
+    choice_tally = {}        # 객관식 선택 횟수 (+ 순위형의 순위 합)
     question_by_id = {q.id: q for q in questions}
 
     for r in responses:
@@ -1103,6 +1137,13 @@ def survey_results(survey_id):
                 entry['values'].append(
                     a.value_text if a.value_text is not None else a.value_json
                 )
+                if 'choice_counts' in entry:
+                    picked = _choice_values(a.value_json)
+                    for rank, label in enumerate(picked, start=1):
+                        cell = choice_tally.setdefault(a.question_id, {}).setdefault(
+                            label, {'count': 0, 'rank_sum': 0})
+                        cell['count'] += 1
+                        cell['rank_sum'] += rank
                 _slice_add(rslice, q, None)
                 _slice_add(pslice, q, None)
 
@@ -1117,6 +1158,29 @@ def survey_results(survey_id):
             for k, v in buckets.items() if v['n']
         }
 
+    # 객관식 세기를 마무리한다.
+    #
+    # ⚠️ 보기에 없는 답이 나올 수 있다. 배포 뒤에 보기를 고친 설문이나, 옛
+    #    화면으로 낸 답이 그렇다. **버리지 않고 뒤에 붙인다** — 조용히 빼면
+    #    선택지 합이 응답 수와 안 맞는데 왜 그런지 알 길이 없다.
+    for qid, tally in choice_tally.items():
+        entry = by_question.get(qid)
+        if entry is None or 'choice_counts' not in entry:
+            continue
+        listed = {row['value'] for row in entry['choice_counts']}
+        for row in entry['choice_counts']:
+            row['count'] = tally.get(row['value'], {}).get('count', 0)
+        for label, cell in tally.items():
+            if label not in listed:
+                entry['choice_counts'].append({
+                    'value': label, 'count': cell['count'], 'unlisted': True,
+                })
+        if 'rank_average' in entry:
+            entry['rank_average'] = {
+                label: round(cell['rank_sum'] / cell['count'], 2)
+                for label, cell in tally.items() if cell['count']
+            }
+
     def _finish(slices):
         """누적기(_sum)를 평균으로 바꾸고 내부 칸을 지운다."""
         for slice_ in slices.values():
@@ -1129,7 +1193,7 @@ def survey_results(survey_id):
 
     targets = target_user_ids(survey)
     unknown = sum(1 for r in responses if not r.division_id)
-    return jsonify({'success': True, 'data': {
+    return {
         'survey': _survey_dict(survey),
         'target_count': len(targets),
         'response_count': len(responses),
@@ -1143,7 +1207,173 @@ def survey_results(survey_id):
         #    원문이 필요하면 위의 questions[] 를 본다.
         'by_role': _finish(role_slices),
         'by_process': _finish(process_slices),
-    }})
+    }
+
+
+@admin_bp.route('/<int:survey_id>/results', methods=['GET'])
+@manager_required
+def survey_results(survey_id):
+    """집계 화면이 부르는 곳. **응답자 신원은 실리지 않는다.**
+
+    응답 수를 항상 같이 낸다. 몇 명이 답했는지 모르는 평균은 숫자 구경이다.
+    소속을 모르는 응답도 따로 센다 — 숨기면 그럴듯한 사업부별 평균이 나오는데
+    실은 절반이 어디 것인지 모르는 상태가 된다.
+    """
+    survey = Survey.query.get(survey_id)
+    if not survey:
+        return _error('설문을 찾을 수 없습니다.', 404)
+    return jsonify({'success': True, 'data': compute_results(survey)})
+
+
+def _division_names():
+    """division_id → 이름. 못 읽으면 빈 표를 준다(번호로 나간다)."""
+    try:
+        from app.modules.digital_twin_dashboard.models import Division
+        return {d.id: d.name for d in Division.query.all()}
+    except Exception:
+        return {}
+
+
+def _csv_response(rows, filename):
+    """행 목록을 CSV 응답으로. **BOM 을 붙인다.**
+
+    엑셀은 UTF-8 CSV 를 cp949 로 열어 한글을 깨뜨린다. 파일을 열자마자 깨져
+    보이면 아무도 두 번 쓰지 않는다.
+    """
+    import csv as _csv
+    import io as _io
+    from flask import Response
+
+    buf = _io.StringIO()
+    writer = _csv.writer(buf)
+    for row in rows:
+        writer.writerow(row)
+    return Response('﻿' + buf.getvalue(),
+                    mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename="{filename}"'})
+
+
+@admin_bp.route('/<int:survey_id>/export/summary', methods=['GET'])
+@manager_required
+def export_summary(survey_id):
+    """집계표 CSV. 한 줄이 **하나의 숫자가 선 조건**이다.
+
+    원자료만 내보내던 때는 보고서에 넣으려면 엑셀에서 피벗을 다시 돌려야 했다.
+    화면은 이미 그 계산을 하고 있으니 그대로 파일로 낸다 — 눈으로 옮겨 적게
+    두면 반드시 틀린다.
+
+    ⚠️ **숫자는 화면과 같은 함수(compute_results)에서 나온다.** 여기서 따로
+       세면 화면이 3.4 인데 파일은 3.5 인 날이 오고, 그러면 둘 다 못 믿는다.
+
+    ⚠️ **'묻지 않음'과 '응답 0'을 구별한다.** 그 역할에게 안 보인 문항을 0 으로
+       찍으면 "아무도 안 답했다"로 읽히고, 그 오해가 그대로 보고서에 실린다.
+
+    ⚠️ 응답자 이름·계정은 실리지 않는다. 이 파일은 메일로 돌아다닌다.
+    """
+    survey = Survey.query.get(survey_id)
+    if not survey:
+        return _error('설문을 찾을 수 없습니다.', 404)
+
+    data = compute_results(survey)
+    questions = data['questions']
+    divisions = _division_names()
+
+    # 척도 칸은 **실제로 나온 점수만** 연다. 1~5 로 박아 두면 7점 척도가
+    # 잘리고, 안 쓰는 칸이 늘 비어 있으면 표가 지저분해진다.
+    scale_keys = set()
+    for entry in questions:
+        scale_keys.update(entry.get('distribution') or {})
+    for slices in (data['by_role'], data['by_process']):
+        for slice_ in slices.values():
+            for cell in slice_['questions'].values():
+                scale_keys.update(cell.get('distribution') or {})
+
+    def _as_number(key):
+        try:
+            return float(key)
+        except (TypeError, ValueError):
+            return float('inf')
+
+    scale_cols = sorted(scale_keys, key=_as_number)
+
+    header = (['섹션', '문항', '유형', '구분', '값', '응답수', '평균', '비율(%)']
+              + [f'{k}점' for k in scale_cols] + ['비고'])
+
+    QTYPE_LABEL = {'scale': '척도', 'choice': '객관식', 'multi': '복수선택',
+                   'rank': '순위', 'text': '자유서술'}
+
+    rows = [
+        ['설문', survey.title],
+        ['상태', survey.status],
+        ['대상', data['target_count'], '응답', data['response_count'],
+         '소속 미확인', data['unknown_division_count']],
+        ['뽑은 시각', datetime.utcnow().isoformat(sep=' ', timespec='minutes')],
+        # ⚠️ 표 위의 이 넉 줄이 없으면, 며칠 뒤 이 파일이 어느 설문의 것인지
+        #    아무도 모른다. 표는 빈 줄 하나 뒤에서 시작한다.
+        [],
+        header,
+    ]
+
+    def _row(entry, kind, value, count, average, ratio, dist, note=''):
+        return ([entry.get('section') or '', entry['text'],
+                 QTYPE_LABEL.get(entry['qtype'], entry['qtype']),
+                 kind, value, count,
+                 '' if average is None else average,
+                 '' if ratio is None else ratio]
+                + [(dist or {}).get(k, 0) if dist is not None else ''
+                   for k in scale_cols]
+                + [note])
+
+    def _asked(entry, axis_field, key):
+        """이 칸의 사람들에게 **물어본 문항인가.** 빈 대상은 전원이다."""
+        if key == UNSET_BUCKET:
+            return True          # 축을 안 고른 사람 — 물었는지 알 수 없다
+        wanted = entry.get(axis_field) or []
+        return (not wanted) or (key in wanted)
+
+    for entry in questions:
+        qid = str(entry['question_id'])
+        answered = entry['answer_count']
+        is_scale = entry['qtype'] == 'scale'
+
+        rows.append(_row(entry, '전체', '', answered,
+                         entry.get('average'), None,
+                         entry.get('distribution') if is_scale else None))
+
+        for axis_field, slices, label in (
+            ('audience_roles', data['by_role'], '역할'),
+            ('audience_processes', data['by_process'], '프로세스'),
+        ):
+            for key in sorted(slices, key=lambda k: (k == UNSET_BUCKET, k)):
+                if not _asked(entry, axis_field, key):
+                    rows.append(_row(entry, label, key, '', None, None, None,
+                                     note='묻지 않음'))
+                    continue
+                cell = slices[key]['questions'].get(qid) or {}
+                rows.append(_row(entry, label, key, cell.get('answer_count', 0),
+                                 cell.get('average'), None,
+                                 cell.get('distribution') if is_scale else None))
+
+        for key, cell in (entry.get('by_division') or {}).items():
+            name = ('소속 미확인' if key == 'unknown'
+                    else divisions.get(int(key), f'#{key}'))
+            # 사업부는 평균과 응답수만 낸다. 여기서 점수 분포까지 쪼개면 한 칸에
+            # 한두 명이 남아, 익명이라던 응답이 사실상 지목이 된다.
+            rows.append(_row(entry, '사업부', name, cell['count'],
+                             cell['average'], None, None))
+
+        for row in entry.get('choice_counts') or []:
+            ratio = round(row['count'] * 100 / answered, 1) if answered else ''
+            average = (entry.get('rank_average') or {}).get(row['value'])
+            rows.append(_row(entry, '선택지', row['value'], row['count'],
+                             average, ratio, None,
+                             note='보기에 없는 답' if row.get('unlisted') else ''))
+
+    db.session.add(SurveyAccessLog(
+        survey_id=survey.id, viewer_id=int(get_jwt_identity()), action='export',
+    ))
+    db.session.commit()
+    return _csv_response(rows, f'survey_{survey.id}_summary.csv')
 
 
 @admin_bp.route('/<int:survey_id>/export', methods=['GET'])

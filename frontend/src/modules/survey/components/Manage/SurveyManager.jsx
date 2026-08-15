@@ -351,6 +351,7 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
           onBack={() => setView({ mode: 'list' })}
           onReveal={reveal}
           onExport={() => surveyApi.exportResponses(view.survey.id).catch(e => setError(e.message))}
+          onExportSummary={() => surveyApi.exportSummary(view.survey.id).catch(e => setError(e.message))}
         />
       </Wrap>
     );

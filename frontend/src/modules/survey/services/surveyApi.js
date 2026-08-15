@@ -37,6 +37,37 @@ async function authFetch(url, options = {}) {
 
 const request = (path, options) => authFetch(`${API_BASE}${path}`, options);
 
+/** 파일 내려받기. **JSON 이 아니라 blob 이라 authFetch 를 못 쓴다.**
+ *
+ * 서버가 오류를 내면 본문은 JSON 이므로 그 문구를 꺼내 올린다 — 여기서
+ * "내려받기 실패 (403)" 으로 뭉개면 왜 막혔는지 알 수 없다.
+ */
+async function download(path, filename) {
+  const token = localStorage.getItem('accessToken');
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `내려받기 실패 (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.message) message = body.message;
+    } catch {
+      // 본문이 JSON 이 아니면 위 문구를 쓴다
+    }
+    throw new Error(message);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // 안 풀어 주면 파일 하나가 탭이 닫힐 때까지 메모리에 남는다.
+  URL.revokeObjectURL(url);
+}
+
 /** context 로 목록을 좁힐 때 쓰는 쿼리. 둘 다 없으면 빈 문자열이다. */
 function contextQuery(context) {
   const params = new URLSearchParams();
@@ -177,23 +208,13 @@ export const surveyApi = {
    *
    * ⚠️ 다른 함수와 달리 JSON 이 아니다. 브라우저가 파일로 받게 하려면 blob 을
    *    직접 다뤄야 한다. 응답자 이름은 실리지 않는다(서버가 안 넣는다). */
-  exportResponses: async (surveyId) => {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_BASE}/manage/${surveyId}/export`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error(`내보내기 실패 (${res.status})`);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `survey_${surveyId}_responses.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // 안 풀어 주면 파일 하나가 탭이 닫힐 때까지 메모리에 남는다.
-    URL.revokeObjectURL(url);
-  },
+  exportResponses: (surveyId) =>
+    download(`/manage/${surveyId}/export`, `survey_${surveyId}_responses.csv`),
+
+  /** 집계표 CSV. 한 줄이 하나의 숫자가 선 조건(전체/역할/사업부/선택지)이다.
+   *  화면과 **같은 계산**에서 나온다 — 서버가 compute_results 하나만 쓴다. */
+  exportSummary: (surveyId) =>
+    download(`/manage/${surveyId}/export/summary`, `survey_${surveyId}_summary.csv`),
 
   /** ⚠️ 응답자 확인. 부르는 순간 감사 로그가 남는다. */
   getSurveyIdentities: (surveyId) => request(`/manage/${surveyId}/identities`),
