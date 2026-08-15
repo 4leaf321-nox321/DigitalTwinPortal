@@ -309,14 +309,31 @@ def _accepting(survey, now=None):
     return True
 
 
-def _apply_questions(survey, items):
-    """문항을 통째로 교체한다. 돌려주는 값은 오류 메시지이며 None 이면 통과."""
-    if not isinstance(items, list):
-        return 'questions 는 목록이어야 합니다.'
+# ── 문항을 넣는 두 길 ──────────────────────────────────────────────────────
+#
+# ⚠️ **지우는 길과 더하는 길을 이름으로 가른다.**
+#
+#    `_replace_questions` 는 기존 문항을 **전부 지우고** 다시 만든다.
+#    `_append_questions` 는 **하나도 지우지 않고** 뒤에 이어 붙인다.
+#
+#    한 함수에 플래그로 합쳐 두면 부르는 쪽에서 어느 쪽인지 안 보이고, 그러면
+#    "제목만 고쳤는데 문항이 전부 사라졌다" 가 난다. 실제로 문항은 응답이
+#    들어오면 잠기므로, 잘못 지운 것을 되돌릴 방법이 없다.
+#
+#    실제로 만드는 일은 `_add_questions` 하나가 한다 — 검증 규칙이 둘로 갈리면
+#    "새로 만들 때는 통과하는데 덧붙일 때는 실패" 가 생긴다.
 
-    for q in survey.questions.all():
-        db.session.delete(q)
+def _add_questions(survey, items, order_base=None):
+    """items 를 검증해 문항으로 **더한다.** 돌려주는 값은 오류 메시지(None 이면 통과).
 
+    ⚠️ 이 함수는 **아무것도 지우지 않는다.** 지우는 것은 `_replace_questions`
+       한 곳에서만 한다.
+
+    order_base 가 None 이면 넘어온 order 를 그대로 쓴다(교체 경로 — 화면이
+    순서를 정해 보낸다). 숫자면 그 번호부터 차례로 매긴다(덧붙이기 경로 —
+    표에는 order 열이 없어서 0 부터 다시 매겨지는데, 그대로 두면 기존 문항
+    사이에 새 문항이 끼어들어 순서가 섞인다).
+    """
     for i, item in enumerate(items or []):
         text = (item.get('text') or '').strip()
         if not text:
@@ -334,10 +351,11 @@ def _apply_questions(survey, items):
         if error:
             return error
 
+        order = item.get('order', i) if order_base is None else order_base + i
         section = (item.get('section') or '').strip() or None
         db.session.add(SurveyQuestion(
             survey=survey,
-            order=item.get('order', i),
+            order=order,
             section=section,
             text=text,
             help_text=item.get('help_text'),
@@ -353,6 +371,44 @@ def _apply_questions(survey, items):
     return None
 
 
+def _replace_questions(survey, items):
+    """문항을 통째로 교체한다. **기존 문항은 사라진다.**
+
+    돌려주는 값은 오류 메시지이며 None 이면 통과. 부르기 전에 응답이 없는지
+    확인해야 한다 — 응답이 있는 설문에서 문항을 갈아치우면 이미 받은 답이
+    무엇에 대한 답이었는지 알 수 없게 된다.
+    """
+    if not isinstance(items, list):
+        return 'questions 는 목록이어야 합니다.'
+
+    for q in survey.questions.all():
+        db.session.delete(q)
+
+    return _add_questions(survey, items)
+
+
+def _next_order(survey):
+    """덧붙일 문항이 시작할 order.
+
+    기존 문항이 0..4 인데 덧붙이는 문항을 0 부터 매기면, order 로 정렬하는
+    응답 화면에서 새 문항이 옛 문항 사이에 끼어들어 섞인다. 그래서 **기존
+    최대값 다음**부터 매긴다. 문항이 하나도 없으면 0.
+    """
+    orders = [q.order or 0 for q in survey.questions.all()]
+    return max(orders) + 1 if orders else 0
+
+
+def _append_questions(survey, items):
+    """기존 문항 **뒤에** 문항을 덧붙인다. 하나도 지우지 않는다.
+
+    돌려주는 값은 오류 메시지이며 None 이면 통과.
+    """
+    if not isinstance(items, list):
+        return 'questions 는 목록이어야 합니다.'
+
+    return _add_questions(survey, items, order_base=_next_order(survey))
+
+
 def _apply_axes(survey, payload):
     """설문이 물을 역할·프로세스를 payload 에서 받아 반영한다.
 
@@ -366,6 +422,36 @@ def _apply_axes(survey, payload):
         if error:
             return error
         setattr(survey, field, values)
+    return None
+
+
+def _extend_axes(survey, table_axes, payload):
+    """설문이 물을 역할·프로세스를 **넓히기만 한다**(합집합). 덧붙이기 전용.
+
+    ⚠️ **좁히지 않는다.** 이미 그 역할로 답한 사람이 있을 수 있고, 목록에서
+       빼면 그 응답은 집계에서 갈 곳을 잃는다(응답의 respondent_role 은 남아
+       있는데 설문은 그 역할을 모르는 상태가 된다).
+
+    ⚠️ 표에서 유도만 하지 않는다. 전용 문항이 없는 역할(사무국장처럼)은 표의
+       역할 열에 아예 나타나지 않는데, 설문 목록에 없으면 그 사람은 역할을
+       고를 수 없어 제출 자체가 막힌다. 그래서 payload 가 명시한 값도 함께
+       더한다.
+
+    순서는 기존 값 → 표에 나온 값 → payload 가 명시한 값. 화면의 선택지 순서가
+    덧붙일 때마다 뒤바뀌면 응답자가 헷갈린다.
+    """
+    for field, label in (('roles', '역할'), ('processes', '프로세스')):
+        explicit, error = _axis_list(payload.get(field), label)
+        if error:
+            return error
+        merged = []
+        for source in (getattr(survey, field) or [],
+                       table_axes.get(field) or [],
+                       explicit):
+            for value in source:
+                if value not in merged:
+                    merged.append(value)
+        setattr(survey, field, merged)
     return None
 
 
@@ -429,7 +515,7 @@ def create_survey():
         db.session.flush()
 
         error = _apply_axes(survey, payload) or \
-            _apply_questions(survey, payload.get('questions') or [])
+            _replace_questions(survey, payload.get('questions') or [])
         if error:
             db.session.rollback()
             return _error(error, 400)
@@ -458,78 +544,177 @@ def import_preview():
     그때는 문항을 못 고친다(응답이 있으면 잠긴다).
     """
     payload = request.get_json() or {}
+    # ⚠️ survey_id 가 와도 **무시한다.** 미리보기는 어느 설문에 붙일 표든 읽기만
+    #    한다 — 확인하려고 눌렀을 뿐인데 문항이 늘어나면 안 된다.
     return jsonify({'success': True, 'data': parse_table(payload.get('text') or '')})
+
+
+def _parse_or_reject(payload, refusal):
+    """표를 읽는다. 돌려주는 값은 (결과, 오류응답) — 오류응답이 있으면 그대로 반환.
+
+    ⚠️ **DB 를 건드리기 전에 부른다.** 오류가 한 줄이라도 있으면 아무것도
+       만들지도, 덧붙이지도 않는다. 반쯤 반영된 설문이 남는 것이 가장 나쁘다.
+
+    refusal 은 "그래서 무엇을 안 했는지"다. 새로 만드는 길과 덧붙이는 길이
+    같은 문구를 쓰면, 사용자는 기존 문항이 날아갔는지 아닌지 알 수 없다.
+    """
+    result = parse_table(payload.get('text') or '')
+    if not result['rows']:
+        return None, _error('표에서 문항을 하나도 읽지 못했습니다. '
+                            '첫 줄은 머리글로 보고 건너뜁니다.', 400)
+    if result['error_count']:
+        # 오류를 그대로 실어 보낸다. 개수만 알려주면 사용자는 미리보기를
+        # 다시 불러야 하고, 그 사이 표를 고쳤으면 줄 번호가 어긋난다.
+        return None, (jsonify({
+            'success': False,
+            'message': f"{result['error_count']}개 행에 오류가 있어 {refusal}",
+            'errors': all_errors(result),
+            'data': result,
+        }), 400)
+    return result, None
+
+
+def _append_target(payload):
+    """payload 의 survey_id 로 덧붙일 설문을 찾는다.
+
+    돌려주는 값은 (설문, 오류응답). **둘 다 None 이면 survey_id 가 없다** =
+    지금까지처럼 새 설문을 만드는 길이다.
+    """
+    raw = payload.get('survey_id')
+    if raw is None or raw == '':
+        return None, None
+
+    try:
+        survey_id = int(raw)
+    except (TypeError, ValueError):
+        return None, _error(f'survey_id 는 숫자여야 합니다: {raw}', 400)
+
+    survey = Survey.query.get(survey_id)
+    if not survey:
+        return None, _error('설문을 찾을 수 없습니다.', 404)
+
+    # 문항 수정을 막는 것과 같은 이유다. 응답을 받는 도중에 문항이 늘면 먼저
+    # 답한 사람과 나중에 답한 사람이 **서로 다른 설문에 답한 것**이 되고,
+    # 나중에 집계에서 새 문항의 분모가 몇인지 아무도 설명할 수 없게 된다.
+    if survey.responses.count() > 0:
+        return None, _error(
+            '이미 응답이 있어 문항을 덧붙일 수 없습니다. 받는 도중에 문항이 '
+            '늘면 먼저 답한 사람과 나중에 답한 사람이 서로 다른 설문에 답한 것이 '
+            '됩니다. 새 설문을 만드세요.', 409)
+
+    return survey, None
 
 
 @admin_bp.route('/import', methods=['POST'])
 @manager_required
 def import_survey():
-    """표에서 설문을 통째로 만든다.
+    """표를 설문으로. survey_id 유무로 **길이 갈린다.**
 
-    ⚠️ **오류가 한 줄이라도 있으면 아무것도 만들지 않는다.** 반쯤 만들어진
-       설문이 남는 것이 가장 나쁘다 — 목록에는 보이는데 문항이 빠져 있고,
-       고치려면 지우고 다시 넣어야 하는데 그 사이 누가 답해 버리면 잠긴다.
-       그래서 DB 를 건드리기 전에 표 전체를 먼저 검증한다.
+        survey_id 없음  → 표에서 설문을 통째로 새로 만든다
+        survey_id 있음  → 그 설문 **뒤에 문항을 덧붙인다**(기존 문항은 남는다)
+
+    덧붙이기가 필요한 이유: 운영에서 AI 로 역할별 표를 여러 벌 만들어 온다.
+    첫 표로 설문을 만든 뒤 나머지를 같은 설문에 이어 붙여야 하는데, 그 길이
+    없으면 표를 다시 붙여넣을 때마다 설문이 하나씩 더 생긴다.
+
+    ⚠️ **오류가 한 줄이라도 있으면 아무것도 만들지도 덧붙이지도 않는다.**
+       반쯤 반영된 설문이 남는 것이 가장 나쁘다 — 목록에는 보이는데 문항이
+       빠져 있고, 고치려는 사이 누가 답해 버리면 문항이 잠긴다.
     """
     try:
         payload = request.get_json() or {}
-        title = (payload.get('title') or '').strip()
-        if not title:
-            return _error('title 이 필요합니다.', 400)
-
-        target_type = payload.get('target_type') or 'all'
-        if target_type not in TARGET_TYPES:
-            return _error(f'알 수 없는 대상 구분입니다: {target_type}', 400)
-
-        result = parse_table(payload.get('text') or '')
-        if not result['rows']:
-            return _error('표에서 문항을 하나도 읽지 못했습니다. '
-                          '첫 줄은 머리글로 보고 건너뜁니다.', 400)
-        if result['error_count']:
-            # 오류를 그대로 실어 보낸다. 개수만 알려주면 사용자는 미리보기를
-            # 다시 불러야 하고, 그 사이 표를 고쳤으면 줄 번호가 어긋난다.
-            return jsonify({
-                'success': False,
-                'message': f"{result['error_count']}개 행에 오류가 있어 "
-                           f'설문을 만들지 않았습니다.',
-                'errors': all_errors(result),
-                'data': result,
-            }), 400
-
-        survey = Survey(
-            title=title,
-            description=payload.get('description'),
-            context_type=payload.get('context_type'),
-            context_id=payload.get('context_id'),
-            context_tag=payload.get('context_tag'),
-            target_type=target_type,
-            target_refs=payload.get('target_refs') or [],
-            created_by=int(get_jwt_identity()),
-        )
-        db.session.add(survey)
-        db.session.flush()
-
-        # 축을 따로 안 주면 **표에 등장한 것**을 그대로 쓴다. 표에 PL 문항이
-        # 있는데 설문이 PL 을 안 물으면 그 문항은 아무에게도 안 보인다.
-        axes = {
-            'roles': payload.get('roles', result['roles']),
-            'processes': payload.get('processes', result['processes']),
-        }
-        error = _apply_axes(survey, axes) or _apply_questions(
-            survey, rows_to_questions(result, link_type=payload.get('link_type'))
-        )
-        if error:
-            db.session.rollback()
-            return _error(error, 400)
-
-        db.session.commit()
-        return jsonify({
-            'success': True,
-            'data': _survey_dict(survey, with_questions=True),
-        }), 201
+        survey, refusal = _append_target(payload)
+        if refusal:
+            return refusal
+        if survey is not None:
+            return _import_append(survey, payload)
+        return _import_create(payload)
     except Exception as e:
         db.session.rollback()
         return _error(str(e))
+
+
+def _import_create(payload):
+    """표에서 설문을 새로 만든다. 지금까지의 동작 그대로다."""
+    title = (payload.get('title') or '').strip()
+    if not title:
+        return _error('title 이 필요합니다.', 400)
+
+    target_type = payload.get('target_type') or 'all'
+    if target_type not in TARGET_TYPES:
+        return _error(f'알 수 없는 대상 구분입니다: {target_type}', 400)
+
+    result, refusal = _parse_or_reject(payload, '설문을 만들지 않았습니다.')
+    if refusal:
+        return refusal
+
+    survey = Survey(
+        title=title,
+        description=payload.get('description'),
+        context_type=payload.get('context_type'),
+        context_id=payload.get('context_id'),
+        context_tag=payload.get('context_tag'),
+        target_type=target_type,
+        target_refs=payload.get('target_refs') or [],
+        created_by=int(get_jwt_identity()),
+    )
+    db.session.add(survey)
+    db.session.flush()
+
+    # 축을 따로 안 주면 **표에 등장한 것**을 그대로 쓴다. 표에 PL 문항이
+    # 있는데 설문이 PL 을 안 물으면 그 문항은 아무에게도 안 보인다.
+    axes = {
+        'roles': payload.get('roles', result['roles']),
+        'processes': payload.get('processes', result['processes']),
+    }
+    # 새 설문이라 지울 문항이 없다. 교체 경로를 쓰는 것이 안전하다.
+    error = _apply_axes(survey, axes) or _replace_questions(
+        survey, rows_to_questions(result, link_type=payload.get('link_type'))
+    )
+    if error:
+        db.session.rollback()
+        return _error(error, 400)
+
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'data': _survey_dict(survey, with_questions=True),
+    }), 201
+
+
+def _import_append(survey, payload):
+    """기존 설문에 표의 문항을 **덧붙인다.**
+
+    ⚠️ title/description/target_* 은 **건드리지 않는다.** 덧붙이기는 문항을
+       더하는 일이지 설문을 다시 정의하는 일이 아니다. payload 에 와도 무시한다 —
+       두 번째 표를 넣다가 제목이 바뀌면 사무국이 어느 설문인지 잃어버린다.
+    """
+    result, refusal = _parse_or_reject(payload, '문항을 덧붙이지 않았습니다.')
+    if refusal:
+        return refusal
+
+    before = survey.questions.count()
+
+    # 축은 **넓히기만** 한다(합집합). 좁히면 이미 그 역할로 답한 응답이 갈 곳을
+    # 잃는다 — 지금은 응답이 없어야 여기 오지만, 규칙을 경로마다 다르게 두면
+    # 나중에 그 전제가 풀렸을 때 조용히 데이터가 어긋난다.
+    table_axes = {'roles': result['roles'], 'processes': result['processes']}
+    error = _extend_axes(survey, table_axes, payload) or _append_questions(
+        survey, rows_to_questions(result, link_type=payload.get('link_type'))
+    )
+    if error:
+        db.session.rollback()
+        return _error(error, 400)
+
+    db.session.commit()
+    data = _survey_dict(survey, with_questions=True)
+    # 몇 개가 붙었는지 화면이 바로 말해 줄 수 있어야 한다. 개수를 안 돌려주면
+    # 사용자는 문항 목록을 세어 보는 수밖에 없고, 수십 문항이면 세지 않는다.
+    # **저장된 결과에서 센다** — 넣으려던 개수를 세면, 어긋났을 때 그 사실이
+    # 숫자에 안 나타난다.
+    data['question_count'] = len(data['questions'])
+    data['appended_count'] = data['question_count'] - before
+    return jsonify({'success': True, 'data': data}), 200
 
 
 @admin_bp.route('/<int:survey_id>', methods=['GET', 'PUT', 'DELETE'])
@@ -580,7 +765,8 @@ def modify_survey(survey_id):
             return _error(error, 400)
 
         if 'questions' in payload:
-            error = _apply_questions(survey, payload['questions'])
+            # 통째로 교체하는 길이다. 위에서 응답 유무를 이미 막아 두었다.
+            error = _replace_questions(survey, payload['questions'])
             if error:
                 db.session.rollback()
                 return _error(error, 400)

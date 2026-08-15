@@ -514,3 +514,201 @@ def test_기존_설문은_그대로_동작한다(client, office, staff, auth):
     res = client.post(f'{RESPOND_BASE}/{survey.id}/responses',
                       json={'answers': {str(qid): 4}}, headers=auth(staff))
     assert res.status_code == 201
+
+
+# ══ 기존 설문에 문항 덧붙이기 ═══════════════════════════════════════════════
+#
+# ── 무엇을 지키나 ──────────────────────────────────────────────────────────
+# 운영에서 AI 로 역할별 표를 **여러 벌** 만들어 온다. 첫 표로 설문을 만든 뒤
+# 나머지를 같은 설문에 이어 붙이지 못하면, 붙여넣을 때마다 설문이 하나씩 더
+# 생긴다. 그래서 `/import` 가 survey_id 를 받는다.
+#
+#   · 덧붙이기가 **기존 문항을 지우지 않는가** (지우는 길과 더하는 길이 섞이면
+#     "제목만 고쳤는데 문항이 사라졌다"가 난다. 응답이 들어오면 못 되돌린다)
+#   · order 가 **기존 뒤로** 이어지는가 (0 부터 다시 매기면 순서가 섞인다)
+#   · 축이 **합집합으로 넓어지는가** (좁히면 그 역할로 답한 응답이 갈 곳을 잃는다)
+#   · 오류난 표가 **한 문항도** 덧붙이지 않는가
+
+EXTRA_ROWS = [
+    HEADER,
+    ['품질', '품질 담당', '품질', '검사 데이터는 자동으로 쌓이나?', '척도', '',
+     '예', '', 'quality:data'],
+    ['품질', '품질 담당', '품질', '불량 원인을 어디서 보나?', '객관식',
+     'MES|엑셀|기타', '아니오', '', ''],
+]
+
+
+def _import_new(client, office, auth, rows=None, title='덧붙이기 설문', **extra):
+    """표로 설문을 새로 만들고 그 응답 본문을 돌려준다."""
+    res = client.post(
+        f'{ADMIN_BASE}/import',
+        json={'title': title, 'text': _tsv(rows or TABLE_ROWS), **extra},
+        headers=auth(office),
+    )
+    assert res.status_code == 201, res.get_json()
+    return res.get_json()['data']
+
+
+def _append(client, office, auth, survey_id, rows=None, **extra):
+    return client.post(
+        f'{ADMIN_BASE}/import',
+        json={'survey_id': survey_id, 'text': _tsv(rows or EXTRA_ROWS), **extra},
+        headers=auth(office),
+    )
+
+
+def test_덧붙이면_기존_문항이_남고_뒤에_붙는다(client, office, auth):
+    """⚠️ 요점은 **기존 문항이 하나도 안 사라지는 것**이다.
+
+    문항을 통째로 지우고 다시 만드는 길(_replace_questions)을 덧붙이기에
+    그대로 쓰면, 두 번째 표를 넣는 순간 첫 표의 문항이 전부 없어진다.
+    그리고 order 를 0 부터 다시 매기면 새 문항이 옛 문항 사이에 끼어든다.
+    """
+    survey = _import_new(client, office, auth)
+    res = _append(client, office, auth, survey['id'])
+    assert res.status_code == 200, res.get_json()
+
+    data = res.get_json()['data']
+    assert data['id'] == survey['id']            # 새 설문이 아니라 그 설문이다
+    assert Survey.query.count() == 1             # 하나 더 생기지 않았다
+    # 몇 개가 붙었는지 화면이 바로 말할 수 있어야 한다 — 수십 문항을 사람이
+    # 세지는 않는다.
+    assert data['appended_count'] == 2 and data['question_count'] == 7
+
+    questions = data['questions']
+    assert len(questions) == 7                   # 5 + 2
+    assert [q['order'] for q in questions] == [0, 1, 2, 3, 4, 5, 6]
+    assert [q['text'] for q in questions[:5]] == \
+        [q['text'] for q in survey['questions']]  # 앞의 5개는 그대로
+    assert questions[5]['text'] == '검사 데이터는 자동으로 쌓이나?'
+    assert questions[5]['section'] == '품질'
+    assert questions[5]['audience_roles'] == ['품질 담당']
+    assert questions[6]['options']['choices'] == ['MES', '엑셀', '기타']
+    assert questions[6]['required'] is False
+
+    assert Survey.query.get(survey['id']).questions.count() == 7
+
+
+def test_덧붙이면_축이_합집합으로_넓어진다(client, office, auth):
+    """⚠️ **좁히지 않는다.**
+
+    이미 그 역할로 답한 사람이 있을 수 있고, 목록에서 빼면 그 응답은 집계에서
+    갈 곳을 잃는다. 그리고 전용 문항이 없는 역할(사무국장)은 표의 역할 열에
+    아예 안 나타나는데, 표에서 유도만 하면 그 사람은 역할을 못 골라 제출 자체가
+    막힌다.
+    """
+    survey = _import_new(client, office, auth,
+                         roles=['PL', '과제 멤버', '사무국장'])
+    assert survey['roles'] == ['PL', '과제 멤버', '사무국장']
+
+    # 표에는 '품질 담당'이 나오고, payload 로 '감사'를 따로 명시한다.
+    res = _append(client, office, auth, survey['id'], roles=['감사'])
+    assert res.status_code == 200, res.get_json()
+
+    data = res.get_json()['data']
+    # 기존 → 표 → payload 순으로 이어 붙는다. 사무국장이 살아 있는 것이 요점.
+    assert data['roles'] == ['PL', '과제 멤버', '사무국장', '품질 담당', '감사']
+    assert data['processes'] == ['개발', '품질']
+
+
+def test_덧붙인_뒤에도_배포가_막히지_않는다(client, office, auth):
+    """축을 안 넓히면 덧붙인 문항이 아무에게도 안 보여 배포가 막힌다.
+
+    그 상태를 알아차리는 곳은 배포 직전 검사뿐인데, 거기서 막히면 사무국은
+    왜 막혔는지 모른 채 설문을 다시 만든다.
+    """
+    survey = _import_new(client, office, auth)
+    assert _append(client, office, auth, survey['id']).status_code == 200
+
+    res = client.put(f'{ADMIN_BASE}/{survey["id"]}/status',
+                     json={'status': 'open'}, headers=auth(office))
+    assert res.status_code == 200, res.get_json()
+
+
+def test_응답이_있으면_덧붙일_수_없다(client, office, staff, auth):
+    """⚠️ 받는 도중에 문항이 늘면 먼저 답한 사람과 나중에 답한 사람이
+    **서로 다른 설문에 답한 것**이 된다. 문항 수정을 막는 것과 같은 이유다."""
+    survey_id = _import_and_open(client, office, auth)
+    form = client.get(f'{RESPOND_BASE}/{survey_id}/form',
+                      headers=auth(staff)).get_json()['data']
+    qs = {q['text']: q['id'] for q in form['questions']}
+    assert client.post(f'{RESPOND_BASE}/{survey_id}/responses', json={
+        'respondent_role': 'PL', 'respondent_process': '개발',
+        'answers': {str(qs['디지털 전환 준비도는?']): 4,
+                    str(qs['PL 로서 리소스는 충분한가?']): 3,
+                    str(qs['개발 단계에서 쓰는 도구는?']): 'NX'},
+    }, headers=auth(staff)).status_code == 201
+
+    res = _append(client, office, auth, survey_id)
+    assert res.status_code == 409
+    # 왜 막혔는지 메시지에 있어야 한다 — 없으면 사무국은 다시 시도만 한다.
+    assert '응답' in res.get_json()['message']
+    assert Survey.query.get(survey_id).questions.count() == 5     # 그대로다
+
+
+def test_없는_설문에_덧붙이면_404다(client, office, auth):
+    """⚠️ 못 찾았다고 **새로 만들어 버리면 안 된다.**
+
+    id 를 잘못 적은 사람은 덧붙였다고 믿는데, 실제로는 반쪽짜리 설문이 하나
+    더 생겨 있다. 그걸 알아채는 것은 응답이 갈린 뒤다.
+    """
+    res = _append(client, office, auth, 999999)
+    assert res.status_code == 404
+    assert Survey.query.count() == 0
+
+
+def test_오류난_표는_한_문항도_덧붙이지_않는다(client, office, auth):
+    """오류가 한 줄이라도 있으면 아무것도 덧붙이지 않는다.
+
+    절반만 붙으면 어디까지 들어갔는지 알 수 없어, 표를 고쳐 다시 넣으면
+    앞부분이 중복된다.
+    """
+    survey = _import_new(client, office, auth)
+    rows = list(EXTRA_ROWS)
+    rows.append(['품질', '', '', '어떤 도구를 쓰나?', '객관식', '', '예', '', ''])
+
+    res = _append(client, office, auth, survey['id'], rows=rows)
+    assert res.status_code == 400
+    assert any('4행' in m for m in res.get_json()['errors'])
+    assert Survey.query.get(survey['id']).questions.count() == 5   # ← 요점
+
+
+def test_덧붙이기는_제목과_대상을_바꾸지_않는다(client, office, auth):
+    """덧붙이기는 문항을 더하는 일이지 설문을 다시 정의하는 일이 아니다.
+
+    두 번째 표를 넣다가 제목이나 대상이 바뀌면, 이미 배포된 설문이 다른
+    사람들에게 가 버린다.
+    """
+    survey = _import_new(client, office, auth, title='원래 제목')
+    res = _append(client, office, auth, survey['id'],
+                  title='엉뚱한 제목', description='엉뚱한 설명',
+                  target_type='department', target_refs=['설계팀'])
+    assert res.status_code == 200, res.get_json()
+
+    saved = Survey.query.get(survey['id'])
+    assert saved.title == '원래 제목'
+    assert saved.description is None
+    assert saved.target_type == 'all' and saved.target_refs == []
+
+
+def test_미리보기는_survey_id_를_줘도_저장하지_않는다(client, office, auth):
+    """확인하려고 눌렀을 뿐인데 문항이 늘어나면 안 된다."""
+    survey = _import_new(client, office, auth)
+    res = client.post(f'{ADMIN_BASE}/import/preview',
+                      json={'survey_id': survey['id'], 'text': _tsv(EXTRA_ROWS)},
+                      headers=auth(office))
+    assert res.status_code == 200
+    assert res.get_json()['data']['ok_count'] == 2
+    assert Survey.query.get(survey['id']).questions.count() == 5
+
+
+def test_survey_id_없이_부르면_예전처럼_새_설문이_만들어진다(client, office, auth):
+    """회귀 방지. 덧붙이기를 붙였다고 기존 경로가 달라지면 안 된다."""
+    first = _import_new(client, office, auth, title='첫 설문')
+    second = _import_new(client, office, auth, rows=EXTRA_ROWS, title='둘째 설문')
+
+    assert first['id'] != second['id']
+    assert Survey.query.count() == 2
+    assert len(first['questions']) == 5
+    assert len(second['questions']) == 2
+    assert [q['order'] for q in second['questions']] == [0, 1]

@@ -117,6 +117,32 @@ export const surveyApi = {
       body: JSON.stringify(payload),
     }),
 
+  /**
+   * 이미 있는 설문에 표의 문항을 **덧붙인다.**
+   *
+   * 만들기와 **같은 엔드포인트**다 — body 에 survey_id 가 있으면 서버가
+   * 덧붙이기로 읽는다. 파서가 한 벌이어야 "미리보기는 통과했는데 생성은 실패"가
+   * 안 생기듯, 이쪽도 규칙을 두 벌로 만들지 않는다.
+   *
+   * 그런데도 함수를 따로 두는 이유: 덧붙이기에서 title·description·target 은
+   * 서버가 **무시한다.** 인자를 나눠 두면 그것들을 실을 방법이 아예 없어서,
+   * "제목을 고쳐 보냈는데 안 바뀌었다"가 생기지 않는다.
+   *
+   * ⚠️ 응답이 한 건이라도 있는 설문이면 **409** 다(받은 답이 무엇에 대한
+   *    답이었는지 알 수 없게 되므로). 없는 id 면 404. 화면에서 미리 못 고르게
+   *    막지만, 고르고 누르는 사이 누가 답할 수 있어 서버가 마지막으로 막는다.
+   * ⚠️ roles/processes 는 기존 값과 **합집합**이다. 덮어쓰지 않으므로 기존
+   *    역할이 사라지지 않는다.
+   *
+   * @param {number} surveyId 덧붙일 설문 id
+   * @param {{text: string, roles?: string[], processes?: string[], link_type?: string}} payload
+   */
+  appendImport: (surveyId, payload) =>
+    request('/manage/import', {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, survey_id: surveyId }),
+    }),
+
   deleteSurvey: (surveyId) =>
     request(`/manage/${surveyId}`, { method: 'DELETE' }),
 

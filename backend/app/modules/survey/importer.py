@@ -312,7 +312,8 @@ def all_errors(result):
 
 
 def rows_to_questions(result, link_type=None):
-    """파싱 결과를 `_apply_questions` 가 먹는 모양으로.
+    """파싱 결과를 라우트의 문항 적용 함수(`_replace_questions` ·
+    `_append_questions`)가 먹는 모양으로.
 
     **오류가 없는 표에만 쓴다.** 오류가 하나라도 있으면 라우트가 그 전에
     돌아선다 — 반쯤 만들어진 설문이 남는 것이 가장 나쁘다.

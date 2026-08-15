@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X, Table2 } from 'lucide-react';
+import { Plus, BarChart3, Send, Undo2, Trash2, Pencil, ArrowLeft, X, Table2, ListPlus } from 'lucide-react';
 import SurveyEditor from './SurveyEditor';
 import SurveyResults from './SurveyResults';
 import SurveyImport from './SurveyImport';
@@ -169,7 +169,10 @@ const IconButton = styled.button`
   color: #64748b;
   cursor: pointer;
   display: flex;
-  &:hover { border-color: ${ACCENT}; color: ${ACCENT}; }
+  &:hover:not(:disabled) { border-color: ${ACCENT}; color: ${ACCENT}; }
+  /* 못 누르는 버튼은 **감추지 않고** 흐리게 둔다. 감추면 어떤 카드에만 있는
+     이유를 아무도 모르고, 흐리게 두면 title 로 이유를 읽을 수 있다. */
+  &:disabled { opacity: 0.35; cursor: not-allowed; }
 `;
 
 const Panel = styled.div`
@@ -197,6 +200,18 @@ const ErrorBox = styled.div`
   border-radius: 0.5rem;
   color: #b91c1c;
   font-size: 0.8125rem;
+`;
+
+// 덧붙이기는 카드의 「문항 N개」가 조용히 늘어나는 것 말고는 눈에 띄는 변화가
+// 없다. 눌렀는데 아무 말도 없으면 됐는지 안 됐는지 알 수 없어 한 번 더 누른다.
+const NoticeBox = styled.div`
+  padding: 0.75rem 1rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.5rem;
+  color: #15803d;
+  font-size: 0.8125rem;
+  line-height: 1.6;
 `;
 
 const STATUS = {
@@ -249,17 +264,32 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
     if (ok) setView({ mode: 'list' });
   };
 
-  // 표에서 통째로 만들기. 오류가 하나라도 있으면 서버가 400 을 주고 아무것도
-  // 만들지 않는다 — 그 오류를 화면 안(SurveyImport)에서 줄 단위로 보여줘야
-  // 하므로 여기서 run() 으로 삼키지 않고 promise 를 그대로 넘긴다.
-  const importFromTable = (payload) => (
-    // 새로 만들 때만 context 를 싣는다 — save() 와 같은 규칙이다.
-    surveyApi.importSurvey({ ...payload, ...(context || {}) })
-  );
+  // 표에서 통째로 만들기 / 이미 있는 설문에 덧붙이기. 오류가 하나라도 있으면
+  // 서버가 400 을 주고 아무것도 만들지 않는다 — 그 오류를 화면 안(SurveyImport)
+  // 에서 줄 단위로 보여줘야 하므로 여기서 run() 으로 삼키지 않고 promise 를
+  // 그대로 넘긴다.
+  const importFromTable = (payload) => {
+    const { survey_id: surveyId, ...rest } = payload;
+    // ⚠️ 덧붙일 때는 context 를 **싣지 않는다.** save() 와 같은 규칙이다 —
+    //    다른 화면에서 만든 설문이 지금 보고 있는 맥락으로 조용히 옮겨 붙으면
+    //    원래 있던 목록에서 사라진다.
+    if (surveyId) return surveyApi.appendImport(surveyId, rest);
+    // 새로 만들 때만 context 를 싣는다.
+    return surveyApi.importSurvey({ ...rest, ...(context || {}) });
+  };
 
-  const afterImport = async () => {
-    // 만든 설문이 목록에 보여야 한다. 목록으로 먼저 돌아가고 다시 읽는다.
-    setView({ mode: 'list' });
+  const afterImport = async (data) => {
+    // 만든(덧붙인) 설문이 목록에 보여야 한다. 목록으로 먼저 돌아가고 다시
+    // 읽는다 — 덧붙이기는 문항 수가 바뀌므로 다시 읽지 않으면 카드의 「문항 N개」
+    // 가 옛 숫자로 남아 덧붙이기가 안 된 것처럼 보인다.
+    //
+    // 알림은 **view 에 실어 둔다.** 따로 상태로 두면 다른 화면에 갔다 돌아왔을
+    // 때까지 남아, 방금 한 일처럼 읽힌다. view 를 바꾸면 저절로 사라진다.
+    // 개수는 서버가 저장된 결과에서 센 값(appended_count)을 그대로 쓴다.
+    const notice = data?.appended_count != null
+      ? `'${data.title}'에 문항 ${data.appended_count}개를 덧붙였습니다 — 이제 문항 ${data.question_count}개입니다.`
+      : null;
+    setView({ mode: 'list', notice });
     await load();
   };
 
@@ -318,13 +348,20 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
         <Back onClick={() => setView({ mode: 'list' })}>
           <ArrowLeft size={15} /> 설문 목록
         </Back>
-        <Title>표로 새 설문 만들기</Title>
+        {/* 제목에 모드를 적지 않는다. 모드는 화면 안에서 언제든 바뀌는데,
+            바깥 제목은 처음 들어온 모드로 남아 서로 다른 말을 하게 된다. */}
+        <Title>표 붙여넣기</Title>
         {error && <ErrorBox>{error}</ErrorBox>}
         <Panel>
           <SurveyImport
             onCreate={importFromTable}
             onCreated={afterImport}
             onCancel={() => setView({ mode: 'list' })}
+            // 목록을 그대로 넘긴다. 덧붙일 설문을 고르려고 같은 목록을 다시
+            // 부르면, 카드에 적힌 응답 수와 고르는 화면의 응답 수가 어긋난다.
+            surveys={surveys}
+            initialMode={view.importMode || 'create'}
+            initialSurveyId={view.importSurveyId ?? null}
           />
         </Panel>
       </Wrap>
@@ -366,8 +403,8 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
         </Hint>
         <HeadActions>
           <GhostButton
-            onClick={() => setView({ mode: 'import' })}
-            title="엑셀에서 복사한 표를 붙여넣어 문항을 한 번에 만듭니다">
+            onClick={() => setView({ mode: 'import', importMode: 'create' })}
+            title="엑셀에서 복사한 표를 붙여넣어 문항을 한 번에 만듭니다. 그 화면에서 기존 설문에 덧붙일 수도 있습니다">
             <Table2 size={15} /> 표로 만들기
           </GhostButton>
           <AddButton onClick={() => openEditor(null)}>
@@ -377,6 +414,7 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
       </Head>
 
       {error && <ErrorBox>{error}</ErrorBox>}
+      {view.notice && <NoticeBox>{view.notice}</NoticeBox>}
 
       {loading ? (
         <Empty>불러오는 중…</Empty>
@@ -405,6 +443,20 @@ const SurveyManager = ({ context, contextLabel, divisions = [], onClearContext }
               <Buttons>
                 <IconButton onClick={() => openResults(s)} title="집계 보기">
                   <BarChart3 size={15} />
+                </IconButton>
+                {/* 표를 여러 벌 만들어 한 설문에 얹는 것이 실제 흐름이라,
+                    카드에서 바로 덧붙이기로 들어갈 수 있어야 한다. 응답이
+                    있으면 문항을 못 바꾸므로(서버 409) 여기서 미리 막고
+                    이유를 title 에 적는다. */}
+                <IconButton
+                  onClick={() => setView({
+                    mode: 'import', importMode: 'append', importSurveyId: s.id,
+                  })}
+                  disabled={s.response_count > 0}
+                  title={s.response_count > 0
+                    ? `응답 ${s.response_count}건 — 문항을 바꿀 수 없습니다`
+                    : '표를 붙여넣어 이 설문에 문항을 덧붙입니다'}>
+                  <ListPlus size={15} />
                 </IconButton>
                 <IconButton onClick={() => openEditor(s)} title="수정">
                   <Pencil size={15} />
