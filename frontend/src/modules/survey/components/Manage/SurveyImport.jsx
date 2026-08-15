@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { Table2, Wand2, AlertTriangle, CheckCircle2, Loader2, ListPlus } from 'lucide-react';
 import surveyApi from '../../services/surveyApi';
 import AxisPicker from './AxisPicker';
-import { linkKeyLabel, STRATEGY_DIMENSION_LINK } from '../../constants/questionTemplates';
+import { linkKeyLabel } from '../../constants/questionTemplates';
 import { ACCENT, ACCENT_DARK, ACCENT_LINE, ACCENT_TINT } from '../../theme';
 
 // 표를 붙여넣어 설문을 통째로 만드는 자리.
@@ -416,7 +416,7 @@ const COLUMN_GUIDE = [
   { name: '보기', desc: '| 로 구분. 척도·서술은 비웁니다' },
   { name: '필수', desc: '예/아니오·Y/N·1/0. 비우면 필수' },
   { name: '도움말', desc: '선택' },
-  { name: '연결키', desc: '선택. 예: organization:readiness' },
+  { name: '연결키', desc: '선택. 아래 「쓸 수 있는 연결키」에서 그대로 복사' },
 ];
 
 const QTYPE_LABEL = {
@@ -645,13 +645,25 @@ const roleCounts = useMemo(() => countAxis(rows, 'roles'), [rows]);
   const header = preview?.header || null;
   const headerLooksOdd = !!header && !header.some(c => /문항|질문/.test(c || ''));
 
-  // 연결키가 붙은 행이 있으면 link_type 도 같이 실어야 한다. 표에는 종류 열이
-  // 없어서, 지금 아는 종류(organization:*)일 때만 붙인다 — 이 둘의 짝이 안
-  // 맞으면 백엔드가 에러 없이 201 을 주고 연결만 NULL 로 남는다.
-  const linkKeys = useMemo(() => rows.map(r => r.link_key).filter(Boolean), [rows]);
-  const linkType = linkKeys.length && linkKeys.every(k => String(k).startsWith('organization:'))
-    ? STRATEGY_DIMENSION_LINK
-    : null;
+  // 연결 종류는 **서버가 키마다 따로** 정한다(survey/links.py). 예전에는 여기서
+  // 표 전체를 보고 정했다 — 연결키 10개 중 하나가 이상하면 10개 **전부** 연결이
+  // NULL 로 저장되고, 화면은 아무 말도 안 했다.
+  //
+  // 여기서는 **미리 알려주기만** 한다. 서버도 거절하지만 그것은 「만들기」를
+  // 누른 뒤이고, 그 전에 알면 표를 고쳐서 다시 붙여넣으면 그만이다.
+  const knownLinkKeys = useMemo(
+    () => new Set((axisOptions.link_keys || []).map(o => o.key)),
+    [axisOptions.link_keys],
+  );
+  const unknownLinkKeys = useMemo(() => {
+    if (knownLinkKeys.size === 0) return [];   // 목록을 못 받았으면 판단하지 않는다
+    const seen = [];
+    rows.forEach(r => {
+      const key = r.link_key;
+      if (key && !knownLinkKeys.has(key) && !seen.includes(key)) seen.push(key);
+    });
+    return seen;
+  }, [rows, knownLinkKeys]);
 
   /** 쉼표로 적은 축을 목록으로. 서버에 실어 보내는 값과 화면에 그리는 값이 같아야 한다. */
   const splitAxis = (v) => v.split(',').map(x => x.trim()).filter(Boolean);
@@ -729,7 +741,6 @@ const roleCounts = useMemo(() => countAxis(rows, 'roles'), [rows]);
     //  기존 역할이 지워지지 않는다.)
     if (axes.roles.trim()) payload.roles = splitAxis(axes.roles);
     if (axes.processes.trim()) payload.processes = splitAxis(axes.processes);
-    if (linkType) payload.link_type = linkType;
 
     setCreating(true);
     setError(null);
@@ -944,6 +955,18 @@ const roleCounts = useMemo(() => countAxis(rows, 'roles'), [rows]);
         )
       )}
 
+      {unknownLinkKeys.length > 0 && (
+        <Note $tone="warn">
+          <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+          <span>
+            <strong>모르는 연결키가 {unknownLinkKeys.length}종 있습니다:</strong>{' '}
+            {unknownLinkKeys.join(', ')}. 이대로 넣으면 서버가 거절합니다.
+            쓸 수 있는 값은{' '}
+            {(axisOptions.link_keys || []).map(o => o.key).join(', ')} 입니다.
+          </span>
+        </Note>
+      )}
+
       {header && (
         headerLooksOdd ? (
           <Note $tone="warn">
@@ -1055,7 +1078,10 @@ const roleCounts = useMemo(() => countAxis(rows, 'roles'), [rows]);
                       </Td>
                       <Td>{r.required ? '필수' : <Muted>선택</Muted>}</Td>
                       <Td title={r.link_key || ''}>
-                        {r.link_key ? linkKeyLabel(r.link_key) : <Muted>—</Muted>}
+                        {!r.link_key ? <Muted>—</Muted>
+                          : knownLinkKeys.size && !knownLinkKeys.has(r.link_key)
+                            ? <Bad title="쓸 수 있는 연결키가 아닙니다">{r.link_key}</Bad>
+                            : linkKeyLabel(r.link_key)}
                       </Td>
                     </Tr>
                     {bad && (

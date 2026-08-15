@@ -62,7 +62,9 @@ const ORGANIZATION_SCALE = {
   maxLabel: '지속 개선',
 };
 
-export const STRATEGY_DIMENSION_LINK = 'strategy_dimension';
+// link_type 은 여기서 정하지 않는다. 연결키를 보고 **서버가** 정한다
+// (survey/links.py) — 화면이 정하던 시절에는 키와 종류의 짝이 어긋나도
+// 에러 없이 저장되고 연결만 NULL 로 남았다.
 
 /** 'organization:readiness' 같은 링크 키를 만든다. 한 곳에서만 만든다. */
 export const organizationLinkKey = (dimensionKey) => `organization:${dimensionKey}`;
@@ -85,7 +87,7 @@ export function linkKeyLabel(linkKey) {
  * 템플릿 목록. 에디터는 이 배열을 그대로 버튼으로 그린다 — 배열이 비면 버튼도
  * 안 뜨므로, 템플릿을 늘리거나 줄이는 데 에디터를 고칠 필요가 없다.
  *
- * build() 가 돌려주는 문항에는 link_type/link_key 가 **반드시** 붙어야 한다.
+ * build() 가 돌려주는 문항에는 link_key 가 **반드시** 붙어야 한다.
  * 안 붙으면 백엔드가 에러 없이 201 을 주고 link 만 NULL 로 저장돼서, 겉보기엔
  * 멀쩡한데 집계값이 진단 칸으로 영영 들어가지 않는다.
  */
@@ -101,7 +103,6 @@ export const QUESTION_TEMPLATES = [
       qtype: 'scale',
       required: true,
       options: { ...ORGANIZATION_SCALE },
-      link_type: STRATEGY_DIMENSION_LINK,
       link_key: organizationLinkKey(d.key),
     })),
   },

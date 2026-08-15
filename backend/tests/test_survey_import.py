@@ -534,7 +534,7 @@ def test_기존_설문은_그대로_동작한다(client, office, staff, auth):
 EXTRA_ROWS = [
     HEADER,
     ['품질', '사업부 사무국', '품질', '검사 데이터는 자동으로 쌓이나?', '척도', '',
-     '예', '', 'quality:data'],
+     '예', '', 'organization:readiness'],
     ['품질', '사업부 사무국', '품질', '불량 원인을 어디서 보나?', '객관식',
      'MES|엑셀|기타', '아니오', '', ''],
 ]
@@ -743,3 +743,46 @@ def test_모르는_프로세스는_임포트에서_막힌다(client, office, aut
     assert res.status_code == 400
     assert '설계' in res.get_json()['message']
     assert Survey.query.count() == 0
+
+
+def test_모르는_연결키는_몇번_문항인지_말하고_거절한다(client, office, auth):
+    """연결키는 손으로 타이핑하는 값이라 오타가 난다. 그대로 받으면 그 문항은
+    **연결이 안 붙은 채로 저장**되고, 그 사실은 진단을 만들 때가 되어서야
+    드러난다 — 그때는 응답이 들어와 문항이 잠겨서 못 고친다.
+
+    역할·프로세스를 목록으로만 받는 것과 같은 이유다(LINK_PLAN 0단계).
+    """
+    rows = [
+        HEADER,
+        ['공통', '', '', '준비도는?', '척도', '', '예', '', 'organization:readiness'],
+        ['공통', '', '', '역할이 분명한가?', '척도', '', '예', '', 'organizaton:role'],
+    ]
+    res = client.post(f'{ADMIN_BASE}/import',
+                      json={'title': '연결키 설문', 'text': _tsv(rows)},
+                      headers=auth(office))
+    assert res.status_code == 400
+    message = res.get_json()['message']
+    assert '2번 문항' in message          # 어느 문항인지 말해 준다
+    assert 'organizaton:role' in message  # 무엇이 문제인지도
+    # ⚠️ 요점. 한 줄이 틀리면 **한 문항도** 만들지 않는다.
+    assert Survey.query.count() == 0
+
+
+def test_연결_종류는_키마다_따로_정해진다(client, office, auth):
+    """예전에는 화면이 표 전체를 보고 정했다 — 연결키 하나가 이상하면 **전부**
+    연결이 NULL 로 저장되고 화면은 아무 말도 안 했다."""
+    rows = [
+        HEADER,
+        ['공통', '', '', '준비도는?', '척도', '', '예', '', 'organization:readiness'],
+        ['공통', '', '', '그냥 묻는 것', '척도', '', '예', '', ''],
+    ]
+    res = client.post(f'{ADMIN_BASE}/import',
+                      json={'title': '연결 설문', 'text': _tsv(rows)},
+                      headers=auth(office))
+    assert res.status_code == 201, res.get_json()
+    questions = res.get_json()['data']['questions']
+    assert questions[0]['link_type'] == 'strategy_dimension'
+    assert questions[0]['link_key'] == 'organization:readiness'
+    # 연결키가 없는 문항에는 종류도 안 붙는다. 가리키는 것이 없는 종류 이름은
+    # 나중에 읽는 쪽을 헷갈리게 한다.
+    assert questions[1]['link_type'] is None

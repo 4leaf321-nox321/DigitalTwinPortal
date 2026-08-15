@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { Table2, AlertTriangle, Loader2 } from 'lucide-react';
 import surveyApi from '../../services/surveyApi';
-import { STRATEGY_DIMENSION_LINK } from '../../constants/questionTemplates';
 import { ACCENT, ACCENT_DARK, ACCENT_LINE, ACCENT_TINT } from '../../theme';
 
 // 편집기 안에서 **표로 문항을 여러 개 넣는 자리.**
@@ -105,9 +104,9 @@ const Button = styled.button`
 
 /** 미리보기 행 → 편집기가 쓰는 문항 모양.
  *
- *  ⚠️ 연결키가 있으면 link_type 을 같이 달아야 한다. 안 달면 백엔드가
- *     **에러 없이 저장하고 link 만 NULL 로** 둔다 — 겉보기엔 멀쩡한데 진단
- *     연결이 영영 안 되는, 제일 잡기 어려운 종류의 고장이다. */
+ *  link_type 은 **싣지 않는다.** 종류는 서버가 연결키에서 정한다
+ *  (survey/links.py). 화면이 정하던 시절에는 키와 종류의 짝이 어긋나도
+ *  에러 없이 201 이 나가고 연결만 NULL 로 남았다. */
 const rowToQuestion = (row) => ({
   text: row.text || '',
   help_text: row.help_text || '',
@@ -117,7 +116,6 @@ const rowToQuestion = (row) => ({
   section: row.section || '',
   audience_roles: row.roles || [],
   audience_processes: row.processes || [],
-  link_type: row.link_key ? STRATEGY_DIMENSION_LINK : null,
   link_key: row.link_key || null,
 });
 

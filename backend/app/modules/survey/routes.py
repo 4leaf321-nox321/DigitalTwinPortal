@@ -24,6 +24,7 @@ from .importer import (
     MAX_AXIS_VALUE, MAX_LINK_KEY, MAX_SECTION, MAX_TEXT,
     TableFormatError, all_errors, parse_table, rows_to_questions,
 )
+from .links import allowed_link_keys, link_key_options, link_type_for
 from .models import (
     Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
 )
@@ -445,7 +446,7 @@ def _add_questions(survey, items, order_base=None):
         # 것은 **raw SQL 과 바인딩된 값이 통째로 실린 500** 이다 — 무엇이
         # 문제인지도, 어느 문항인지도 알 수 없다.
         section = (item.get('section') or '').strip() or None
-        link_key = item.get('link_key') or None
+        link_key = (item.get('link_key') or '').strip() or None
         for value, limit, label in (
             (text, MAX_TEXT, '내용이'),
             (section, MAX_SECTION, '섹션이'),
@@ -467,8 +468,15 @@ def _add_questions(survey, items, order_base=None):
         if error:
             return error
 
+        # 연결키도 **아는 값만** 받는다. 손으로 타이핑하던 값이라 오타가 나면
+        # 조용히 안 붙었고, 그 사실은 진단을 만들 때가 되어서야 드러났다 —
+        # 그때는 응답이 들어와 문항이 잠겨 못 고친다.
+        known = allowed_link_keys()
+        if link_key and known and link_key not in known:
+            return (f'{i + 1}번 문항의 연결키를 알 수 없습니다: {link_key} '
+                    f"(쓸 수 있는 값: {', '.join(sorted(known))})")
+
         order = item.get('order', i) if order_base is None else order_base + i
-        section = (item.get('section') or '').strip() or None
         db.session.add(SurveyQuestion(
             survey=survey,
             order=order,
@@ -481,8 +489,10 @@ def _add_questions(survey, items, order_base=None):
             # 빈 목록으로 떨어지는 것이 기본이다 = 전원이 본다.
             audience_roles=audience_roles,
             audience_processes=audience_processes,
-            link_type=item.get('link_type'),
-            link_key=item.get('link_key'),
+            # ⚠️ 종류는 **키에서 정한다.** 부르는 쪽이 넘긴 값을 그대로 믿으면,
+            #    키와 종류의 짝이 안 맞아도 201 이 나가고 연결만 NULL 로 남는다.
+            link_type=link_type_for(link_key),
+            link_key=link_key,
         ))
     return None
 
@@ -617,6 +627,9 @@ def survey_options():
     return jsonify({'success': True, 'data': {
         'roles': list(SURVEY_ROLES),
         'processes': process_names(),
+        # 문항이 가리킬 진단 축. 비어 있으면 화면이 연결 선택을 아예 안 띄운다
+        # (전략 모듈을 못 읽는 경우) — 없는 것을 고르라고 하지 않는다.
+        'link_keys': link_key_options(),
         # 사무국장은 권한으로 구분되지 않아 사람을 직접 지정한다.
         'office_head_user_ids': heads,
         'users': [
@@ -870,7 +883,7 @@ def _import_create(payload):
     }
     # 새 설문이라 지울 문항이 없다. 교체 경로를 쓰는 것이 안전하다.
     error = _apply_axes(survey, axes) or _replace_questions(
-        survey, rows_to_questions(result, link_type=payload.get('link_type'))
+        survey, rows_to_questions(result)
     )
     if error:
         db.session.rollback()
@@ -901,7 +914,7 @@ def _import_append(survey, payload):
     # 나중에 그 전제가 풀렸을 때 조용히 데이터가 어긋난다.
     table_axes = {'roles': result['roles'], 'processes': result['processes']}
     error = _extend_axes(survey, table_axes, payload) or _append_questions(
-        survey, rows_to_questions(result, link_type=payload.get('link_type'))
+        survey, rows_to_questions(result)
     )
     if error:
         db.session.rollback()

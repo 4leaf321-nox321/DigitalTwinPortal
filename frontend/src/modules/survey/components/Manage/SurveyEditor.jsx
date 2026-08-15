@@ -17,10 +17,11 @@ import surveyApi from '../../services/surveyApi';
 // (constants/questionTemplates.js) — 전략 API 를 부르면 백엔드에서 지킨 모듈
 // 독립성이 프론트에서 깨진다.
 //
-// ⚠️ 템플릿 문항에는 link_type/link_key 가 붙어 있어야 나중에 집계값이 진단
-// 칸으로 들어갈 수 있다. 옛 이름(link_category/link_dimension)으로 보내면
-// 백엔드가 **에러 없이 201 을 주고 link 만 NULL 로 저장한다** — 겉보기엔 멀쩡한데
-// 연결이 영영 안 되는, 제일 잡기 어려운 종류의 고장이다.
+// ⚠️ 문항의 link_key 가 있어야 나중에 그 답이 진단 칸으로 들어간다. 그 값은
+// **목록에서만 고른다**(서버의 /manage/options 가 준다) — 손으로 적던 시절에는
+// 오타 하나로 조용히 안 붙었고, 그 사실은 진단을 만들 때가 되어서야 드러났다.
+// 그때는 응답이 들어와 문항이 잠겨서 못 고친다.
+// link_type 은 싣지 않는다. 연결키를 보고 서버가 정한다(survey/links.py).
 //
 // 분기(섹션·역할·프로세스)도 여기서 편집한다. 전에는 표 붙여넣기로만 넣을 수
 // 있어서, 이 화면으로 만든 설문에는 분기를 넣을 방법이 아예 없었다.
@@ -280,7 +281,7 @@ const CHOICE_TYPES = new Set(['choice', 'multi', 'rank']);
 const emptyQuestion = () => ({
   text: '', help_text: '', qtype: 'scale', required: true,
   options: { min: 1, max: 5 },
-  link_type: null, link_key: null,
+  link_key: null,
 });
 
 /** options.choices ↔ 여러 줄 텍스트. 보기를 한 줄에 하나씩 적게 하는 편이
@@ -498,8 +499,7 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
           qtype: q.qtype,
           required: !!q.required,
           options: q.options || {},
-          // 옛 이름으로 보내면 조용히 버려진다. 이 두 키가 정확해야 한다.
-          link_type: q.link_type ?? null,
+          // link_type 은 안 싣는다 — 서버가 연결키에서 정한다(survey/links.py).
           link_key: q.link_key ?? null,
           // ⚠️ **이 세 칸을 빠뜨리면 분기가 통째로 지워진다.**
           //
@@ -558,7 +558,8 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
           ⚠️ 응답이 들어와 문항이 잠긴 뒤에도 이 두 칸은 열어 둔다. "역할 목록에
              내 역할이 없어 제출이 안 된다"는 사고는 배포 뒤에 드러나는데,
              고칠 곳이 바로 여기다. 문항을 안 건드리므로 이미 받은 답의 뜻도
-             안 바뀐다(서버도 축 변경엔 409 를 주지 않는다). */}
+             안 바뀐다. 다만 응답이 들어온 뒤에는 서버가 축을 **빼는 것**만 막는다
+             — 그 역할로 답한 응답이 갈 곳을 잃기 때문이다. */}
       <Row>
         <div style={{ flex: 1, minWidth: '16rem' }}>
           <AxisPicker
@@ -756,6 +757,32 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
                   </BranchBox>
                 )}
 
+                {/* 진단 연결. **목록에서만 고른다** — 예전에는 표에 손으로
+                    타이핑하는 것이 유일한 길이라, 오타가 나면 조용히 안 붙고
+                    그 사실은 진단을 만들 때가 되어서야 드러났다. 그때는 응답이
+                    들어와 문항이 잠겨서 못 고친다.
+
+                    목록을 못 받았으면(전략 모듈이 없거나 못 읽음) 이 줄을 아예
+                    안 띄운다. 고를 것이 없는 선택칸은 고장으로 보인다. */}
+                {(axisOptions.link_keys || []).length > 0 && (
+                  <Field style={{ maxWidth: '22rem' }}>
+                    진단 연결 <Hint>선택 — 이 문항의 답이 갈 진단 축</Hint>
+                    <Select
+                      value={q.link_key || ''}
+                      disabled={locked}
+                      onChange={e => setQuestions(qs => qs.map((x, n) => (
+                        n === i ? { ...x, link_key: e.target.value || null } : x
+                      )))}
+                    >
+                      <option value="">연결하지 않음</option>
+                      {axisOptions.link_keys.map(o => (
+                        <option key={o.key} value={o.key} title={o.question}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
                 {q.link_key && (
                   // 'organization:readiness' 를 그대로 찍으면 사람이 못 읽는다.
                   <LinkTag>진단 연결 · {linkKeyLabel(q.link_key)}</LinkTag>
