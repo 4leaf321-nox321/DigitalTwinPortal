@@ -300,6 +300,12 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
         if (res.data?.suggested_division_id != null) {
           setDivisionId(String(res.data.suggested_division_id));
         }
+        // 역할도 마찬가지다. 데이터로 확인된 역할이 있으면 **그것으로 채운다.**
+        // 빈 채로 두면 사람들은 목록의 첫 항목이나 자기에게 편한 것을 고르고,
+        // 역할별 집계는 자칭의 모음이 된다. 여럿이면 가장 좁은 것(목록 순서상
+        // 앞선 것)을 쓰고, 본인이 바꿀 수 있게 둔다.
+        const derived = res.data?.derived_roles || [];
+        if (derived.length > 0) setRole(derived[0]);
         setError(null);
       })
       .catch(e => alive && setError(e.message))
@@ -474,6 +480,7 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
         <>
           {/* 문항보다 **먼저**. 무엇을 묻는지가 이 선택으로 정해진다. */}
           <RoleSelect
+            derivedRoles={form.derived_roles || []}
             roles={askRoles}
             processes={askProcesses}
             role={role}

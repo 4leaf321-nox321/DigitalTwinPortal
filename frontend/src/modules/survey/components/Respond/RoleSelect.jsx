@@ -102,9 +102,16 @@ export function questionApplies(question, role, process) {
   return true;
 }
 
+const Derived = styled.div`
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: ${p => (p.$off ? '#b45309' : '#15803d')};
+`;
+
 const RoleSelect = ({
   roles = [],
   processes = [],
+  derivedRoles = [],
   role,
   process,
   onRoleChange,
@@ -132,9 +139,27 @@ const RoleSelect = ({
             >
               <option value="">— 고르세요 —</option>
               {roles.map(r => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>
+                  {r}{derivedRoles.includes(r) ? ' ✓' : ''}
+                </option>
               ))}
             </Select>
+            {/* 유도된 역할과 그렇지 않은 것을 갈라 보여준다.
+                ✓ 는 과제·권한 데이터로 확인된 역할이다. 표시가 없는 것을 고르면
+                '본인이 밝힌 역할'로 기록되고(role_source='picked'), 집계에서
+                그 둘을 갈라 볼 수 있다. 확인된 것을 감추면 사람들은 아무거나
+                고르고, 역할별 집계는 자칭의 모음이 된다. */}
+            {derivedRoles.length > 0 ? (
+              <Derived $off={role && !derivedRoles.includes(role)}>
+                {role && derivedRoles.includes(role)
+                  ? '✓ 과제·권한 데이터로 확인된 역할입니다'
+                  : `✓ 표시가 확인된 역할입니다 (${derivedRoles.join(', ')})`}
+              </Derived>
+            ) : (
+              <Derived $off>
+                데이터로 확인되지 않아 <strong>본인이 밝힌 역할</strong>로 기록됩니다
+              </Derived>
+            )}
           </Field>
         )}
         {processes.length > 0 && (
