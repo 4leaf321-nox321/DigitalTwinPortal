@@ -2,10 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import {
   Plus, Trash2, Wand2, GripVertical, ChevronDown, ChevronRight, AlertTriangle,
+  Table2,
 } from 'lucide-react';
 import { QUESTION_TEMPLATES, linkKeyLabel } from '../../constants/questionTemplates';
 import { ACCENT, ACCENT_DARK, ACCENT_LINE, ACCENT_TINT } from '../../theme';
 import AxisPicker from './AxisPicker';
+import QuestionPasteBox from './QuestionPasteBox';
 import surveyApi from '../../services/surveyApi';
 
 // 설문 하나를 짓는 자리.
@@ -353,6 +355,7 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
     return () => { alive = false; };
   }, []);
 
+  const [pasting, setPasting] = useState(false);
   const [choiceDraft, setChoiceDraft] = useState({});
   // 역할·프로세스 입력의 원문. choiceDraft 와 같은 이유다 — 쉼표를 찍는 순간
   // 나눴다 다시 합치면 그 쉼표가 사라져서 다음 이름을 못 적는다.
@@ -766,10 +769,31 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
               )}
             </QuestionCard>
           ))}
-          <GhostButton onClick={() => setQuestions(qs => [...qs, emptyQuestion()])}
-                       style={{ alignSelf: 'flex-start' }}>
-            <Plus size={14} /> 문항 추가
-          </GhostButton>
+          {/* 한 개씩 넣는 길과 표로 여러 개 넣는 길을 나란히 둔다.
+              표 붙여넣기가 별도 화면에만 있으면 **새 설문을 만드는 중에는
+              쓸 수가 없어서**, 만들다 말고 나가야 했다. */}
+          <Row style={{ alignItems: 'center' }}>
+            <GhostButton onClick={() => setQuestions(qs => [...qs, emptyQuestion()])}>
+              <Plus size={14} /> 문항 추가
+            </GhostButton>
+            <GhostButton onClick={() => setPasting(v => !v)}
+                         title="엑셀에서 복사한 표를 붙여넣어 문항을 한 번에 넣습니다">
+              <Table2 size={14} /> 표로 추가
+            </GhostButton>
+          </Row>
+
+          {pasting && (
+            <QuestionPasteBox
+              onClose={() => setPasting(false)}
+              onAdd={(added) => setQuestions(qs => {
+                // 비어 있는 기본 문항 한 줄만 있는 상태(새 설문을 막 연 직후)면
+                // 그 줄을 버린다. 안 그러면 표로 넣을 때마다 빈 문항이 맨 앞에
+                // 남고, 저장할 때 '내용이 비어 있습니다'로 막힌다.
+                const base = (qs.length === 1 && !qs[0].text.trim()) ? [] : qs;
+                return [...base, ...added];
+              })}
+            />
+          )}
         </>
       )}
 
