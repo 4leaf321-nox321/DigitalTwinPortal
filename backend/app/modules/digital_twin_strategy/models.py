@@ -212,9 +212,9 @@ class StrategyIssue(BaseModel):
 #    솔직한 답을 못 받는다. 그래서 켜고 끄는 설정으로 두지 않는다.
 
 
-class Survey(BaseModel):
+class StrategySurvey(BaseModel):
     """설문 한 벌."""
-    __tablename__ = 'survey'
+    __tablename__ = 'strategy_survey'
 
     plan_id = db.Column(
         db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
@@ -236,22 +236,22 @@ class Survey(BaseModel):
     created_by = db.Column(db.Integer, nullable=True)
 
     questions = db.relationship(
-        'SurveyQuestion', backref='survey', lazy='dynamic',
+        'StrategySurveyQuestion', backref='survey', lazy='dynamic',
         cascade='all, delete-orphan',
-        order_by='SurveyQuestion.order'
+        order_by='StrategySurveyQuestion.order'
     )
     responses = db.relationship(
-        'SurveyResponse', backref='survey', lazy='dynamic',
+        'StrategySurveyResponse', backref='survey', lazy='dynamic',
         cascade='all, delete-orphan'
     )
 
 
-class SurveyQuestion(BaseModel):
+class StrategySurveyQuestion(BaseModel):
     """문항 하나."""
-    __tablename__ = 'survey_question'
+    __tablename__ = 'strategy_survey_question'
 
     survey_id = db.Column(
-        db.Integer, db.ForeignKey('survey.id', ondelete='CASCADE'),
+        db.Integer, db.ForeignKey('strategy_survey.id', ondelete='CASCADE'),
         nullable=False, index=True
     )
     order = db.Column(db.Integer, nullable=False, default=0)
@@ -270,7 +270,7 @@ class SurveyQuestion(BaseModel):
     link_dimension = db.Column(db.String(50))   # 'readiness' 등
 
 
-class SurveyResponse(BaseModel):
+class StrategySurveyResponse(BaseModel):
     """한 사람의 응답 한 벌.
 
     user_id 를 남기는 이유는 두 가지다. **중복 응답을 막고**, 고지한 대로
@@ -280,10 +280,10 @@ class SurveyResponse(BaseModel):
     소속을 응답 시점에 **복사해 둔다.** 나중에 조직이 바뀌어도 "그때 이
     부서가 이렇게 답했다"가 남아야 집계가 검증된다.
     """
-    __tablename__ = 'survey_response'
+    __tablename__ = 'strategy_survey_response'
 
     survey_id = db.Column(
-        db.Integer, db.ForeignKey('survey.id', ondelete='CASCADE'),
+        db.Integer, db.ForeignKey('strategy_survey.id', ondelete='CASCADE'),
         nullable=False, index=True
     )
     user_id = db.Column(db.Integer, nullable=False, index=True)
@@ -300,30 +300,30 @@ class SurveyResponse(BaseModel):
     submitted_at = db.Column(db.DateTime, nullable=True)
 
     answers = db.relationship(
-        'SurveyAnswer', backref='response', lazy='dynamic',
+        'StrategySurveyAnswer', backref='response', lazy='dynamic',
         cascade='all, delete-orphan'
     )
 
     __table_args__ = (
         # 한 사람이 한 설문에 한 번. 여러 벌 받으면 집계가 기울어진다.
-        db.UniqueConstraint('survey_id', 'user_id', name='uq_survey_response_user'),
+        db.UniqueConstraint('survey_id', 'user_id', name='uq_strategy_survey_response_user'),
     )
 
 
-class SurveyAnswer(BaseModel):
+class StrategySurveyAnswer(BaseModel):
     """문항 하나에 대한 답.
 
     유형마다 담기는 칸이 다르다. 한 칸에 전부 문자열로 밀어넣으면 집계할 때
     매번 파싱해야 하고, 숫자가 아닌 값이 섞여도 모른다.
     """
-    __tablename__ = 'survey_answer'
+    __tablename__ = 'strategy_survey_answer'
 
     response_id = db.Column(
-        db.Integer, db.ForeignKey('survey_response.id', ondelete='CASCADE'),
+        db.Integer, db.ForeignKey('strategy_survey_response.id', ondelete='CASCADE'),
         nullable=False, index=True
     )
     question_id = db.Column(
-        db.Integer, db.ForeignKey('survey_question.id', ondelete='CASCADE'),
+        db.Integer, db.ForeignKey('strategy_survey_question.id', ondelete='CASCADE'),
         nullable=False, index=True
     )
 
@@ -333,20 +333,20 @@ class SurveyAnswer(BaseModel):
 
     __table_args__ = (
         db.UniqueConstraint('response_id', 'question_id',
-                            name='uq_survey_answer_response_question'),
+                            name='uq_strategy_survey_answer_response_question'),
     )
 
 
-class SurveyAccessLog(BaseModel):
+class StrategySurveyAccessLog(BaseModel):
     """관리자가 응답자를 확인한 기록.
 
     "관리자는 확인할 수 있습니다"라고 고지하는 이상, 실제로 누가 언제 봤는지
     남아야 그 고지가 말뿐이 아니게 된다. 남기지 않으면 고지는 면피 문구다.
     """
-    __tablename__ = 'survey_access_log'
+    __tablename__ = 'strategy_survey_access_log'
 
     survey_id = db.Column(
-        db.Integer, db.ForeignKey('survey.id', ondelete='CASCADE'),
+        db.Integer, db.ForeignKey('strategy_survey.id', ondelete='CASCADE'),
         nullable=False, index=True
     )
     # 본 사람 (관리자)

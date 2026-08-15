@@ -7,6 +7,22 @@
 
 ---
 
+## 0. 기존 설문 기능에 대하여
+
+`collaboration_board` 모듈에 `Survey`·`SurveyQuestion`·`SurveyResponse`·
+`SurveyAnswer` 와 서비스가 **이미 있습니다**(표: `surveys`, `survey_questions`,
+`survey_responses`, `survey_answers`). 이 문서의 이전 판에 "포탈에 설문 기능이
+전혀 없습니다"라고 적혀 있었는데 **틀린 서술이었습니다.**
+
+다만 **그쪽은 만들다 만 것이라 쓰지 않습니다**(2026-08-15 확인). 재사용하지 않는
+이유는 방향이 다르기 때문이기도 합니다 — 그쪽은 익명 여부·중복 응답을 설문마다
+켜고 끄는 일반 게시판형 설문이고, 여기서 필요한 것은 **익명 방식이 하나로 고정**
+되고 **문항이 진단 축에 연결**되는 설문입니다(3절·6-4).
+
+⚠️ 그래도 **이름은 반드시 겹치지 않게** 지어야 합니다. 이유는 4절 참고.
+
+---
+
 ## 1. 왜 만드는가
 
 포탈 데이터는 **시스템이 아는 것**만 말해줍니다. 과제가 몇 건인지, KPI 에 걸렸는지는
@@ -99,33 +115,52 @@
 ## 4. 데이터 모델 (구현 완료)
 
 `backend/app/modules/digital_twin_strategy/models.py`
-마이그레이션 `6e4d7588e875` 적용 완료.
+마이그레이션 `298c0f1b8fb6` 적용 완료.
 
 ```
-survey                 설문 한 벌
+strategy_survey                 설문 한 벌
   plan_id(CASCADE), title, description, stage,
   target_type(all|department|role|user), target_refs(JSON),
   status(draft|open|closed), closes_at, created_by
 
-survey_question        문항
+strategy_survey_question        문항
   survey_id(CASCADE), order, text, help_text,
   qtype(scale|choice|rank|text), required, options(JSON),
   link_category, link_dimension       ← 진단 축 연결
 
-survey_response        한 사람의 응답 한 벌
+strategy_survey_response        한 사람의 응답 한 벌
   survey_id(CASCADE), user_id,
   department_name, division_id, division_source(profile|picked|unknown),
   submitted_at
   UNIQUE(survey_id, user_id)          ← 중복 응답 차단
 
-survey_answer          문항 하나에 대한 답
+strategy_survey_answer          문항 하나에 대한 답
   response_id(CASCADE), question_id(CASCADE),
   value_number | value_text | value_json
   UNIQUE(response_id, question_id)
 
-survey_access_log      관리자가 응답자를 확인한 기록
+strategy_survey_access_log      관리자가 응답자를 확인한 기록
   survey_id(CASCADE), viewer_id, response_id, action
 ```
+
+### ⚠ 이름에 `Strategy` 접두어가 붙은 이유 (2026-08-15)
+
+처음에는 `Survey`·`SurveyQuestion` 이었는데, **`collaboration_board` 모듈에
+같은 이름의 클래스가 이미 있었습니다**(`surveys`·`survey_questions` 표).
+같은 declarative base 라서 관계 문자열 `'SurveyQuestion'` 이 모호해지고
+**매퍼 설정이 실패해 모든 DB 질의가 죽었습니다.**
+
+그리고 그 상태로 **v0.1.22 가 릴리스되어 개발서버에 배포까지 됐습니다.** 이유가
+셋입니다 — 마이그레이션 생성·적용은 매퍼를 완전히 설정하지 않고, 표 존재
+확인(inspect)도 매퍼를 안 건드리며, **CI 는 `backend\tests` 가 없어 pytest 를
+통째로 건너뛰고 있었습니다.** 즉 모델을 고치고 질의를 한 번도 안 해본 것입니다.
+
+→ `backend/scripts/check_models.py` 를 만들어 CI 에 넣었습니다. DB 없이
+모든 모델을 불러와 `configure_mappers()` 를 부르고 표 이름 중복도 봅니다.
+충돌을 일부러 만들어 실제로 잡는 것까지 확인했습니다.
+
+**새 모델은 모듈 접두어로 짓습니다**(`StrategySurvey`, `Dt2Project` 처럼).
+짧은 일반명은 언젠가 부딪힙니다.
 
 **답을 유형별로 나눠 담습니다.** 한 칸에 전부 문자열로 밀어넣으면 집계할 때마다
 파싱해야 하고, 숫자가 아닌 값이 섞여도 모릅니다.

@@ -31,6 +31,16 @@ jobs:
           python -m pip install --upgrade pip
           if (Test-Path backend\requirements.txt) { pip install -r backend\requirements.txt }
 
+      # DB 가 필요 없는 검사다. 모델을 고쳤는데 질의를 한 번도 안 해보면
+      # 매퍼가 깨진 채로 릴리스까지 나간다 — 2026-08-15 에 실제로 그랬다.
+      # 마이그레이션 생성·적용도, 표 존재 확인도 매퍼를 완전히 설정하지 않는다.
+      - name: "Backend: check model mappings"
+        shell: pwsh
+        run: |
+          .\backend\.venv\Scripts\Activate.ps1
+          python backend\scripts\check_models.py
+          if ($LASTEXITCODE -ne 0) { throw "model mapping check failed (exit $LASTEXITCODE)" }
+
       - name: "Backend: run tests"
         shell: pwsh
         run: |
