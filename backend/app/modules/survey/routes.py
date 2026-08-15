@@ -267,23 +267,45 @@ def target_user_ids(survey):
 
 
 def resolve_division(user):
-    """응답자의 사업부를 유도한다.
+    """응답자의 사업부 — **계정에서만 정한다.** (division_id, 이름, 출처)
 
-    users.department → departments.division_id 로 잇는다. 개발 DB 에서는 둘 다
-    비어 있어 대부분 (None, 'unknown') 이 나온다(SURVEY_PLAN 5절). 그때는
-    응답자가 직접 고르게 하고, 그것도 없으면 unknown 으로 남긴다 —
-    **모르는 것을 아무 사업부에나 넣으면 집계가 거짓말을 한다.**
+    users.department → departments.division_id → divisions.name 으로 잇는다.
+    운영은 계정마다 소속그룹이 있고 그룹마다 사업부가 정의되어 있어 이것만으로
+    정해진다(2026-08-16 확인).
+
+    ⚠️ **응답자에게 묻지 않는다.** 물으면 소속이 자칭이 되어, 사업부별 집계가
+       "이 사업부 사람들이 이렇게 답했다"가 아니라 "이 사업부라고 고른 사람들이
+       이렇게 답했다"가 된다. 역할을 유도하는 이유와 같다(roles.py). 게다가
+       고를 수 있으면 익명 설문에서 **남의 사업부로 답을 흘려 넣을 수 있다.**
+
+    판별이 안 되면 (None, None, 'unknown') — **미상으로 남긴다.** 모르는 것을
+    아무 사업부에나 넣으면 집계가 거짓말을 한다. 미상은 따로 세어진다
+    (unknown_division_count). 개발 DB 는 users.department 와
+    departments.division_id 가 비어 있어 거의 전부 미상이다 — 개발에서 미상만
+    보이는 것은 데이터 탓이다.
     """
-    if not user.department:
-        return None, 'unknown'
+    name = (user.department or '').strip()
+    if not name:
+        return None, None, 'unknown'
     try:
-        from app.modules.digital_twin_dashboard.models import Department
-        row = Department.query.filter_by(name=user.department).first()
+        from app.modules.digital_twin_dashboard.models import Department, Division
+        # 부서 이름은 유일하지 않다 — 같은 이름의 비활성 옛 행이 남아 있다.
+        # 사업부가 붙은 행만 보고, 활성을 먼저 고른다. filter_by(name=...) 로
+        # 그냥 first() 를 쓰면 어느 행이 걸리는지가 그때그때 달라진다.
+        base = Department.query.filter(
+            db.func.lower(db.func.btrim(Department.name)) == name.lower(),
+            Department.division_id.isnot(None),
+        )
+        row = (base.filter(Department.is_active.is_(True))
+               .order_by(Department.id).first()
+               or base.order_by(Department.id).first())
+        if not row:
+            return None, None, 'unknown'
+        division = Division.query.get(row.division_id)
     except Exception:
-        return None, 'unknown'
-    if row and row.division_id:
-        return row.division_id, 'profile'
-    return None, 'unknown'
+        # 대시보드 표를 못 읽어도 설문은 받아야 한다. 그때는 미상이다.
+        return None, None, 'unknown'
+    return row.division_id, (division.name if division else None), 'profile'
 
 
 # ── 직렬화 ────────────────────────────────────────────────────────────────
@@ -1341,7 +1363,7 @@ def survey_form(survey_id):
     existing = SurveyResponse.query.filter_by(
         survey_id=survey.id, user_id=user.id
     ).first()
-    division_id, source = resolve_division(user)
+    division_id, division_name, source = resolve_division(user)
 
     # 이 사람이 실제로 해당하는 역할. 설문이 묻는 목록과 겹치는 것만 준다 —
     # 설문이 안 묻는 역할을 기본값으로 주면 제출이 막힌다(_pick_axis).
@@ -1351,8 +1373,12 @@ def survey_form(survey_id):
     return jsonify({'success': True, 'data': {
         **_survey_dict(survey, with_questions=True),
         'already_answered': bool(existing and existing.submitted_at),
-        # 유도된 값이 있으면 화면이 기본값으로 쓴다. 없으면 직접 고르게 한다.
-        'suggested_division_id': division_id,
+        # 사업부는 **읽기 전용**이다. 화면은 이 값을 보여 주기만 하고 되돌려
+        # 보내지 않는다. 이름까지 주는 것은 화면이 사업부 목록을 따로 받아
+        # 번호를 이름으로 바꾸지 않게 하려는 것이다 — 그 목록은 응답자에게
+        # 필요 없고, 있으면 고를 수 있는 것처럼 보인다.
+        'division_id': division_id,
+        'division_name': division_name,
         'division_source': source,
         'department_name': user.department,
         # ⚠️ 역할은 **데이터에서 유도한다.** 자유롭게 고르게 두면 역할별 집계가
@@ -1496,15 +1522,12 @@ def submit_response(survey_id):
                         f'{value:g} — {q.text}', 400)
             prepared[qid] = (q, value)
 
-        division_id, source = resolve_division(user)
-        # 응답자가 직접 고른 값이 유도값보다 우선한다. 본인이 제일 잘 안다.
-        picked = payload.get('division_id')
-        if picked:
-            try:
-                division_id, source = int(picked), 'picked'
-            except (TypeError, ValueError):
-                # 예전에는 여기서 int() 가 그대로 터져 500 이 나갔다.
-                return _error(f'division_id 가 올바르지 않습니다: {picked}', 400)
+        # ⚠️ payload 의 division_id 는 **일부러 무시한다.** 소속은 계정에서만
+        #    정한다(resolve_division 의 설명). 예전 화면은 응답자가 고른 값을
+        #    여기로 보냈고 서버는 그것을 그대로 믿었다 — 그 경로를 없앤다.
+        #    옛 화면이 브라우저 캐시에 남아 계속 보낼 수 있으므로, 400 으로
+        #    막지 말고 조용히 버린다. 막으면 새 창을 열기 전까지 제출이 안 된다.
+        division_id, _division_name, source = resolve_division(user)
 
         if editing:
             # 답을 통째로 갈아끼운다. 남겨 두면 이번에 해당 없는 문항의 옛 답이

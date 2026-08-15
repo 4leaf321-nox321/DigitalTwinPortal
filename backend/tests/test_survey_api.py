@@ -163,6 +163,49 @@ def test_응답을_제출하면_저장된다(client, staff, auth):
     assert saved.answers.one().value_number == 4
 
 
+def test_사업부는_계정에서_정하고_응답자가_보낸_값은_무시한다(client, db, staff, auth):
+    """소속은 **계정의 소속그룹**이 정한다. 응답자가 고를 수 있으면 소속이
+    자칭이 되어 사업부별 집계가 "이 사업부 사람들"이 아니라 "이 사업부라고 고른
+    사람들"이 되고, 익명 설문에서는 남의 사업부로 답을 흘려 넣을 수 있다.
+
+    옛 화면이 브라우저 캐시에 남아 division_id 를 계속 보낼 수 있으므로,
+    막지 말고 **버려야** 한다 — 400 을 주면 새 창을 열기 전까지 제출이 안 된다.
+    """
+    from app.modules.digital_twin_dashboard.models import Department, Division
+
+    division = Division(name='메모리사업부')
+    db.session.add(division)
+    db.session.flush()
+    #  ⚠️ 같은 이름의 비활성 옛 행을 **먼저** 둔다. 사업부가 안 붙은 그 행이
+    #     걸리면 실제로는 아는 소속이 미상이 되는데, filter_by(name=...) 뒤에
+    #     first() 를 그냥 쓰면 어느 행이 걸리는지가 그때그때 달라진다.
+    db.session.add(Department(name='생산기술팀', division_id=None, is_active=False))
+    db.session.add(Department(name='  생산기술팀 ', division_id=division.id,
+                              is_active=True))
+    db.session.commit()
+
+    survey = _make_survey()
+    qid = survey.questions.first().id
+
+    res = client.post(
+        f'{RESPOND_BASE}/{survey.id}/responses',
+        json={'answers': {str(qid): 3}, 'division_id': division.id + 999},
+        headers=auth(staff),
+    )
+    assert res.status_code == 201, res.get_json()
+
+    saved = SurveyResponse.query.one()
+    assert saved.division_id == division.id      # 계정에서 유도한 값
+    assert saved.division_source == 'profile'
+
+    # 응답 화면도 같은 값을 **읽기 전용으로** 받는다.
+    form = client.get(f'{RESPOND_BASE}/{survey.id}/form', headers=auth(staff))
+    data = form.get_json()['data']
+    assert data['division_id'] == division.id
+    assert data['division_name'] == '메모리사업부'
+    assert data['division_source'] == 'profile'
+
+
 def test_한_사람의_응답은_한_벌이고_마감_전엔_고칠_수_있다(client, staff, auth):
     """다시 내면 **갈아끼운다.** 여러 벌 쌓이면 어느 것이 정본인지 갈린다.
 

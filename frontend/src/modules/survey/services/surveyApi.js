@@ -58,7 +58,8 @@ export const surveyApi = {
   /** 미응답 건수만. 헤더 배지처럼 가벼운 표시에 쓴다. */
   pendingCount: () => request('/mine/count'),
 
-  /** 문항 + suggested_division_id + already_answered. 대상자가 아니면 404 다. */
+  /** 문항 + division_id/division_name(읽기 전용) + already_answered.
+   *  대상자가 아니면 404 다. */
   getForm: (surveyId) => request(`/${surveyId}/form`),
 
   /** 제출. 1인 1회이고, 두 번째부터는 서버가 409 를 준다. */

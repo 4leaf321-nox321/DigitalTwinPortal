@@ -129,11 +129,14 @@ class SurveyResponse(BaseModel):
 
     department_name = db.Column(db.String(100))
     division_id = db.Column(db.Integer, nullable=True, index=True)
-    # profile: 사용자 소속에서 유도 / picked: 응답자가 직접 고름 / unknown: 못 정함
+    # profile: 계정의 소속에서 유도 / unknown: 못 정함(= 미상)
     #
-    # ⚠️ users.department 와 departments.division_id 가 비어 있으면 유도가 안 된다.
-    #    그때는 응답자가 직접 고르게 하고, 그것도 없으면 unknown 으로 남긴다.
-    #    사업부를 모르는 응답을 조용히 아무 데나 넣으면 집계가 거짓말을 한다.
+    # ⚠️ **응답자에게 묻지 않는다.** 계정 → 소속그룹 → 사업부로만 정하고,
+    #    안 되면 미상으로 남긴다. 사업부를 모르는 응답을 조용히 아무 데나 넣으면
+    #    집계가 거짓말을 하고, 고르게 두면 소속이 자칭이 된다.
+    #
+    #    'picked' 는 응답자가 고르던 시절의 값이다. 그 행이 남아 있을 수 있어
+    #    읽을 때는 인정하되, **새로 쓰지 않는다.**
     division_source = db.Column(db.String(20), nullable=False, default='unknown')
 
     # 응답자가 고른 축. 설문의 roles/processes 가 비어 있으면 묻지 않았으므로

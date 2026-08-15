@@ -95,6 +95,16 @@ const Select = styled.select`
   &:focus { outline: none; border-color: ${ACCENT}; }
 `;
 
+const DivisionValue = styled.div`
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  background: #f8fafc;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: ${p => (p.$unknown ? '#94a3b8' : '#1e293b')};
+`;
+
 const Note = styled.div`
   margin-top: 0.5rem;
   font-size: 0.8125rem;
@@ -283,13 +293,12 @@ const Answered = styled.div`
   line-height: 1.6;
 `;
 
-const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
+const SurveyForm = ({ surveyId, onBack, onSubmitted }) => {
   const [form, setForm] = useState(null);
   // ⚠️ 문항 id → 값의 **평면 맵**이다. 역할·프로세스로 문항을 걸러도 이 맵은
   //    건드리지 않는다 — 그래서 역할을 바꿨다 되돌아오면 답이 그대로 남아
   //    있다. 걸러진 문항의 답을 지우는 코드를 여기에 넣지 마라.
   const [answers, setAnswers] = useState({});
-  const [divisionId, setDivisionId] = useState('');
   // 응답자가 고른 축. 설문이 묻지 않는 축은 '' 로 남고 제출에도 안 실린다.
   const [role, setRole] = useState('');
   const [process, setProcess] = useState('');
@@ -308,11 +317,8 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
       .then(res => {
         if (!alive) return;
         setForm(res.data);
-        // 유도된 사업부가 있으면 기본값으로 둔다. 매번 처음부터 고르게 하면
-        // 대충 고른다.
-        if (res.data?.suggested_division_id != null) {
-          setDivisionId(String(res.data.suggested_division_id));
-        }
+        // 사업부는 상태로 들고 있지 않는다 — 고를 수 없으니 form 의 값을 그대로
+        // 보여주기만 한다.
         // 역할도 마찬가지다. 데이터로 확인된 역할이 있으면 **그것으로 채운다.**
         // 빈 채로 두면 사람들은 목록의 첫 항목이나 자기에게 편한 것을 고르고,
         // 역할별 집계는 자칭의 모음이 된다. 여럿이면 가장 좁은 것(목록 순서상
@@ -424,7 +430,6 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
         // 세어져 집계의 응답 수가 부풀어 오른다.
         if (hasAnswer(answers[q.id])) payload.answers[String(q.id)] = answers[q.id];
       });
-      if (divisionId) payload.division_id = Number(divisionId);
       // 설문이 안 묻는 축은 싣지 않는다. 서버는 안 묻는 축의 값을 버리지만,
       // 안 보내는 편이 "무엇을 물었는지"가 payload 에 그대로 남아 읽기 쉽다.
       if (askRoles.length > 0) payload.respondent_role = role;
@@ -467,7 +472,7 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
   }
 
   const deadline = formatDeadline(form.closes_at);
-  const hasDivisionList = divisions.length > 0;
+  const knownDivision = form.division_source === 'profile' && !!form.division_name;
   // 안내 문구에 쓸 축 이름. **설문이 묻는 축만** 적는다 — 안 묻는 '프로세스'를
   // 문구에 끼워 넣으면 어디서 고르는 것인지 찾다가 헤맨다.
   const axisNames = [
@@ -512,35 +517,34 @@ const SurveyForm = ({ surveyId, divisions, onBack, onSubmitted }) => {
             onProcessChange={changeProcess}
           />
 
+          {/* ⚠️ 사업부는 **보여주기만 한다.** 고르게 두면 소속이 자칭이 되고,
+              익명 설문에서는 남의 사업부로 답을 흘려 넣을 수도 있다. 계정의
+              소속그룹에 사업부가 매여 있으므로 서버가 그것만 쓴다. */}
           <Card>
             <SectionLabel>소속 사업부</SectionLabel>
-            {hasDivisionList ? (
-              <Select value={divisionId} onChange={e => setDivisionId(e.target.value)}>
-                <option value="">모름 / 고르지 않음</option>
-                {divisions.map(d => (
-                  <option key={String(d.id)} value={String(d.id)}>{d.name}</option>
-                ))}
-              </Select>
-            ) : (
-              // ⚠️ 사업부 목록을 못 받아온 경우. **직접 입력을 열지 않는다** —
-              // 손으로 적은 사업부 이름은 표기가 제각각이라 집계에서 묶이지
-              // 않고, 그러면 '있는데 안 세어지는' 최악의 상태가 된다.
-              // 모르는 채로 두고, 그 사실이 따로 세어진다는 것만 알린다.
-              <Note style={{ marginTop: 0, color: '#475569' }}>
-                지금은 사업부 목록을 불러올 수 없어 <strong>「모름」으로 제출</strong>됩니다.
-              </Note>
-            )}
+            <DivisionValue $unknown={!knownDivision}>
+              {knownDivision ? form.division_name : '미상'}
+            </DivisionValue>
             <Note>
-              {form.division_source === 'profile' && form.suggested_division_id != null ? (
+              {knownDivision ? (
                 <>
-                  {form.department_name ? `프로필의 소속(${form.department_name})` : '프로필의 소속'}
-                  에서 자동으로 확인한 값입니다. 다르면 바꿔 주세요.
+                  {form.department_name
+                    ? <>계정의 소속그룹(<strong>{form.department_name}</strong>)에서 확인한 값입니다.</>
+                    : <>계정 정보에서 확인한 값입니다.</>}
+                  {' '}설문에서 고칠 수 없습니다 — 사실과 다르면 계정의 소속그룹을
+                  바로잡아야 합니다.
                 </>
               ) : (
-                <>소속을 자동으로 확인하지 못했습니다.</>
+                <>
+                  {form.department_name
+                    ? <>계정의 소속그룹(<strong>{form.department_name}</strong>)에 사업부가 매여 있지 않아 </>
+                    : <>계정에 소속그룹이 없어 </>}
+                  사업부를 확인하지 못했습니다.{' '}
+                  <strong>「미상」으로 제출</strong>되며, 응답은 정상적으로 접수됩니다.
+                </>
               )}
               {' '}
-              고르지 않으면 <strong>「소속 미확인」으로 따로 집계</strong>됩니다 —
+              미상은 <strong>따로 집계</strong>됩니다 —
               모르는 응답을 아무 사업부에나 넣으면 사업부별 평균이 거짓말을 하기
               때문에, 묶지 않고 별도로 셉니다. 답 자체는 그대로 반영됩니다.
             </Note>

@@ -147,7 +147,7 @@ const formatDeadline = (iso) => {
   return `${d.getMonth() + 1}. ${d.getDate()}.까지`;
 };
 
-const MySurveys = ({ divisions, onPendingChange }) => {
+const MySurveys = ({ onPendingChange }) => {
   const [surveys, setSurveys] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -176,7 +176,6 @@ const MySurveys = ({ divisions, onPendingChange }) => {
     return (
       <SurveyForm
         surveyId={openId}
-        divisions={divisions}
         onBack={() => { setOpenId(null); load(); }}
         onSubmitted={load}
       />

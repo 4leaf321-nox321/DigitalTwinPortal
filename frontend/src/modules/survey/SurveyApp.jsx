@@ -104,12 +104,14 @@ function SurveyApp({ onGoHome }) {
   }, [context, canManage]);
 
   useEffect(() => {
-    // 사업부 목록은 두 얼굴이 같이 쓴다(응답에서 고르고, 집계에서 이름을
-    // 푼다). 실패해도 []를 돌려주므로 여기서 오류 처리를 하지 않는다.
+    // 사업부 목록은 **집계 화면에서만** 쓴다 — 응답의 사업부는 서버가 계정에서
+    // 정하므로 응답자는 목록이 필요 없다. 관리 권한이 없으면 부르지 않는다.
+    // 실패해도 []를 돌려주므로 여기서 오류 처리를 하지 않는다.
+    if (!canManage) return undefined;
     let alive = true;
     surveyApi.listDivisions().then(rows => alive && setDivisions(rows));
     return () => { alive = false; };
-  }, []);
+  }, [canManage]);
 
   useEffect(() => {
     // 헤더 배지의 첫 값. 응답 화면에 들어가면 목록이 정확한 값으로 덮어쓴다.
@@ -147,10 +149,7 @@ function SurveyApp({ onGoHome }) {
               onClearContext={clearContext}
             />
           ) : (
-            <MySurveys
-              divisions={divisions}
-              onPendingChange={handlePendingChange}
-            />
+            <MySurveys onPendingChange={handlePendingChange} />
           )}
         </Bounded>
       </MainContent>
