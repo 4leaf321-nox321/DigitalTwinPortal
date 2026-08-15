@@ -234,6 +234,24 @@ cd C:\Server\tools
 .\deploy.ps1 -AppPath 'C:\Server\DigitalTwinPortal'
 ```
 
+> ⚠️ **출력을 `2>&1` 로 파이프하지 마세요.** 예를 들어
+> `.\deploy.ps1 ... 2>&1 | Select-String '...'` 처럼 쓰면 **성공한 배포가
+> 실패로 뒤집힙니다.**
+>
+> PowerShell 5.1 은 네이티브 명령의 stderr 를 리다이렉트하면 그 줄들을 오류
+> 레코드로 감쌉니다. `flask db upgrade` 는 정상 진행 상황(`INFO [alembic...]`)을
+> stderr 로 내보내므로, 종료코드가 0 인데도 스크립트의 `catch` 가 걸려
+> `Migration failed: INFO [sqlalchemy...]` 같은 엉뚱한 메시지가 납니다.
+> (2026-08-15 실제로 겪음)
+>
+> 로그를 남기고 싶으면 파이프 대신 **트랜스크립트**를 쓰세요.
+>
+> ```powershell
+> Start-Transcript -Path C:\Server\deploy_log.txt
+> .\deploy.ps1 -AppPath 'C:\Server\DigitalTwinPortal'
+> Stop-Transcript
+> ```
+
 수행 내용:
 
 | 순서 | 내용 |
@@ -352,6 +370,22 @@ cd C:\Server\DigitalTwinPortal
 **파일만 되돌아갑니다. 마이그레이션은 취소되지 않습니다.** 실패한 배포가
 파괴적 마이그레이션(컬럼 삭제·이름 변경 등)을 적용했다면 DB는 따로 복구해야
 합니다.
+
+> ⚠️ **`.env` 도 같이 되돌아갑니다.** `.env` 는 앱 폴더 **안**(`backend\.env`)에
+> 있고 롤백은 폴더를 통째로 맞바꾸므로, **배포한 뒤에 `.env` 에 넣은 설정은
+> 롤백하면 사라집니다.** (2026-08-15 `STRATEGY_EVIDENCE_SOURCE` 가 그렇게
+> 없어졌습니다.)
+>
+> 그래서 순서를 이렇게 잡으세요 — **롤백 → 앱 시작 → `.env` 확인 → 필요하면
+> 다시 넣고 재기동.** 되돌린 뒤 설정이 그대로인지 한 번 보는 것이 안전합니다.
+>
+> ```powershell
+> Select-String -Path 'C:\Server\DigitalTwinPortal\backend\.env' -Pattern '^DT2_WRITE_ENABLED|^STRATEGY_EVIDENCE_SOURCE'
+> ```
+>
+> `.env` 를 고칠 때는 **파일 전체를 다시 쓰지 말고 줄만 덧붙이세요.** 이 파일은
+> UTF-8 인데 PowerShell 5.1 의 `Set-Content`·`Get-Content` 는 기본이 cp949 라,
+> 통째로 읽고 쓰면 한글 주석이 깨집니다.
 
 되돌린 버전의 `requirements.txt`가 다르면 가상환경이 새 버전 기준으로 남아
 있습니다. 그때는 위의 `venv_sync.ps1 -Force`를 한 번 실행하세요.
