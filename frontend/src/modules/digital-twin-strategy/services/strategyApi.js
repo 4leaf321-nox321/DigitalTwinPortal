@@ -92,6 +92,41 @@ export const strategyApi = {
 
   /** 근거 원천이 무엇을 돌려주는지 확인용 (Phase 1 점검) */
   previewEvidence: (year) => request(`/evidence-preview/${year}`),
+
+  // ── 설문 (관리자) ────────────────────────────────────────────────────
+  // 응답자용 API 는 /api/surveys 라 이 파일이 아니라 설문 모듈에 둔다.
+
+  listSurveys: (year) => request(`/plans/${year}/surveys`),
+
+  getSurvey: (surveyId) => request(`/surveys/${surveyId}`),
+
+  createSurvey: (year, payload) =>
+    request(`/plans/${year}/surveys`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateSurvey: (surveyId, payload) =>
+    request(`/surveys/${surveyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteSurvey: (surveyId) =>
+    request(`/surveys/${surveyId}`, { method: 'DELETE' }),
+
+  /** 배포(open)·마감(closed)·회수(draft) */
+  setSurveyStatus: (surveyId, status, closesAt) =>
+    request(`/surveys/${surveyId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, closes_at: closesAt ?? null }),
+    }),
+
+  /** 집계. 응답자 신원은 실리지 않는다. */
+  getSurveyResults: (surveyId) => request(`/surveys/${surveyId}/results`),
+
+  /** ⚠️ 응답자 확인. 부르는 순간 감사 로그가 남는다. */
+  getSurveyIdentities: (surveyId) => request(`/surveys/${surveyId}/identities`),
 };
 
 export default strategyApi;
