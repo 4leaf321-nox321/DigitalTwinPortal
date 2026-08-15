@@ -1,25 +1,34 @@
 # 설문 모듈 — 개발 계획
 
-> 상태: **API · 관리자 화면 완료. 응답자 화면(6-3)부터 남음** · 2026-08-15
+> 상태: **독립 모듈로 분리 중** · 2026-08-15
+> 백엔드 완료(`app/modules/survey/`). 프론트 분리 진행 중.
 > 상위 계획: [PLAN.md](./PLAN.md) — 전략 기획 모듈. 설문은 그 6절에서 갈라져 나온 것입니다.
 >
 > **내일 여기서부터** → 6절 「다음에 할 일」
 
 ---
 
-## 0. 기존 설문 기능에 대하여
+## 0. 기존 설문 기능을 걷어냈다 (2026-08-15)
 
-`collaboration_board` 모듈에 `Survey`·`SurveyQuestion`·`SurveyResponse`·
-`SurveyAnswer` 와 서비스가 **이미 있습니다**(표: `surveys`, `survey_questions`,
-`survey_responses`, `survey_answers`). 이 문서의 이전 판에 "포탈에 설문 기능이
-전혀 없습니다"라고 적혀 있었는데 **틀린 서술이었습니다.**
+`collaboration_board` 에 설문 기능이 **있었고, 죽은 코드가 아니었습니다.**
+이 문서의 이전 판이 두 번 틀렸습니다 — 처음엔 "포탈에 설문이 전혀 없다"고 했고,
+다음엔 "만들다 만 것"이라고 했습니다. 실제로는:
 
-다만 **그쪽은 만들다 만 것이라 쓰지 않습니다**(2026-08-15 확인). 재사용하지 않는
-이유는 방향이 다르기 때문이기도 합니다 — 그쪽은 익명 여부·중복 응답을 설문마다
-켜고 끄는 일반 게시판형 설문이고, 여기서 필요한 것은 **익명 방식이 하나로 고정**
-되고 **문항이 진단 축에 연결**되는 설문입니다(3절·6-4).
+| | |
+|---|---|
+| 백엔드 | `/surveys` CRUD 라우트 일습 + 서비스 |
+| 프론트 | 게시판의 **「설문조사」 카테고리 탭** — 만들기·수정·마감·삭제 화면 |
+| 데이터 | 설문 2건 · 문항 3개 · **응답 4건** (개발 DB) |
 
-⚠️ 그래도 **이름은 반드시 겹치지 않게** 지어야 합니다. 이유는 4절 참고.
+**사용자 확인 후 걷어냈습니다.** 포탈에 설문이 둘 있는 것보다 하나로 통일하는
+쪽을 골랐고, 그래서 새 모듈이 `Survey` / `surveys` 이름을 가져왔습니다.
+
+두 설문은 실제로 다른 물건이었습니다 — 게시판 것은 글 옆에 붙는 가벼운 투표
+(익명 여부를 설문마다 켜고 끔, 대상 개념 없음)였고, 새 것은 **익명 방식이 하나로
+고정**되고 **대상을 지정**하며 **문항이 진단 축에 연결**되는 설문입니다.
+
+⚠️ 그래서 게시판 설문 데이터는 **옮기지 않고 버렸습니다.** 옛 행에는 대상·소속이
+아예 없어서, 옮기면 전부 "소속 알 수 없음"인 응답만 남습니다.
 
 ---
 
@@ -43,41 +52,34 @@
 
 ---
 
-## 2. 진입점 — 두 개다
+## 2. 진입점 — 설문은 자기 모듈이다
 
-관리자와 응답자가 완전히 다른 사람이라 **하나로 묶으면 반드시 권한이 꼬입니다.**
+**설문은 전략의 부품이 아니라 포탈의 기능입니다.** 그래서 자기 모듈과 자기
+카드를 갖습니다. 전략은 첫 사용처일 뿐입니다.
 
 ```
 홈 화면
-├─ [디지털 트윈 전략 기획]   admin · dt_office 전용
-│    └ 설문 만들기 · 배포 · 집계 · 응답자 확인
-│
-└─ [설문]  ③건                전원 공개          ← 새 카드
-     └ 내가 받은 설문만. 전략 산출물은 안 보임
+├─ [디지털 트윈 전략 기획]   admin · dt_office
+│    헤더 [설문 ↗] ─────────┐   지금 보고 있는 전략을 context 로 달아 넘어간다
+│                            │
+└─ [설문]  ③건   전원 공개  ◀┘
+     · 누구나 — 내가 받은 설문에 응답
+     · admin·dt_office — 화면 안에서 '설문 관리'로 전환
 ```
 
-**응답은 반드시 전략 모듈 밖.** 전략 모듈은 `admin`·`dt_office` 전용인데 설문은
-전사 대상입니다. 응답을 그 안에 두려면 권한을 뚫어야 하고, 뚫는 순간 초안 전략과
-핵심 난제가 샐 위험이 생깁니다. 화면에서 가려도 URL 직접 접근이 남습니다.
+**한 모듈이 두 얼굴을 갖습니다.** 로그인한 사람은 누구나 들어와 자기가 받은
+설문에 답하고, 권한이 있으면 같은 모듈 안에서 만들기·집계로 전환합니다.
+가르는 것은 **백엔드**입니다 — `/api/surveys/manage/*` 는 `manager_required`,
+응답용은 로그인만 봅니다. 화면에서 가리는 것은 방어가 아닙니다.
 
-**만들기·집계는 반드시 전략 모듈 안.** 설문은 독립 제품이 아니라 전략의 도구입니다.
-문항이 단계에 묶이고 결과가 진단 칸으로 들어갑니다. 진단 화면에서
-**「이 축을 설문으로 물어보기」** 를 바로 눌러야 맥락이 안 끊깁니다. 별도 모듈로
-빼면 "어느 연도, 어느 축을 위한 설문인지"를 매번 다시 골라야 하고, 그러면 아무도
-안 씁니다.
+**전략은 링크로만 잇습니다.** 헤더의 [설문 ↗] 은 만들기 화면을 열지 않고
+`/survey?context_type=strategy_plan&context_id=<planId>` 로 넘어갑니다.
+저쪽에서 그 전략의 설문만 걸러 보여줍니다. 이렇게 해야 설문 모듈이 전략을
+모르는 채로 있을 수 있습니다.
 
-**발견성은 배지로.** 홈 타일이 이미 `badge` 를 지원합니다
-([MainPage.jsx](../../../pages/MainPage.jsx) 의 `TileBadge`). 미응답 건수를 띄우면
-"설문 받았는데 어디서 하지"가 없어집니다. 0건이면 배지 없이 카드만 남습니다.
-
-### 확정 (2026-08-15)
-
-**홈에 설문 모듈 카드를 추가합니다.** 지금까지 만든 것은 전부 사무국/관리자용이라
-일반 사용자 화면은 그대로였는데, **이건 조직 전체가 보는 화면을 바꾸는 첫
-변경**입니다. 그래서 확인받고 진행합니다.
+### 홈 카드 (확정 2026-08-15)
 
 ```javascript
-// MainPage.jsx 의 카드 목록
 {
   id: "survey",
   name: "설문",
@@ -87,27 +89,22 @@
 }
 ```
 
-`desc` 를 "받은 설문에 응답합니다"로 적는 이유는, 이름만 "설문"이면 **설문을
-만드는 곳으로 오해**하기 때문입니다. 만드는 곳은 전략 모듈 안입니다.
+`desc` 를 이렇게 적는 이유는, 이름만 "설문"이면 **설문을 만드는 곳으로 오해**
+하기 때문입니다. 대부분의 사용자에게 이 카드는 답하러 가는 곳입니다.
+
+미응답 건수를 **배지**로 띄웁니다(`GET /api/surveys/mine/count`). 0이거나
+호출이 실패하면 배지를 안 그립니다 — 배지는 부가 정보라 실패해도 홈이 깨지면
+안 됩니다.
 
 **카드를 역할로 숨기지 않습니다.** 이 포탈은 카드를 모두에게 보여주고 **누를 때
-거부**하는 방식입니다(`MainPage.jsx` 의 `onOpen` → "⚠️ 접근 권한이 없습니다").
-설문 카드도 그 방식을 따릅니다.
+거부**합니다(`MainPage.jsx` 의 `onOpen`). 설문 카드는 애초에 전원 공개라 거부될
+일이 없습니다.
 
 > ⚠️ PLAN.md 8절에 "해당 역할이 아니면 카드 자체가 보이지 않습니다"라고 적혀
-> 있었는데 **틀린 서술이었습니다.** `filtered` 는 검색어·상태·역할필터로만 거르고
-> `allowedRoles` 는 보지 않습니다. 지금도 일반 사용자에게 전략 기획 카드가 보이고,
-> 누르면 토스트로 거부됩니다. 이 동작을 유지하기로 했습니다.
+> 있었는데 **틀린 서술이었습니다.** `filtered` 는 `allowedRoles` 를 보지 않습니다.
 
-**응답자 화면도 다른 모듈과 같은 껍데기를 씁니다.**
-`shared/components/Header/CommonHeader` + 홈 버튼. 전략 모듈의
-`components/Layout/Header.jsx` 가 그 사용 예입니다 — 로고·제목·`onGoHome` 을
-넘기고, 모듈 고유 버튼은 `centerContent` 로 얹습니다.
-
-> 대안이었던 것: 설문을 통째로 독립 모듈로 만들고 역할에 따라 다른 화면을
-> 보여주는 방식. 나중에 전략 외 용도로도 설문을 쓸 거라면 이쪽이 맞습니다.
-> 지금은 진단 축과의 연결이 이 설문의 존재 이유라, 그 연결을 링크 너머로
-> 밀어내는 비용이 더 큽니다.
+**껍데기는 다른 모듈과 같습니다** — `shared/components/Header/CommonHeader` +
+홈 버튼. 모듈만 생김새가 다르면 사용자는 다른 시스템으로 넘어온 줄 압니다.
 
 ---
 
@@ -146,53 +143,64 @@
 
 ## 4. 데이터 모델 (구현 완료)
 
-`backend/app/modules/digital_twin_strategy/models.py`
-마이그레이션 `298c0f1b8fb6` 적용 완료.
+`backend/app/modules/survey/models.py` · 마이그레이션 `b0410d38d54c`
 
 ```
-strategy_survey                 설문 한 벌
-  plan_id(CASCADE), title, description, stage,
+surveys                 설문 한 벌
+  title, description,
+  context_type, context_id, context_tag,   ← 어디에 매달렸나 (비어도 된다)
   target_type(all|department|role|user), target_refs(JSON),
   status(draft|open|closed), closes_at, created_by
 
-strategy_survey_question        문항
+survey_questions        문항
   survey_id(CASCADE), order, text, help_text,
   qtype(scale|choice|rank|text), required, options(JSON),
-  link_category, link_dimension       ← 진단 축 연결
+  link_type, link_key                      ← 무엇에 연결되나
 
-strategy_survey_response        한 사람의 응답 한 벌
+survey_responses        한 사람의 응답 한 벌
   survey_id(CASCADE), user_id,
   department_name, division_id, division_source(profile|picked|unknown),
   submitted_at
-  UNIQUE(survey_id, user_id)          ← 중복 응답 차단
+  UNIQUE(survey_id, user_id)               ← 중복 응답 차단
 
-strategy_survey_answer          문항 하나에 대한 답
+survey_answers          문항 하나에 대한 답
   response_id(CASCADE), question_id(CASCADE),
   value_number | value_text | value_json
   UNIQUE(response_id, question_id)
 
-strategy_survey_access_log      관리자가 응답자를 확인한 기록
+survey_access_logs      관리자가 응답자를 확인한 기록
   survey_id(CASCADE), viewer_id, response_id, action
 ```
 
-### ⚠ 이름에 `Strategy` 접두어가 붙은 이유 (2026-08-15)
+### 이 모듈은 무엇에도 의존하지 않는다
 
-처음에는 `Survey`·`SurveyQuestion` 이었는데, **`collaboration_board` 모듈에
-같은 이름의 클래스가 이미 있었습니다**(`surveys`·`survey_questions` 표).
-같은 declarative base 라서 관계 문자열 `'SurveyQuestion'` 이 모호해지고
-**매퍼 설정이 실패해 모든 DB 질의가 죽었습니다.**
+전략 모듈을 import 하지 않고 전략 표에 FK 도 걸지 않습니다. 대신 **불투명한
+문자열 칸**만 들고 있습니다.
 
-그리고 그 상태로 **v0.1.22 가 릴리스되어 개발서버에 배포까지 됐습니다.** 이유가
-셋입니다 — 마이그레이션 생성·적용은 매퍼를 완전히 설정하지 않고, 표 존재
-확인(inspect)도 매퍼를 안 건드리며, **CI 는 `backend\tests` 가 없어 pytest 를
-통째로 건너뛰고 있었습니다.** 즉 모델을 고치고 질의를 한 번도 안 해본 것입니다.
+| 칸 | 전략이 넣는 값 | 설문 모듈이 아는 것 |
+|---|---|---|
+| `context_type` / `context_id` | `'strategy_plan'`, `12` | 없음. 그대로 보관·반환 |
+| `link_type` / `link_key` | `'strategy_dimension'`, `'organization:readiness'` | 없음 |
 
-→ `backend/scripts/check_models.py` 를 만들어 CI 에 넣었습니다. DB 없이
-모든 모델을 불러와 `configure_mappers()` 를 부르고 표 이름 중복도 봅니다.
-충돌을 일부러 만들어 실제로 잡는 것까지 확인했습니다.
+**아무 데도 안 매단 설문이 유효해야** 진짜 독립입니다. 테스트가 그렇게 만들어
+검증합니다(`_make_survey()` 는 context 를 안 답니다).
 
-**새 모델은 모듈 접두어로 짓습니다**(`StrategySurvey`, `Dt2Project` 처럼).
-짧은 일반명은 언젠가 부딪힙니다.
+권한 검사도 이 모듈이 직접 합니다(`manager_required`). 전략의
+`office_required` 를 빌려 쓰면 역할은 같아도 다시 매입니다.
+
+### ⚠ 클래스 이름 충돌로 v0.1.22 가 깨졌던 일
+
+처음엔 `strategy_survey_*` 로 만들었다가, 독립시키면서 게시판 것을 걷어내고
+`surveys` 를 가져왔습니다. 그 사이에 **같은 declarative base 에 `Survey` 가
+둘이 되어 매퍼 설정이 실패했고, 모든 DB 질의가 죽은 채로 릴리스됐습니다.**
+
+세 가지가 전부 매퍼를 안 건드려서 통과했습니다 — 마이그레이션 생성, 적용,
+표 존재 확인(inspect). CI 가 막았어야 하는데 `backend/tests` 가 없어 pytest 를
+통째로 건너뛰고 있었습니다.
+
+→ `backend/scripts/check_models.py` 가 CI 에서 DB 없이 모든 모델을 불러
+`configure_mappers()` 를 부르고 표 이름 중복도 봅니다. 충돌을 일부러 되살려
+실제로 잡는 것까지 확인했습니다.
 
 **답을 유형별로 나눠 담습니다.** 한 칸에 전부 문자열로 밀어넣으면 집계할 때마다
 파싱해야 하고, 숫자가 아닌 값이 섞여도 모릅니다.
@@ -239,55 +247,52 @@ unknown   둘 다 안 됨
 
 ### ✅ 6-1. 백엔드 API (완료)
 
-`backend/app/modules/digital_twin_strategy/` 안에 `survey_routes.py` 를 새로 둡니다.
-`routes.py` 에 섞지 않는 이유는 **권한 기준이 다르기 때문**입니다 — 그 파일의
-`office_required` 가 전부에 걸려 있어, 응답자용을 같이 두면 실수로 막히거나
-실수로 열립니다.
+`backend/app/modules/survey/routes.py` — 블루프린트가 둘입니다. **권한 기준이
+달라서** 한 파일 안에서도 경로로 갈랐습니다.
 
-**관리자용** (`office_required`)
+**관리자용** (`manager_required` — admin·dt_office)
 
 ```
-GET    /api/digital-twin-strategy/plans/<year>/surveys        목록
-POST   /api/digital-twin-strategy/plans/<year>/surveys        생성(문항 포함)
-GET    /api/.../surveys/<id>                                  문항까지 조회
-PUT    /api/.../surveys/<id>                                  수정
-DELETE /api/.../surveys/<id>
-PUT    /api/.../surveys/<id>/status                           배포·마감·회수
-GET    /api/.../surveys/<id>/results                          집계 (익명)
-GET    /api/.../surveys/<id>/identities                       응답자 확인 → 감사 로그
+GET    /api/surveys/manage?context_type=&context_id=   목록 (context 로 좁힘)
+POST   /api/surveys/manage                             생성(문항 포함)
+GET    /api/surveys/manage/<id>                        문항까지 조회
+PUT    /api/surveys/manage/<id>                        수정
+DELETE /api/surveys/manage/<id>
+PUT    /api/surveys/manage/<id>/status                 배포·마감·회수
+GET    /api/surveys/manage/<id>/results                집계 (익명)
+GET    /api/surveys/manage/<id>/identities             응답자 확인 → 감사 로그
 ```
 
-상태 전환을 `open`·`close` 두 엔드포인트로 나누지 않고 `status` 하나로 둡니다.
-되돌리는 경우(`open → draft`)까지 생각하면 동사마다 엔드포인트를 파는 것보다
-상태를 넘기는 편이 단순하고, 상태가 늘어나도 경로가 안 늘어납니다.
-
-**응답자용** (로그인만 요구, 역할 무관)
+**응답자용** (로그인만 — 역할 안 봄)
 
 ```
-GET    /api/surveys/mine                내가 받은 설문 (미응답 우선)
-GET    /api/surveys/mine/count          홈 배지용 미응답 건수
-GET    /api/surveys/<id>/form           문항 (대상자만)
-POST   /api/surveys/<id>/responses      제출 (1인 1회)
+GET  /api/surveys/mine          내가 받은 설문 (미응답 먼저)
+GET  /api/surveys/mine/count    홈 배지용 미응답 건수
+GET  /api/surveys/<id>/form     문항 (대상자만)
+POST /api/surveys/<id>/responses  제출 (1인 1회)
 ```
 
-**지킨 것** (`survey_routes.py`)
+상태 전환을 `open`·`close` 로 나누지 않고 `status` 하나로 둡니다. 되돌리는
+경우(`open → draft`)까지 생각하면 상태를 넘기는 편이 단순하고, 상태가 늘어나도
+경로가 안 늘어납니다.
+
+**지킨 것**
 
 - 대상자 판정은 `is_target(user, survey)` **한 곳**뿐. 목록·조회·제출이 전부
-  이걸 쓴다 — 흩어 쓰면 목록엔 안 뜨는데 id 로 POST 하면 받아지는 구멍이 생긴다.
+  이걸 씁니다 — 흩어 쓰면 목록엔 안 뜨는데 id 로 POST 하면 받아지는 구멍이 생깁니다.
 - 응답 직렬화는 `serialize_response(r, reveal=False)` **한 곳**뿐이고
-  **기본값이 '가린다'** 다. 깜빡하면 더 가려지지, 새지 않는다.
+  **기본값이 '가린다'** 입니다. 깜빡하면 더 가려지지, 새지 않습니다.
 - `status != 'open'` 이거나 `closes_at` 이 지났으면 거부(`_accepting()`).
-- 제출은 **DB 를 건드리기 전에 전부 검증**한다. 처음엔 넣으면서 검사했는데,
-  알 수 없는 문항이 섞이면 응답이 반쯤 저장된 채 400 이 나갔다 —
-  **테스트가 첫 실행에서 잡았다.**
-- 응답이 있는 설문은 문항 수정을 막는다(409). 바꾸면 이미 받은 답이 무엇에
-  대한 답이었는지 알 수 없다.
+- 제출은 **DB 를 건드리기 전에 전부 검증**합니다. 처음엔 넣으면서 검사했는데,
+  알 수 없는 문항이 섞이면 응답이 반쯤 저장된 채 400 이 나갔습니다 —
+  **테스트가 첫 실행에서 잡았습니다.**
+- 응답이 있는 설문은 문항 수정을 막습니다(409).
 
-**테스트** — `backend/tests/test_survey_api.py` 19개. 권한과 익명성부터 짰다.
+**테스트** — `backend/tests/test_survey_api.py` 19개. 권한과 익명성부터.
 `backend/tests` 가 없어서 CI 의 pytest 가 통째로 건너뛰어지고 있었고, 그게
-매퍼 충돌이 릴리스까지 간 이유였다. 이제 **`backend-tests` 잡(ubuntu +
-postgres 서비스)** 이 따로 돈다 — Windows 러너에는 Postgres 가 없고 Actions 의
-`services:` 도 리눅스 전용이다.
+매퍼 충돌이 릴리스까지 간 이유였습니다. 이제 **`backend-tests` 잡(ubuntu +
+postgres 서비스)** 이 따로 돕니다 — Windows 러너에는 Postgres 가 없고 Actions 의
+`services:` 도 리눅스 전용입니다.
 
 ### ✅ 6-2. 관리자 화면 (완료)
 

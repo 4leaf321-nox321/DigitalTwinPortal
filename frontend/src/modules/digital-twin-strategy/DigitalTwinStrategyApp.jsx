@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { AlertTriangle } from 'lucide-react';
 import Header from './components/Layout/Header';
 import DiagnosisView from './components/Diagnosis/DiagnosisView';
 import IssuesView from './components/Issues/IssuesView';
-import SurveyManager from './components/Survey/SurveyManager';
 import ThresholdModal from './components/Settings/ThresholdModal';
 import strategyApi from './services/strategyApi';
 
@@ -182,15 +182,13 @@ const ErrorBox = styled.div`
 `;
 
 function DigitalTwinStrategyApp({ onGoHome }) {
+  const navigate = useNavigate();
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [stage, setStage] = useState('assessment');
   const [meta, setMeta] = useState(null);
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  // 설문은 단계 탭과 나란한 것이 아니라 그 위를 가로지르는 화면이다.
-  // stage 상태에 섞지 않는다 — 섞으면 5단계가 6개로 읽힌다.
-  const [showSurveys, setShowSurveys] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -287,6 +285,16 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   const handleIssueDelete = (issueId) =>
     runAndReload(() => strategyApi.deleteIssue(currentYear, issueId));
 
+  // 설문은 독립 모듈이라 화면을 넘어간다. 지금 보고 있는 전략을 context 로
+  // 달아 보내면 저쪽에서 그 전략의 설문만 걸러 보여준다. 전략이 아직 없으면
+  // 매달 곳이 없으므로 그냥 설문 목록으로 간다.
+  const goToSurveys = () => {
+    const query = plan
+      ? `?context_type=strategy_plan&context_id=${plan.id}&label=${encodeURIComponent(`${currentYear}년 전략`)}`
+      : '';
+    navigate(`/survey${query}`);
+  };
+
   const isFixture = meta?.evidenceMode === 'fixture';
 
   const renderStage = () => {
@@ -352,8 +360,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       <Header
         onGoHome={onGoHome}
         onOpenSettings={() => setShowSettings(true)}
-        onOpenSurveys={() => setShowSurveys(v => !v)}
-        surveyActive={showSurveys}
+        onOpenSurveys={goToSurveys}
       />
 
       {isFixture && (
@@ -366,9 +373,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       <StickyBar>
        <Bounded>
         <TopBar>
-          {/* 설문 화면에서는 단계 탭을 감춘다. 설문은 어느 단계에도 속하지
-              않으므로, 탭이 하나 켜져 있으면 거짓말이 된다. */}
-          <StageTabs style={{ visibility: showSurveys ? 'hidden' : 'visible' }}>
+          <StageTabs>
             {STAGES.map(s => (
               <StageTab
                 key={s.key}
@@ -393,22 +398,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
 
       <MainContent>
        <Bounded>
-        {showSurveys ? (
-          plan ? (
-            <SurveyManager
-              year={currentYear}
-              categories={meta?.categories || []}
-              divisions={meta?.divisions || []}
-              onClose={() => setShowSurveys(false)}
-            />
-          ) : (
-            <Panel>
-              <PanelTitle>{currentYear}년 전략이 아직 없습니다</PanelTitle>
-              <div>설문은 연도별 전략에 매달립니다. 먼저 전략을 만드세요.</div>
-              <CreateButton onClick={handleCreate}>{currentYear}년 전략 만들기</CreateButton>
-            </Panel>
-          )
-        ) : renderStage()}
+        {renderStage()}
        </Bounded>
       </MainContent>
 
