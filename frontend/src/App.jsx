@@ -32,6 +32,7 @@ import DigitalTwinSwResourceApp from './modules/digital-twin-sw-resource/Digital
 import AutoDocumentApp from './modules/auto-document/AutoDocumentApp';
 import AutoDocumentVerifyApp from './modules/auto-document-verify/AutoDocumentVerifyApp';
 import DxKpiManagementApp from './modules/dx-kpi-management/DxKpiManagementApp';
+import SurveyApp from './modules/survey/SurveyApp';
 
 // 홈으로 이동하는 컴포넌트
 const AppWithNav = () => {
@@ -305,6 +306,18 @@ const AppWithNav = () => {
         element={
           <ProtectedRoute>
             <DxKpiManagementApp onGoHome={handleGoHome} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 설문 모듈 (보호됨 - 전원 공개) */}
+      {/* allowedRoles 를 붙이지 않는다 — 설문 응답은 전사 대상이고,
+          만들기/집계 쪽 권한은 백엔드(/api/surveys/manage)가 따로 본다. */}
+      <Route
+        path="/survey"
+        element={
+          <ProtectedRoute>
+            <SurveyApp onGoHome={handleGoHome} />
           </ProtectedRoute>
         }
       />

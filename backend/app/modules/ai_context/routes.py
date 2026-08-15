@@ -1071,7 +1071,7 @@ def _build_meeting_context():
 
 def _build_collaboration_context():
     """Collaboration Board page context"""
-    from app.modules.collaboration_board.models import BoardCategory, BoardPost, Survey
+    from app.modules.collaboration_board.models import BoardCategory, BoardPost
 
     categories = BoardCategory.query.filter_by(is_active=True).order_by(BoardCategory.order).all()
     cat_details = []
@@ -1091,11 +1091,9 @@ def _build_collaboration_context():
         post_details.append(f"- {pin}{p.title} (조회 {p.view_count}회, {p.created_at.strftime('%m/%d')})")
     post_text = '\n'.join(post_details) or '(게시글 없음)'
 
-    # Surveys
-    surveys = Survey.query.filter_by(is_active=True).order_by(Survey.created_at.desc()).limit(5).all()
-    survey_text = '\n'.join(
-        f"- {s.title} ({s.start_date} ~ {s.end_date})" for s in surveys
-    ) or '(설문 없음)'
+    # 설문은 2026-08-15 에 게시판에서 빠져 독립 모듈(/survey)이 되었다.
+    # 여기는 게시판 화면의 컨텍스트라 더 언급하지 않는다 — 설문 화면에
+    # 컨텍스트가 필요하면 자기 빌더를 따로 붙인다.
 
     return f"""{PLATFORM_INTRO}
 
@@ -1107,9 +1105,6 @@ def _build_collaboration_context():
 
 ## 최근 게시글
 {post_text}
-
-## 진행 중인 설문
-{survey_text}
 
 ## 주요 기능
 - 카테고리별 게시판 운영

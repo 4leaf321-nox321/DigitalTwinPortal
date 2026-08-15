@@ -39,7 +39,8 @@ import {
   Share2,
   Database,
   ShieldCheck,
-  TrendingUp
+  TrendingUp,
+  ClipboardList
 } from 'lucide-react';
 // AiChatSidebar 는 2026-08-01 에 화면에서 내렸다(아래 mount 자리 주석 참고).
 // import AiChatSidebar from '../components/AiChatSidebar';
@@ -1126,6 +1127,20 @@ const SIMULATION_FEATURES = [
     allowedRoles: ['admin', 'dt_office']  // 전략 산출물은 사무국/관리자 전용
   },
   {
+    id: "survey",
+    name: "설문",
+    // ⚠️ 이름만 "설문"이면 설문을 **만드는** 곳으로 오해한다. 대부분의 사용자에게
+    //    이 카드는 답하러 가는 곳이라 desc 로 그것을 못박는다.
+    desc: "받은 설문에 응답합니다",
+    color: 1,
+    gridColumn: "span 1",
+    gridRow: "span 1",
+    icon: ClipboardList,
+    route: "/survey"
+    // allowedRoles 를 적지 않는다 = 전원 공개. 설문 응답은 전사 대상이고,
+    // 만들기/집계는 같은 모듈 안에서 백엔드 권한(manager_required)이 가른다.
+  },
+  {
     id: "office-management",
     name: "사무국 운영",
     desc: "디지털 트윈 사무국 주간 업무",
@@ -1571,6 +1586,37 @@ const MainPage = () => {
       .catch(() => { /* 못 읽으면 기본값 그대로 — 첫 화면을 막지 않는다 */ });
   }, []);
 
+  /*
+    설문 미응답 건수 — 「설문」 카드 배지용.
+
+    ⚠️ 배지는 **부가 정보다.** 못 읽으면 0으로 두고 배지를 안 그릴 뿐,
+       홈 화면은 그대로 뜬다(위 모듈 상태와 같은 원칙). 그래서 실패를 삼키고
+       toast 도 띄우지 않는다 — 첫 화면에서 사용자가 할 수 있는 일이 없다.
+  */
+  const [pendingSurveys, setPendingSurveys] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;          // 서버가 jwt_required 라 토큰 없이 부를 이유가 없다
+    let alive = true;            // 응답 전에 화면을 뜨면 setState 를 버린다
+    const fetchPendingSurveys = async () => {
+      try {
+        const response = await fetch('/api/surveys/mine/count', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const result = await response.json();
+        if (alive && result.success && result.data) {
+          setPendingSurveys(result.data.pending || 0);
+        }
+      } catch (error) {
+        console.error('설문 미응답 건수 조회 실패:', error);  // 배지만 안 뜬다
+      }
+    };
+    fetchPendingSurveys();
+    return () => { alive = false; };
+  }, [token]);
+
   const handleLogout = () => {
     if (window.confirm('로그아웃 하시겠습니까?')) {
       logout();
@@ -1592,10 +1638,26 @@ const MainPage = () => {
       - (rank.has(b.id) ? rank.get(b.id) : Infinity));
   }, [moduleOrder]);
 
+  /**
+   * 서버에서 온 값을 배지로 얹은 모듈 목록.
+   *
+   * `SIMULATION_FEATURES` 는 모듈 최상위 상수라 그 안에는 못 넣는다. 그리고
+   * **원본을 고쳐 쓰지 않는다** — 같은 배열이 `ModuleStatusModal` 로 그대로
+   * 넘어가므로 mutate 하면 거기까지 오염된다. 사본에만 얹는다.
+   *
+   * 0건이면 `badge` 를 아예 안 단다 — Tile 이 `item.badge &&` 로 그리므로
+   * "0건" 이라는 빈 배지가 붙는 일이 없다.
+   */
+  const featuresWithBadge = useMemo(() => {
+    if (!pendingSurveys) return orderedFeatures;
+    return orderedFeatures.map((f) =>
+      f.id === 'survey' ? { ...f, badge: `${pendingSurveys}건` } : f);
+  }, [orderedFeatures, pendingSurveys]);
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     // '숨김' 은 목록에서 아예 뺀다 — 묶음이 없어 안 그려지는 게 아니라, 없는 것으로 둔다.
-    return orderedFeatures.filter((x) => statusById[x.id] !== 'hidden').filter((x) =>
+    return featuresWithBadge.filter((x) => statusById[x.id] !== 'hidden').filter((x) =>
       (!term || x.name.toLowerCase().includes(term) || x.desc.toLowerCase().includes(term)) &&
       (role === "All" ||
        (role === "Engineer" && ["self-simulation","element-tech","ai-hub","simulation-tools"].includes(x.id)) ||
@@ -1603,7 +1665,9 @@ const MainPage = () => {
     );
     // 🐞 `statusById` 를 빠뜨렸었다. 본문에서 읽는 값을 의존성에 안 적으면 **옛 값이
     //    닫혀 버려**, 설정에서 상태를 바꿔도 화면이 그대로였다(2026-08-10).
-  }, [q, role, statusById, orderedFeatures]);
+    //    `featuresWithBadge` 도 같은 이유로 반드시 여기 있어야 한다 — 빠뜨리면
+    //    설문 건수가 와도 배지가 안 붙는다.
+  }, [q, role, statusById, featuresWithBadge]);
 
   // 상태별 그룹핑 (검색/역할 필터 적용 후)
   const groupedFiltered = useMemo(() => {

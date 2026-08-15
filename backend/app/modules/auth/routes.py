@@ -417,8 +417,9 @@ def delete_user(target_user_id):
     from app.modules.auth.models import RefreshToken
     from app.modules.dx_work_process.models import Graph
     from app.modules.collaboration_board.models import (
-        BoardPost, BoardComment, BoardAttachment, Survey, SurveyResponse,
+        BoardPost, BoardComment, BoardAttachment,
     )
+    from app.modules.survey.models import Survey, SurveyResponse
     from app.modules.meeting_management.models import ReportPlanNotice
     from app.modules.digital_twin_task_management.models import TaskManagementData
     from app.modules.digital_twin_dashboard.models import (
@@ -436,12 +437,19 @@ def delete_user(target_user_id):
         # dx_work_process: graphs require an owner, transfer to admin
         Graph.query.filter_by(user_id=target_user_id).update({'user_id': user_id})
 
-        # collaboration_board: posts/comments/surveys require an author -> transfer; attachments/responses are nullable -> anonymize
+        # collaboration_board: posts/comments require an author -> transfer; attachments are nullable -> anonymize
         BoardPost.query.filter_by(author_id=target_user_id).update({'author_id': user_id})
         BoardComment.query.filter_by(author_id=target_user_id).update({'author_id': user_id})
         BoardAttachment.query.filter_by(uploader_id=target_user_id).update({'uploader_id': None})
-        Survey.query.filter_by(author_id=target_user_id).update({'author_id': user_id})
-        SurveyResponse.query.filter_by(respondent_id=target_user_id).update({'respondent_id': None})
+
+        # survey: 만든 사람은 관리자에게 넘기고, **응답은 통째로 지운다.**
+        #
+        # 응답만 익명화(user_id=NULL)하면 안 된다 — user_id 는 NOT NULL 이고,
+        # (survey_id, user_id) 유니크로 중복 응답을 막는 칸이라 비우면 그 장치가
+        # 무너진다. 그리고 떠난 사람의 응답을 남겨두면 집계 분모(대상자 수)에는
+        # 없는데 분자에는 있는 상태가 된다.
+        Survey.query.filter_by(created_by=target_user_id).update({'created_by': user_id})
+        SurveyResponse.query.filter_by(user_id=target_user_id).delete()
 
         # meeting_management: report-plan notices require an author -> transfer
         ReportPlanNotice.query.filter_by(author_id=target_user_id).update({'author_id': user_id})

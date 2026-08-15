@@ -1,0 +1,138 @@
+// 설문 모듈의 유일한 서버 접점.
+//
+// 관리(`/manage/*`)와 응답(`/mine`, `/<id>/form`, …)이 **한 파일에 같이 있다.**
+// 백엔드는 권한 기준이 달라 블루프린트를 둘로 갈랐지만(`survey/routes.py:28-29`),
+// 프론트에서 파일까지 가르면 base 경로가 두 군데에 적혀 한쪽만 고치는 사고가 난다.
+// 대신 아래 주석으로 두 층을 갈라 둔다 — 가르는 것은 백엔드다.
+
+const API_BASE = '/api/surveys';
+
+// 포탈 공통 인증 방식. localStorage 의 accessToken 을 Bearer 로 싣는다
+// (다른 모듈의 api 헬퍼와 같은 모양이다).
+async function authFetch(url, options = {}) {
+  const token = localStorage.getItem('accessToken');
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    // 본문이 없거나 JSON 이 아닌 응답
+  }
+
+  if (!res.ok) {
+    // 서버가 준 문구를 그대로 올린다. '이미 응답하셨습니다', '지금은 응답을
+    // 받지 않는 설문입니다' 같은 말은 프론트가 다시 지어낼 수 없다.
+    throw new Error(body?.message || `요청 실패 (${res.status})`);
+  }
+  return body;
+}
+
+const request = (path, options) => authFetch(`${API_BASE}${path}`, options);
+
+/** context 로 목록을 좁힐 때 쓰는 쿼리. 둘 다 없으면 빈 문자열이다. */
+function contextQuery(context) {
+  const params = new URLSearchParams();
+  if (context?.context_type) params.set('context_type', context.context_type);
+  if (context?.context_id !== undefined && context?.context_id !== null
+      && context.context_id !== '' && !Number.isNaN(Number(context.context_id))) {
+    params.set('context_id', String(context.context_id));
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export const surveyApi = {
+  // ── 응답자용 (로그인만 필요, 역할 무관) ──────────────────────────────
+
+  /** 내가 받은, 지금 답할 수 있는 설문. 서버가 미응답을 먼저 보낸다. */
+  listMine: () => request('/mine'),
+
+  /** 미응답 건수만. 헤더 배지처럼 가벼운 표시에 쓴다. */
+  pendingCount: () => request('/mine/count'),
+
+  /** 문항 + suggested_division_id + already_answered. 대상자가 아니면 404 다. */
+  getForm: (surveyId) => request(`/${surveyId}/form`),
+
+  /** 제출. 1인 1회이고, 두 번째부터는 서버가 409 를 준다. */
+  submitResponse: (surveyId, payload) =>
+    request(`/${surveyId}/responses`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // ── 관리자용 (admin · dt_office) ─────────────────────────────────────
+  //
+  // 화면에서 이 함수들을 감추는 것은 방어가 아니다. 막는 곳은 백엔드의
+  // manager_required 한 곳이고, 여기서는 403 을 그냥 메시지로 보여준다.
+
+  /** context 를 주면 그 전략(등)에 매달린 설문만, 안 주면 전부. */
+  listSurveys: (context) => request(`/manage${contextQuery(context)}`),
+
+  /** 목록에는 문항이 없다. 편집하려면 이걸로 문항까지 받아야 한다. */
+  getSurvey: (surveyId) => request(`/manage/${surveyId}`),
+
+  /** 연도가 아니라 context 를 **본문**에 실어 보낸다 — 경로에 넣지 않는다. */
+  createSurvey: (payload) =>
+    request('/manage', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateSurvey: (surveyId, payload) =>
+    request(`/manage/${surveyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteSurvey: (surveyId) =>
+    request(`/manage/${surveyId}`, { method: 'DELETE' }),
+
+  /** 배포(open) · 마감(closed) · 회수(draft) */
+  setSurveyStatus: (surveyId, status, closesAt) =>
+    request(`/manage/${surveyId}/status`, {
+      method: 'PUT',
+      // closes_at 은 **줄 때만** 싣는다. 항상 실으면 배포/마감 토글을 누를
+      // 때마다 설정된 마감일이 지워진다 — 백엔드는 키가 있으면 덮어쓴다.
+      body: JSON.stringify(
+        closesAt === undefined ? { status } : { status, closes_at: closesAt }
+      ),
+    }),
+
+  /** 집계. 응답자 신원은 실리지 않는다. */
+  getSurveyResults: (surveyId) => request(`/manage/${surveyId}/results`),
+
+  /** ⚠️ 응답자 확인. 부르는 순간 감사 로그가 남는다. */
+  getSurveyIdentities: (surveyId) => request(`/manage/${surveyId}/identities`),
+
+  // ── 부수 ─────────────────────────────────────────────────────────────
+
+  /**
+   * 사업부 목록. **설문 API 가 아니다** — 포탈 공통 설정에서 빌려 온다
+   * (`@jwt_required()` 만 걸려 있어 전 직원이 부를 수 있다. 선례:
+   * modules/spdm-status/SPDMStatusApp.jsx).
+   *
+   * ⚠️ 실패해도 던지지 않고 빈 배열을 돌려준다. 사업부는 응답에 **곁들이는**
+   * 정보라, 이것 때문에 응답 자체가 막히면 안 된다. 목록이 비면 화면이
+   * 「모름」만 남는 모드로 내려간다.
+   */
+  listDivisions: async () => {
+    try {
+      const body = await authFetch('/api/digital-twin-dashboard/settings');
+      const rows = body?.data?.divisions || [];
+      // to_dict() 가 id 를 문자열로 준다. 비교는 화면에서 String() 으로 맞춘다.
+      return rows.map(d => ({ id: d.id, name: d.name }));
+    } catch {
+      return [];
+    }
+  },
+};
+
+export default surveyApi;
