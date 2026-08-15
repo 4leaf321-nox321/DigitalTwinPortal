@@ -21,7 +21,8 @@ from app.extensions import db
 from app.modules.auth.models import User
 from app.modules.auth.models import UserRole
 from .importer import (
-    MAX_AXIS_VALUE, all_errors, parse_table, rows_to_questions,
+    MAX_AXIS_VALUE, MAX_LINK_KEY, MAX_SECTION, MAX_TEXT,
+    all_errors, parse_table, rows_to_questions,
 )
 from .models import (
     Survey, SurveyQuestion, SurveyResponse, SurveyAnswer, SurveyAccessLog,
@@ -128,6 +129,31 @@ def _pick_axis(value, allowed, label):
     if token not in allowed:
         return None, f"알 수 없는 {label}입니다: {token} (가능: {', '.join(allowed)})"
     return token, None
+
+
+def question_lock_reason(survey):
+    """문항을 바꿀 수 없는 이유. 바꿔도 되면 None.
+
+    ⚠️ **판단은 여기 한 곳에서만 한다.** 교체(편집기)와 덧붙이기(표)가 각자
+    판단하면 기준이 갈린다 — 실제로 한쪽은 '응답 수', 다른 쪽은 '상태'를 보고
+    있었다.
+
+    **응답이 0건이어도 배포된 설문은 잠근다.** 응답 수만 보면 status='open'
+    이고 아직 아무도 안 낸 설문에 문항을 더할 수 있는데, 그 순간 폼을 열어 둔
+    사람은 **다른 설문에 답한 것**이 된다. 이 잠금이 막으려던 바로 그 결과다.
+    화면에 "응답 0건" 이라 떠 있어도 마찬가지다.
+
+    되돌리는 길은 있다 — 마감(closed)했다가 draft 로 내리면 고칠 수 있다.
+    그때는 이미 받은 응답을 어떻게 할지 사람이 알고 결정하는 것이다.
+    """
+    if survey.responses.count() > 0:
+        return ('이미 응답이 있어 문항을 바꿀 수 없습니다. 받는 도중에 문항이 '
+                '바뀌면 먼저 답한 사람과 나중에 답한 사람이 서로 다른 설문에 '
+                '답한 것이 됩니다.')
+    if survey.status != 'draft':
+        return ('배포된 설문은 문항을 바꿀 수 없습니다. 지금 응답 화면을 열어 둔 '
+                '사람이 있을 수 있습니다. 먼저 마감한 뒤 작성 중으로 되돌리세요.')
+    return None
 
 
 def unreachable_questions(survey):
@@ -341,6 +367,22 @@ def _add_questions(survey, items, order_base=None):
         qtype = item.get('qtype') or 'scale'
         if qtype not in QTYPES:
             return f'{i + 1}번 문항의 유형을 알 수 없습니다: {qtype}'
+
+        # ⚠️ 길이를 여기서 막는다.
+        #
+        # 표 경로는 파서가 미리 잡아 "몇 행이 문제"라고 말해 주는데, 편집기
+        # 경로는 검사가 없어 같은 입력이 commit 에서 터졌다. 그때 사용자가 보는
+        # 것은 **raw SQL 과 바인딩된 값이 통째로 실린 500** 이다 — 무엇이
+        # 문제인지도, 어느 문항인지도 알 수 없다.
+        section = (item.get('section') or '').strip() or None
+        link_key = item.get('link_key') or None
+        for value, limit, label in (
+            (text, MAX_TEXT, '내용이'),
+            (section, MAX_SECTION, '섹션이'),
+            (link_key, MAX_LINK_KEY, '연결키가'),
+        ):
+            if value and len(value) > limit:
+                return f'{i + 1}번 문항의 {label} 너무 깁니다({limit}자까지).'
 
         audience_roles, error = _axis_list(item.get('audience_roles'),
                                            f'{i + 1}번 문항의 대상 역할')
@@ -596,11 +638,9 @@ def _append_target(payload):
     # 문항 수정을 막는 것과 같은 이유다. 응답을 받는 도중에 문항이 늘면 먼저
     # 답한 사람과 나중에 답한 사람이 **서로 다른 설문에 답한 것**이 되고,
     # 나중에 집계에서 새 문항의 분모가 몇인지 아무도 설명할 수 없게 된다.
-    if survey.responses.count() > 0:
-        return None, _error(
-            '이미 응답이 있어 문항을 덧붙일 수 없습니다. 받는 도중에 문항이 '
-            '늘면 먼저 답한 사람과 나중에 답한 사람이 서로 다른 설문에 답한 것이 '
-            '됩니다. 새 설문을 만드세요.', 409)
+    reason = question_lock_reason(survey)
+    if reason:
+        return None, _error(reason, 409)
 
     return survey, None
 
@@ -726,9 +766,19 @@ def modify_survey(survey_id):
             return _error('설문을 찾을 수 없습니다.', 404)
 
         if request.method == 'GET':
+            # 잠금 사유를 **서버가 계산해서 준다.** 화면이 응답 수를 보고 따로
+            # 판단하면 기준이 갈린다 — 목록의 response_count 는 제출된 것만
+            # 세는데 잠금은 모든 응답 행을 보므로, 화면은 "응답 0건" 이라
+            # 말하면서 저장은 409 가 나는 일이 생긴다.
             return jsonify({'success': True, 'data': _survey_dict(
                 survey, with_questions=True,
-                counts={'target_count': len(target_user_ids(survey))},
+                counts={
+                    'target_count': len(target_user_ids(survey)),
+                    'response_count': survey.responses.filter(
+                        SurveyResponse.submitted_at.isnot(None)
+                    ).count(),
+                    'question_lock_reason': question_lock_reason(survey),
+                },
             )})
 
         if request.method == 'DELETE':
@@ -740,10 +790,9 @@ def modify_survey(survey_id):
 
         # 응답이 들어온 뒤 문항을 바꾸면 이미 받은 답이 무엇에 대한 답이었는지
         # 알 수 없게 된다. 제목·설명은 고칠 수 있어도 문항은 잠근다.
-        has_responses = survey.responses.count() > 0
-        if 'questions' in payload and has_responses:
-            return _error('이미 응답이 있어 문항을 바꿀 수 없습니다. '
-                          '새 설문을 만드세요.', 409)
+        lock = question_lock_reason(survey)
+        if 'questions' in payload and lock:
+            return _error(lock, 409)
 
         if 'title' in payload:
             title = (payload['title'] or '').strip()

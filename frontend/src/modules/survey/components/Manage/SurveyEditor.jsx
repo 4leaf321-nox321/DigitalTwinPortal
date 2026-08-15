@@ -253,9 +253,13 @@ const Locked = styled.div`
   line-height: 1.55;
 `;
 
+// ⚠️ 백엔드 QTYPES 와 **같은 집합**이어야 한다.
+//    'multi' 가 빠져 있어서, 표로 만든 복수선택 문항을 편집기에서 열면 유형이
+//    빈칸으로 보이고 보기도 못 고쳤다. 저장하면 그 문항이 조용히 망가진다.
 const QTYPES = [
   { value: 'scale', label: '척도 1~5' },
   { value: 'choice', label: '객관식' },
+  { value: 'multi', label: '복수선택' },
   { value: 'rank', label: '순위' },
   { value: 'text', label: '자유서술' },
 ];
@@ -267,7 +271,7 @@ const TARGETS = [
   { value: 'user', label: '지정 인원' },
 ];
 
-const CHOICE_TYPES = new Set(['choice', 'rank']);
+const CHOICE_TYPES = new Set(['choice', 'multi', 'rank']);
 
 const emptyQuestion = () => ({
   text: '', help_text: '', qtype: 'scale', required: true,
@@ -289,7 +293,18 @@ const textToChoices = (text) =>
  *  보기 안에는 쉼표가 자주 들어가지만 역할·프로세스 이름에는 안 들어가기
  *  때문이다. 표 붙여넣기 화면(SurveyImport)과 같은 규칙이라 두 경로로 만든
  *  설문의 이름이 서로 다른 모양으로 갈리지 않는다. */
-const splitAxis = (text) => (text || '').split(',').map(s => s.trim()).filter(Boolean);
+const splitAxis = (text) => {
+  // ⚠️ **중복을 없앤다.** 서버(importer._split_axis, routes._axis_list)가
+  //    없애므로 여기서 안 없애면 같은 글자를 넣어도 결과가 갈린다 — 화면에는
+  //    'PL, PL' 이 남고 저장된 것은 'PL' 하나라, blur 때 "정규화한다"는 약속이
+  //    거짓이 된다.
+  const seen = new Set();
+  return (text || '').split(',').map(x => x.trim()).filter(x => {
+    if (!x || seen.has(x)) return false;
+    seen.add(x);
+    return true;
+  });
+};
 const joinAxis = (list) => (Array.isArray(list) ? list : []).join(', ');
 
 /** 문항이 가리키는 값 중 **설문 목록에 없는** 이름을 찾는다.
@@ -318,7 +333,12 @@ const axisWarnings = (q, definedRoles, definedProcesses) => {
 };
 
 const SurveyEditor = ({ survey, onSave, onCancel }) => {
-  const locked = (survey?.response_count || 0) > 0;
+  // 잠금 판단은 **서버가 한다.** 화면이 응답 수로 따로 판단하면, 배포됐지만
+  // 응답이 0건인 설문에서 "고칠 수 있어 보이는데 저장하면 409" 가 된다.
+  // 옛 응답(question_lock_reason 미지원)에 대비해 응답 수도 함께 본다.
+  const lockReason = survey?.question_lock_reason
+    || ((survey?.response_count || 0) > 0 ? '이미 응답이 있어 문항을 바꿀 수 없습니다.' : null);
+  const locked = !!lockReason;
   // 문항 번호 -> 보기 입력의 원문. 문항 개수가 바뀌면(추가·삭제·템플릿)
   // 번호가 밀리므로 통째로 버린다 — 남은 초안이 엉뚱한 문항에 붙는 것보다 낫다.
   const [choiceDraft, setChoiceDraft] = useState({});
@@ -353,6 +373,18 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
   const setQ = (i, patch) =>
     setQuestions(qs => qs.map((q, n) => (n === i ? { ...q, ...patch } : q)));
+
+  // 유형을 바꾸면 options 를 그 유형에 맞게 씻는다.
+  //
+  // 안 씻으면 척도였던 문항을 객관식으로 바꿔도 {min,max} 가 남고, 반대로
+  // 객관식이었던 것을 척도로 바꿔도 choices 가 남는다. 화면에는 안 보이지만
+  // 저장되고, **같은 내용의 문항이 만든 경로에 따라 서로 다른 모양**이 된다.
+  const setQType = (i, qtype) => setQ(i, {
+    qtype,
+    options: qtype === 'scale' ? { min: 1, max: 5 }
+      : CHOICE_TYPES.has(qtype) ? { choices: [] }
+      : {},
+  });
   const setOpt = (i, patch) =>
     setQuestions(qs => qs.map((q, n) => (
       n === i ? { ...q, options: { ...(q.options || {}), ...patch } } : q
@@ -577,7 +609,7 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
                           onChange={e => setQ(i, { help_text: e.target.value })}
                           placeholder="도움말 (선택) — 무엇을 묻는지 풀어 씁니다" />
                 <Row>
-                  <Select value={q.qtype} onChange={e => setQ(i, { qtype: e.target.value })}>
+                  <Select value={q.qtype} onChange={e => setQType(i, e.target.value)}>
                     {QTYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </Select>
                   <label style={{ fontSize: '0.8125rem', color: '#64748b' }}>
