@@ -29,6 +29,18 @@ import os
 import pkgutil
 import sys
 
+# 콘솔 코드페이지와 무관하게 한글을 찍는다.
+#
+# GitHub 러너의 stdout 은 cp1252 라 한글에서 UnicodeEncodeError 로 죽는다.
+# 그러면 **검사가 통과했는지 실패했는지가 아니라 출력이 CI 를 빨갛게 만든다.**
+# errors='replace' 까지 두는 이유는, 렌더가 안 되더라도 검사 결과는 나와야
+# 하기 때문이다.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError):
+        pass
+
 # backend/ 를 import 경로에 넣는다. scripts/ 안에서 실행되므로 한 단계 위다.
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
