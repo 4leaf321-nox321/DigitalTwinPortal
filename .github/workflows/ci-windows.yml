@@ -7,6 +7,53 @@ on:
     branches: [ main, master ]
 
 jobs:
+  # DB 가 필요한 테스트는 리눅스에서 돈다.
+  #
+  # Windows 러너에는 Postgres 가 없고, GitHub Actions 의 `services:` 컨테이너도
+  # 리눅스에서만 쓸 수 있다. 백엔드는 순수 파이썬이라 테스트를 리눅스에서 돌려도
+  # 검증력이 같다 — **패키징만 Windows 에서 하면 된다**(아래 build 잡).
+  #
+  # 이 잡이 없으면 backend\tests 가 있어도 CI 에서 한 번도 안 돈다.
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dxdigitaltwin_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/dxdigitaltwin_test
+      # create_app() 이 요구하는 값들. 테스트 설정이 DB URI 는 따로 잡는다.
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/dxdigitaltwin_test
+      SECRET_KEY: ci-secret
+      JWT_SECRET_KEY: ci-jwt-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+
+      - name: Check model mappings
+        run: python backend/scripts/check_models.py
+
+      - name: Run tests
+        run: python -m pytest backend/tests -q -p no:warnings
+
   build:
     runs-on: windows-latest
     steps:
@@ -41,20 +88,10 @@ jobs:
           python backend\scripts\check_models.py
           if ($LASTEXITCODE -ne 0) { throw "model mapping check failed (exit $LASTEXITCODE)" }
 
-      - name: "Backend: run tests"
-        shell: pwsh
-        run: |
-          .\backend\.venv\Scripts\Activate.ps1
-          if (Test-Path backend\requirements-dev.txt) {
-            pip install -r backend\requirements-dev.txt
-            if ($LASTEXITCODE -ne 0) { throw "dev requirements install failed (exit $LASTEXITCODE)" }
-          }
-          if (Test-Path backend\tests) {
-            pytest backend\tests -q
-            if ($LASTEXITCODE -ne 0) { throw "pytest failed (exit $LASTEXITCODE)" }
-          } else {
-            Write-Host 'No backend tests found, skipping.'
-          }
+      # pytest 는 여기서 돌지 않는다. Postgres 가 필요하고 Windows 러너에는
+      # 없다 — 위의 backend-tests 잡(ubuntu + postgres 서비스)이 담당한다.
+      # 이 잡은 **Windows 에서만 확인할 수 있는 것**에 집중한다: 의존성 설치,
+      # 프론트 빌드, wheel 묶음 만들기.
 
       - name: "Frontend: install and build"
         id: frontend-build
