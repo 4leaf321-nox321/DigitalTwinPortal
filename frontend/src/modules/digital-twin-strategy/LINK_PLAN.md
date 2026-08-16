@@ -147,14 +147,38 @@ const linkType = linkKeys.every(k => k.startsWith('organization:'))
 임계값은 전략 모듈이 이미 쓰는 `ModuleSettings` 에 둡니다(임계값을 코드에
 박지 않는 기존 방식 그대로).
 
-### 4-4. 마감된 설문만
+### 4-4. 마감된 설문만, 그리고 **설문을 섞지 않는다**
 
 진행 중인 설문을 반영하면 사람이 답할 때마다 진단이 움직입니다. 어제 본 숫자와
-오늘 숫자가 다른데 아무도 왜인지 모릅니다.
+오늘 숫자가 다른데 아무도 왜인지 모릅니다. `status='closed'` 인 설문만
+근거가 됩니다.
 
-`status='closed'` 인 설문만 근거가 됩니다. 같은 연도(plan)에 마감된 설문이
-여럿이면 **전부 합쳐** 1인 1표로 셉니다. 한 사람이 두 설문에 답했으면 그
-사람은 두 표가 됩니다 — 다른 시점의 다른 의견이므로 그게 맞습니다.
+⚠️ **여러 설문의 같은 축을 한 평균으로 뭉치지 않습니다.** 「과제 애로사항
+조사」의 준비도 문항과 「조직 역량 진단」의 준비도 문항은 같은 축을 가리켜도
+묻는 맥락이 다릅니다 — 앞뒤 문항이 다르고 응답자 집단이 다르면 답이 달라집니다.
+합쳐 놓으면 숫자는 나오는데 **그게 무엇의 평균인지 아무도 말할 수 없습니다.**
+
+그래서 **설문별로 갈라서** 냅니다.
+
+```
+조직 역량 · 준비도        MX 사업부
+  ├ 조직 역량 진단(3월 마감)      3.2   N=22   ← 이걸로 반영
+  └ 과제 애로사항 조사(5월 마감)   2.8   N=9
+```
+
+반영은 **설문 하나를 골라서** 합니다. 두 설문의 숫자가 벌어져 있다면 그 사실
+자체가 볼 만한 것이고, 평균을 내서 3.0 으로 만들면 그 정보가 사라집니다.
+
+한 설문 안에서는 합칩니다 — 그건 같은 맥락에서 같은 사람들에게 물은 것이라
+문항 여러 개가 한 축을 재는 것이 정상입니다(4-1 의 1인 1표).
+
+**어느 설문을 볼 것인가**는 `context_type='strategy_plan'`, `context_id=plan.id`
+로 좁힙니다. 그 전략에 매달아 만든 설문만 후보가 됩니다 — 설문 모듈은
+전사용이라, 전략과 무관한 설문까지 후보에 올리면 목록이 금세 못 쓰게 됩니다.
+
+⚠️ 다만 **꼬리표가 곧 후보 자격입니다.** 그 설문에 `link_key` 가 달린 척도
+문항이 하나도 없으면 애초에 목록에 안 나옵니다. 설문 종류로 거르는 것이 아니라
+**문항에 달린 꼬리표로** 거릅니다.
 
 ### 4-5. 목표 레벨은 설문으로 정하지 않는다
 
@@ -182,8 +206,9 @@ const linkType = linkKeys.every(k => k.startsWith('organization:'))
 진단 화면의 조직 역량 칸에서:
 
 ```
-준비도   현재 3   목표 4        [설문 제안 3.3 → 3]  N=18
+준비도   현재 3   목표 4        [조직 역량 진단 · 3.3 → 3]  N=18
                                 └ 누르면 근거 패널
+                                  (같은 축에 설문이 둘 이상이면 나란히 뜬다)
 ```
 
 근거 패널에 들어가는 것:
@@ -207,17 +232,18 @@ const linkType = linkKeys.every(k => k.startsWith('organization:'))
 
 ```
 GET  /api/digital-twin-strategy/plans/<year>/survey-evidence
-     → { surveys: [...근거가 된 마감 설문],
+     → { surveys: [{id, title, closed_at, response_count}],  ← 후보 설문
          min_sample: 5,
-         cells: [{ division_id, dimension,
+         cells: [{ survey_id,                   ← **설문마다 한 줄**
+                   division_id, dimension,
                    respondent_count, average, suggested_level,
-                   current_level, basis,          ← 지금 진단값 (비교용)
+                   current_level, basis,        ← 지금 진단값 (비교용)
                    questions: [...], by_role: {...},
                    insufficient: false }],
          out_of_scope: [{division_id, name, respondent_count}] }
 
 POST /api/digital-twin-strategy/plans/<year>/assessments/apply-survey
-     { cells: [{division_id, dimension}, ...] }   ← 고른 칸만
+     { cells: [{survey_id, division_id, dimension}, ...] }   ← 어느 설문인지 명시
      → 반영된 칸과 건너뛴 칸(사유 포함)
 ```
 
@@ -257,3 +283,4 @@ POST /api/digital-twin-strategy/plans/<year>/assessments/apply-survey
 | 설문이 진단의 유일한 근거가 된다 | 조직 축만 설문이다. 기술 성숙도(A)와 활용·성과(B)는 그대로 |
 | 한 번 반영하고 나면 근거를 못 찾는다 | `note` 스탬프 + 근거 패널이 **항상** 원 설문으로 되짚어 간다 |
 | 사람이 매긴 값을 설문이 덮어쓴다 | 「전부 반영」은 수기 칸을 건너뛴다. 개별 반영은 이전 값을 남긴다 |
+| 맥락이 다른 설문이 한 숫자로 뭉쳐진다 | 설문별로 갈라서 보여주고, 반영은 **설문 하나를 골라서** 한다 (4-4) |
