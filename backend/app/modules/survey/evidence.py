@@ -404,6 +404,72 @@ def free_text_answers(survey, limit_per_question=200):
     return out
 
 
+def choice_tally_by_link(survey, prefix, min_answers=1):
+    """연결키가 prefix 로 시작하는 **객관식**의 보기별 응답 수.
+
+    돌려주는 값:
+        [{'link_key', 'question_id', 'text', 'division_id', 'answer_count',
+          'rows': [{'value', 'count', 'share'}]}]
+
+    ③ 분석의 기회·위협이 이걸로 채워진다. 「가장 큰 위협은?」의 보기 하나하나가
+    후보가 되므로 **1위만이 아니라 전부** 낸다 — 2위·3위도 위협이다.
+
+    ⚠️ **사업부별로 가른다.** 진단이 사업부별인데 분석만 전사로 뭉치면, 「MX 의
+       위협」과 「NW 의 위협」이 한 줄로 섞여 어느 사업부 이야기인지 알 수 없다.
+       division_id 가 None 인 칸은 소속 미확인 응답이다.
+    """
+    known = allowed_link_keys()
+    questions = {
+        q.id: q for q in survey.questions.all()
+        if q.qtype == 'choice' and q.link_key
+        and q.link_key.startswith(prefix)
+        and (not known or q.link_key in known)
+    }
+    if not questions:
+        return []
+
+    responses = {
+        r.id: r for r in survey.responses.filter(
+            SurveyResponse.submitted_at.isnot(None)).all()
+    }
+    if not responses:
+        return []
+
+    counted = {}
+    for a in SurveyAnswer.query.filter(
+        SurveyAnswer.response_id.in_(list(responses)),
+        SurveyAnswer.question_id.in_(list(questions)),
+    ).all():
+        picked = _choice_label(a.value_json)
+        if picked is None:
+            continue
+        division_id = responses[a.response_id].division_id
+        slot = counted.setdefault((a.question_id, division_id), {})
+        slot[picked] = slot.get(picked, 0) + 1
+
+    out = []
+    for (question_id, division_id), tally in counted.items():
+        total = sum(tally.values())
+        if total < min_answers:
+            continue
+        question = questions[question_id]
+        rows = [
+            {'value': label, 'count': count,
+             'share': round(count * 100 / total, 1)}
+            for label, count in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
+        out.append({
+            'link_key': question.link_key,
+            'question_id': question_id,
+            'text': question.text,
+            'division_id': division_id,
+            'answer_count': total,
+            'rows': rows,
+        })
+    out.sort(key=lambda x: (x['link_key'], x['division_id'] or 0))
+    return out
+
+
 def survey_brief(survey):
     """설문을 가리키는 최소한의 정보. 화면이 "어느 설문에서 나왔나"를 말할 때 쓴다."""
     return {

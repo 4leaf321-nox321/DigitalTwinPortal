@@ -19,6 +19,8 @@ STRATEGY_DIMENSION = 'strategy_dimension'
 
 # 연결키의 앞자리. 'organization:readiness' 의 'organization'.
 _ORGANIZATION = 'organization'
+# ③ 분석의 기회·위협. 'analysis:threat' 의 'analysis'.
+_ANALYSIS = 'analysis'
 
 
 def link_key_options():
@@ -29,7 +31,7 @@ def link_key_options():
     """
     try:
         from app.modules.digital_twin_strategy.definitions import (
-            ORGANIZATION_DIMENSIONS,
+            ANALYSIS_LINKS, ORGANIZATION_DIMENSIONS,
         )
     except Exception:
         return []
@@ -45,6 +47,18 @@ def link_key_options():
             # 무엇을 묻는 축인지 같이 준다. 화면이 이것을 툴팁으로 띄우면
             # 사무국이 문항과 축을 맞춰 볼 수 있다.
             'question': dim.get('question') or '',
+        })
+
+    # ③ 분석의 기회·위협. 진단이 아니라 **분석**으로 가는 문항이다 — 포탈에
+    # 없는 정보라 물어보는 수밖에 없다.
+    for item in ANALYSIS_LINKS:
+        key = (item.get('key') or '').strip()
+        if not key:
+            continue
+        out.append({
+            'key': f'{_ANALYSIS}:{key}',
+            'label': f"분석 · {item.get('label') or key}",
+            'question': item.get('question') or '',
         })
     return out
 

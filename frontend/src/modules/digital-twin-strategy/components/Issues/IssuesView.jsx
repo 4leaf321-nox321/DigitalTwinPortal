@@ -4,6 +4,9 @@ import { Plus, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import IssueCard from './IssueCard';
 import IssueEditor from './IssueEditor';
 import FlowMap from '../FlowMap';
+import DivisionFilter, {
+  countByDivision, inDivision,
+} from '../DivisionFilter';
 import CandidatePanel from './CandidatePanel';
 
 // ② 이슈.
@@ -249,12 +252,26 @@ const IssuesView = ({
   // 묶어서 난제로 만들 이슈. 고아 영역에서만 고른다.
   const [picked, setPicked] = useState([]);
   const [rollupTitle, setRollupTitle] = useState('');
+  // null 이면 전체 전략. 사업부를 고르면 그 사업부 것과 **전사 공통**을 함께 본다.
+  const [division, setDivision] = useState(null);
 
   const divisionName = (id) => divisions.find(d => d.id === id)?.name || null;
 
-  const live = issues.filter(i => i.status !== 'dropped');
-  const dropped = issues.filter(i => i.status === 'dropped');
+  // ⚠️ 난제와 이슈를 **각각** 거른다. 난제만 걸러 그 아래 이슈를 다 보여주면
+  //    MX 를 보는데 VD 이슈가 딸려 오고, 이슈만 걸러 난제를 다 보여주면 이슈가
+  //    하나도 없는 난제가 잔뜩 뜬다.
+  const visibleCruxes = cruxes.filter(c => inDivision(c, division));
+  const live = issues.filter(
+    i => i.status !== 'dropped' && inDivision(i, division));
+  const dropped = issues.filter(
+    i => i.status === 'dropped' && inDivision(i, division));
   const orphans = live.filter(i => i.crux_id === null);
+  const visibleCandidates = (candidates || []).filter(
+    c => inDivision(c, division));
+  // 보이는 난제 중 이슈가 하나도 안 달린 것. 서버의 coverage 는 전체 기준이라
+  // 필터를 걸면 화면과 어긋난다.
+  const emptyCruxCount = visibleCruxes.filter(
+    c => !live.some(i => i.crux_id === c.id)).length;
 
   const save = async (payload) => {
     const ok = editing?.mode === 'edit'
@@ -368,21 +385,30 @@ const IssuesView = ({
     <Layout>
       <FlowMap items={flow} />
       <Wrap>
+        <DivisionFilter
+          divisions={divisions}
+          value={division}
+          onChange={setDivision}
+          counts={countByDivision(issues.filter(i => i.status !== 'dropped'),
+                                  divisions)}
+        />
       <Head>
         <Title>이슈</Title>
         {/* 한 줄로 전체 상태가 읽혀야 한다. 아래로 스크롤해야 알 수 있으면
             "할 일이 없는 난제"는 아무도 못 본다. */}
+        {/* ⚠️ 서버가 준 coverage 는 **전체 기준**이다. 사업부를 골라 놓고 그
+            숫자를 그대로 쓰면 화면에 안 보이는 난제까지 세어져, "할 일이 없는
+            난제 3개"라는데 화면에는 하나도 없는 상태가 된다. 보이는 것으로 센다. */}
         <Hint>
           핵심 난제마다, 그것을 넘으려면 무엇을 해야 하는지 적습니다.
           이슈 {live.length}건
-          {coverage?.cruxesWithoutIssues?.length > 0 &&
-            ` · 할 일이 없는 난제 ${coverage.cruxesWithoutIssues.length}개`}
+          {emptyCruxCount > 0 && ` · 할 일이 없는 난제 ${emptyCruxCount}개`}
           {orphans.length > 0 && ` · 난제에 안 걸린 이슈 ${orphans.length}건`}
         </Hint>
       </Head>
 
       <CruxGrid id="sec-issue-cruxes">
-      {cruxes.map(crux => {
+      {visibleCruxes.map(crux => {
         const children = live.filter(i => i.crux_id === crux.id);
         return (
           <CruxBlock key={crux.id}>
@@ -472,7 +498,7 @@ const IssuesView = ({
           채로 생겨 빨간 경고로 떨어지는데, 그러면 그 경고가 무뎌진다.
           어느 난제 아래인지는 가져올 때 정하는 것이 맞다. */}
       <CandidatePanel
-        candidates={candidates}
+        candidates={visibleCandidates}
         onPick={(c) => startNew('', {
           title: c.title,
           description: c.detail,

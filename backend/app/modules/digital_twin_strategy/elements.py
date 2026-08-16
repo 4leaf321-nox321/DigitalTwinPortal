@@ -15,7 +15,9 @@
    O·T 를 여기서 지어내지 않는다. 포탈에 없는 정보를 규칙이 만들어내면 그건
    근거가 아니라 창작이다. 그 자리는 설문이 메운다(ANALYSIS_PLAN 3절).
 """
-from .definitions import CATEGORIES, LEVEL_MAX, LEVEL_MIN
+from .definitions import (
+    ANALYSIS_KIND_BY_KEY, CATEGORIES, CATEGORY_ANALYSIS, LEVEL_MAX, LEVEL_MIN,
+)
 
 _DIMENSION_BY_SLOT = {
     (c['key'], d['key']): d
@@ -121,6 +123,46 @@ def derive_element_candidates(assessments, findings, divisions):
     # 흩어져, 있는 줄도 모르고 지나간다.
     order = {'S': 0, 'W': 1, 'O': 2, 'T': 3}
     out.sort(key=lambda c: (order.get(c['kind'], 9), c['title']))
+    return out
+
+
+def derive_survey_candidates(plan, min_sample):
+    """O·T 후보. **설문에서만 나온다.**
+
+    포탈에 없는 정보라 규칙이 만들어낼 수 없다. 「가장 큰 위협은?」 같은 객관식
+    문항을 `analysis:threat` 에 연결해 두면, 보기 하나하나가 후보가 된다.
+
+    ⚠️ **1위만 내지 않는다.** 진단의 쏠림 규칙은 튀는 것 하나를 짚는 일이지만
+       여기는 재료를 모으는 일이다 — 2위·3위도 위협이다.
+
+    ⚠️ **사업부별로 낸다.** 진단이 사업부별인데 분석만 전사로 뭉치면 「MX 의
+       위협」과 「NW 의 위협」이 한 줄로 섞인다.
+    """
+    try:
+        from app.modules.survey.evidence import choice_tally_by_link, closed_surveys
+    except Exception:
+        return []
+
+    out = []
+    for survey in closed_surveys('strategy_plan', plan.id):
+        for item in choice_tally_by_link(survey, f'{CATEGORY_ANALYSIS}:',
+                                         min_answers=min_sample):
+            axis = item['link_key'].split(':', 1)[1]
+            kind = ANALYSIS_KIND_BY_KEY.get(axis)
+            if not kind:
+                continue
+            for row in item['rows']:
+                out.append({
+                    'key': (f"survey:{kind}:{item['question_id']}:"
+                            f"{row['value']}:{item['division_id']}"),
+                    'kind': kind,
+                    'title': row['value'],
+                    'detail': (f"「{item['text']}」에 {item['answer_count']}명 중 "
+                               f"{row['count']}명({row['share']}%)이 꼽았습니다. "
+                               '현장이 인식하는 것이지 시장 그 자체는 아닙니다.'),
+                    'division_id': item['division_id'],
+                    'source_type': 'survey',
+                })
     return out
 
 

@@ -298,6 +298,25 @@ _unmatched = [
 assert not _unmatched, f'임계값 짝이 없는 지표: {_unmatched}'
 
 
+# ── ③ 분석이 설문에 물을 것 ────────────────────────────────────────────────
+#
+# S·W 는 포탈 데이터에서 나오지만 **O·T 는 포탈에 없다.** 그 자리를 설문이
+# 메운다 — 「3년 안에 마주할 가장 큰 위협은?」은 설문 문항이다.
+#
+# ⚠️ 이렇게 모은 것은 **현장이 인식하는** 기회·위협이지 시장 그 자체가 아니다.
+#    화면이 그 한계를 적어야 한다(ANALYSIS_PLAN 3절).
+CATEGORY_ANALYSIS = 'analysis'
+
+ANALYSIS_LINKS = [
+    {'key': 'opportunity', 'label': '기회', 'element_kind': 'O',
+     'question': '앞으로 우리에게 열릴 수 있는 것은 무엇인가'},
+    {'key': 'threat', 'label': '위협', 'element_kind': 'T',
+     'question': '앞으로 우리를 막을 수 있는 것은 무엇인가'},
+]
+
+ANALYSIS_KIND_BY_KEY = {a['key']: a['element_kind'] for a in ANALYSIS_LINKS}
+
+
 # ── 진단 임계값 ────────────────────────────────────────────────────────────
 # 여기 값은 **기본값**이다. 운영에서 화면으로 덮어쓸 수 있다(ModuleSettings).
 #

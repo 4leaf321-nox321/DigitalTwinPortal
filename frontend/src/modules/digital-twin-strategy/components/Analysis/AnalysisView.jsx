@@ -4,6 +4,9 @@ import {
   Plus, Trash2, ArrowDown, Info, AlertTriangle, ClipboardList, ChevronDown,
 } from 'lucide-react';
 import FlowMap from '../FlowMap';
+import DivisionFilter, {
+  countByDivision, inDivision,
+} from '../DivisionFilter';
 
 // ③ 분석 — SWOT.
 //
@@ -262,14 +265,21 @@ const AnalysisView = ({
 }) => {
   const [draft, setDraft] = useState({});
   const [showAll, setShowAll] = useState(false);
+  // null 이면 전체 전략. 사업부를 고르면 그 사업부 것과 **전사 공통**을 함께 본다.
+  const [division, setDivision] = useState(null);
 
   const divisionName = (id) => divisions.find(d => d.id === id)?.name || null;
-  const of = (kind) => (elements || []).filter(e => e.kind === kind);
+  const shown = (elements || []).filter(e => inDivision(e, division));
+  const shownCandidates = (candidates || []).filter(c => inDivision(c, division));
+  const of = (kind) => shown.filter(e => e.kind === kind);
 
   const add = async (kind) => {
     const title = (draft[kind] || '').trim();
     if (!title) return;
-    const ok = await onCreate({ kind, title, source_type: 'manual' });
+    // 사업부를 골라 놓고 적으면 그 사업부 것이다. 전체 보기면 전사 항목이 된다.
+    const ok = await onCreate({
+      kind, title, source_type: 'manual', division_id: division,
+    });
     if (ok !== false) setDraft(d => ({ ...d, [kind]: '' }));
   };
 
@@ -293,12 +303,14 @@ const AnalysisView = ({
           <Item key={e.id}>
             <ItemBody>
               {e.title}
-              {(e.detail || e.division_id) && (
-                <ItemDetail>
-                  {divisionName(e.division_id) && `${divisionName(e.division_id)} · `}
-                  {e.detail}
-                </ItemDetail>
-              )}
+              <ItemDetail>
+                {/* 사업부를 골라 놓고 봐도 전사 항목은 같이 보인다.
+                    그 사실을 적지 않으면 그 사업부만의 것으로 읽힌다. */}
+                {e.division_id == null
+                  ? <strong>전사</strong>
+                  : divisionName(e.division_id)}
+                {e.detail && ` · ${e.detail}`}
+              </ItemDetail>
             </ItemBody>
             <IconButton onClick={() => onDelete(e.id)} title="삭제">
               <Trash2 size={13} />
@@ -335,9 +347,18 @@ const AnalysisView = ({
     <Layout>
       <FlowMap items={flow} />
       <Wrap>
+        <DivisionFilter
+          divisions={divisions}
+          value={division}
+          onChange={setDivision}
+          counts={countByDivision(elements || [], divisions)}
+        />
+
         <Head>
           <StepBadge>3</StepBadge>
-          <Title>SWOT</Title>
+          <Title>
+            SWOT{division !== null && ` · ${divisionName(division)}`}
+          </Title>
           <Hint>
             ④ 솔루션이 <strong>S×O · W×O · S×T · W×T</strong> 네 조합에서 수를
             뽑습니다. 그래서 네 칸이 다 있어야 합니다 — 다만 전부 채울 의무는
@@ -383,13 +404,13 @@ const AnalysisView = ({
         </Half>
 
         {/* 후보 — 자동으로 올리지 않는다 */}
-        {candidates?.length > 0 && (
+        {shownCandidates.length > 0 && (
           <Candidates>
             <BoxHead>
-              <BoxTitle>후보 {candidates.length}건</BoxTitle>
+              <BoxTitle>후보 {shownCandidates.length}건</BoxTitle>
               <Count>진단·발견 사항에서 뽑았습니다. 고르는 것은 사람입니다.</Count>
             </BoxHead>
-            {(showAll ? candidates : candidates.slice(0, VISIBLE_CANDIDATES)).map(c => (
+            {(showAll ? shownCandidates : shownCandidates.slice(0, VISIBLE_CANDIDATES)).map(c => (
               <CandidateRow key={c.key}>
                 <Kind $color={KIND[c.kind].color}>{c.kind}</Kind>
                 <ItemBody>
@@ -408,13 +429,13 @@ const AnalysisView = ({
                 </PromoteButton>
               </CandidateRow>
             ))}
-            {candidates.length > VISIBLE_CANDIDATES && (
+            {shownCandidates.length > VISIBLE_CANDIDATES && (
               <AddButton onClick={() => setShowAll(v => !v)}
                          style={{ alignSelf: 'flex-start' }}>
                 <ChevronDown size={13} />
                 {showAll
                   ? '접기'
-                  : `나머지 ${candidates.length - VISIBLE_CANDIDATES}건 더 보기`}
+                  : `나머지 ${shownCandidates.length - VISIBLE_CANDIDATES}건 더 보기`}
               </AddButton>
             )}
           </Candidates>

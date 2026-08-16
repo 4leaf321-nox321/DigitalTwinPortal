@@ -27,7 +27,10 @@ from .survey_voice import is_available as voices_available, summarize as summari
 from .issues import (
     derive_issue_candidates, derive_survey_candidates, summarize_coverage,
 )
-from .elements import derive_element_candidates, summarize_elements
+from .elements import (
+    derive_element_candidates, derive_survey_candidates as derive_element_survey,
+    summarize_elements,
+)
 from .definitions import (
     CATEGORIES, CATEGORY_ORGANIZATION, DIMENSION_KEYS_BY_CATEGORY,
     ALL_ASSESSMENT_SLOTS,
@@ -257,7 +260,9 @@ def get_plan(year):
         taken_elements = {e['source_ref'] for e in elements if e.get('source_ref')}
 
         element_candidates = [
-            c for c in derive_element_candidates(assessments, findings, divisions)
+            c for c in (derive_element_candidates(assessments, findings, divisions)
+                        # O·T 는 포탈에 없다. 설문에서만 온다.
+                        + derive_element_survey(plan, min_sample))
             if c['key'] not in taken_elements
         ]
 
