@@ -34,11 +34,15 @@ const Layout = styled.div`
 `;
 
 const Wrap = styled.div`
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   /* 글줄 상한. 본문이 이보다 넓어지면 한 줄이 너무 길어 눈이 줄을 놓친다.
-     곁가지(흐름도·후보 열)는 이 상한 **밖**이다. */
-  max-width: 1200px;
+     곁가지(흐름도·후보 열)는 이 상한 **밖**이다.
+
+     이 화면만 1120 이다. 본문이 난제 카드라 글줄이 짧고(카드 안에서 다시
+     줄이 잡힌다), 남는 폭은 후보 곁열이 쓰는 편이 낫다. 난제 2열에 필요한
+     1060 보다는 넉넉하다. */
+  max-width: 1120px;
 
   display: flex;
   flex-direction: column;
@@ -285,10 +289,17 @@ const Rail = styled.aside`
   position: sticky;
   top: 0;
   align-self: flex-start;
-  flex-shrink: 0;
-  width: 20rem;
   max-height: calc(100vh - 2rem);
   overflow-y: auto;
+
+  /* 남는 폭을 **곁열이 먹는다.** 본문은 1120 에서 멈추므로(난제 2열에 필요한
+     1060 보다 넉넉하다), 그 위로 남는 자리는 후보 쪽이 쓰는 편이 낫다 —
+     후보 제목은 「MX · 조직 역량 · 성과 측정 2단계 → 4단계」처럼 길다.
+     22rem 아래로는 안 줄고, 30rem 위로는 안 늘린다. 너무 넓으면 그 안의
+     글줄이 다시 길어진다. */
+  flex: 1 1 22rem;
+  min-width: 22rem;
+  max-width: 30rem;
 `;
 
 const Empty = styled.div`
@@ -318,8 +329,9 @@ const IssuesView = ({
   const [division, setDivision] = useState(null);
   // 방금 만들거나 고친 이슈. 그 자리로 데려가고 잠깐 밝힌다.
   const [flashId, setFlashId] = useState(null);
-  // 흐름도(208) + 본문(1200) + 후보 열(320) + 여백이 들어갈 폭.
-  const wide = useWideScreen(1760);
+  // 흐름도(208) + 본문(1120) + 후보 열(352~) + 여백이 들어갈 폭.
+  // 화면 여백은 좌우 padding 48 을 뺀 값이라 1800 부터 다 들어간다.
+  const wide = useWideScreen(1800);
 
   // 곁열과 바닥이 **같은 것**을 그려야 한다. 두 군데에 따로 적으면 한쪽만
   // 고치는 일이 반드시 생긴다.
