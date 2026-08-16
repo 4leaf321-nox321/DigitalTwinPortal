@@ -8,6 +8,7 @@ import CruxPanel from './CruxPanel';
 import SurveyEvidence from './SurveyEvidence';
 import SurveyVoices from './SurveyVoices';
 import SectionNav from '../SectionNav';
+import FlowMap from '../FlowMap';
 import AssessmentGrid from '../Assessment/AssessmentView';
 
 // ① 진단.
@@ -304,6 +305,15 @@ const DiagnosisView = ({
           )}
         </Section>
       </Wrap>
+
+      {/* 무엇이 어디로 가는지. 목차(왼쪽)가 "지금 어디인가" 라면 이쪽은
+          "이게 어디로 흘러가나" 다. */}
+      <FlowMap
+        hasSurvey={surveyEvidence?.cells?.length > 0
+                   || surveyEvidence?.surveys?.length > 0}
+        hasVoices={surveyEvidence?.surveys?.length > 0}
+        onJump={(id) => { if (id === 'sec-grid') setShowGrid(true); }}
+      />
     </Layout>
   );
 };
