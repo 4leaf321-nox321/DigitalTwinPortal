@@ -289,6 +289,8 @@ function DigitalTwinStrategyApp({ onGoHome }) {
 
   const handleElementCreate = (payload) =>
     runAndReload(() => strategyApi.createElement(currentYear, payload));
+  const handleElementUpdate = (id, payload) =>
+    runAndReload(() => strategyApi.updateElement(currentYear, id, payload));
   const handleElementDelete = (id) =>
     runAndReload(() => strategyApi.deleteElement(currentYear, id));
 
@@ -398,6 +400,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           summary={plan.elementSummary}
           divisions={meta?.divisions || []}
           onCreate={handleElementCreate}
+          onUpdate={handleElementUpdate}
           onDelete={handleElementDelete}
         />
       );

@@ -198,3 +198,69 @@ def test_표본이_모자란_설문은_후보를_안_만든다(client, world, of
 
     candidates = _plan(client, office, auth)['elementCandidates']
     assert not [c for c in candidates if c['kind'] == 'T']
+
+
+def test_사업부_격차의_강점은_잘하는_쪽에_붙는다(client, world, office, auth):
+    """⚠️ 실제로 났던 문제다. 격차 자체는 전사 사실이지만("사업부 간 1.4점
+    벌어져 있다"), 그것을 **강점**으로 세우면서 전사로 두면 격차의 **약한 쪽
+    사업부 아래에도 강점으로** 뜬다. NW 가 자기 화면에서 "준비도가 강점" 을
+    보게 되는 것이다.
+    """
+    from datetime import datetime
+    from app.modules.survey.models import (
+        Survey, SurveyAnswer, SurveyQuestion, SurveyResponse,
+    )
+
+    survey = Survey(title='역량 진단', target_type='all', status='closed',
+                    context_type='strategy_plan', context_id=world['plan'].id)
+    _db.session.add(survey)
+    _db.session.flush()
+    q = SurveyQuestion(survey_id=survey.id, order=0, text='준비도는?',
+                       qtype='scale', required=True, options={'min': 1, 'max': 5},
+                       link_key='organization:readiness',
+                       link_type='strategy_dimension')
+    _db.session.add(q)
+    _db.session.commit()
+
+    # MX 는 5점, VD 는 2점 — 3점 벌어진다.
+    seq = 0
+    for division, score in ((world['mx'], 5), (world['vd'], 2)):
+        for _ in range(6):
+            seq += 1
+            response = SurveyResponse(
+                survey_id=survey.id, user_id=720000 + seq,
+                division_id=division.id, division_source='profile',
+                submitted_at=datetime.utcnow())
+            _db.session.add(response)
+            _db.session.flush()
+            _db.session.add(SurveyAnswer(response_id=response.id,
+                                         question_id=q.id, value_number=score))
+    _db.session.commit()
+
+    candidates = _plan(client, office, auth)['elementCandidates']
+    strengths = [c for c in candidates if c['kind'] == 'S']
+    assert len(strengths) == 1
+    # ← 요점. 전사가 아니라 **MX** 의 강점이다.
+    assert strengths[0]['division_id'] == world['mx'].id
+    assert 'MX' in strengths[0]['title']
+    # 그리고 강점으로 읽혀야 한다 — '편차 3점' 은 관찰이지 강점이 아니다.
+    assert '가장 높습니다' in strengths[0]['title']
+
+
+def test_요소의_사업부를_고칠_수_있다(client, world, office, auth):
+    """후보가 달아 준 사업부가 늘 맞지는 않는다. 특히 **전사로 잘못 들어간 것은
+    모든 사업부에 다 뜬다** — 화면에서 고칠 수 있어야 한다."""
+    res = client.post(f'{BASE}/plans/{YEAR}/elements', headers=auth(office),
+                      json={'kind': 'S', 'title': 'CAE 해석 역량'})
+    element_id = res.get_json()['data']['id']
+    assert StrategyElement.query.get(element_id).division_id is None
+
+    res = client.put(f'{BASE}/plans/{YEAR}/elements/{element_id}',
+                     json={'division_id': world['mx'].id}, headers=auth(office))
+    assert res.status_code == 200
+    assert StrategyElement.query.get(element_id).division_id == world['mx'].id
+
+    # 전사로 되돌리는 것도 된다.
+    client.put(f'{BASE}/plans/{YEAR}/elements/{element_id}',
+               json={'division_id': None}, headers=auth(office))
+    assert StrategyElement.query.get(element_id).division_id is None

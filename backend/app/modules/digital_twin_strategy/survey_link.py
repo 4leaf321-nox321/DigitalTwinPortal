@@ -235,7 +235,13 @@ def derive_survey_findings(evidence, thresholds, min_sample):
             '아니라 옮겨지지 않은 것이라면, 새로 만들 것이 아니라 옮길 것을 '
             '찾아야 합니다.',
             None, {'dimension': dimension, 'spread': spread,
-                   'top': top['division_name'], 'bottom': bottom['division_name']})
+                   'top': top['division_name'], 'bottom': bottom['division_name'],
+                   # ⚠️ **id 도 싣는다.** ③ 분석이 이 격차를 강점으로 세울 때
+                   #    어느 사업부의 강점인지가 필요하다. 이름만 있으면 그
+                   #    요소가 전사가 되어 **약한 쪽 사업부에도 강점으로 뜬다.**
+                   'top_division_id': top['division_id'],
+                   'top_average': top['average'],
+                   'bottom_division_id': bottom['division_id']})
 
     # ── 역할 간 인식 격차 ─────────────────────────────────────────────
     # 같은 것을 보고 다르게 말한다는 것은 **정보가 위아래로 안 흐른다**는 뜻이다.

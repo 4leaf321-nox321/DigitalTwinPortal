@@ -158,6 +158,22 @@ const ItemDetail = styled.div`
   margin-top: 0.15rem;
 `;
 
+// 요소가 어느 사업부 것인가. **고칠 수 있어야 한다** — 후보가 달아 준 사업부가
+// 늘 맞지는 않고, 틀리면 그 요소가 엉뚱한 사업부의 전략에 앉는다.
+// 특히 '전사' 로 잘못 들어간 것은 **모든 사업부에 다 뜬다.**
+const Where = styled.select`
+  padding: 0.05rem 0.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  &:hover { border-color: #cbd5e1; background: white; }
+`;
+
 const IconButton = styled.button`
   flex-shrink: 0;
   padding: 0.2rem;
@@ -261,7 +277,7 @@ const KIND = {
 const VISIBLE_CANDIDATES = 8;
 
 const AnalysisView = ({
-  elements, candidates, summary, divisions, onCreate, onDelete,
+  elements, candidates, summary, divisions, onCreate, onUpdate, onDelete,
 }) => {
   const [draft, setDraft] = useState({});
   const [showAll, setShowAll] = useState(false);
@@ -304,11 +320,23 @@ const AnalysisView = ({
             <ItemBody>
               {e.title}
               <ItemDetail>
-                {/* 사업부를 골라 놓고 봐도 전사 항목은 같이 보인다.
-                    그 사실을 적지 않으면 그 사업부만의 것으로 읽힌다. */}
-                {e.division_id == null
-                  ? <strong>전사</strong>
-                  : divisionName(e.division_id)}
+                {/* 사업부를 골라 놓고 봐도 전사 항목은 같이 보인다. 그 사실을
+                    적지 않으면 그 사업부만의 것으로 읽힌다. 그리고 **여기서
+                    고칠 수 있어야 한다** — 전사로 잘못 들어간 것은 모든
+                    사업부에 다 뜬다. */}
+                <Where
+                  value={e.division_id ?? ''}
+                  onChange={ev => onUpdate(e.id, {
+                    division_id: ev.target.value === '' ? null
+                      : Number(ev.target.value),
+                  })}
+                  title="이 요소가 어느 사업부의 것인지"
+                >
+                  <option value="">전사 (모든 사업부에 보임)</option>
+                  {divisions.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </Where>
                 {e.detail && ` · ${e.detail}`}
               </ItemDetail>
             </ItemBody>

@@ -18,6 +18,7 @@
 from .definitions import (
     ANALYSIS_KIND_BY_KEY, CATEGORIES, CATEGORY_ANALYSIS, LEVEL_MAX, LEVEL_MIN,
 )
+from .survey_link import ORGANIZATION_LABEL
 
 _DIMENSION_BY_SLOT = {
     (c['key'], d['key']): d
@@ -96,14 +97,27 @@ def derive_element_candidates(assessments, findings, divisions):
     for f in findings or []:
         key = f.get('key') or ''
         if key.startswith('survey_division_gap:'):
+            # ⚠️ **격차는 전사 사실이지만 강점은 잘하는 쪽의 것이다.** 발견
+            #    사항으로는 전사가 맞다("사업부 간 1.4점 벌어져 있다"). 그런데
+            #    그것을 강점으로 세우면서 전사로 두면, 격차의 **약한 쪽 사업부
+            #    아래에도 강점으로 뜬다.** 실제로 그렇게 나왔다.
+            evidence = f.get('evidence') or {}
+            top_id = evidence.get('top_division_id')
+            top_name = evidence.get('top', '')
+            average = evidence.get('top_average')
+            label = ORGANIZATION_LABEL.get(evidence.get('dimension'), '')
             out.append({
                 'key': f'finding:S:{key}',
                 'kind': 'S',
-                'title': f.get('title') or key,
+                # 강점으로 읽히게 다시 쓴다. "편차가 1.4점" 은 관찰이지 강점이
+                # 아니다 — ④ 에서 S×O 를 만들려면 "무엇을 할 수 있는가"가
+                # 보여야 한다.
+                'title': (f'{top_name} · {label} {average}점 — 사업부 중 가장 높습니다'
+                          if top_name and label else (f.get('title') or key)),
                 'detail': (f.get('detail') or '')
                           + ' 잘하는 곳이 있다는 것은 방법이 없는 것이 아니라 '
                             '아직 옮겨지지 않은 것입니다.',
-                'division_id': f.get('division_id'),
+                'division_id': top_id,
                 'source_type': 'finding',
             })
             continue
