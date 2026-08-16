@@ -50,6 +50,19 @@ const Badge = styled.span`
   background: ${p => p.$accent};
 `;
 
+// 어디서 나온 사실인가. 지표에서 계산된 것과 사람에게 물어 나온 것은 **무게가
+// 다르다** — 설문은 응답자 수만큼의 의견이고 지표는 데이터다. 목록에서 섞여
+// 있으면 그 차이가 안 보이고, "이건 어디서 나온 말이지"를 매번 되묻게 된다.
+const Source = styled.span`
+  flex-shrink: 0;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: ${p => (p.$survey ? '#f5f3ff' : '#f1f5f9')};
+  color: ${p => (p.$survey ? '#6d28d9' : '#64748b')};
+`;
+
 const PromoteButton = styled.button`
   flex-shrink: 0;
   display: flex;
@@ -96,6 +109,13 @@ const FindingsPanel = ({ findings, onPromote }) => {
       {findings.map((f, i) => (
         <Item key={`${f.key}-${f.division_id ?? 'all'}-${i}`} $accent={ACCENT[f.severity]}>
           <Badge $accent={ACCENT[f.severity]}>{LABEL[f.severity]}</Badge>
+          {/* 설문에서 나온 규칙은 key 가 survey_ 로 시작한다(survey_link.py). */}
+          <Source $survey={String(f.key).startsWith('survey_')}
+                  title={String(f.key).startsWith('survey_')
+                    ? '설문 응답에서 나온 사실입니다. 응답자 수만큼의 의견입니다.'
+                    : '포탈 데이터에서 계산된 사실입니다.'}>
+            {String(f.key).startsWith('survey_') ? '설문' : '지표'}
+          </Source>
           <Body>
             <Title>{f.title}</Title>
             <Detail>{f.detail}</Detail>

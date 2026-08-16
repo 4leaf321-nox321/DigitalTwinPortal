@@ -46,7 +46,7 @@ const Section = styled.section`
 // 목록이라 나란히 두면 한쪽이 길어질 때 다른 쪽 아래가 텅 비고, 좁은 화면에서는
 // 어차피 세로로 떨어져 규칙이 화면 폭마다 달랐다. 지금은 **항상 세로**다 —
 // 흐름은 [핵심 난제로 ↓] 버튼과 목차의 ②③ 이 말해 준다.
-// 좁은 화면에서는 한 줄로 되돌아간다.
+
 const Head = styled.div`
   display: flex;
   align-items: baseline;
@@ -206,7 +206,9 @@ const DiagnosisView = ({
             <Hint>
               마감된 설문의 조직 역량 문항을 <strong>1인 1표</strong>로 모았습니다.
               제안값일 뿐이라 누르기 전에는 진단이 바뀌지 않습니다 — 평균을 같이
-              적어 두었으니 반올림된 자리를 보고 판단하세요.
+              적어 두었으니 반올림된 자리를 보고 판단하세요.{' '}
+              <strong>「반영」을 누르면</strong> 맨 아래 <strong>세부 판단</strong>의
+              조직 역량 칸이 그 값으로 바뀝니다.
             </Hint>
           </Head>
           <SurveyEvidence evidence={surveyEvidence} onApply={onApplySurvey} />
@@ -221,8 +223,10 @@ const DiagnosisView = ({
               <StepBadge>1</StepBadge>
               <Title>설문에서 나온 이야기</Title>
               <Hint>
-                자유서술 답을 AI 가 묶어 읽습니다. <strong>인용문이 근거</strong>이니
-                함께 보세요 — 숫자가 못 말하는 &lsquo;왜&rsquo;가 여기 있습니다.
+                자유서술 답을 사내 AI 가 묶어 읽습니다. <strong>인용문이 근거</strong>
+                이니 함께 보세요 — 숫자가 못 말하는 &lsquo;왜&rsquo;가 여기 있습니다.
+                여기 묶음은 발견 사항에는 안 들어가고{' '}
+                <strong>바로 핵심 난제로</strong> 올릴 수 있습니다.
               </Hint>
             </Head>
             <SurveyVoices
@@ -239,8 +243,9 @@ const DiagnosisView = ({
             <Title>발견 사항</Title>
             {findings?.length > 0 && <Count>{findings.length}건</Count>}
             <Hint>
-              관측 지표와 설문에서 ⚙설정의 기준을 넘은 것을 골랐습니다.
-              중요한 것을 아래로 올리세요.
+              위의 <strong>관측·지표별 연결·설문</strong>에서 ⚙설정의 기준을 넘은
+              것만 규칙이 골라 문장으로 세운 것입니다. 줄마다 어디서 나왔는지
+              적혀 있습니다. 중요한 것을 아래로 올리세요.
             </Hint>
           </Head>
           <FindingsPanel findings={findings} onPromote={promote} />
@@ -250,7 +255,12 @@ const DiagnosisView = ({
           <Head>
             <StepBadge>3</StepBadge>
             <Title>핵심 난제</Title>
-            <Hint>올해 이것만은 넘겠다고 정하는 자리. 1~3개. ② 이슈에서 할 일로 이어집니다.</Hint>
+            <Hint>
+              올해 이것만은 넘겠다고 정하는 자리. 1~3개. ② 이슈에서 할 일로
+              이어집니다. 들어오는 길은 셋입니다 — <strong>발견 사항</strong>에서
+              올리거나, <strong>설문에서 나온 이야기</strong>에서 올리거나,
+              직접 적습니다.
+            </Hint>
           </Head>
           <CruxPanel
             cruxes={cruxes}
@@ -267,7 +277,10 @@ const DiagnosisView = ({
               <Title>세부 판단</Title>
             </Toggle>
             <Hint>
-              성숙도·조직 역량을 직접 매깁니다. {filledCount}/{totalSlots} 입력됨 — 전부 채울 의무는 없습니다.
+              성숙도·조직 역량을 직접 매깁니다. {filledCount}/{totalSlots} 입력됨 —
+              전부 채울 의무는 없습니다. <strong>현재와 목표의 차이가 ② 이슈의
+              후보</strong>가 되고, 위 「설문 근거」의 <strong>「반영」도 이 표의
+              조직 역량 칸에 씁니다.</strong>
             </Hint>
           </Head>
 
