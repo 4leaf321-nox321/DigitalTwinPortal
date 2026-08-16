@@ -119,7 +119,13 @@ const SurveyVoices = ({ available, onLoad, onPromote }) => {
   const [busy, setBusy] = useState(false);
   const [data, setData] = useState(null);
 
-  if (!available) {
+  // ⚠️ **`false` 일 때만** 못 쓴다고 말한다. `undefined` 는 '설정 안 됨'이 아니라
+  //    '아직 모름'이다 — 서버가 그 칸을 아직 안 준 상태(옛 응답을 들고 있는
+  //    화면)에서 "LLM 서버가 설정되지 않았습니다" 를 띄우면 멀쩡한 설정을
+  //    의심하게 만든다. 실제로 그렇게 헷갈린 적이 있다.
+  //
+  //    모르면 버튼을 띄운다. 정말 안 되면 **서버가 이유를 말해 준다**(reason).
+  if (available === false) {
     return (
       <Note>
         <Info size={15} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
