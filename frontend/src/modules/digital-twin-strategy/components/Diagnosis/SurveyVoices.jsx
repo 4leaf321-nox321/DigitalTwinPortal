@@ -4,7 +4,7 @@ import { MessageSquare, Loader2, ArrowUpRight, Info } from 'lucide-react';
 
 // 설문 서술형을 AI 가 묶어 읽은 것. (LINK_PLAN 6-1)
 //
-// ⚠️ **「짚인 것」과 자리를 가른다.** 그쪽은 규칙이 **센** 것이고 이것은 AI 가
+// ⚠️ **「발견 사항」과 자리를 가른다.** 그쪽은 규칙이 **센** 것이고 이것은 AI 가
 //    **읽은** 것이다. 한 목록에 섞으면 지어낸 문장이 세어진 사실과 똑같은
 //    모양으로 앉는다. 그래서 색도 아이콘도 다르게 두고, 「AI 가 묶었다」고 적는다.
 //
@@ -185,7 +185,7 @@ const SurveyVoices = ({ available, onLoad, onPromote }) => {
         <Note>
           <Info size={15} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
           <span>
-            <strong>AI 가 묶어 읽은 것입니다.</strong> 위 「짚인 것」이 규칙으로{' '}
+            <strong>AI 가 묶어 읽은 것입니다.</strong> 위 「발견 사항」이 규칙으로{' '}
             <strong>센</strong> 사실인 것과 달리 이것은 <strong>읽은</strong> 것이라,
             같은 무게로 두면 안 됩니다. 인용문이 근거이니 반드시 함께 보세요 —
             원문에 없는 인용은 서버가 걸러냈습니다

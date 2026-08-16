@@ -269,7 +269,7 @@ def test_표본이_모자란_칸은_반영되지_않는다(client, world, office
     assert StrategyAssessment.query.count() == 0
 
 
-# ── 4단계: 짚인 것 ─────────────────────────────────────────────────────────
+# ── 4단계: 발견 사항 ─────────────────────────────────────────────────────────
 
 def _findings(client, office, auth):
     res = client.get(f'{STRATEGY_BASE}/plans/{YEAR}', headers=auth(office))

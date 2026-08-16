@@ -13,10 +13,10 @@ import AssessmentGrid from '../Assessment/AssessmentView';
 //
 // 순서가 설계다. 사람에게 격자부터 채우게 하면 근거 없는 점수가 3점으로
 // 수렴하고, 채우는 것 자체가 목적이 된다. 그래서 데이터가 먼저 말하고,
-// 사람은 짚인 것에 답하며, 결과로 핵심 난제를 고른다.
+// 사람은 발견 사항에 답하며, 결과로 핵심 난제를 고른다.
 //
 //   1. 관측       사람이 아무것도 안 해도 보이는 것
-//   2. 짚인 것    시스템이 규칙으로 뽑은 사실
+//   2. 발견 사항    시스템이 규칙으로 뽑은 사실
 //   3. 핵심 난제  사람이 고르는 진단의 산출물  ← 다음 단계로 넘어감
 //   4. 세부 판단  필요한 곳만. 전부 채울 의무가 없다
 
@@ -33,7 +33,7 @@ const Section = styled.section`
   min-width: 0;   /* 표가 넓어도 격자 칸을 밀어내지 않게 */
 `;
 
-// 짚인 것 → 핵심 난제는 흐름이다. [핵심 난제로 →] 버튼이 왼쪽에서 오른쪽으로
+// 발견 사항 → 핵심 난제는 흐름이다. [핵심 난제로 →] 버튼이 왼쪽에서 오른쪽으로
 // 보내는 것이므로, 세로로 쌓아 스크롤로 갈라놓으면 그 관계가 안 보인다.
 // 좁은 화면에서는 한 줄로 되돌아간다.
 const Columns = styled.div`
@@ -190,7 +190,7 @@ const DiagnosisView = ({
       </Section>
 
       {/* 서술형은 규칙으로 못 짚는다. "이런 말이 많았다"는 판단이라 AI 의 일이다.
-          ⚠️ 「짚인 것」과 **자리를 갈라 둔다** — 센 것과 읽은 것을 한 목록에 두면
+          ⚠️ 「발견 사항」과 **자리를 갈라 둔다** — 센 것과 읽은 것을 한 목록에 두면
              지어낸 문장이 세어진 사실과 같은 모양으로 앉는다. */}
       {surveyEvidence?.surveys?.length > 0 && (
         <Section>
@@ -214,9 +214,12 @@ const DiagnosisView = ({
         <Section>
           <Head>
             <StepBadge>2</StepBadge>
-            <Title>짚인 것</Title>
+            <Title>발견 사항</Title>
             {findings?.length > 0 && <Count>{findings.length}건</Count>}
-            <Hint>위 값 중 ⚙설정의 기준을 넘은 것을 골랐습니다. 중요한 것을 오른쪽으로 올리세요.</Hint>
+            <Hint>
+              관측 지표와 설문에서 ⚙설정의 기준을 넘은 것을 골랐습니다.
+              중요한 것을 오른쪽으로 올리세요.
+            </Hint>
           </Head>
           <FindingsPanel findings={findings} onPromote={promote} />
         </Section>

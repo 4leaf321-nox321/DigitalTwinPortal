@@ -205,7 +205,7 @@ def get_plan(year):
                 })
 
         # 설문이 말하는 것. **한 번만 계산해서** 제안값과 findings 가 같이 쓴다 —
-        # 따로 세면 화면의 제안값과 짚인 것이 서로 다른 숫자를 근거로 삼는다.
+        # 따로 세면 화면의 제안값과 발견 사항이 서로 다른 숫자를 근거로 삼는다.
         thresholds = get_thresholds()
         min_sample = int(thresholds.get('survey_min_sample', 5) or 5)
         survey_evidence = attach_current(

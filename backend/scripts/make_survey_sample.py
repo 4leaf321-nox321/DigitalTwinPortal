@@ -420,7 +420,7 @@ def main():
         for out in evidence['out_of_scope']:
             print(f"  [대상 밖] {out['division_name']} {out['respondent_count']}명")
 
-        print('\n── 「짚인 것」에 뜨는 설문 항목 ──────────────')
+        print('\n── 「발견 사항」에 뜨는 설문 항목 ──────────────')
         findings = (derive_survey_findings(evidence, thresholds, min_sample)
                     + derive_choice_findings(plan, thresholds, min_sample))
         for f in findings:
