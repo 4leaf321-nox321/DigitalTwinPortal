@@ -5,6 +5,7 @@ Digital Twin Strategy Routes
 접근 권한: 사무국/관리자 전용. 화면에서 카드를 가리는 것만으로는 URL 직접 접근을
 막지 못하므로 여기서도 같은 기준으로 검사한다.
 """
+from datetime import datetime
 from functools import wraps
 
 from flask import Blueprint, request, jsonify
@@ -19,9 +20,13 @@ from .models import (
 from .evidence import get_evidence_source
 from .metrics import compute_metrics, compute_kpi_coverage
 from .findings import derive_findings, derive_kpi_findings
+from .survey_link import (
+    attach_current, collect, derive_choice_findings, derive_survey_findings,
+)
 from .issues import derive_issue_candidates, summarize_coverage
 from .definitions import (
-    CATEGORIES, DIMENSION_KEYS_BY_CATEGORY, ALL_ASSESSMENT_SLOTS,
+    CATEGORIES, CATEGORY_ORGANIZATION, DIMENSION_KEYS_BY_CATEGORY,
+    ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
     THRESHOLDS, THRESHOLD_KEYS, DEFAULT_THRESHOLDS,
     MODULE_KEY, THRESHOLD_SETTINGS_KEY,
@@ -196,6 +201,13 @@ def get_plan(year):
                     'note': t.note if t else None,
                 })
 
+        # 설문이 말하는 것. **한 번만 계산해서** 제안값과 findings 가 같이 쓴다 —
+        # 따로 세면 화면의 제안값과 짚인 것이 서로 다른 숫자를 근거로 삼는다.
+        thresholds = get_thresholds()
+        min_sample = int(thresholds.get('survey_min_sample', 5) or 5)
+        survey_evidence = attach_current(
+            collect(plan, divisions, min_sample), assessments)
+
         # 데이터가 먼저 말하는 부분. 사람이 아무것도 안 매겨도 볼 것이 있어야 한다.
         if metric_error:
             findings = []
@@ -203,11 +215,14 @@ def get_plan(year):
             # 사업부에서 본 것과 지표에서 본 것을 합친다. 뒤집어 봐야만
             # 드러나는 공백이 있다 — 아무도 주기여로 밀지 않는 지표 같은 것.
             findings = (
-                derive_findings(observed, divisions, observed_context, get_thresholds())
+                derive_findings(observed, divisions, observed_context, thresholds)
                 + derive_kpi_findings(kpi_coverage)
             )
-            order = {'high': 0, 'medium': 1, 'info': 2}
-            findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
+        # 설문 규칙은 지표를 못 읽어도 돌아야 한다. 둘은 서로 다른 원천이다.
+        findings += derive_survey_findings(survey_evidence, thresholds, min_sample)
+        findings += derive_choice_findings(plan, thresholds, min_sample)
+        order = {'high': 0, 'medium': 1, 'info': 2}
+        findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
 
         cruxes = [
             c.to_dict() for c in StrategyCrux.query.filter_by(plan_id=plan.id)
@@ -237,6 +252,7 @@ def get_plan(year):
                 'metrics': metrics,
                 'kpiCoverage': kpi_coverage,
                 'findings': findings,
+                'surveyEvidence': survey_evidence,
                 'cruxes': cruxes,
                 'issues': issues,
                 'issueCandidates': candidates,
@@ -525,6 +541,114 @@ def update_assessment(year, division_id, category, dimension):
 
         db.session.commit()
         return jsonify({'success': True, 'data': assessment.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
+@bp.route('/plans/<int:year>/assessments/apply-survey', methods=['POST'])
+@office_required
+def apply_survey_evidence(year):
+    """설문 제안값을 진단에 **반영한다.** 읽기(진단 조회)와 쓰기를 가른 자리다.
+
+    ⚠️ 한 엔드포인트가 보여주면서 저장하면, 화면을 열어 본 것만으로 진단이 바뀐다.
+       그래서 제안값은 진단 조회에 실려 나가기만 하고, 바꾸는 것은 여기다.
+
+    ⚠️ **덮어쓰기 전에 이전 값을 note 에 남긴다.** 남기지 않으면 나중에 "왜
+       3이지?" 에 답할 수 없다. 진단값은 사람이 설명할 수 있어야 한다.
+
+    ⚠️ **사람이 손으로 매긴 칸(basis='manual')은 건너뛴다.** 사무국의 판단을
+       설문이 조용히 지우면, 다음부터 아무도 이 화면에 판단을 안 적는다.
+       그 칸을 정말 바꾸려면 화면에서 직접 고치면 된다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        payload = request.get_json() or {}
+        wanted = payload.get('cells')
+        if not isinstance(wanted, list) or not wanted:
+            return _error('반영할 칸(cells)이 필요합니다.', 400)
+
+        divisions = get_target_divisions()
+        thresholds = get_thresholds()
+        min_sample = int(thresholds.get('survey_min_sample', 5) or 5)
+        evidence = collect(plan, divisions, min_sample)
+        by_cell = {
+            (c['survey_id'], c['division_id'], c['dimension']): c
+            for c in evidence['cells']
+        }
+
+        applied, skipped = [], []
+        stamp = datetime.utcnow().strftime('%Y-%m-%d')
+
+        for item in wanted:
+            try:
+                key = (int(item.get('survey_id')), int(item.get('division_id')),
+                       str(item.get('dimension')))
+            except (TypeError, ValueError):
+                skipped.append({'cell': item, 'reason': '칸 지정이 올바르지 않습니다.'})
+                continue
+
+            cell = by_cell.get(key)
+            if not cell:
+                skipped.append({'cell': item, 'reason': '그 설문에 해당 근거가 없습니다.'})
+                continue
+            if cell['insufficient'] or cell['suggested_level'] is None:
+                skipped.append({
+                    'cell': item,
+                    'reason': f"표본 부족 (응답 {cell['respondent_count']}명, "
+                              f'최소 {min_sample}명)',
+                })
+                continue
+
+            assessment = StrategyAssessment.query.filter_by(
+                plan_id=plan.id, division_id=cell['division_id'],
+                category=CATEGORY_ORGANIZATION, dimension=cell['dimension'],
+            ).first()
+
+            if assessment and assessment.basis == 'manual'                     and assessment.current_level is not None                     and not payload.get('overwrite_manual'):
+                skipped.append({
+                    'cell': item,
+                    'reason': f'사람이 매긴 값({assessment.current_level})이 있습니다. '
+                              '바꾸시려면 그 칸을 직접 고치세요.',
+                })
+                continue
+
+            if not assessment:
+                assessment = StrategyAssessment(
+                    plan_id=plan.id, division_id=cell['division_id'],
+                    category=CATEGORY_ORGANIZATION, dimension=cell['dimension'],
+                )
+                db.session.add(assessment)
+
+            before = assessment.current_level
+            assessment.current_level = cell['suggested_level']
+            assessment.basis = 'survey'
+            # 근거를 문장으로 남긴다. 나중에 이 칸만 보고도 되짚어갈 수 있어야 한다.
+            trace = (f"{stamp} 설문 반영: {cell['survey_title']} "
+                     f"평균 {cell['average']} → {cell['suggested_level']} "
+                     f"(응답 {cell['respondent_count']}명"
+                     + (f", 이전 값 {before}" if before is not None else "")
+                     + ")")
+            # 덧붙인다. 덮어쓰면 앞선 반영 기록이 사라져서, 이 칸이 어떻게
+            # 여기까지 왔는지 되짚을 수 없다.
+            assessment.note = (f'{assessment.note}\n{trace}'
+                               if assessment.note else trace)
+
+            applied.append({
+                'survey_id': cell['survey_id'],
+                'division_id': cell['division_id'],
+                'dimension': cell['dimension'],
+                'level': cell['suggested_level'],
+                'previous_level': before,
+            })
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': {
+            'applied': applied, 'skipped': skipped,
+        }})
     except Exception as e:
         db.session.rollback()
         return _error(str(e))

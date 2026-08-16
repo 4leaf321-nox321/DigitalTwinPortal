@@ -50,6 +50,17 @@ export const strategyApi = {
       body: JSON.stringify(payload),
     }),
 
+  /** 설문 제안값을 진단에 반영한다.
+   *
+   *  ⚠️ 읽기(getPlan)와 **쓰기를 가른 자리**다. 한 엔드포인트가 보여주면서
+   *     저장하면 화면을 열어 본 것만으로 진단이 바뀐다.
+   *  cells: [{survey_id, division_id, dimension}] — 어느 설문인지 반드시 명시한다. */
+  applySurveyEvidence: (year, cells, overwriteManual = false) =>
+    request(`/plans/${year}/assessments/apply-survey`, {
+      method: 'POST',
+      body: JSON.stringify({ cells, overwrite_manual: overwriteManual }),
+    }),
+
   /** 진단 임계값. 기본값과 다른 항목만 저장된다. */
   updateThresholds: (thresholds) =>
     request('/settings/thresholds', {

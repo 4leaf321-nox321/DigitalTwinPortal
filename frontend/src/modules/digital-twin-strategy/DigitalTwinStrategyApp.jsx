@@ -259,6 +259,20 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
+  // 반영하고 전체를 다시 읽는다. 반영 결과(몇 칸이 되고 몇 칸이 건너뛰어졌나)는
+  // **돌려준다** — 화면이 그 자리에서 이유를 보여줘야 사용자가 다음 수를 안다.
+  const handleApplySurvey = async (cells) => {
+    setError(null);
+    try {
+      const res = await strategyApi.applySurveyEvidence(currentYear, cells);
+      await fetchPlan(currentYear);
+      return res?.data || null;
+    } catch (e) {
+      setError(e.message);
+      return null;
+    }
+  };
+
   const handleThresholdSave = async (thresholds) => {
     await strategyApi.updateThresholds(thresholds);
     // meta 도 다시 읽는다 — 관측 표의 색이 이 임계값을 쓰므로 같이 바뀌어야 한다.
@@ -323,6 +337,8 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           kpiCoverage={plan.kpiCoverage}
           findings={plan.findings}
           cruxes={plan.cruxes}
+          surveyEvidence={plan.surveyEvidence}
+          onApplySurvey={handleApplySurvey}
           onChange={handleAssessmentChange}
           onTargetChange={handleMetricTargetChange}
           onCruxAdd={handleCruxAdd}

@@ -328,6 +328,22 @@ THRESHOLDS = [
      'detail': '달성률이 이 아래면 미달로 본다.'},
     {'key': 'spread_concentrated', 'label': '참여 부서 하한', 'unit': '개', 'default': 4,
      'detail': '참여 부서가 이 이하면 확산이 안 된 것으로 본다.'},
+
+    # ── 설문 근거 (LINK_PLAN) ──────────────────────────────────────────
+    # ⚠️ 이 넷은 **실제 분포를 보기 전에는 맞는 값을 모른다.** 보수적으로
+    #    시작한다 — 너무 많이 짚으면 아무도 안 읽고, 그러면 안 짚는 것과 같다.
+    {'key': 'survey_min_sample', 'label': '설문 표본 하한', 'unit': '명', 'default': 5,
+     'detail': '한 칸의 응답자가 이 아래면 제안도 안 하고 짚지도 않는다. '
+               '표본이 한둘로 내려가면 익명 응답이 사실상 지목이 된다.'},
+    {'key': 'survey_role_gap', 'label': '역할 간 인식 격차', 'unit': '점', 'default': 0.8,
+     'detail': '같은 축을 역할별로 이만큼 다르게 보면 짚는다. 정보가 위아래로 '
+               '안 흐른다는 뜻이다.'},
+    {'key': 'survey_division_gap', 'label': '사업부 간 격차', 'unit': '점', 'default': 1.0,
+     'detail': '한 축에서 최고와 최저 사업부의 차이가 이만큼이면 짚는다.'},
+    {'key': 'survey_low_level', 'label': '전사 공통 저점', 'unit': '점', 'default': 2.5,
+     'detail': '모든 사업부가 이 아래면 사업부가 아니라 전사 문제로 짚는다.'},
+    {'key': 'survey_choice_share', 'label': '객관식 쏠림', 'unit': '%', 'default': 50.0,
+     'detail': '한 보기에 이 비율 넘게 몰리면 짚는다. 사람들이 직접 지목한 것이다.'},
 ]
 
 DEFAULT_THRESHOLDS = {t['key']: t['default'] for t in THRESHOLDS}

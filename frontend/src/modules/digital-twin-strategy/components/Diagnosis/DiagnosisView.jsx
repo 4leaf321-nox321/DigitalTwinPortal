@@ -5,6 +5,7 @@ import ObservedMatrix from './ObservedMatrix';
 import KpiCoverage from './KpiCoverage';
 import FindingsPanel from './FindingsPanel';
 import CruxPanel from './CruxPanel';
+import SurveyEvidence from './SurveyEvidence';
 import AssessmentGrid from '../Assessment/AssessmentView';
 
 // ① 진단.
@@ -109,6 +110,7 @@ const Collapsed = styled.div`
 const DiagnosisView = ({
   categories, divisions, metricDefinitions, thresholds,
   assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
+  surveyEvidence, onApplySurvey,
   onChange, onTargetChange, onCruxAdd, onCruxUpdate, onCruxDelete,
 }) => {
   const [showGrid, setShowGrid] = useState(false);
@@ -164,6 +166,27 @@ const DiagnosisView = ({
           <KpiCoverage coverage={kpiCoverage} />
         </Section>
       )}
+
+      {/* 사람에게 물어야만 아는 것. 지표는 '무엇이 벌어졌나'를 말하지만
+          '왜'와 '어떻게 느끼나'는 말하지 못한다. 그 자리를 설문이 채운다.
+
+          ⚠️ 여기서 아무것도 자동으로 바뀌지 않는다. 제안값일 뿐이고,
+             누르는 것은 사람이다. */}
+      <Section>
+        <Head>
+          <StepBadge>1</StepBadge>
+          <Title>설문 근거</Title>
+          {surveyEvidence?.cells?.length > 0 && (
+            <Count>{surveyEvidence.cells.length}칸</Count>
+          )}
+          <Hint>
+            마감된 설문의 조직 역량 문항을 <strong>1인 1표</strong>로 모았습니다.
+            제안값일 뿐이라 누르기 전에는 진단이 바뀌지 않습니다 — 평균을 같이
+            적어 두었으니 반올림된 자리를 보고 판단하세요.
+          </Hint>
+        </Head>
+        <SurveyEvidence evidence={surveyEvidence} onApply={onApplySurvey} />
+      </Section>
 
       <Columns>
         <Section>
