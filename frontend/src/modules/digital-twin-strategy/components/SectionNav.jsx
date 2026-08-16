@@ -65,6 +65,11 @@ const Item = styled.button`
 `;
 
 // 단계 번호. 지금 보는 것이 ①관측인지 ②발견 사항인지가 이것으로 읽힌다.
+//
+// ⚠️ **단계가 바뀌는 줄에만 찍는다.** 관측 단계에는 패널이 넷이라(관측·지표별
+//    연결·설문 근거·설문 이야기) 줄마다 찍으면 ① 이 네 번 나오고, 그러면
+//    단계가 아니라 번호 매기기 실수로 보인다. 번호가 나오는 자리가 곧
+//    단계가 바뀌는 자리다.
 const Step = styled.span`
   flex-shrink: 0;
   width: 1.1rem;
@@ -76,6 +81,16 @@ const Step = styled.span`
   font-weight: 700;
   background: ${p => (p.$active ? '#7c3aed' : '#e2e8f0')};
   color: ${p => (p.$active ? 'white' : '#94a3b8')};
+  /* 번호가 없는 줄도 라벨 세로줄이 맞아야 목록으로 읽힌다. */
+  visibility: ${p => (p.$hidden ? 'hidden' : 'visible')};
+`;
+
+// 번호가 아예 없는 부분(세부 판단)을 가르는 줄. 단계에 속하지 않는다는 것을
+// 선 하나로 말한다 — 없는 번호를 지어내 붙이는 것보다 낫다.
+const Divider = styled.div`
+  height: 1px;
+  margin: 0.35rem 0.5rem;
+  background: #e2e8f0;
 `;
 
 const Text = styled.span`
@@ -87,6 +102,7 @@ const Text = styled.span`
 
 /**
  * items: [{id, label, step}] — id 는 화면의 섹션 element id 와 같아야 한다.
+ *        step 이 null 이면 단계에 속하지 않는 보조 영역이다(구분선으로 가른다).
  * onJump: 옮겨 가기 **전에** 부른다. 접혀 있는 섹션을 펴는 데 쓴다 —
  *         접힌 채로 옮겨 가면 제목만 보여서 왜 눌렀는지 알 수 없다.
  */
@@ -135,17 +151,27 @@ const SectionNav = ({ items, onJump }) => {
   return (
     <Nav aria-label="진단 목차">
       <Label>목차</Label>
-      {items.map(item => (
-        <Item
-          key={item.id}
-          $active={active === item.id}
-          onClick={() => jump(item.id)}
-          title={item.label}
-        >
-          <Step $active={active === item.id}>{item.step}</Step>
-          <Text>{item.label}</Text>
-        </Item>
-      ))}
+      {items.map((item, i) => {
+        const prev = items[i - 1];
+        // 단계가 바뀌는 줄에만 번호를 찍는다.
+        const showStep = item.step != null && item.step !== prev?.step;
+        const cut = item.step == null && prev?.step != null;
+        return (
+          <React.Fragment key={item.id}>
+            {cut && <Divider />}
+            <Item
+              $active={active === item.id}
+              onClick={() => jump(item.id)}
+              title={item.step != null ? `${item.step}단계 · ${item.label}` : item.label}
+            >
+              <Step $active={active === item.id} $hidden={!showStep}>
+                {item.step}
+              </Step>
+              <Text>{item.label}</Text>
+            </Item>
+          </React.Fragment>
+        );
+      })}
     </Nav>
   );
 };

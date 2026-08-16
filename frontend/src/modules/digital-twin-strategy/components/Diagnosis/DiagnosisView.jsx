@@ -141,8 +141,12 @@ const DiagnosisView = ({
       ? [{ id: 'sec-voices', label: '설문 이야기', step: 1 }] : []),
     // 발견 사항과 핵심 난제는 **가로로 나란히** 있다. 목차에 둘로 적으면 같은
     // 자리로 가는 항목이 두 개가 되고, 둘째는 영영 안 밝는다.
-    { id: 'sec-findings', label: '발견 사항 → 난제', step: 2 },
-    { id: 'sec-grid', label: '세부 판단', step: 3 },
+    // 발견 사항(②)과 핵심 난제(③)가 한 줄인 것은 가로로 나란히 놓여서다.
+    { id: 'sec-findings', label: '발견 사항 → 핵심 난제', step: 2 },
+    // ⚠️ 세부 판단에는 **번호를 붙이지 않는다.** 화면의 그 섹션에도 단계 배지가
+    //    없다 — 세 단계 밖의 보조 영역이라 그렇다. 목차에만 번호를 지어 붙이면
+    //    화면과 목차가 다른 말을 한다.
+    { id: 'sec-grid', label: '세부 판단', step: null },
   ], [metricsError, surveyEvidence]);
 
   const promote = (finding) => {
