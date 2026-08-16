@@ -4,15 +4,19 @@ import { Pencil, Trash2, RotateCcw, MinusCircle } from 'lucide-react';
 
 // 이슈 한 줄. 읽을 때는 조용하고, 손댈 때만 버튼이 드러난다.
 
+// 방금 만든 이슈를 잠깐 밝힌다. 저장하면 그것이 **다른 곳에** 들어가므로
+// (후보에서 만들면 난제 블록 안으로), 어디로 갔는지 눈으로 못 찾으면 사람은
+// 같은 것을 또 만든다.
 const Card = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 0.875rem;
   padding: 0.75rem 1rem;
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: ${p => (p.$flash ? '#f5f3ff' : 'white')};
+  border: 1px solid ${p => (p.$flash ? '#a78bfa' : '#e2e8f0')};
   border-radius: 0.5rem;
   opacity: ${p => (p.$dropped ? 0.55 : 1)};
+  transition: background 0.4s ease, border-color 0.4s ease;
 
   &:hover .issue-actions { opacity: 1; }
 `;
@@ -94,12 +98,14 @@ const SOURCE_LABEL = {
   manual: '직접 입력',
 };
 
-const IssueCard = ({ issue, divisionName, onEdit, onToggleDrop, onDelete }) => {
+const IssueCard = ({ issue, divisionName, flash,
+                     onEdit, onToggleDrop, onDelete }) => {
   const dropped = issue.status === 'dropped';
   const scored = issue.impact !== null && issue.feasibility !== null;
 
   return (
-    <Card $dropped={dropped}>
+    // id 로 찾아간다 — 저장 뒤 그 자리로 데려가려면 자리에 이름이 있어야 한다.
+    <Card id={`issue-${issue.id}`} $dropped={dropped} $flash={flash}>
       <Body>
         <Title $dropped={dropped}>{issue.title}</Title>
         {issue.description && <Detail>{issue.description}</Detail>}

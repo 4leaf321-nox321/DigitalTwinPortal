@@ -250,10 +250,14 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   const runAndReload = async (fn) => {
     setError(null);
     try {
-      await fn();
+      // ⚠️ 서버가 돌려준 것을 **그대로 넘긴다.** 만들자마자 그 항목으로
+      //    데려가려면 화면이 새로 생긴 id 를 알아야 한다. 예전에는 true 만
+      //    돌려줘서, 저장한 사람이 그것을 눈으로 찾아야 했다.
+      //    실패는 여전히 false 이므로 `ok !== false` 로 보던 곳은 그대로 돈다.
+      const result = await fn();
       // loadPlan 이 아니라 fetchPlan 이다. 화면을 덮지 않아야 보던 자리가 남는다.
       await fetchPlan(currentYear);
-      return true;
+      return result ?? true;
     } catch (e) {
       setError(e.message);
       return false;

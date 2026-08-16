@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { Plus, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import IssueCard from './IssueCard';
@@ -229,6 +229,49 @@ const Toggle = styled.button`
   font-family: inherit;
 `;
 
+// 후보에서 가져올 때만 모달로 연다.
+//
+// 난제 아래 「이슈 추가」나 카드 수정은 **이미 그 자리**에서 열리므로 그대로
+// 둔다 — 맥락이 눈앞에 있는데 모달로 덮으면 오히려 나빠진다. 문제는 후보에서
+// 가져오는 길 하나였다: 후보 패널이 화면 맨 아래인데 편집기가 그보다 더 아래에
+// 열려서, 내려가서 누르고 더 내려가서 적고 다시 맨 위로 올라가 확인해야 했다.
+const Backdrop = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+`;
+
+const Sheet = styled.div`
+  width: min(720px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+`;
+
+const SheetHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1e293b;
+`;
+
+const SheetHint = styled.span`
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #94a3b8;
+`;
+
 const Empty = styled.div`
   padding: 2rem 1.25rem;
   text-align: center;
@@ -254,6 +297,8 @@ const IssuesView = ({
   const [rollupTitle, setRollupTitle] = useState('');
   // null 이면 전체 전략. 사업부를 고르면 그 사업부 것과 **전사 공통**을 함께 본다.
   const [division, setDivision] = useState(null);
+  // 방금 만들거나 고친 이슈. 그 자리로 데려가고 잠깐 밝힌다.
+  const [flashId, setFlashId] = useState(null);
 
   const divisionName = (id) => divisions.find(d => d.id === id)?.name || null;
 
@@ -274,12 +319,37 @@ const IssuesView = ({
     c => !live.some(i => i.crux_id === c.id)).length;
 
   const save = async (payload) => {
-    const ok = editing?.mode === 'edit'
+    const res = editing?.mode === 'edit'
       ? await onUpdate(editing.draft.id, payload)
       : await onCreate(payload);
     // 실패하면 폼을 닫지 않는다. 닫으면 쓴 내용이 사라지고 저장된 것처럼 보인다.
-    if (ok !== false) setEditing(null);
+    if (res === false) return;
+    setEditing(null);
+    // 저장한 것이 **다른 곳에** 들어간다 — 후보에서 만들면 화면 위 난제 블록
+    // 안으로. 어디로 갔는지 안 알려주면 사람이 눈으로 찾아야 하고, 못 찾으면
+    // 같은 것을 또 만든다.
+    setFlashId(res?.data?.id ?? editing?.draft?.id ?? null);
   };
+
+  // 목록이 새로 그려진 **뒤에** 찾아간다. 저장 직후에는 그 카드가 아직 없다.
+  useEffect(() => {
+    if (!flashId) return undefined;
+    const el = document.getElementById(`issue-${flashId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      // ⚠️ 사업부 필터 때문에 안 보이는 경우. MX 를 보면서 VD 이슈를 만들면
+      //    저장은 됐는데 화면에는 없다 — 그러면 사람은 저장이 안 된 줄 알고
+      //    또 만든다. **만든 것을 못 보여주느니 필터를 푼다.**
+      const made = issues.find(i => i.id === flashId);
+      if (made && !inDivision(made, division)) {
+        setDivision(null);
+        return undefined;      // 다시 그려지면 이 효과가 또 돈다
+      }
+    }
+    const timer = setTimeout(() => setFlashId(null), 2200);
+    return () => clearTimeout(timer);
+  }, [flashId, issues, division]);
 
   // 난제가 맥락에서 이미 정해졌으면 편집기에 넘겨 다시 묻지 않게 한다.
   // 고아 이슈를 수정할 때는 넘기지 않는다 — 그때는 고르는 것이 할 일이다.
@@ -363,6 +433,7 @@ const IssuesView = ({
           key={issue.id}
           issue={issue}
           divisionName={divisionName(issue.division_id)}
+          flash={flashId === issue.id}
           {...cardProps}
         />
       )
@@ -509,9 +580,23 @@ const IssuesView = ({
       />
 
       {/* 후보에서 온 것만 난제가 비어 있다. 그때는 어느 난제 아래인지가
-          진짜로 정해지지 않았으므로 편집기가 물어본다. */}
+          진짜로 정해지지 않았으므로 편집기가 물어본다.
+
+          ⚠️ **모달로 연다.** 후보 패널이 화면 맨 아래인데 편집기를 그보다 더
+             아래에 열면, 내려가서 누르고 더 내려가서 적고 다시 맨 위로 올라가
+             확인해야 한다. 한 동작인데 화면 세 곳을 오가는 셈이었다. */}
       {editing?.mode === 'new' && editing.crux_id === '' && (
-        <div style={{ marginTop: '-0.5rem' }}>{editor()}</div>
+        <Backdrop onClick={() => setEditing(null)}>
+          <Sheet onClick={e => e.stopPropagation()}>
+            <SheetHead>
+              후보를 이슈로
+              <SheetHint>
+                어느 난제 아래에 둘지 고르세요. 저장하면 그 자리로 데려다 드립니다.
+              </SheetHint>
+            </SheetHead>
+            {editor()}
+          </Sheet>
+        </Backdrop>
       )}
 
       {dropped.length > 0 && (
