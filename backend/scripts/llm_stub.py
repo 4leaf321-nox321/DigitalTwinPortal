@@ -115,6 +115,8 @@ _MARK_KPI = '### dt-form-assist: kpi-links'
 # ⚠️ `ai/graph_narrate.py` 의 MARK 와 **같은 문자열**이어야 한다.
 _MARK_GRAPH_NARRATE = '### dt-graph-agent: narrate'
 _MARK_NAME_MATCH = '### dxkpi-import: name-match'
+# ⚠️ `digital_twin_strategy/survey_voice.py` 의 MARK 와 **같은 문자열**이어야 한다.
+_MARK_VOICES = '### dt-strategy: survey-voices'
 
 # KPI 추천 프롬프트의 지표 줄:  - id=12 `설계 리드타임 단축률` (효율) 단위 %
 _KPI_RE = re.compile(r'^-\s*id=(\d+)\s*`([^`]*)`(.*)$', re.M)
@@ -461,6 +463,48 @@ def _form_kpi_payload(system_text: str):
             'note': '[stub] 실제 모델이 아닙니다 — 목록 앞쪽에서 두 개를 골랐을 뿐입니다.'}
 
 
+def _voices_payload(user_text: str):
+    """설문 서술형 묶기 흉내. (`digital_twin_strategy/survey_voice.py`)
+
+    **인용문은 받은 원문에서 그대로 가져온다.** 지어낸 문장을 돌려주면 서버가
+    전부 걸러내서, 개발에서는 늘 빈 화면만 보게 된다.
+
+    묶는 방식은 단순하다 — 같은 문장이 몇 번 나왔는지 세어 많은 것부터 낸다.
+    진짜 모델처럼 뜻으로 묶지는 못하지만, **화면·파싱·인용 검사**는 그대로
+    돌아간다. 그게 스텁이 하는 일이다.
+
+    ⚠️ 첫 묶음에 **일부러 없는 인용 하나**를 섞는다. 서버가 그것을 버리고
+       화면이 '1건 버림'을 띄우는 길을, 개발에서 눈으로 볼 수 있어야 한다.
+    """
+    try:
+        payload = json.loads(user_text)
+    except ValueError:
+        return {'themes': []}
+
+    counts = {}
+    for group in payload.get('questions') or []:
+        for answer in group.get('answers') or []:
+            text = (answer or '').strip()
+            if text:
+                counts[text] = counts.get(text, 0) + 1
+
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    limit = int(payload.get('max_themes') or 5)
+
+    themes = []
+    for i, (text, n) in enumerate(ranked[:limit]):
+        quotes = [text]
+        if i == 0:
+            quotes.append('예산이 배정되지 않아 아무것도 시작하지 못했습니다.')
+        themes.append({
+            'title': text[:24] + ('…' if len(text) > 24 else ''),
+            'summary': f'비슷한 이야기가 {n}건 나왔습니다. (개발 스텁이 같은 문장을 '
+                       '센 것이라, 뜻으로 묶은 결과는 아닙니다.)',
+            'quotes': quotes,
+        })
+    return {'themes': themes}
+
+
 def _name_match_payload(user_text: str):
     """KPI 이름 짝짓기 (`dx_kpi_management/name_ai.py`).
 
@@ -530,6 +574,8 @@ def chat_completions():
         return jsonify(_text_message(model, _graph_narrate_text(_last_user(messages))))
     if _MARK_NAME_MATCH in system:
         return jsonify(_json_message(model, _name_match_payload(_last_user(messages))))
+    if _MARK_VOICES in system:
+        return jsonify(_json_message(model, _voices_payload(_last_user(messages))))
 
     # ① 운영 캡처 fixture 가 있으면 그대로 재생 (진짜 응답 모양에 파싱 핀 고정)
     if _FIXTURE.exists():

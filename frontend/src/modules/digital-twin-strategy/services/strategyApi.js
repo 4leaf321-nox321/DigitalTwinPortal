@@ -61,6 +61,13 @@ export const strategyApi = {
       body: JSON.stringify({ cells, overwrite_manual: overwriteManual }),
     }),
 
+  /** 설문 서술형을 AI 로 묶어 읽는다.
+   *
+   *  값을 바꾸지 않는데도 POST 다. **부르는 것 자체가 비용**이라, 새로고침에
+   *  딸려 나가면 안 되기 때문이다. 결과도 저장하지 않는다. */
+  loadSurveyVoices: (year) =>
+    request(`/plans/${year}/survey-voices`, { method: 'POST', body: '{}' }),
+
   /** 진단 임계값. 기본값과 다른 항목만 저장된다. */
   updateThresholds: (thresholds) =>
     request('/settings/thresholds', {

@@ -354,3 +354,102 @@ def test_설문이_없으면_진단은_그대로_돈다(client, world, office, a
     assert res.status_code == 200
     data = res.get_json()['data']
     assert data['surveyEvidence'] == {'surveys': [], 'cells': [], 'out_of_scope': []}
+
+
+# ── 설문이 이슈 후보가 된다 ────────────────────────────────────────────────
+
+def test_설문이_짚은_것은_목표_없이도_이슈_후보가_된다(client, world, office, auth):
+    """격차 후보는 사람이 **목표 레벨을 넣어야** 나온다. 그런데 '63% 가 데이터
+    정합성을 꼽았다'는 격차가 아니라 지목이라, 목표를 정하는 것과 상관없이 그대로
+    할 일이다. 그 길이 없으면 설문은 진단에서 멈춘다."""
+    survey = _survey(world['plan'])
+    q = _question(survey, '성과를 재는가', 'organization:return')
+    _db.session.commit()
+    for division in (world['mx'], world['vd']):
+        for _ in range(5):
+            _answer(survey, division, {q: 2})
+    _db.session.commit()
+
+    res = client.get(f'{STRATEGY_BASE}/plans/{YEAR}', headers=auth(office))
+    data = res.get_json()['data']
+    assert all(a['target_level'] is None for a in data['assessments'])   # 목표 없음
+
+    candidates = {c['source_ref']: c for c in data['issueCandidates']}
+    assert 'survey_universal_low' in candidates
+    assert candidates['survey_universal_low']['source_type'] == 'finding'
+    assert candidates['survey_universal_low']['group'] == '설문'
+
+
+def test_핵심_난제로_올린_설문_사실은_후보에서_빠진다(client, world, office, auth):
+    """⚠️ 같은 사실이 난제로도 후보로도 남으면 이슈 목록에 두 번 들어온다.
+    issues.py 가 findings 를 후보로 안 뽑던 이유가 그것이다."""
+    survey = _survey(world['plan'])
+    q = _question(survey, '성과를 재는가', 'organization:return')
+    _db.session.commit()
+    for division in (world['mx'], world['vd']):
+        for _ in range(5):
+            _answer(survey, division, {q: 2})
+    _db.session.commit()
+
+    client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes',
+                json={'title': '성과를 재는 법이 없다',
+                      'source_finding': 'survey_universal_low'},
+                headers=auth(office))
+
+    data = client.get(f'{STRATEGY_BASE}/plans/{YEAR}',
+                      headers=auth(office)).get_json()['data']
+    refs = {c['source_ref'] for c in data['issueCandidates']}
+    assert 'survey_universal_low' not in refs
+
+
+def test_지표에서_나온_짚인_것은_후보로_안_간다(client, world, office, auth):
+    """지표 쪽은 B(지표 격차)가 이미 같은 것을 낸다. 두 번 내면 중복이다."""
+    from app.modules.digital_twin_strategy.issues import derive_survey_candidates
+
+    findings = [
+        {'key': 'gap_performance', 'severity': 'high', 'title': 'x', 'detail': ''},
+        {'key': 'survey_role_gap', 'severity': 'high', 'title': 'y', 'detail': ''},
+    ]
+    refs = {c['source_ref'] for c in derive_survey_candidates(findings, set())}
+    assert refs == {'survey_role_gap'}
+
+
+# ── 서술형: 지어낸 인용을 버린다 ───────────────────────────────────────────
+
+def test_원문에_없는_인용은_버린다():
+    """⚠️ 있지도 않은 말을 그럴듯하게 지어내는 것이 이 종류 작업의 대표적
+    실패다. 근거로 못 쓸 문장이 화면에 남으면 나머지 묶음까지 못 믿게 된다."""
+    from app.modules.digital_twin_strategy.survey_voice import _verify_quotes
+
+    corpus = ['데이터를 두 번 입력합니다. 시스템이 이어져 있지 않아서 사람이 옮깁니다.']
+    kept, dropped = _verify_quotes([
+        '데이터를 두 번 입력합니다',                    # 원문에 있다
+        '"데이터를 두 번 입력합니다."',                  # 부호만 다르다 — 인정
+        '예산이 부족해서 아무것도 못 합니다',            # 지어낸 말
+    ], corpus)
+    assert len(kept) == 2
+    assert dropped == ['예산이 부족해서 아무것도 못 합니다']
+
+
+def test_서술형이_적으면_묶지_않는다(client, world, office, auth):
+    """두세 건을 묶어 "이런 의견이 있다"고 말하는 것은 요약이 아니라 지목이다."""
+    from app.modules.digital_twin_strategy.survey_voice import summarize
+    from app.modules.survey.models import SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness')
+    free = SurveyQuestion(survey_id=survey.id, order=1, text='바라는 점은?',
+                          qtype='text', required=False)
+    _db.session.add(free)
+    _db.session.commit()
+    for i in range(3):
+        response = _answer(survey, world['mx'], {})
+        _db.session.add(_A(response_id=response.id, question_id=free.id,
+                           value_text=f'의견 {i}'))
+    _db.session.commit()
+
+    out = summarize(world['plan'])
+    assert out['themes'] == []
+    assert out['answer_count'] == 3
+    # 이유를 말해 준다. 빈 화면만 주면 고장인지 데이터가 없는 건지 알 수 없다.
+    assert '3건' in out['reason']

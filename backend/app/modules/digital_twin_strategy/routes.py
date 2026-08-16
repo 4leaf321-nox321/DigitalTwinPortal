@@ -23,7 +23,10 @@ from .findings import derive_findings, derive_kpi_findings
 from .survey_link import (
     attach_current, collect, derive_choice_findings, derive_survey_findings,
 )
-from .issues import derive_issue_candidates, summarize_coverage
+from .survey_voice import is_available as voices_available, summarize as summarize_voices
+from .issues import (
+    derive_issue_candidates, derive_survey_candidates, summarize_coverage,
+)
 from .definitions import (
     CATEGORIES, CATEGORY_ORGANIZATION, DIMENSION_KEYS_BY_CATEGORY,
     ALL_ASSESSMENT_SLOTS,
@@ -239,8 +242,12 @@ def get_plan(year):
             f"{i['source_type']}:{i['source_ref']}:{i['division_id']}"
             for i in issues if i.get('source_ref')
         }
+        # 설문에서 나온 사실은 **격차가 없어도** 이슈가 될 수 있다. 목표 레벨을
+        # 안 넣어도 '63% 가 데이터 정합성을 꼽았다'는 그대로 할 일이다.
+        promoted = {c['source_finding'] for c in cruxes if c.get('source_finding')}
         candidates = [
-            c for c in derive_issue_candidates(assessments, metrics, divisions)
+            c for c in (derive_issue_candidates(assessments, metrics, divisions)
+                        + derive_survey_candidates(findings, promoted))
             if c['key'] not in taken
         ]
 
@@ -253,6 +260,8 @@ def get_plan(year):
                 'kpiCoverage': kpi_coverage,
                 'findings': findings,
                 'surveyEvidence': survey_evidence,
+                # 버튼을 띄울지 정하는 데만 쓴다. 부르는 것은 사람이 누를 때다.
+                'surveyVoicesAvailable': voices_available(),
                 'cruxes': cruxes,
                 'issues': issues,
                 'issueCandidates': candidates,
@@ -543,6 +552,27 @@ def update_assessment(year, division_id, category, dimension):
         return jsonify({'success': True, 'data': assessment.to_dict()})
     except Exception as e:
         db.session.rollback()
+        return _error(str(e))
+
+
+@bp.route('/plans/<int:year>/survey-voices', methods=['POST'])
+@office_required
+def survey_voices(year):
+    """설문 서술형을 AI 로 묶어 읽는다.
+
+    ⚠️ **누를 때만 부른다.** 진단 화면을 열 때마다 LLM 을 부르면 화면이 느려지고
+       같은 답에 돈을 반복해서 쓴다. 그래서 GET 이 아니라 POST 다 — 값을 바꾸지는
+       않지만, 부르는 것 자체가 비용이라 실수로 새로고침에 딸려 나가면 안 된다.
+
+    ⚠️ 결과를 **저장하지 않는다.** 저장하면 원문이 늘어난 뒤에도 낡은 요약이
+       남고, 그것이 어느 시점의 것인지 아무도 모른다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        return jsonify({'success': True, 'data': summarize_voices(plan)})
+    except Exception as e:
         return _error(str(e))
 
 

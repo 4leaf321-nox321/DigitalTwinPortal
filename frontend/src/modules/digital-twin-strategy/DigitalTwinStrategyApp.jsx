@@ -273,6 +273,19 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
+  // 결과를 저장하지 않고 돌려주기만 한다. 저장하면 원문이 늘어난 뒤에도 낡은
+  // 요약이 남고, 그것이 어느 시점의 것인지 아무도 모른다.
+  const handleLoadVoices = async () => {
+    setError(null);
+    try {
+      const res = await strategyApi.loadSurveyVoices(currentYear);
+      return res?.data || null;
+    } catch (e) {
+      setError(e.message);
+      return null;
+    }
+  };
+
   const handleThresholdSave = async (thresholds) => {
     await strategyApi.updateThresholds(thresholds);
     // meta 도 다시 읽는다 — 관측 표의 색이 이 임계값을 쓰므로 같이 바뀌어야 한다.
@@ -338,7 +351,9 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           findings={plan.findings}
           cruxes={plan.cruxes}
           surveyEvidence={plan.surveyEvidence}
+          surveyVoicesAvailable={plan.surveyVoicesAvailable}
           onApplySurvey={handleApplySurvey}
+          onLoadVoices={handleLoadVoices}
           onChange={handleAssessmentChange}
           onTargetChange={handleMetricTargetChange}
           onCruxAdd={handleCruxAdd}

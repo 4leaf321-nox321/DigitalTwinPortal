@@ -216,6 +216,52 @@ def choice_highlights(survey):
     return out
 
 
+def free_text_answers(survey, limit_per_question=200):
+    """서술형 원문. **누가 썼는지는 실리지 않는다.**
+
+    돌려주는 값:
+        [{'question_id', 'text'(문항), 'answers': [원문...]}]
+
+    ⚠️ 응답자 정보를 붙이지 않는다. 서술형은 문체와 내용으로 사람이 좁혀지는
+       일이 실제로 있어서, 여기에 역할이나 사업부를 달면 "그 사업부의 그 역할인
+       사람"이 되어 사실상 기명이 된다. 원문만 낸다.
+
+    ⚠️ **답이 적으면 아예 안 낸다.** 서술형 두 건을 묶어 "이런 의견이 있다"고
+       말하는 것은 요약이 아니라 지목이다.
+    """
+    questions = [q for q in survey.questions.all() if q.qtype == 'text']
+    if not questions:
+        return []
+
+    responses = [
+        r.id for r in survey.responses.filter(
+            SurveyResponse.submitted_at.isnot(None)).all()
+    ]
+    if not responses:
+        return []
+
+    grouped = {}
+    for a in SurveyAnswer.query.filter(
+        SurveyAnswer.response_id.in_(responses),
+        SurveyAnswer.question_id.in_([q.id for q in questions]),
+    ).all():
+        text = (a.value_text or '').strip()
+        if text:
+            grouped.setdefault(a.question_id, []).append(text)
+
+    out = []
+    for q in questions:
+        answers = grouped.get(q.id) or []
+        if not answers:
+            continue
+        out.append({
+            'question_id': q.id,
+            'text': q.text,
+            'answers': answers[:limit_per_question],
+        })
+    return out
+
+
 def survey_brief(survey):
     """설문을 가리키는 최소한의 정보. 화면이 "어느 설문에서 나왔나"를 말할 때 쓴다."""
     return {

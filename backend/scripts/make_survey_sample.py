@@ -79,11 +79,24 @@ ROLE_MIX_OFFICE = [ROLE_OFFICE, ROLE_OFFICE, ROLE_PL, ROLE_MEMBER]
 BLOCKERS = ['데이터 정합성', '기준·표준 불일치', '인력 부족', '도구 미숙', '타 부서 협조']
 PRIORITIES = ['데이터 표준화', '인력 충원', '교육', '도구 통합', '프로세스 정비']
 
+# 되풀이되는 이야기가 보이도록 **몇 갈래로 모아** 적는다. 전부 다른 말이면
+# 묶을 것이 없고, 전부 같은 말이면 묶기가 시험이 안 된다.
 FREE_TEXT = [
-    '설계 변경이 제조로 넘어오는 데 시간이 걸립니다. 그 사이에 만든 모델은 이미 옛것입니다.',
+    # 데이터가 두 번 들어간다
     '데이터를 두 번 입력합니다. 시스템이 이어져 있지 않아서 사람이 옮깁니다.',
+    'PLM 에 넣은 값을 MES 에 또 넣습니다. 옮기다 틀리면 어디서 틀렸는지 못 찾습니다.',
+    '같은 데이터를 부서마다 따로 관리해서, 어느 것이 맞는지 회의에서 정합니다.',
+    # 기준이 사업부마다 다르다
     '무엇을 성과로 볼지 사업부마다 달라서, 잘했다는 말을 서로 다른 뜻으로 씁니다.',
+    '기준이 사업부마다 달라 비교가 안 됩니다. 잘하고 있는지 아닌지를 모릅니다.',
+    '성과 지표를 과제마다 새로 만듭니다. 끝나고 나면 비교할 수가 없습니다.',
+    # 설계 변경이 늦게 온다
+    '설계 변경이 제조로 넘어오는 데 시간이 걸립니다. 그 사이에 만든 모델은 이미 옛것입니다.',
+    '변경 사항을 메일로 받습니다. 놓치면 그대로 잘못된 모델로 검토합니다.',
+    # 배울 자리가 없다
     '도구는 있는데 쓰는 법을 배울 자리가 없습니다.',
+    '교육이 한 번뿐이라, 실제로 쓸 때가 되면 다 잊어버립니다.',
+    # 책임이 불분명하다
     '모델이 틀렸을 때 누구에게 말해야 하는지 모르겠습니다.',
     '과제가 끝나면 그 결과물이 어디로 가는지 알 수 없습니다.',
 ]
@@ -231,6 +244,12 @@ def make_main_survey(plan_id, processes):
         survey, n, '사무국', '개선이 필요하다고 보는 것을 적어 주세요.',
         'text', roles=[ROLE_OFFICE, ROLE_HEAD], required=False)
     n += 1
+    # 전원 대상 서술형. 묶어 읽기의 재료는 이쪽이 더 많다 — 사무국만 물으면
+    # 현장에서 나오는 말이 안 들어온다.
+    linked['free_all'] = _q(
+        survey, n, '공통', '일하면서 가장 답답한 것을 한 가지만 적어 주세요.',
+        'text', required=False)
+    n += 1
 
     # ── 프로세스 분기 (연계) ──────────────────────────────────────────
     if processes:
@@ -296,14 +315,19 @@ def answer_main(survey, linked, people, processes):
             RNG.shuffle(order)
             put(linked['priority'], json_value=order[:3])
 
+        def put_text(question, text):
+            """서술형은 value_text 에 담긴다. put 은 숫자·JSON 용이라 따로 쓴다."""
+            db.session.add(SurveyAnswer(
+                response_id=response.id, question_id=question.id, value_text=text))
+
         if role in (ROLE_OFFICE, ROLE_HEAD):
             put(linked['role_view'], _score(mood, 0.2))
-            if RNG.random() < 0.5:
-                put(linked['free'], json_value=None)
-                # 서술형은 value_text 에 담긴다. 위 put 은 숫자·JSON 용이라 따로 쓴다.
-                db.session.query(SurveyAnswer).filter_by(
-                    response_id=response.id, question_id=linked['free'].id
-                ).update({'value_text': RNG.choice(FREE_TEXT)})
+            if RNG.random() < 0.8:
+                put_text(linked['free'], RNG.choice(FREE_TEXT))
+
+        # 전원이 받는 서술형. 실제 설문에서도 절반쯤은 안 적는다.
+        if RNG.random() < 0.55:
+            put_text(linked['free_all'], RNG.choice(FREE_TEXT))
 
         if 'role_link' in linked and process == processes[-1]:
             put(linked['role_link'], _score(mood, -0.4))

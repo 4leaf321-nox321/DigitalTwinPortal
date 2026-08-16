@@ -6,6 +6,7 @@ import KpiCoverage from './KpiCoverage';
 import FindingsPanel from './FindingsPanel';
 import CruxPanel from './CruxPanel';
 import SurveyEvidence from './SurveyEvidence';
+import SurveyVoices from './SurveyVoices';
 import AssessmentGrid from '../Assessment/AssessmentView';
 
 // ① 진단.
@@ -110,7 +111,7 @@ const Collapsed = styled.div`
 const DiagnosisView = ({
   categories, divisions, metricDefinitions, thresholds,
   assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
-  surveyEvidence, onApplySurvey,
+  surveyEvidence, surveyVoicesAvailable, onApplySurvey, onLoadVoices,
   onChange, onTargetChange, onCruxAdd, onCruxUpdate, onCruxDelete,
 }) => {
   const [showGrid, setShowGrid] = useState(false);
@@ -187,6 +188,27 @@ const DiagnosisView = ({
         </Head>
         <SurveyEvidence evidence={surveyEvidence} onApply={onApplySurvey} />
       </Section>
+
+      {/* 서술형은 규칙으로 못 짚는다. "이런 말이 많았다"는 판단이라 AI 의 일이다.
+          ⚠️ 「짚인 것」과 **자리를 갈라 둔다** — 센 것과 읽은 것을 한 목록에 두면
+             지어낸 문장이 세어진 사실과 같은 모양으로 앉는다. */}
+      {surveyEvidence?.surveys?.length > 0 && (
+        <Section>
+          <Head>
+            <StepBadge>1</StepBadge>
+            <Title>설문에서 나온 이야기</Title>
+            <Hint>
+              자유서술 답을 AI 가 묶어 읽습니다. <strong>인용문이 근거</strong>이니
+              함께 보세요 — 숫자가 못 말하는 &lsquo;왜&rsquo;가 여기 있습니다.
+            </Hint>
+          </Head>
+          <SurveyVoices
+            available={surveyVoicesAvailable}
+            onLoad={onLoadVoices}
+            onPromote={onCruxAdd}
+          />
+        </Section>
+      )}
 
       <Columns>
         <Section>

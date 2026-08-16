@@ -11,10 +11,19 @@
 
     A. 성숙도 격차   사람이 매긴 목표 - 현재       (strategy_assessment)
     B. 지표 격차     사람이 정한 목표 - 관측값     (strategy_metric_target × metrics)
+    C. 설문이 짚은 것  규칙이 잡은 사실             (survey_link.derive_*_findings)
 
 ⚠️ '짚인 것(findings)'은 여기서 다시 뽑지 않는다. 그쪽은 이미 진단 화면에서
    한 번의 클릭으로 **핵심 난제**가 되는 길이 있다. 같은 사실이 두 경로로
    들어오면 이슈 목록에 중복이 쌓이고, 어느 쪽이 정본인지 갈린다.
+
+   **딱 하나 예외가 설문이다**(C). 지표에서 나온 짚인 것은 같은 지표가 B 로도
+   후보를 내므로 중복이지만, 설문에서 나온 것은 **다른 길이 아예 없다.** A 로
+   가려면 사람이 목표 레벨을 넣어야 하는데, '63% 가 데이터 정합성을 꼽았다'는
+   격차가 아니라 지목이라 목표를 정하는 것과 상관이 없다. 그래서 그것만 낸다.
+
+   중복은 **핵심 난제로 이미 올린 것을 빼서** 막는다(promoted). 두 경로가
+   같은 사실을 이슈로 만드는 일은 그렇게 사라진다.
 
 후보는 저장하지 않는다. 매번 계산한다 — 사람이 목표를 고치면 후보도 따라
 바뀌어야 한다. 채택한 순간에만 strategy_issue 로 남는다.
@@ -42,6 +51,43 @@ _LEVEL_LABEL = {
     (c['key'], level['value']): level['label']
     for c in CATEGORIES for level in c['levels']
 }
+
+
+# 설문에서 나온 짚인 것의 key 앞자리. survey_link 가 붙이는 것과 같은 약속이다.
+SURVEY_FINDING_PREFIX = 'survey_'
+
+# 심각도 → 정렬 무게. 격차(A·B)의 weight 와 같은 자에서 견주어야 하므로
+# 단계 차이와 비슷한 크기로 둔다.
+_SEVERITY_WEIGHT = {'high': 3, 'medium': 2, 'info': 1}
+
+
+def derive_survey_candidates(findings, promoted=None):
+    """설문이 짚은 것을 이슈 후보로. (위 C)
+
+    ⚠️ **핵심 난제로 이미 올린 것은 빼낸다.** 안 빼면 같은 사실이 난제로도
+       후보로도 남아, 이슈 목록에 두 번 들어올 수 있다.
+
+    ⚠️ 지표에서 나온 짚인 것은 **여기 안 온다.** 그쪽은 B 가 같은 것을 이미 낸다.
+    """
+    taken = set(promoted or ())
+    out = []
+    for f in findings or []:
+        key = f.get('key') or ''
+        if not key.startswith(SURVEY_FINDING_PREFIX) or key in taken:
+            continue
+        division_id = f.get('division_id')
+        out.append({
+            'key': f'finding:{key}:{division_id}',
+            'title': f.get('title') or key,
+            'detail': f.get('detail') or '',
+            'division_id': division_id,
+            'source_type': 'finding',
+            'source_ref': key,
+            'group': '설문',
+            'gap': None,
+            'weight': _SEVERITY_WEIGHT.get(f.get('severity'), 1),
+        })
+    return out
 
 
 def derive_issue_candidates(assessments, metrics, divisions):
