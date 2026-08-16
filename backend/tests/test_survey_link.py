@@ -936,3 +936,66 @@ def test_후보의_출처는_전부_이슈로_저장될_수_있다(client, world
     produced = {c['source_type'] for c in derive_survey_candidates(findings, set())}
     produced |= {c['source_type'] for c in derive_issue_candidates([], [], [])}
     assert produced <= ISSUE_SOURCE_TYPES, produced - ISSUE_SOURCE_TYPES
+
+
+def test_후보_여러_개를_한_번에_새_난제로_묶는다(client, world, office, auth):
+    """⚠️ 이 길이 없으면 후보를 하나씩 「난제 비움」으로 저장해 고아로 만든 뒤
+    다시 골라 묶어야 한다 — 세 건이면 대화상자를 네 번 연다. 같은 일이다.
+    """
+    from app.modules.digital_twin_strategy.models import StrategyCrux, StrategyIssue
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes/from-issues',
+                      headers=auth(office),
+                      json={'title': '성과를 정의하지 않고 일한다',
+                            'new_issues': [
+                                {'title': 'MX 성과 미정의 70%',
+                                 'division_id': world['mx'].id,
+                                 'source_type': 'gap', 'source_ref': 'a'},
+                                {'title': 'VD 성과 미정의 75%',
+                                 'division_id': world['vd'].id,
+                                 'source_type': 'gap', 'source_ref': 'b'},
+                            ]})
+    assert res.status_code == 201, res.get_json()
+    data = res.get_json()['data']
+    assert len(data['created']) == 2
+
+    crux = StrategyCrux.query.one()
+    # 두 사업부를 묶었으니 전사 난제다.
+    assert crux.division_id is None
+    assert {i.crux_id for i in StrategyIssue.query.all()} == {crux.id}
+
+
+def test_기존_이슈와_후보를_섞어_묶을_수_있다(client, world, office, auth):
+    """고아 이슈 하나와 새 후보 하나가 같은 이야기일 수 있다."""
+    from app.modules.digital_twin_strategy.models import StrategyCrux, StrategyIssue
+
+    made = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/issues',
+                       json={'title': '이미 적어 둔 것'},
+                       headers=auth(office)).get_json()['data']['id']
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes/from-issues',
+                      headers=auth(office),
+                      json={'title': '한 이야기', 'issue_ids': [made],
+                            'new_issues': [{'title': '후보에서 온 것'}]})
+    assert res.status_code == 201, res.get_json()
+
+    crux = StrategyCrux.query.one()
+    assert StrategyIssue.query.count() == 2
+    assert {i.crux_id for i in StrategyIssue.query.all()} == {crux.id}
+
+
+def test_후보_하나가_잘못되면_난제도_안_만든다(client, world, office, auth):
+    """⚠️ 반쯤 된 상태가 제일 나쁘다. 난제만 만들어지면 빈 난제가 남아
+    "넘겠다고 해놓고 아무것도 안 하는" 난제처럼 보인다."""
+    from app.modules.digital_twin_strategy.models import StrategyCrux, StrategyIssue
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes/from-issues',
+                      headers=auth(office),
+                      json={'title': '묶기', 'new_issues': [
+                          {'title': '멀쩡한 것'},
+                          {'title': ''},          # 제목이 비었다
+                      ]})
+    assert res.status_code == 400
+    assert '2번째 항목' in res.get_json()['message']
+    assert StrategyCrux.query.count() == 0
+    assert StrategyIssue.query.count() == 0

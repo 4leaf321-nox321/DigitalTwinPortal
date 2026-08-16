@@ -570,6 +570,7 @@ const IssuesView = ({
           어느 난제 아래인지는 가져올 때 정하는 것이 맞다. */}
       <CandidatePanel
         candidates={visibleCandidates}
+        onBundle={onRollup}
         onPick={(c) => startNew('', {
           title: c.title,
           description: c.detail,

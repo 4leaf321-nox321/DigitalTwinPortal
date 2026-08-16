@@ -373,6 +373,15 @@ def create_crux(year):
 def crux_from_issues(year):
     """이슈 여러 개를 **묶어서** 핵심 난제를 만든다. (아래에서 위로)
 
+    묶는 대상은 두 가지다.
+
+        issue_ids   이미 있는 이슈 (대개 난제에 안 걸린 고아)
+        new_issues  아직 이슈가 아닌 것 — **진단 격차·설문 후보**
+
+    ⚠️ new_issues 가 없으면 후보 여러 개를 새 난제로 묶는 길이 사실상 막힌다.
+       후보를 하나씩 「난제 비움」으로 저장해 고아로 만든 뒤 다시 골라 묶어야
+       하는데, 세 건이면 대화상자를 네 번 연다. 같은 일을 한 번에 한다.
+
     진단이 난제를 먼저 남기고 그것을 쪼개는 것이 본줄기지만, 실제로는 반대
     방향도 일어난다 — 진단의 여러 곳에서 나온 것을 각각 이슈로 적어 놓고 보니
     **그것들을 관통하는 하나**가 보이는 경우다. 그게 난제다.
@@ -394,8 +403,11 @@ def crux_from_issues(year):
         if not title:
             return _error('난제 제목이 필요합니다.', 400)
 
-        raw_ids = payload.get('issue_ids')
-        if not isinstance(raw_ids, list) or not raw_ids:
+        raw_ids = payload.get('issue_ids') or []
+        drafts = payload.get('new_issues') or []
+        if not isinstance(raw_ids, list) or not isinstance(drafts, list):
+            return _error('묶을 대상이 목록이 아닙니다.', 400)
+        if not raw_ids and not drafts:
             return _error('묶을 이슈를 골라 주세요.', 400)
         try:
             issue_ids = {int(x) for x in raw_ids}
@@ -407,18 +419,34 @@ def crux_from_issues(year):
         issues = StrategyIssue.query.filter(
             StrategyIssue.plan_id == plan.id,
             StrategyIssue.id.in_(issue_ids),
-        ).all()
+        ).all() if issue_ids else []
         missing = issue_ids - {i.id for i in issues}
         if missing:
             return _error(f"이 전략의 이슈가 아닙니다: {sorted(missing)}", 400)
 
+        # 후보를 이슈로 만든다. **난제보다 먼저 검증한다** — 하나가 틀렸는데
+        # 난제만 만들어지면, 빈 난제가 남아 "넘겠다고 해놓고 아무것도 안 하는"
+        # 난제처럼 보인다.
+        made = []
+        base_order = StrategyIssue.query.filter_by(plan_id=plan.id).count()
+        for i, draft in enumerate(drafts):
+            if not isinstance(draft, dict):
+                return _error('후보 항목이 올바르지 않습니다.', 400)
+            issue = StrategyIssue(plan_id=plan.id, title='',
+                                  order=base_order + i)
+            error = _apply_issue_fields(issue, draft, plan)
+            if error:
+                return _error(f'{i + 1}번째 항목: {error}', 400)
+            made.append(issue)
+
+        bundled = issues + made
         crux = StrategyCrux(
             plan_id=plan.id,
             title=title,
             rationale=payload.get('rationale'),
             # 여러 사업부의 이슈를 묶었으면 전사 난제다. 하나뿐이면 그 사업부.
-            division_id=(issues[0].division_id
-                         if len({i.division_id for i in issues}) == 1 else None),
+            division_id=(bundled[0].division_id
+                         if len({i.division_id for i in bundled}) == 1 else None),
             source_finding=payload.get('source_finding'),
             order=StrategyCrux.query.filter_by(plan_id=plan.id).count(),
         )
@@ -431,10 +459,14 @@ def crux_from_issues(year):
             # 다만 무엇이 옮겨졌는지 돌려줘서 화면이 말할 수 있게 한다.
             moved.append({'id': issue.id, 'from_crux_id': issue.crux_id})
             issue.crux_id = crux.id
+        for issue in made:
+            issue.crux_id = crux.id
+            db.session.add(issue)
 
         db.session.commit()
         return jsonify({'success': True, 'data': {
             'crux': crux.to_dict(), 'moved': moved,
+            'created': [i.id for i in made],
         }}), 201
     except Exception as e:
         db.session.rollback()
