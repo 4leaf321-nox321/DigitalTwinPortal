@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import ObservedMatrix from './ObservedMatrix';
@@ -7,6 +7,7 @@ import FindingsPanel from './FindingsPanel';
 import CruxPanel from './CruxPanel';
 import SurveyEvidence from './SurveyEvidence';
 import SurveyVoices from './SurveyVoices';
+import SectionNav from '../SectionNav';
 import AssessmentGrid from '../Assessment/AssessmentView';
 
 // ① 진단.
@@ -20,7 +21,15 @@ import AssessmentGrid from '../Assessment/AssessmentView';
 //   3. 핵심 난제  사람이 고르는 진단의 산출물  ← 다음 단계로 넘어감
 //   4. 세부 판단  필요한 곳만. 전부 채울 의무가 없다
 
+const Layout = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+`;
+
 const Wrap = styled.div`
+  flex: 1;
+  min-width: 0;   /* 표가 넓어도 목차를 밀어내지 않게 */
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -122,6 +131,20 @@ const DiagnosisView = ({
   const totalSlots = (divisions?.length || 0) *
     (categories || []).reduce((n, c) => n + c.dimensions.length, 0);
 
+  // ⚠️ 화면에 **실제로 그린 섹션만** 싣는다. 없는 곳으로 보내면 아무 일도 안
+  //    일어나서, 사용자는 목차가 고장 난 줄 안다.
+  const navItems = useMemo(() => [
+    { id: 'sec-observed', label: '관측', step: 1 },
+    ...(!metricsError ? [{ id: 'sec-kpi', label: '지표별 연결', step: 1 }] : []),
+    { id: 'sec-survey', label: '설문 근거', step: 1 },
+    ...(surveyEvidence?.surveys?.length > 0
+      ? [{ id: 'sec-voices', label: '설문 이야기', step: 1 }] : []),
+    // 발견 사항과 핵심 난제는 **가로로 나란히** 있다. 목차에 둘로 적으면 같은
+    // 자리로 가는 항목이 두 개가 되고, 둘째는 영영 안 밝는다.
+    { id: 'sec-findings', label: '발견 사항 → 난제', step: 2 },
+    { id: 'sec-grid', label: '세부 판단', step: 3 },
+  ], [metricsError, surveyEvidence]);
+
   const promote = (finding) => {
     onCruxAdd({
       title: finding.title,
@@ -132,144 +155,150 @@ const DiagnosisView = ({
   };
 
   return (
-    <Wrap>
-      <Section>
-        <Head>
-          <StepBadge>1</StepBadge>
-          <Title>관측</Title>
-          <Hint>
-            디지털 트윈 대시보드·DX KPI 관리에서 계산합니다.
-            붉은 칸이 ⚙설정의 기준을 넘은 값입니다 — 칸에 대면 기준이 보입니다.
-          </Hint>
-        </Head>
-        {metricsError
-          ? <Collapsed>{metricsError}</Collapsed>
-          : (
-            <ObservedMatrix
-              definitions={metricDefinitions}
-              divisions={divisions}
-              metrics={metrics}
-              thresholds={thresholds}
-            />
-          )}
-      </Section>
-
-      {!metricsError && (
-        <Section>
+    <Layout>
+      <SectionNav
+        items={navItems}
+        onJump={(id) => { if (id === 'sec-grid') setShowGrid(true); }}
+      />
+      <Wrap>
+        <Section id="sec-observed">
           <Head>
             <StepBadge>1</StepBadge>
-            <Title>지표별 연결</Title>
+            <Title>관측</Title>
             <Hint>
-              지표마다 그것을 미는 과제가 있는지 봅니다. '주'가 0이면 목표만
-              있고 그 지표를 직접 미는 과제는 없다는 뜻입니다.
+              디지털 트윈 대시보드·DX KPI 관리에서 계산합니다.
+              붉은 칸이 ⚙설정의 기준을 넘은 값입니다 — 칸에 대면 기준이 보입니다.
             </Hint>
           </Head>
-          <KpiCoverage coverage={kpiCoverage} />
-        </Section>
-      )}
-
-      {/* 사람에게 물어야만 아는 것. 지표는 '무엇이 벌어졌나'를 말하지만
-          '왜'와 '어떻게 느끼나'는 말하지 못한다. 그 자리를 설문이 채운다.
-
-          ⚠️ 여기서 아무것도 자동으로 바뀌지 않는다. 제안값일 뿐이고,
-             누르는 것은 사람이다. */}
-      <Section>
-        <Head>
-          <StepBadge>1</StepBadge>
-          <Title>설문 근거</Title>
-          {surveyEvidence?.cells?.length > 0 && (
-            <Count>{surveyEvidence.cells.length}칸</Count>
-          )}
-          <Hint>
-            마감된 설문의 조직 역량 문항을 <strong>1인 1표</strong>로 모았습니다.
-            제안값일 뿐이라 누르기 전에는 진단이 바뀌지 않습니다 — 평균을 같이
-            적어 두었으니 반올림된 자리를 보고 판단하세요.
-          </Hint>
-        </Head>
-        <SurveyEvidence evidence={surveyEvidence} onApply={onApplySurvey} />
-      </Section>
-
-      {/* 서술형은 규칙으로 못 짚는다. "이런 말이 많았다"는 판단이라 AI 의 일이다.
-          ⚠️ 「발견 사항」과 **자리를 갈라 둔다** — 센 것과 읽은 것을 한 목록에 두면
-             지어낸 문장이 세어진 사실과 같은 모양으로 앉는다. */}
-      {surveyEvidence?.surveys?.length > 0 && (
-        <Section>
-          <Head>
-            <StepBadge>1</StepBadge>
-            <Title>설문에서 나온 이야기</Title>
-            <Hint>
-              자유서술 답을 AI 가 묶어 읽습니다. <strong>인용문이 근거</strong>이니
-              함께 보세요 — 숫자가 못 말하는 &lsquo;왜&rsquo;가 여기 있습니다.
-            </Hint>
-          </Head>
-          <SurveyVoices
-            available={surveyVoicesAvailable}
-            onLoad={onLoadVoices}
-            onPromote={onCruxAdd}
-          />
-        </Section>
-      )}
-
-      <Columns>
-        <Section>
-          <Head>
-            <StepBadge>2</StepBadge>
-            <Title>발견 사항</Title>
-            {findings?.length > 0 && <Count>{findings.length}건</Count>}
-            <Hint>
-              관측 지표와 설문에서 ⚙설정의 기준을 넘은 것을 골랐습니다.
-              중요한 것을 오른쪽으로 올리세요.
-            </Hint>
-          </Head>
-          <FindingsPanel findings={findings} onPromote={promote} />
+          {metricsError
+            ? <Collapsed>{metricsError}</Collapsed>
+            : (
+              <ObservedMatrix
+                definitions={metricDefinitions}
+                divisions={divisions}
+                metrics={metrics}
+                thresholds={thresholds}
+              />
+            )}
         </Section>
 
-        <Section>
-          <Head>
-            <StepBadge>3</StepBadge>
-            <Title>핵심 난제</Title>
-            <Hint>올해 이것만은 넘겠다고 정하는 자리. 1~3개. ② 이슈에서 할 일로 이어집니다.</Hint>
-          </Head>
-          <CruxPanel
-            cruxes={cruxes}
-            onAdd={onCruxAdd}
-            onUpdate={onCruxUpdate}
-            onDelete={onCruxDelete}
-          />
-        </Section>
-      </Columns>
-
-      <Section>
-        <Head>
-          <Toggle onClick={() => setShowGrid(v => !v)}>
-            {showGrid ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-            <Title>세부 판단</Title>
-          </Toggle>
-          <Hint>
-            성숙도·조직 역량을 직접 매깁니다. {filledCount}/{totalSlots} 입력됨 — 전부 채울 의무는 없습니다.
-          </Hint>
-        </Head>
-
-        {showGrid ? (
-          <AssessmentGrid
-            categories={categories}
-            divisions={divisions}
-            metricDefinitions={metricDefinitions}
-            assessments={assessments}
-            metrics={metrics}
-            metricsError={metricsError}
-            onChange={onChange}
-            onTargetChange={onTargetChange}
-            hideMetrics
-          />
-        ) : (
-          <Collapsed>
-            핵심 난제와 관련된 항목만 매기면 됩니다. 격자를 다 채우는 것이 진단의
-            목적이 아닙니다 — 근거 없이 매긴 점수는 판단을 돕지 못합니다.
-          </Collapsed>
+        {!metricsError && (
+          <Section id="sec-kpi">
+            <Head>
+              <StepBadge>1</StepBadge>
+              <Title>지표별 연결</Title>
+              <Hint>
+                지표마다 그것을 미는 과제가 있는지 봅니다. '주'가 0이면 목표만
+                있고 그 지표를 직접 미는 과제는 없다는 뜻입니다.
+              </Hint>
+            </Head>
+            <KpiCoverage coverage={kpiCoverage} />
+          </Section>
         )}
-      </Section>
-    </Wrap>
+
+        {/* 사람에게 물어야만 아는 것. 지표는 '무엇이 벌어졌나'를 말하지만
+            '왜'와 '어떻게 느끼나'는 말하지 못한다. 그 자리를 설문이 채운다.
+
+            ⚠️ 여기서 아무것도 자동으로 바뀌지 않는다. 제안값일 뿐이고,
+               누르는 것은 사람이다. */}
+        <Section id="sec-survey">
+          <Head>
+            <StepBadge>1</StepBadge>
+            <Title>설문 근거</Title>
+            {surveyEvidence?.cells?.length > 0 && (
+              <Count>{surveyEvidence.cells.length}칸</Count>
+            )}
+            <Hint>
+              마감된 설문의 조직 역량 문항을 <strong>1인 1표</strong>로 모았습니다.
+              제안값일 뿐이라 누르기 전에는 진단이 바뀌지 않습니다 — 평균을 같이
+              적어 두었으니 반올림된 자리를 보고 판단하세요.
+            </Hint>
+          </Head>
+          <SurveyEvidence evidence={surveyEvidence} onApply={onApplySurvey} />
+        </Section>
+
+        {/* 서술형은 규칙으로 못 짚는다. "이런 말이 많았다"는 판단이라 AI 의 일이다.
+            ⚠️ 「발견 사항」과 **자리를 갈라 둔다** — 센 것과 읽은 것을 한 목록에 두면
+               지어낸 문장이 세어진 사실과 같은 모양으로 앉는다. */}
+        {surveyEvidence?.surveys?.length > 0 && (
+          <Section id="sec-voices">
+            <Head>
+              <StepBadge>1</StepBadge>
+              <Title>설문에서 나온 이야기</Title>
+              <Hint>
+                자유서술 답을 AI 가 묶어 읽습니다. <strong>인용문이 근거</strong>이니
+                함께 보세요 — 숫자가 못 말하는 &lsquo;왜&rsquo;가 여기 있습니다.
+              </Hint>
+            </Head>
+            <SurveyVoices
+              available={surveyVoicesAvailable}
+              onLoad={onLoadVoices}
+              onPromote={onCruxAdd}
+            />
+          </Section>
+        )}
+
+        <Columns id="sec-findings">
+          <Section>
+            <Head>
+              <StepBadge>2</StepBadge>
+              <Title>발견 사항</Title>
+              {findings?.length > 0 && <Count>{findings.length}건</Count>}
+              <Hint>
+                관측 지표와 설문에서 ⚙설정의 기준을 넘은 것을 골랐습니다.
+                중요한 것을 오른쪽으로 올리세요.
+              </Hint>
+            </Head>
+            <FindingsPanel findings={findings} onPromote={promote} />
+          </Section>
+
+          <Section>
+            <Head>
+              <StepBadge>3</StepBadge>
+              <Title>핵심 난제</Title>
+              <Hint>올해 이것만은 넘겠다고 정하는 자리. 1~3개. ② 이슈에서 할 일로 이어집니다.</Hint>
+            </Head>
+            <CruxPanel
+              cruxes={cruxes}
+              onAdd={onCruxAdd}
+              onUpdate={onCruxUpdate}
+              onDelete={onCruxDelete}
+            />
+          </Section>
+        </Columns>
+
+        <Section id="sec-grid">
+          <Head>
+            <Toggle onClick={() => setShowGrid(v => !v)}>
+              {showGrid ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              <Title>세부 판단</Title>
+            </Toggle>
+            <Hint>
+              성숙도·조직 역량을 직접 매깁니다. {filledCount}/{totalSlots} 입력됨 — 전부 채울 의무는 없습니다.
+            </Hint>
+          </Head>
+
+          {showGrid ? (
+            <AssessmentGrid
+              categories={categories}
+              divisions={divisions}
+              metricDefinitions={metricDefinitions}
+              assessments={assessments}
+              metrics={metrics}
+              metricsError={metricsError}
+              onChange={onChange}
+              onTargetChange={onTargetChange}
+              hideMetrics
+            />
+          ) : (
+            <Collapsed>
+              핵심 난제와 관련된 항목만 매기면 됩니다. 격자를 다 채우는 것이 진단의
+              목적이 아닙니다 — 근거 없이 매긴 점수는 판단을 돕지 못합니다.
+            </Collapsed>
+          )}
+        </Section>
+      </Wrap>
+    </Layout>
   );
 };
 
