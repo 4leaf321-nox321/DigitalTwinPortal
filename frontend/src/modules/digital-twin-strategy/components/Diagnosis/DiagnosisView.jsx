@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import ObservedMatrix from './ObservedMatrix';
@@ -7,7 +7,6 @@ import FindingsPanel from './FindingsPanel';
 import CruxPanel from './CruxPanel';
 import SurveyEvidence from './SurveyEvidence';
 import SurveyVoices from './SurveyVoices';
-import SectionNav from '../SectionNav';
 import FlowMap from '../FlowMap';
 import AssessmentGrid from '../Assessment/AssessmentView';
 
@@ -123,24 +122,6 @@ const DiagnosisView = ({
   const totalSlots = (divisions?.length || 0) *
     (categories || []).reduce((n, c) => n + c.dimensions.length, 0);
 
-  // ⚠️ 화면에 **실제로 그린 섹션만** 싣는다. 없는 곳으로 보내면 아무 일도 안
-  //    일어나서, 사용자는 목차가 고장 난 줄 안다.
-  const navItems = useMemo(() => [
-    { id: 'sec-observed', label: '관측', step: 1 },
-    ...(!metricsError ? [{ id: 'sec-kpi', label: '지표별 연결', step: 1 }] : []),
-    { id: 'sec-survey', label: '설문 근거', step: 1 },
-    ...(surveyEvidence?.surveys?.length > 0
-      ? [{ id: 'sec-voices', label: '설문 이야기', step: 1 }] : []),
-    // 발견 사항과 핵심 난제는 **가로로 나란히** 있다. 목차에 둘로 적으면 같은
-    // 자리로 가는 항목이 두 개가 되고, 둘째는 영영 안 밝는다.
-    { id: 'sec-findings', label: '발견 사항', step: 2 },
-    { id: 'sec-cruxes', label: '핵심 난제', step: 3 },
-    // ⚠️ 세부 판단에는 **번호를 붙이지 않는다.** 화면의 그 섹션에도 단계 배지가
-    //    없다 — 세 단계 밖의 보조 영역이라 그렇다. 목차에만 번호를 지어 붙이면
-    //    화면과 목차가 다른 말을 한다.
-    { id: 'sec-grid', label: '세부 판단', step: null },
-  ], [metricsError, surveyEvidence]);
-
   const promote = (finding) => {
     onCruxAdd({
       title: finding.title,
@@ -152,8 +133,12 @@ const DiagnosisView = ({
 
   return (
     <Layout>
-      <SectionNav
-        items={navItems}
+      {/* 무엇이 어디로 가는지 + 지금 어디인지. 한동안 목차를 따로 두었는데
+          이름이 겹쳐 두 벌이 나란히 있는 꼴이라 이것 하나로 합쳤다. */}
+      <FlowMap
+        hasSurvey={surveyEvidence?.cells?.length > 0
+                   || surveyEvidence?.surveys?.length > 0}
+        hasVoices={surveyEvidence?.surveys?.length > 0}
         onJump={(id) => { if (id === 'sec-grid') setShowGrid(true); }}
       />
       <Wrap>
@@ -305,15 +290,6 @@ const DiagnosisView = ({
           )}
         </Section>
       </Wrap>
-
-      {/* 무엇이 어디로 가는지. 목차(왼쪽)가 "지금 어디인가" 라면 이쪽은
-          "이게 어디로 흘러가나" 다. */}
-      <FlowMap
-        hasSurvey={surveyEvidence?.cells?.length > 0
-                   || surveyEvidence?.surveys?.length > 0}
-        hasVoices={surveyEvidence?.surveys?.length > 0}
-        onJump={(id) => { if (id === 'sec-grid') setShowGrid(true); }}
-      />
     </Layout>
   );
 };
