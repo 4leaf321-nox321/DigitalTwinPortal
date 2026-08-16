@@ -146,6 +146,43 @@ def dimension_cells(survey):
     return out
 
 
+def respondents_by_division(survey):
+    """사업부별 **실인원**. {division_id: 사람 수}
+
+    ⚠️ 축별 칸(dimension_cells)의 respondent_count 를 더하면 안 된다. 한 사람이
+       다섯 축에 답하면 다섯 번 세어져서, 5명이 21명으로 보인다. 실제로 그렇게
+       나왔다 — 사람 수를 말하는 자리에서는 사람을 세야 한다.
+    """
+    known = allowed_link_keys()
+    question_ids = [
+        q.id for q in survey.questions.all()
+        if q.qtype == LEVEL_QTYPE and q.link_key and
+        (not known or q.link_key in known)
+    ]
+    if not question_ids:
+        return {}
+
+    responses = {
+        r.id: r.division_id for r in survey.responses.filter(
+            SurveyResponse.submitted_at.isnot(None)).all()
+    }
+    if not responses:
+        return {}
+
+    counted = {}
+    seen = set()
+    for a in SurveyAnswer.query.filter(
+        SurveyAnswer.response_id.in_(list(responses)),
+        SurveyAnswer.question_id.in_(question_ids),
+    ).all():
+        if a.value_number is None or a.response_id in seen:
+            continue
+        seen.add(a.response_id)
+        division_id = responses[a.response_id]
+        counted[division_id] = counted.get(division_id, 0) + 1
+    return counted
+
+
 def choice_highlights(survey):
     """객관식이 어디로 몰렸나. 레벨은 못 만들지만 **사람들이 직접 지목한 것**이다.
 

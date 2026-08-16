@@ -55,7 +55,8 @@ def collect(plan, divisions, min_sample):
     """
     try:
         from app.modules.survey.evidence import (
-            candidate_surveys, dimension_cells, survey_brief,
+            candidate_surveys, dimension_cells, respondents_by_division,
+            survey_brief,
         )
     except Exception:
         return {'surveys': [], 'cells': [], 'out_of_scope': []}
@@ -77,23 +78,28 @@ def collect(plan, divisions, min_sample):
 
     for survey in candidate_surveys('strategy_plan', plan.id):
         surveys.append(survey_brief(survey))
+
+        # ⚠️ 대상 밖 인원은 **사람 수로** 센다. 축별 칸을 더하면 한 사람이 다섯
+        #    축에 답한 것이 다섯 명으로 보인다.
+        for division_id, people in respondents_by_division(survey).items():
+            if division_id in target_ids:
+                continue
+            bucket = out_of_scope.setdefault(
+                division_id or UNKNOWN_DIVISION,
+                {'division_id': division_id,
+                 'division_name': names.get(division_id) or '소속 미확인',
+                 'respondent_count': 0})
+            bucket['respondent_count'] += people
+
         for cell in dimension_cells(survey):
             dimension = _dimension_of(cell['link_key'])
             if not dimension:
                 continue
 
+            # 진단은 KPI 를 직접 관리하는 사업부만 한다. 나머지는 위에서
+            # 사람 수로 이미 세어 뒀다 — 버리지 않는다.
             division_id = cell['division_id']
-            # 진단은 KPI 를 직접 관리하는 사업부만 한다. 나머지 사업부와 소속
-            # 미확인 응답은 **버리지 않고 따로 센다** — 빠뜨리면 "답했는데 아무
-            # 데도 안 잡힌" 사람이 생기고, 응답 수 합계가 안 맞는데 화면 어디에도
-            # 그 이유가 없다.
             if division_id not in target_ids:
-                bucket = out_of_scope.setdefault(
-                    division_id or UNKNOWN_DIVISION,
-                    {'division_id': division_id,
-                     'division_name': names.get(division_id) or '소속 미확인',
-                     'respondent_count': 0})
-                bucket['respondent_count'] += cell['respondent_count']
                 continue
 
             enough = cell['respondent_count'] >= min_sample
@@ -306,7 +312,9 @@ def _subject(word):
     code = ord(word[-1])
     if 0xAC00 <= code <= 0xD7A3:
         return '이' if (code - 0xAC00) % 28 else '가'
-    return '이(가)'
+    # 영문으로 끝나면 마지막 소리로 가른다. 'PL이(가)' 같은 괄호가 제목에
+    # 들어가면 그 줄 전체가 대충 만든 것으로 읽힌다.
+    return '가' if word[-1].lower() in 'aeiou' else '이'
 
 
 def _with(word):
@@ -316,7 +324,9 @@ def _with(word):
     code = ord(word[-1])
     if 0xAC00 <= code <= 0xD7A3:
         return '과' if (code - 0xAC00) % 28 else '와'
-    return '과(와)'
+    # 영문으로 끝나면 마지막 소리로 가른다. 'PL과(와)' 같은 괄호가 제목에
+    # 들어가면 그 줄 전체가 대충 만든 것으로 읽힌다.
+    return '와' if word[-1].lower() in 'aeiou' else '과'
 
 
 def _object(word):
@@ -326,4 +336,6 @@ def _object(word):
     code = ord(word[-1])
     if 0xAC00 <= code <= 0xD7A3:
         return '을' if (code - 0xAC00) % 28 else '를'
-    return '을(를)'
+    # 영문으로 끝나면 마지막 소리로 가른다. 'PL을(를)' 같은 괄호가 제목에
+    # 들어가면 그 줄 전체가 대충 만든 것으로 읽힌다.
+    return '를' if word[-1].lower() in 'aeiou' else '을'

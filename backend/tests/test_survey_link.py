@@ -146,6 +146,23 @@ def test_진단_대상_밖_응답은_버리지_않고_따로_센다(client, worl
     assert out == {'GTR': 1, '소속 미확인': 1}
 
 
+def test_대상_밖_인원은_축마다_세지_않고_사람으로_센다(client, world, office, auth):
+    """⚠️ 실제로 났던 버그다. 축별 칸의 인원을 더해서, 다섯 축에 답한 5명이
+    **21명**으로 보였다. 사람 수를 말하는 자리에서는 사람을 세야 한다."""
+    survey = _survey(world['plan'])
+    q1 = _question(survey, '준비도', 'organization:readiness', 0)
+    q2 = _question(survey, '역할', 'organization:role', 1)
+    q3 = _question(survey, '리스크', 'organization:risk', 2)
+    _db.session.commit()
+    for _ in range(4):
+        _answer(survey, world['gtr'], {q1: 3, q2: 3, q3: 3})
+    _db.session.commit()
+
+    out = _evidence(client, office, auth)['out_of_scope']
+    assert [o['respondent_count'] for o in out] == [4]     # 12 이 아니다
+    assert out[0]['division_name'] == 'GTR'
+
+
 def test_진행_중인_설문은_근거가_아니다(client, world, office, auth):
     """사람이 답할 때마다 진단이 움직이면, 어제 본 숫자와 오늘 숫자가 다른데
     아무도 왜인지 모른다."""
