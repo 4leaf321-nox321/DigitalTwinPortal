@@ -453,3 +453,65 @@ def test_서술형이_적으면_묶지_않는다(client, world, office, auth):
     assert out['answer_count'] == 3
     # 이유를 말해 준다. 빈 화면만 주면 고장인지 데이터가 없는 건지 알 수 없다.
     assert '3건' in out['reason']
+
+
+def test_서술형을_AI_로_읽으면_감사_로그가_남는다(client, world, office, auth, monkeypatch):
+    """익명 응답의 **원문이 다른 시스템으로 나가는** 일이다. 신원을 드러내지는
+    않지만, 내보내기·응답자 확인에 기록을 남긴 것과 같은 기준을 대면 이것도
+    남아야 한다. 남기지 않으면 「관리자가 열람하면 기록이 남습니다」가 면피
+    문구가 된다.
+    """
+    from app.modules.digital_twin_strategy import survey_voice
+    from app.modules.survey.models import SurveyAccessLog, SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness')
+    free = SurveyQuestion(survey_id=survey.id, order=1, text='바라는 점은?',
+                          qtype='text', required=False)
+    _db.session.add(free)
+    _db.session.commit()
+    for i in range(10):
+        response = _answer(survey, world['mx'], {})
+        _db.session.add(_A(response_id=response.id, question_id=free.id,
+                           value_text=f'데이터를 두 번 입력합니다 {i}'))
+    _db.session.commit()
+
+    class _Answer:
+        content = '{"themes": [{"title": "중복 입력", "summary": "",' \
+                  ' "quotes": ["데이터를 두 번 입력합니다 1"]}]}'
+
+    monkeypatch.setattr(survey_voice.dt_llm, 'is_configured', lambda: True)
+    monkeypatch.setattr(survey_voice.dt_llm, 'chat', lambda *a, **k: _Answer())
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/survey-voices',
+                      json={}, headers=auth(office))
+    assert res.status_code == 200, res.get_json()
+    assert len(res.get_json()['data']['themes']) == 1
+
+    log = SurveyAccessLog.query.one()
+    assert log.action == 'ai_read'
+    assert log.survey_id == survey.id
+    assert log.viewer_id == office.id
+
+
+def test_읽을_원문이_모자라면_로그도_안_남는다(client, world, office, auth):
+    """부르지 않았으면 남길 것도 없다. 안 나간 것을 나갔다고 적으면 기록이
+    거짓이 되고, 그러면 기록 전체를 못 믿는다."""
+    from app.modules.survey.models import SurveyAccessLog, SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness')
+    free = SurveyQuestion(survey_id=survey.id, order=1, text='바라는 점은?',
+                          qtype='text', required=False)
+    _db.session.add(free)
+    _db.session.commit()
+    for i in range(2):
+        response = _answer(survey, world['mx'], {})
+        _db.session.add(_A(response_id=response.id, question_id=free.id,
+                           value_text=f'의견 {i}'))
+    _db.session.commit()
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/survey-voices',
+                      json={}, headers=auth(office))
+    assert res.status_code == 200
+    assert SurveyAccessLog.query.count() == 0

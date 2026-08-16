@@ -571,7 +571,10 @@ def survey_voices(year):
         plan = StrategyPlan.query.filter_by(year=year).first()
         if not plan:
             return _error(f'{year}년 전략이 없습니다.', 404)
-        return jsonify({'success': True, 'data': summarize_voices(plan)})
+        # 누가 읽었는지가 로그에 남아야 하므로 신원을 넘긴다.
+        viewer_id = int(get_jwt_identity())
+        return jsonify({'success': True,
+                        'data': summarize_voices(plan, viewer_id)})
     except Exception as e:
         return _error(str(e))
 

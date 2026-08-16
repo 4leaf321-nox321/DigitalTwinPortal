@@ -24,6 +24,10 @@
 
 ⚠️ **응답자 정보를 안 보낸다.** 서술형은 문체로 사람이 좁혀진다. 역할·사업부를
    같이 보내면 "그 사업부의 그 역할인 사람"이 되어 사실상 기명이 된다.
+
+⚠️ **원문이 나가는 순간을 감사 로그에 남긴다.** 신원을 드러내는 일은 아니지만
+   익명 응답의 원문이 다른 시스템으로 나가는 일이다 — 내보내기·응답자 확인에
+   로그를 남긴 것과 같은 기준이다. **남기지 못하면 읽지도 않는다.**
 """
 import json
 import re
@@ -103,7 +107,22 @@ def is_available():
     return dt_llm.is_configured()
 
 
-def summarize(plan):
+def _log_read(survey_ids, viewer_id):
+    """원문을 LLM 으로 내보낸 사실을 남긴다.
+
+    설문 모듈의 열람 기록에 같이 쌓는다. 설문을 지울 때 함께 지워지는 것도
+    그쪽과 같아야 한다 — 기록만 따로 남으면 어느 설문 것인지 알 수 없다.
+    """
+    from app.extensions import db
+    from app.modules.survey.models import SurveyAccessLog
+
+    for survey_id in sorted(survey_ids):
+        db.session.add(SurveyAccessLog(
+            survey_id=survey_id, viewer_id=viewer_id, action='ai_read'))
+    db.session.commit()
+
+
+def summarize(plan, viewer_id=None):
     """이 전략의 마감 설문 서술형을 묶는다.
 
     돌려주는 값:
@@ -129,12 +148,17 @@ def summarize(plan):
 
     blocks = []
     corpus = []
+    seen = set()
     for survey in candidate_surveys('strategy_plan', plan.id):
         for group in free_text_answers(survey):
             blocks.append({'survey_id': survey.id, 'survey_title': survey.title,
                            'question': group['text'], 'answers': group['answers']})
             corpus.extend(group['answers'])
-            result['surveys'].append({'id': survey.id, 'title': survey.title})
+            # 서술형 문항이 둘이면 같은 설문이 두 번 실린다. 화면에 쓸 목록이라
+            # 한 번만 둔다.
+            if survey.id not in seen:
+                seen.add(survey.id)
+                result['surveys'].append({'id': survey.id, 'title': survey.title})
 
     result['answer_count'] = len(corpus)
     if len(corpus) < MIN_ANSWERS:
@@ -155,6 +179,14 @@ def summarize(plan):
         {'role': 'user',
          'content': json.dumps(payload, ensure_ascii=False)},
     ]
+
+    # ⚠️ **원문이 나가기 직전에** 남긴다. 부르고 나서 남기면, 부르는 데 성공하고
+    #    로그를 못 남긴 경우가 조용히 생긴다 — 그 순서로는 "안 읽었다"와
+    #    "읽었는데 기록이 없다"를 구별할 수 없다.
+    #
+    #    여기서 터지면 밖으로 나간다(아래 try 밖이다). 기록을 못 남기면 읽지
+    #    않는 것이 맞다 — 남기지 않으면 고지가 면피 문구가 된다.
+    _log_read(seen, viewer_id)
 
     try:
         # 온도를 낮게 둔다. 이 작업은 창작이 아니라 정리다.
