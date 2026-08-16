@@ -236,11 +236,15 @@ def choice_highlights(survey):
     """객관식이 어디로 몰렸나. 레벨은 못 만들지만 **사람들이 직접 지목한 것**이다.
 
     돌려주는 값:
-        [{'question_id', 'text', 'answer_count',
-          'top_value', 'top_count', 'top_share'}]
+        [{'question_id', 'text', 'link_key', 'answer_count',
+          'top_value', 'top_count', 'top_share', 'second_share'}]
 
     한 문항에서 가장 많이 고른 보기 하나만 낸다. 전부 내면 findings 가 표가
     되어 아무도 안 읽는다 — 짚는 것은 튀는 것 하나다.
+
+    ⚠️ **2위 비율도 같이 낸다.** 1위만 보고 짚으면 35% 대 33% 인 문항이
+       "압도적 1위"로 읽힌다. 몰렸는지 갈렸는지는 부르는 쪽이 판단해야 하고,
+       그러려면 2위를 알아야 한다.
     """
     from .routes import compute_results        # 세는 곳은 하나다
 
@@ -251,18 +255,102 @@ def choice_highlights(survey):
         answered = entry.get('answer_count') or 0
         if not rows or not answered:
             continue
-        top = max(rows, key=lambda r: r['count'])
+        ranked = sorted(rows, key=lambda r: -r['count'])
+        top = ranked[0]
         if not top['count']:
             continue
+        second = ranked[1]['count'] if len(ranked) > 1 else 0
         out.append({
             'question_id': entry['question_id'],
             'text': entry['text'],
+            'link_key': entry.get('link_key'),
             'answer_count': answered,
             'top_value': top['value'],
             'top_count': top['count'],
             'top_share': round(top['count'] * 100 / answered, 1),
+            'second_share': round(second * 100 / answered, 1),
         })
     return out
+
+
+def _top_choice(counter):
+    """{보기: 수} 에서 1위와 그 비율. 비었으면 None."""
+    if not counter:
+        return None
+    total = sum(counter.values())
+    label, count = max(counter.items(), key=lambda kv: (kv[1], kv[0]))
+    return {'value': label, 'count': count, 'total': total,
+            'share': round(count * 100 / total, 1)}
+
+
+def choice_splits(survey):
+    """**누가 답했느냐에 따라 고른 것이 갈리는가.**
+
+    돌려주는 값:
+        [{'question_id', 'text', 'link_key',
+          'by_role': {역할: {value, count, total, share}},
+          'by_division': {division_id: {...}}}]
+
+    척도에는 역할 간 인식차·사업부 간 격차 규칙이 있는데 객관식에는 없었다.
+    그런데 **PL 은 '인력 부족'을 꼽고 참여인력은 '데이터 정합성'을 꼽는 상황**은
+    평균 차이보다 더 또렷한 발견이다 — 같은 것을 보고 다른 것을 지목한 것이다.
+
+    ⚠️ 순위·복수선택은 뺀다. 고른 것이 여럿이라 '그 사람이 꼽은 것' 이 하나로
+       정해지지 않는다.
+    """
+    questions = {q.id: q for q in survey.questions.all() if q.qtype == 'choice'}
+    if not questions:
+        return []
+
+    responses = {
+        r.id: r for r in survey.responses.filter(
+            SurveyResponse.submitted_at.isnot(None)).all()
+    }
+    if not responses:
+        return []
+
+    by_role, by_division = {}, {}
+    for a in SurveyAnswer.query.filter(
+        SurveyAnswer.response_id.in_(list(responses)),
+        SurveyAnswer.question_id.in_(list(questions)),
+    ).all():
+        picked = _choice_label(a.value_json)
+        if picked is None:
+            continue
+        response = responses[a.response_id]
+        if response.respondent_role:
+            slot = by_role.setdefault(a.question_id, {}).setdefault(
+                response.respondent_role, {})
+            slot[picked] = slot.get(picked, 0) + 1
+        if response.division_id:
+            slot = by_division.setdefault(a.question_id, {}).setdefault(
+                response.division_id, {})
+            slot[picked] = slot.get(picked, 0) + 1
+
+    out = []
+    for qid, question in questions.items():
+        roles = {r: _top_choice(c) for r, c in (by_role.get(qid) or {}).items()}
+        divisions = {d: _top_choice(c)
+                     for d, c in (by_division.get(qid) or {}).items()}
+        if not roles and not divisions:
+            continue
+        out.append({
+            'question_id': qid,
+            'text': question.text,
+            'link_key': question.link_key,
+            'by_role': {k: v for k, v in roles.items() if v},
+            'by_division': {k: v for k, v in divisions.items() if v},
+        })
+    return out
+
+
+def _choice_label(raw):
+    """단일 선택 답에서 고른 보기 하나. 아니면 None."""
+    if isinstance(raw, list):
+        raw = raw[0] if len(raw) == 1 else None
+    if raw is None or str(raw).strip() == '':
+        return None
+    return str(raw).strip()
 
 
 def free_text_answers(survey, limit_per_question=200):

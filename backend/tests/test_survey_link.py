@@ -277,6 +277,14 @@ def test_표본이_모자란_칸은_반영되지_않는다(client, world, office
 
 # ── 4단계: 발견 사항 ─────────────────────────────────────────────────────────
 
+def _one(found, prefix):
+    """그 규칙이 낸 발견 하나. **key 는 축·문항마다 달라야 한다** — 같으면
+    하나를 난제로 올릴 때 나머지가 이슈 후보에서 같이 사라진다."""
+    hits = [f for k, f in found.items() if k.startswith(prefix)]
+    assert len(hits) == 1, f'{prefix} 로 시작하는 발견이 {len(hits)}건'
+    return hits[0]
+
+
 def _findings(client, office, auth):
     res = client.get(f'{STRATEGY_BASE}/plans/{YEAR}', headers=auth(office))
     return {f['key']: f for f in res.get_json()['data']['findings']}
@@ -295,8 +303,8 @@ def test_역할이_다르게_보면_짚는다(client, world, office, auth):
     _db.session.commit()
 
     found = _findings(client, office, auth)
-    assert 'survey_role_gap' in found
-    assert '역할·책임' in found['survey_role_gap']['title']
+    gap = _one(found, 'survey_role_gap:')
+    assert '역할·책임' in gap['title']
 
 
 def test_전사가_다_낮으면_사업부별로_쪼개지_않는다(client, world, office, auth):
@@ -310,9 +318,9 @@ def test_전사가_다_낮으면_사업부별로_쪼개지_않는다(client, wor
     _db.session.commit()
 
     found = _findings(client, office, auth)
-    assert 'survey_universal_low' in found
-    assert found['survey_universal_low']['division_id'] is None   # 전사 하나로
-    assert found['survey_universal_low']['severity'] == 'high'
+    low = _one(found, 'survey_universal_low:')
+    assert low['division_id'] is None            # 전사 하나로
+    assert low['severity'] == 'high'
 
 
 def test_사업부_간_격차를_짚는다(client, world, office, auth):
@@ -327,8 +335,7 @@ def test_사업부_간_격차를_짚는다(client, world, office, auth):
     _db.session.commit()
 
     found = _findings(client, office, auth)
-    assert 'survey_division_gap' in found
-    assert 'MX' in found['survey_division_gap']['title']
+    assert 'MX' in _one(found, 'survey_division_gap:')['title']
 
 
 def test_객관식_쏠림을_짚는다(client, world, office, auth):
@@ -349,9 +356,12 @@ def test_객관식_쏠림을_짚는다(client, world, office, auth):
                                      value_json=['데이터 정합성']))
     _db.session.commit()
 
+    # ⚠️ key 에 문항 번호가 붙는다. 안 붙이면 객관식 발견이 전부 같은 key 라,
+    #    하나를 난제로 올리는 순간 나머지가 이슈 후보에서 통째로 사라진다.
     found = _findings(client, office, auth)
-    assert 'survey_choice_top' in found
-    assert '데이터 정합성' in found['survey_choice_top']['title']
+    top = [f for k, f in found.items() if k.startswith('survey_choice_top:')]
+    assert len(top) == 1
+    assert '데이터 정합성' in top[0]['title']
 
 
 def test_설문이_없으면_진단은_그대로_돈다(client, world, office, auth):
@@ -380,10 +390,11 @@ def test_설문이_짚은_것은_목표_없이도_이슈_후보가_된다(client
     data = res.get_json()['data']
     assert all(a['target_level'] is None for a in data['assessments'])   # 목표 없음
 
-    candidates = {c['source_ref']: c for c in data['issueCandidates']}
-    assert 'survey_universal_low' in candidates
-    assert candidates['survey_universal_low']['source_type'] == 'finding'
-    assert candidates['survey_universal_low']['group'] == '설문'
+    low = [c for c in data['issueCandidates']
+           if c['source_ref'].startswith('survey_universal_low:')]
+    assert len(low) == 1
+    assert low[0]['source_type'] == 'finding'
+    assert low[0]['group'] == '설문'
 
 
 def test_핵심_난제로_올린_설문_사실은_후보에서_빠진다(client, world, office, auth):
@@ -399,13 +410,13 @@ def test_핵심_난제로_올린_설문_사실은_후보에서_빠진다(client,
 
     client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes',
                 json={'title': '성과를 재는 법이 없다',
-                      'source_finding': 'survey_universal_low'},
+                      'source_finding': 'survey_universal_low:return'},
                 headers=auth(office))
 
     data = client.get(f'{STRATEGY_BASE}/plans/{YEAR}',
                       headers=auth(office)).get_json()['data']
     refs = {c['source_ref'] for c in data['issueCandidates']}
-    assert 'survey_universal_low' not in refs
+    assert 'survey_universal_low:return' not in refs
 
 
 def test_지표에서_나온_짚인_것은_후보로_안_간다(client, world, office, auth):
@@ -616,3 +627,96 @@ def test_응답자에게는_보기_점수를_보여주지_않는다(client, worl
     options = res.get_json()['data']['questions'][0]['options']
     assert options['choices'] == ['매일', '주 1~2회', '가끔', '쓰지 않음']
     assert 'scores' not in options        # ← 요점
+
+
+def test_객관식_발견은_문항마다_다른_key_를_쓴다(client, world, office, auth):
+    """⚠️ 실제로 있던 구멍이다. 객관식 발견이 전부 'survey_choice_top' 하나를
+    쓰면, 이슈 후보 중복 제거가 key 로 도는 탓에 **하나를 난제로 올리는 순간
+    나머지 객관식 발견이 후보에서 통째로 사라진다.**
+    """
+    from app.modules.survey.models import SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness')
+    q1 = SurveyQuestion(survey_id=survey.id, order=1, text='걸림돌은?',
+                        qtype='choice', required=True,
+                        options={'choices': ['데이터', '인력']})
+    q2 = SurveyQuestion(survey_id=survey.id, order=2, text='필요한 것은?',
+                        qtype='choice', required=True,
+                        options={'choices': ['교육', '도구']})
+    _db.session.add_all([q1, q2])
+    _db.session.commit()
+    for _ in range(6):
+        response = _answer(survey, world['mx'], {})
+        _db.session.add_all([
+            _A(response_id=response.id, question_id=q1.id, value_json='데이터'),
+            _A(response_id=response.id, question_id=q2.id, value_json='교육'),
+        ])
+    _db.session.commit()
+
+    data = client.get(f'{STRATEGY_BASE}/plans/{YEAR}',
+                      headers=auth(office)).get_json()['data']
+    refs = [c['source_ref'] for c in data['issueCandidates']
+            if c['source_ref'].startswith('survey_choice_top')]
+    assert len(refs) == 2 and len(set(refs)) == 2
+
+    # 하나를 난제로 올려도 **나머지는 남아야 한다.**
+    client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes',
+                json={'title': '데이터 정합성', 'source_finding': refs[0]},
+                headers=auth(office))
+    after = client.get(f'{STRATEGY_BASE}/plans/{YEAR}',
+                       headers=auth(office)).get_json()['data']
+    left = [c['source_ref'] for c in after['issueCandidates']
+            if c['source_ref'].startswith('survey_choice_top')]
+    assert left == [refs[1]]
+
+
+def test_1위와_2위가_붙어_있으면_짚지_않는다(client, world, office, auth):
+    """35% 대 33% 를 "압도적 1위" 로 읽게 두면 그 오해가 보고서에 그대로 실린다."""
+    from app.modules.survey.models import SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness')
+    q = SurveyQuestion(survey_id=survey.id, order=1, text='걸림돌은?',
+                       qtype='choice', required=True,
+                       options={'choices': ['데이터', '인력']})
+    _db.session.add(q)
+    _db.session.commit()
+    # 6 대 5 — 1위 54.5%, 2위 45.5%. 쏠림 기준(50%)은 넘지만 격차는 9%p 다.
+    for label in ['데이터'] * 6 + ['인력'] * 5:
+        response = _answer(survey, world['mx'], {})
+        _db.session.add(_A(response_id=response.id, question_id=q.id,
+                           value_json=label))
+    _db.session.commit()
+
+    found = _findings(client, office, auth)
+    assert not [k for k in found if k.startswith('survey_choice_top')]
+
+
+def test_역할마다_다른_보기를_고르면_짚는다(client, world, office, auth):
+    """평균 차이보다 또렷한 발견이다 — 같은 것을 보고 **다른 것을 지목**했다."""
+    from app.modules.survey.models import SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness')
+    q = SurveyQuestion(survey_id=survey.id, order=1, text='가장 큰 걸림돌은?',
+                       qtype='choice', required=True,
+                       link_key='organization:role', link_type='strategy_dimension',
+                       options={'choices': ['인력 부족', '데이터 정합성']})
+    _db.session.add(q)
+    _db.session.commit()
+    for role, label in (('PL', '인력 부족'), ('과제 참여인력', '데이터 정합성')):
+        for _ in range(6):
+            response = _answer(survey, world['mx'], {}, role=role)
+            _db.session.add(_A(response_id=response.id, question_id=q.id,
+                               value_json=label))
+    _db.session.commit()
+
+    found = _findings(client, office, auth)
+    split = [f for k, f in found.items() if k.startswith('survey_choice_role:')]
+    assert len(split) == 1
+    assert split[0]['severity'] == 'high'
+    assert 'PL' in split[0]['detail'] and '인력 부족' in split[0]['detail']
+    # 연결키를 달아 뒀으면 **어느 축의 이야기인지** 말해 준다. 안 그러면 연결한
+    # 사람은 연결했다고 믿는데 아무 데도 안 붙는다.
+    assert '역할·책임 관련' in split[0]['detail']

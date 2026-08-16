@@ -344,6 +344,9 @@ THRESHOLDS = [
      'detail': '모든 사업부가 이 아래면 사업부가 아니라 전사 문제로 짚는다.'},
     {'key': 'survey_choice_share', 'label': '객관식 쏠림', 'unit': '%', 'default': 50.0,
      'detail': '한 보기에 이 비율 넘게 몰리면 짚는다. 사람들이 직접 지목한 것이다.'},
+    {'key': 'survey_choice_lead', 'label': '객관식 1·2위 격차', 'unit': '%', 'default': 15.0,
+     'detail': '1위가 2위를 이만큼 앞서야 짚는다. 35% 대 33% 를 "압도적 1위"로 '
+               '읽게 두지 않으려는 것이다.'},
 ]
 
 DEFAULT_THRESHOLDS = {t['key']: t['default'] for t in THRESHOLDS}

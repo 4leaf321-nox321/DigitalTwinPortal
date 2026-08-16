@@ -188,6 +188,9 @@ def derive_survey_findings(evidence, thresholds, min_sample):
     gap_division = thresholds.get('survey_division_gap', 1.0)
     low_level = thresholds.get('survey_low_level', 2.5)
 
+    # ⚠️ **축 이름을 key 에 넣는다.** 안 넣으면 사업부 격차 세 건이 전부
+    #    'survey_division_gap' 하나가 되어, 하나를 난제로 올리는 순간 나머지가
+    #    이슈 후보에서 통째로 사라진다. 객관식 쪽에서 실제로 그랬다.
     def add(key, severity, title, detail, division_id=None, evidence_data=None):
         findings.append({
             'key': key, 'severity': severity, 'title': title, 'detail': detail,
@@ -206,7 +209,7 @@ def derive_survey_findings(evidence, thresholds, min_sample):
         averages = [c['average'] for c in group if c['average'] is not None]
         if len(averages) < 2 or max(averages) > low_level:
             continue
-        add('survey_universal_low', 'high',
+        add(f'survey_universal_low:{dimension}', 'high',
             f'{ORGANIZATION_LABEL[dimension]}{_topic(ORGANIZATION_LABEL[dimension])} '
             f'모든 사업부에서 낮게 나왔습니다 (최고 {max(averages)}점)',
             '한 사업부의 문제가 아니라 전사 구조의 문제입니다. 사업부별로 따로 '
@@ -224,7 +227,7 @@ def derive_survey_findings(evidence, thresholds, min_sample):
         spread = round(top['average'] - bottom['average'], 2)
         if spread < gap_division:
             continue
-        add('survey_division_gap', 'medium',
+        add(f'survey_division_gap:{dimension}', 'medium',
             f"{ORGANIZATION_LABEL[dimension]} 편차가 사업부 간 {spread}점입니다 "
             f"({top['division_name']} {top['average']} ↔ "
             f"{bottom['division_name']} {bottom['average']})",
@@ -246,7 +249,7 @@ def derive_survey_findings(evidence, thresholds, min_sample):
         spread = round(usable[high_role][0] - usable[low_role][0], 2)
         if spread < gap_role:
             continue
-        add('survey_role_gap', 'high',
+        add(f'survey_role_gap:{dimension}', 'high',
             f'{ORGANIZATION_LABEL[dimension]}{_object(ORGANIZATION_LABEL[dimension])} '
             f'{high_role}{_with(high_role)} {low_role}{_subject(low_role)} '
             f'다르게 봅니다 ({spread}점 차이)',
@@ -260,39 +263,124 @@ def derive_survey_findings(evidence, thresholds, min_sample):
     return findings
 
 
-def derive_choice_findings(plan, thresholds, min_sample):
-    """객관식이 한 곳으로 몰린 문항. **사람들이 직접 지목한 것**이다.
+def _axis_note(link_key):
+    """이 문항이 가리키는 축을 문장 끝에 달 말. 없으면 빈 문자열.
 
-    레벨은 못 만들지만 오히려 이쪽이 구체적이다 — '준비도 2.8' 보다
-    '62% 가 데이터 정합성을 꼽았다' 가 다음에 무엇을 할지 말해 준다.
+    ⚠️ 점수 없는 객관식은 레벨을 못 만들지만, 연결키를 달아 둘 수는 있다.
+       그런데 그것이 어디에도 안 쓰이면 **연결한 사람은 연결했다고 믿는데
+       실제로는 아무 데도 안 붙는다.** 최소한 어느 축의 이야기인지는 말해 준다.
+    """
+    dimension = _dimension_of(link_key)
+    return f" ({ORGANIZATION_LABEL[dimension]} 관련)" if dimension else ''
+
+
+def derive_choice_findings(plan, thresholds, min_sample):
+    """객관식이 말하는 것. 레벨은 못 만들지만 **사람들이 직접 지목한 것**이다.
+
+    두 가지를 본다.
+
+        몰림   한 보기로 쏠렸다            — 다음에 무엇을 할지 알려준다
+        갈림   누가 답했느냐에 따라 다르다  — 같은 것을 보고 다른 것을 지목했다
+
+    '준비도 2.8' 보다 '62% 가 데이터 정합성을 꼽았다' 가 구체적이고,
+    'PL 은 인력 부족, 참여인력은 데이터 정합성' 은 그보다 더 또렷하다.
     """
     try:
-        from app.modules.survey.evidence import candidate_surveys, choice_highlights
+        from app.modules.survey.evidence import (
+            candidate_surveys, choice_highlights, choice_splits,
+        )
     except Exception:
         return []
 
     share = thresholds.get('survey_choice_share', 50.0)
+    lead = thresholds.get('survey_choice_lead', 15.0)
     findings = []
+
     for survey in candidate_surveys('strategy_plan', plan.id):
+        # ── 몰림 ──────────────────────────────────────────────────────
         for item in choice_highlights(survey):
             if item['answer_count'] < min_sample or item['top_share'] < share:
                 continue
+            # ⚠️ 1위만 보고 짚지 않는다. 35% 대 33% 를 "압도적 1위" 로 읽게
+            #    두면, 그 오해가 그대로 보고서에 실린다.
+            if item['top_share'] - item['second_share'] < lead:
+                continue
             findings.append({
+                # ⚠️ key 에 **문항 번호를 넣는다.** 예전에는 객관식 발견이 전부
+                #    'survey_choice_top' 하나를 썼는데, 이슈 후보 중복 제거가
+                #    key 로 돌아서 하나를 난제로 올리면 나머지 객관식 발견이
+                #    통째로 사라졌다.
+                'key': f"survey_choice_top:{item['question_id']}",
                 # 심각도는 medium 이다. 쏠림은 **사실이지 결함이 아니다** —
                 # 무엇이 문제인지는 사람이 읽고 판단한다.
-                'key': 'survey_choice_top', 'severity': 'medium',
+                'severity': 'medium',
                 # 보기 이름이 데이터에서 오므로 조사를 붙여 준다. '정합성를'
                 # 같은 것이 화면에 보이면 그 줄 전체가 대충 만든 것으로 읽힌다.
                 'title': (f"「{item['text']}」에 응답의 {item['top_share']}% 가 "
                           f"'{item['top_value']}'{_object(item['top_value'])} "
                           '꼽았습니다'),
-                'detail': (f"{item['answer_count']}명 중 {item['top_count']}명입니다. "
-                           '사람들이 직접 지목한 것이라, 놔두면 그대로 남습니다.'),
+                'detail': (f"{item['answer_count']}명 중 {item['top_count']}명입니다"
+                           f"(2위 {item['second_share']}%). 사람들이 직접 지목한 "
+                           '것이라, 놔두면 그대로 남습니다.'
+                           + _axis_note(item['link_key'])),
                 'division_id': None, 'division_name': None,
-                'evidence': {'survey_id': survey.id, 'question_id': item['question_id'],
-                             'share': item['top_share']},
+                'evidence': {'survey_id': survey.id,
+                             'question_id': item['question_id'],
+                             'share': item['top_share'],
+                             'second_share': item['second_share']},
             })
+
+        # ── 갈림 ──────────────────────────────────────────────────────
+        for item in choice_splits(survey):
+            for axis, groups, label in (
+                ('role', item['by_role'], '역할'),
+                ('div', item['by_division'], '사업부'),
+            ):
+                usable = {k: v for k, v in groups.items()
+                          if v['total'] >= min_sample}
+                picks = {v['value'] for v in usable.values()}
+                # 갈리지 않으면(모두 같은 것을 꼽으면) 발견이 아니다.
+                if len(usable) < 2 or len(picks) < 2:
+                    continue
+                names = _group_names(axis, usable)
+                said = ', '.join(
+                    f"{names[k]}{_topic(names[k])} '{v['value']}'({v['share']}%)"
+                    for k, v in sorted(usable.items(), key=lambda kv: str(kv[0]))
+                )
+                findings.append({
+                    'key': f"survey_choice_{axis}:{item['question_id']}",
+                    # 갈림은 몰림보다 세다. 같은 것을 보고 다른 것을 지목했다는
+                    # 뜻이라, 무엇이 문제인지에 대한 합의가 없다는 말이다.
+                    'severity': 'high',
+                    # 문항이 물음표로 끝나는 일이 많아 「…」 뒤에 조사를 붙이면
+                    # '을(를)' 같은 괄호가 제목에 남는다. 줄표로 끊는다.
+                    'title': f"「{item['text']}」 — {label}마다 고른 것이 다릅니다",
+                    'detail': (f'{said}. 같은 것을 보고 다른 것을 지목했다면 '
+                               '무엇이 문제인지에 대한 합의가 아직 없는 것입니다. '
+                               '어느 쪽이 맞는지보다 왜 갈리는지가 먼저입니다.'
+                               + _axis_note(item['link_key'])),
+                    'division_id': None, 'division_name': None,
+                    'evidence': {'survey_id': survey.id,
+                                 'question_id': item['question_id'],
+                                 'axis': axis,
+                                 'picks': {str(k): v['value']
+                                           for k, v in usable.items()}},
+                })
     return findings
+
+
+def _group_names(axis, groups):
+    """갈림 규칙이 쓸 이름표. 역할은 그 자체가 이름, 사업부는 번호라 이름을 찾는다."""
+    if axis == 'role':
+        return {k: str(k) for k in groups}
+    names = {}
+    try:
+        from app.modules.digital_twin_dashboard.models import Division
+        for row in Division.query.filter(Division.id.in_(list(groups) or [0])).all():
+            names[row.id] = row.name
+    except Exception:
+        pass
+    return {k: names.get(k, f'#{k}') for k in groups}
 
 
 def _topic(word):
