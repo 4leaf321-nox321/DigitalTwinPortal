@@ -274,7 +274,7 @@ def _axis_note(link_key):
     return f" ({ORGANIZATION_LABEL[dimension]} 관련)" if dimension else ''
 
 
-def derive_choice_findings(plan, thresholds, min_sample):
+def derive_choice_findings(plan, thresholds, min_sample, divisions=None):
     """객관식이 말하는 것. 레벨은 못 만들지만 **사람들이 직접 지목한 것**이다.
 
     두 가지를 본다.
@@ -287,16 +287,22 @@ def derive_choice_findings(plan, thresholds, min_sample):
     """
     try:
         from app.modules.survey.evidence import (
-            candidate_surveys, choice_highlights, choice_splits,
+            choice_highlights, choice_splits, closed_surveys,
         )
     except Exception:
         return []
 
     share = thresholds.get('survey_choice_share', 50.0)
     lead = thresholds.get('survey_choice_lead', 15.0)
+    # ⚠️ 사업부 갈림은 **진단 대상 사업부끼리만** 견준다. 안 그러면 척도 규칙은
+    #    대상만 보고 객관식 규칙은 전사를 봐서, 같은 화면의 두 발견이 서로 다른
+    #    모집단을 말한다. 대상 밖 응답은 「따로 센다」고 해놓고 여기로 새는 셈이다.
+    target_ids = {d.id for d in (divisions or [])}
     findings = []
 
-    for survey in candidate_surveys('strategy_plan', plan.id):
+    # ⚠️ **레벨을 못 만드는 설문도 짚을 것이 있다.** 객관식만 있는 설문에서
+    #    8명이 100% 로 한 보기를 꼽아도, 좁은 후보로 거르면 아무것도 안 나타났다.
+    for survey in closed_surveys('strategy_plan', plan.id):
         # ── 몰림 ──────────────────────────────────────────────────────
         for item in choice_highlights(survey):
             if item['answer_count'] < min_sample or item['top_share'] < share:
@@ -332,9 +338,11 @@ def derive_choice_findings(plan, thresholds, min_sample):
 
         # ── 갈림 ──────────────────────────────────────────────────────
         for item in choice_splits(survey):
+            divisions_in_scope = {k: v for k, v in item['by_division'].items()
+                                  if not target_ids or k in target_ids}
             for axis, groups, label in (
                 ('role', item['by_role'], '역할'),
-                ('div', item['by_division'], '사업부'),
+                ('div', divisions_in_scope, '사업부'),
             ):
                 usable = {k: v for k, v in groups.items()
                           if v['total'] >= min_sample}

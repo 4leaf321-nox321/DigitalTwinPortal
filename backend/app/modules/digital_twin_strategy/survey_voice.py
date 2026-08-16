@@ -75,7 +75,12 @@ def _verify_quotes(quotes, corpus):
     """원문에 실제로 있는 인용만 남긴다. (남은 것, 버린 것)
 
     LLM 이 인용을 조금 다듬는 일이 흔해서 정확히 일치하지는 않는다. 그래서
-    **정규화한 뒤 부분 일치**로 본다 — 그래도 없는 말을 지어낸 것은 걸린다.
+    정규화한 뒤 **인용이 원문 안에 들어 있는지**로 본다.
+
+    ⚠️ 방향이 한쪽뿐인 것이 요점이다. 예전에는 반대 방향(원문이 인용 안에
+       들어 있는가)도 인정했는데, 그러면 **원문을 품은 창작이 통과한다** —
+       "교육이 부족합니다" 앞뒤에 없는 말을 붙여 놓아도 걸리지 않았다.
+       인용이 원문보다 길다는 것은 없는 말을 보탰다는 뜻이다.
     """
     kept, dropped = [], []
     flat = [_normalize(a) for a in corpus]
@@ -84,7 +89,7 @@ def _verify_quotes(quotes, corpus):
         if len(needle) < 6:
             dropped.append(quote)
             continue
-        if any(needle in text or text in needle for text in flat):
+        if any(needle in text for text in flat):
             kept.append(quote)
         else:
             dropped.append(quote)
@@ -141,7 +146,7 @@ def summarize(plan, viewer_id=None):
         return result
 
     try:
-        from app.modules.survey.evidence import candidate_surveys, free_text_answers
+        from app.modules.survey.evidence import closed_surveys, free_text_answers
     except Exception:
         result['reason'] = '설문 모듈을 읽을 수 없습니다.'
         return result
@@ -149,7 +154,9 @@ def summarize(plan, viewer_id=None):
     blocks = []
     corpus = []
     seen = set()
-    for survey in candidate_surveys('strategy_plan', plan.id):
+    # ⚠️ **레벨 문항을 요구하지 않는다.** 서술형만 있는 설문(애로사항 수집 같은)도
+    #    읽을 것이 있다. 레벨을 못 만드는 것과 읽을 게 없는 것은 다른 이야기다.
+    for survey in closed_surveys('strategy_plan', plan.id):
         for group in free_text_answers(survey):
             blocks.append({'survey_id': survey.id, 'survey_title': survey.title,
                            'question': group['text'], 'answers': group['answers']})

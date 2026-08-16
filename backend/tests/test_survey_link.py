@@ -720,3 +720,102 @@ def test_역할마다_다른_보기를_고르면_짚는다(client, world, office
     # 연결키를 달아 뒀으면 **어느 축의 이야기인지** 말해 준다. 안 그러면 연결한
     # 사람은 연결했다고 믿는데 아무 데도 안 붙는다.
     assert '역할·책임 관련' in split[0]['detail']
+
+
+# ── 감사에서 나온 것들 ─────────────────────────────────────────────────────
+
+def test_객관식만_있는_설문도_짚는다(client, world, office, auth):
+    """⚠️ 레벨을 못 만드는 것과 짚을 게 없는 것은 다른 이야기다. 좁은 후보로
+    거르던 때는 8명이 100% 로 한 보기를 꼽아도 진단에 아무것도 안 나타났다 —
+    '애로사항 조사'처럼 객관식만 있는 설문이 통째로 사라지는 셈이다.
+    """
+    from app.modules.survey.models import SurveyAnswer as _A
+
+    survey = _survey(world['plan'])          # 척도 문항을 **안 넣는다**
+    q = SurveyQuestion(survey_id=survey.id, order=0, text='무엇이 가장 급합니까?',
+                       qtype='choice', required=True,
+                       options={'choices': ['표준화', '인력']})
+    _db.session.add(q)
+    _db.session.commit()
+    for _ in range(8):
+        response = _answer(survey, world['mx'], {})
+        _db.session.add(_A(response_id=response.id, question_id=q.id,
+                           value_json='표준화'))
+    _db.session.commit()
+
+    found = _findings(client, office, auth)
+    assert [k for k in found if k.startswith('survey_choice_top:')]
+    # 레벨은 여전히 안 만든다 — 그건 점수가 있어야 한다.
+    assert _evidence(client, office, auth)['cells'] == []
+
+
+def test_갈림은_진단_대상_사업부끼리만_견준다(client, world, office, auth):
+    """척도 규칙은 진단 대상만 보는데 객관식만 전사를 보면, 같은 화면의 두 발견이
+    서로 다른 모집단을 말한다. 대상 밖은 「따로 센다」고 해놓고 여기로 새는 셈이다."""
+    from app.modules.survey.models import SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness')
+    q = SurveyQuestion(survey_id=survey.id, order=1, text='걸림돌은?',
+                       qtype='choice', required=True,
+                       options={'choices': ['데이터', '인력']})
+    _db.session.add(q)
+    _db.session.commit()
+    # MX 와 GTR 이 서로 다른 보기를 꼽는다. GTR 은 진단 대상이 아니다.
+    for division, label in ((world['mx'], '데이터'), (world['gtr'], '인력')):
+        for _ in range(6):
+            response = _answer(survey, division, {})
+            _db.session.add(_A(response_id=response.id, question_id=q.id,
+                               value_json=label))
+    _db.session.commit()
+
+    found = _findings(client, office, auth)
+    assert not [k for k in found if k.startswith('survey_choice_div:')]
+
+
+def test_원문을_품은_창작_인용은_버린다():
+    """⚠️ 안전장치라고 적어 두고 실제로는 뚫려 있었다. '교육이 부족합니다' 앞뒤에
+    없는 말을 붙여 놓으면 그대로 통과했다 — 인용이 원문보다 길다는 것은 없는
+    말을 보탰다는 뜻이다."""
+    from app.modules.digital_twin_strategy.survey_voice import _verify_quotes
+
+    corpus = ['교육이 부족합니다.']
+    kept, dropped = _verify_quotes([
+        '교육이 부족합니다',                                    # 그대로
+        '예산 문제로 교육이 부족합니다 그래서 전면 재검토합니다',   # 원문을 품은 창작
+    ], corpus)
+    assert kept == ['교육이 부족합니다']
+    assert len(dropped) == 1
+
+
+def test_임계값에_말이_안_되는_값은_거절한다(client, world, office, auth):
+    """⚠️ 전부 '100 이하' 로만 보던 때는 **역할 간 격차 99점**이 저장됐다.
+    1~5 척도에서 그런 격차는 나올 수 없으므로 그 규칙이 조용히 죽는데,
+    설정에서 값을 넣은 사람은 왜 아무것도 안 짚히는지 알 방법이 없다.
+    """
+    bad = client.put(f'{STRATEGY_BASE}/settings/thresholds',
+                     json={'thresholds': {'survey_role_gap': 99}},
+                     headers=auth(office))
+    assert bad.status_code == 400
+    assert '4점 이하' in bad.get_json()['message']
+
+    ok = client.put(f'{STRATEGY_BASE}/settings/thresholds',
+                    json={'thresholds': {'survey_role_gap': 1.2}},
+                    headers=auth(office))
+    assert ok.status_code == 200
+
+
+def test_진단값_근거는_아는_값만_받는다(client, world, office, auth):
+    """basis 는 표시용이 아니라 **판단에 쓰인다** — 설문 반영이 'manual' 칸을
+    건너뛰는 근거가 이것이다. 아무 문자열이나 들어가면 그 칸은 수기 보호를 잃고
+    다음 반영에 조용히 덮인다."""
+    url = (f"{STRATEGY_BASE}/plans/{YEAR}/assessments/{world['mx'].id}"
+           '/organization/readiness')
+    bad = client.put(url, json={'basis': '아무말이나'}, headers=auth(office))
+    assert bad.status_code == 400
+    assert '알 수 없는 근거 구분' in bad.get_json()['message']
+
+    ok = client.put(url, json={'current_level': 3, 'basis': 'manual'},
+                    headers=auth(office))
+    assert ok.status_code == 200
+    assert StrategyAssessment.query.one().basis == 'manual'

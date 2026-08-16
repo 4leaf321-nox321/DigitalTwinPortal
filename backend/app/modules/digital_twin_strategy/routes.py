@@ -31,7 +31,7 @@ from .definitions import (
     CATEGORIES, CATEGORY_ORGANIZATION, DIMENSION_KEYS_BY_CATEGORY,
     ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
-    THRESHOLDS, THRESHOLD_KEYS, DEFAULT_THRESHOLDS,
+    THRESHOLDS, THRESHOLD_KEYS, THRESHOLD_MAX, DEFAULT_THRESHOLDS,
     MODULE_KEY, THRESHOLD_SETTINGS_KEY,
     get_target_divisions, get_thresholds,
 )
@@ -39,6 +39,10 @@ from .definitions import (
 bp = Blueprint('digital_twin_strategy', __name__, url_prefix='/api/digital-twin-strategy')
 
 ALLOWED_ROLES = (UserRole.ADMIN, UserRole.DT_OFFICE_MEMBER)
+
+# 진단값을 무엇으로 매겼나. models.StrategyAssessment 의 주석과 같은 집합이다.
+#   auto  포탈 데이터로 채움 / survey  설문 / manual  손으로 입력
+ASSESSMENT_BASIS = {'auto', 'survey', 'manual'}
 
 
 def office_required(fn):
@@ -111,8 +115,15 @@ def update_thresholds():
                 return _error(f'{key} 는 숫자여야 합니다.', 400)
             if number < 0:
                 return _error(f'{key} 는 0 이상이어야 합니다.', 400)
-            if key != 'spread_concentrated' and number > 100:
-                return _error(f'{key} 는 100 이하여야 합니다(비율).', 400)
+            # 상한은 항목마다 다르다. 전부 100 으로 보던 때는 '역할 간 격차
+            # 99점' 이 저장됐고, 1~5 척도에서 그런 격차는 나올 수 없으므로 그
+            # 규칙이 조용히 죽었다.
+            limit = THRESHOLD_MAX.get(key, 100)
+            if number > limit:
+                meta = next((t for t in THRESHOLDS if t['key'] == key), None)
+                name = meta['label'] if meta else key
+                unit = meta['unit'] if meta else ''
+                return _error(f'{name} 은(는) {limit}{unit} 이하여야 합니다.', 400)
             if number != DEFAULT_THRESHOLDS[key]:
                 cleaned[key] = number
 
@@ -223,7 +234,7 @@ def get_plan(year):
             )
         # 설문 규칙은 지표를 못 읽어도 돌아야 한다. 둘은 서로 다른 원천이다.
         findings += derive_survey_findings(survey_evidence, thresholds, min_sample)
-        findings += derive_choice_findings(plan, thresholds, min_sample)
+        findings += derive_choice_findings(plan, thresholds, min_sample, divisions)
         order = {'high': 0, 'medium': 1, 'info': 2}
         findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
 
@@ -546,6 +557,14 @@ def update_assessment(year, division_id, category, dimension):
         if 'note' in payload:
             assessment.note = payload['note']
         if 'basis' in payload:
+            # ⚠️ **아는 값만 받는다.** basis 는 표시용이 아니라 판단에 쓰인다 —
+            #    설문 반영이 'manual' 인 칸을 건너뛰는 근거가 이것이다. 아무
+            #    문자열이나 들어가면 그 칸은 수기 보호를 못 받고, 다음 「반영」에
+            #    조용히 덮인다.
+            if payload['basis'] not in ASSESSMENT_BASIS:
+                return _error(
+                    f"알 수 없는 근거 구분입니다: {payload['basis']} "
+                    f"(가능: {', '.join(sorted(ASSESSMENT_BASIS))})", 400)
             assessment.basis = payload['basis']
 
         db.session.commit()

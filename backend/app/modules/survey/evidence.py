@@ -86,29 +86,34 @@ def _mean(values):
     return round(sum(values) / len(values), 2) if values else None
 
 
-def candidate_surveys(context_type=None, context_id=None):
-    """근거가 될 수 있는 설문.
-
-    조건은 둘이다 — **마감됐고**, 연결키가 달린 척도 문항이 있다.
+def closed_surveys(context_type=None, context_id=None):
+    """마감된 설문 전부.
 
     ⚠️ 진행 중(open)인 설문은 쓰지 않는다. 사람이 답할 때마다 진단이 움직이면,
        어제 본 숫자와 오늘 숫자가 다른데 아무도 왜인지 모른다.
 
-    ⚠️ **설문 종류로 거르지 않는다.** 만족도 조사든 애로사항 수집이든, 연결키가
-       달린 척도 문항이 없으면 애초에 후보가 아니다. 거름망은 문항의 꼬리표다.
+    ⚠️ **설문 종류로 거르지 않는다.** 만족도 조사든 애로사항 수집이든 여기 온다.
+       무엇을 낼 수 있는지는 **문항이** 정한다.
     """
     query = Survey.query.filter_by(status='closed')
     if context_type:
         query = query.filter_by(context_type=context_type)
     if context_id is not None:
         query = query.filter_by(context_id=context_id)
+    return query.order_by(Survey.id.desc()).all()
 
+
+def candidate_surveys(context_type=None, context_id=None):
+    """**레벨을 만들 수 있는** 설문. 마감됐고, 연결키 달린 레벨 문항이 있다.
+
+    ⚠️ 이건 레벨(제안값)용 거름망이다. 발견 사항과 서술형 읽기는 **더 넓은**
+       closed_surveys 를 쓴다 — 객관식만 있는 설문도 짚을 것이 있는데, 여기로
+       거르면 8명이 100% 로 한 보기를 꼽아도 진단에 아무것도 안 나타난다.
+       실제로 그랬다.
+    """
     known = allowed_link_keys()
-    out = []
-    for survey in query.order_by(Survey.id.desc()).all():
-        if any(levels_question(q, known) for q in survey.questions.all()):
-            out.append(survey)
-    return out
+    return [s for s in closed_surveys(context_type, context_id)
+            if any(levels_question(q, known) for q in s.questions.all())]
 
 
 def dimension_cells(survey):
