@@ -53,6 +53,50 @@ const CloseButton = styled.button`
   &:hover { color: #475569; background: #f1f5f9; }
 `;
 
+// 항목이 열여덟 개가 됐다. 평평하게 늘어놓으면 **어느 것이 무엇을 정하는지**
+// 안 보이고, 그러면 조정해야 할 값을 찾다가 아무것도 안 바꾸게 된다.
+const GroupHead = styled.div`
+  margin: 1.25rem 0 0.25rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #475569;
+
+  &:first-of-type { margin-top: 0; }
+`;
+
+const GroupNote = styled.div`
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-top: 0.15rem;
+  line-height: 1.5;
+`;
+
+// 무엇을 정하는 값인지에 따라 묶는다.
+//
+// ⚠️ **키 앞자리로 가른다.** 정의(definitions.THRESHOLDS)에 묶음 이름을 따로
+//    적게 하면 새 항목을 넣을 때 그걸 빠뜨리고, 그러면 그 항목만 목록에서
+//    사라진다. 여기서 안 걸린 것은 마지막 묶음이 받는다.
+const GROUPS = [
+  {
+    label: '관측 · 지표',
+    note: '포탈 데이터에서 계산한 값이 이 선을 넘으면 발견 사항으로 짚습니다.',
+    match: (key) => !key.startsWith('survey_') && !key.startsWith('element_'),
+  },
+  {
+    label: '설문',
+    note: '설문 응답에서 무엇을 짚을지. 실제 응답 분포를 보고 조정해야 하는 값들입니다.',
+    match: (key) => key.startsWith('survey_'),
+  },
+  {
+    label: '③ 분석 (SWOT 후보)',
+    note: '진단 레벨의 어디까지를 강점·약점 후보로 낼지. 발견 사항과는 무관합니다.',
+    match: (key) => key.startsWith('element_'),
+  },
+];
+
 const Body = styled.div`
   padding: 1rem 1.25rem;
   overflow-y: auto;
@@ -220,6 +264,34 @@ const ThresholdModal = ({ definitions, values, onSave, onClose }) => {
 
   const changedCount = (definitions || []).filter(isDirty).length;
 
+  const renderRow = (d) => (
+    <Row key={d.key}>
+      <div>
+        <Label>
+          {d.label}
+          {isDirty(d) && <Changed>변경됨</Changed>}
+        </Label>
+        <Detail>{d.detail}</Detail>
+      </div>
+      <InputWrap>
+        <Input
+          type="number"
+          $dirty={isDirty(d)}
+          value={draft[d.key] ?? ''}
+          onChange={e => setDraft(v => ({ ...v, [d.key]: e.target.value }))}
+        />
+        <Unit>{d.unit}</Unit>
+      </InputWrap>
+      <ResetButton
+        $active={isDirty(d)}
+        onClick={() => isDirty(d) && setDraft(v => ({ ...v, [d.key]: String(d.default) }))}
+        title={isDirty(d) ? `기본값(${d.default}${d.unit})으로 되돌리기` : '기본값입니다'}
+      >
+        <RotateCcw size={15} />
+      </ResetButton>
+    </Row>
+  );
+
   return (
     <Backdrop onClick={onClose}>
       <Panel onClick={e => e.stopPropagation()}>
@@ -230,41 +302,27 @@ const ThresholdModal = ({ definitions, values, onSave, onClose }) => {
 
         <Body>
           <Intro>
-            이 값을 넘으면 "발견 사항"에 나옵니다. 너무 느슨하면 아무것도 안 걸리고,
-            너무 빡빡하면 전부 걸려 정작 중요한 것이 묻힙니다.
+            무엇을 짚고 무엇을 넘길지 정하는 값들입니다. 너무 느슨하면 아무것도 안
+            걸리고, 너무 빡빡하면 전부 걸려 정작 중요한 것이 묻힙니다.
             기본값과 다른 항목만 저장되므로, 나중에 기본값이 바뀌면 손대지 않은
             항목은 새 기본값을 따라갑니다.
           </Intro>
 
           {error && <ErrorBox>{error}</ErrorBox>}
 
-          {(definitions || []).map(d => (
-            <Row key={d.key}>
-              <div>
-                <Label>
-                  {d.label}
-                  {isDirty(d) && <Changed>변경됨</Changed>}
-                </Label>
-                <Detail>{d.detail}</Detail>
-              </div>
-              <InputWrap>
-                <Input
-                  type="number"
-                  $dirty={isDirty(d)}
-                  value={draft[d.key] ?? ''}
-                  onChange={e => setDraft(v => ({ ...v, [d.key]: e.target.value }))}
-                />
-                <Unit>{d.unit}</Unit>
-              </InputWrap>
-              <ResetButton
-                $active={isDirty(d)}
-                onClick={() => isDirty(d) && setDraft(v => ({ ...v, [d.key]: String(d.default) }))}
-                title={isDirty(d) ? `기본값(${d.default}${d.unit})으로 되돌리기` : '기본값입니다'}
-              >
-                <RotateCcw size={15} />
-              </ResetButton>
-            </Row>
-          ))}
+          {GROUPS.map(group => {
+            const items = (definitions || []).filter(d => group.match(d.key));
+            if (items.length === 0) return null;
+            return (
+              <React.Fragment key={group.label}>
+                <GroupHead>
+                  {group.label}
+                  <GroupNote>{group.note}</GroupNote>
+                </GroupHead>
+                {items.map(renderRow)}
+              </React.Fragment>
+            );
+          })}
         </Body>
 
         <Foot>

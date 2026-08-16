@@ -264,3 +264,22 @@ def test_요소의_사업부를_고칠_수_있다(client, world, office, auth):
     client.put(f'{BASE}/plans/{YEAR}/elements/{element_id}',
                json={'division_id': None}, headers=auth(office))
     assert StrategyElement.query.get(element_id).division_id is None
+
+
+def test_강점_기준을_설정에서_낮추면_후보가_늘어난다(client, world, office, auth):
+    """⚠️ 이 값이 코드에 박혀 있으면 조정하려면 배포해야 한다. **5가 맞는지는
+    실제 진단값 분포를 보기 전에는 아무도 모른다** — 만든 사람도 모른다."""
+    _grade(world, world['mx'], 'readiness', 4)     # 기본값(5)에서는 안 걸린다
+
+    assert not [c for c in _plan(client, office, auth)['elementCandidates']
+                if c['kind'] == 'S']
+
+    res = client.put(f'{BASE}/settings/thresholds',
+                     json={'thresholds': {'element_strong_at': 4}},
+                     headers=auth(office))
+    assert res.status_code == 200
+
+    strengths = [c for c in _plan(client, office, auth)['elementCandidates']
+                 if c['kind'] == 'S']
+    assert len(strengths) == 1
+    assert '준비도 4단계' in strengths[0]['title']

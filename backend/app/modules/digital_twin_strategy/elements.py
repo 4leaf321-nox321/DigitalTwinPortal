@@ -26,9 +26,10 @@ _DIMENSION_BY_SLOT = {
 }
 _CATEGORY_LABEL = {c['key']: c['label'] for c in CATEGORIES}
 
-# 강점·약점으로 볼 레벨.
+# 강점·약점으로 볼 레벨의 **기본값**. 운영에서 ⚙설정으로 바꾼다
+# (definitions.THRESHOLDS 의 element_strong_at · element_weak_at).
 #
-# ⚠️ **양쪽을 대칭으로 두지 않는다.** 약점은 2단계도 약점이지만, 강점은 4단계면
+# ⚠️ **양쪽을 대칭으로 두지 않았다.** 약점은 2단계도 약점이지만, 강점은 4단계면
 #    "보통보다 낫다" 정도라 전략 요소로 세우기엔 약하다. 무엇보다 '준비도 4단계'
 #    는 **사실이지 활용할 수 있는 강점 서술이 아니다** — ④ TOWS 에서 S×O 를
 #    만들려면 "이걸로 무엇을 할 수 있는가"가 나와야 한다.
@@ -37,8 +38,8 @@ _CATEGORY_LABEL = {c['key']: c['label'] for c in CATEGORIES}
 #    강점의 주 원천은 오히려 **사업부 간 격차**다 — "MX 에서는 이미 되고 있다"
 #    는 옮길 수 있다는 뜻이라, 그대로 수가 된다.
 #
-# ⚠️ 임계값 설정에 넣지 않았다 — 늘어날수록 설정 화면이 표가 되고, 그러면
-#    정작 조정해야 할 값(설문 쪽)이 안 보인다. 정말 필요해지면 그때 넣는다.
+#    다만 이 판단은 **실제 진단값 분포를 보기 전에 내린 것**이다. 그래서 코드에
+#    박아 두지 않는다.
 STRONG_AT = LEVEL_MAX          # 5 만
 WEAK_AT = LEVEL_MIN + 1        # 2 이하
 
@@ -50,11 +51,16 @@ def _label(category, dimension):
     return f"{_CATEGORY_LABEL.get(category, category)} · {meta['label']}"
 
 
-def derive_element_candidates(assessments, findings, divisions):
+def derive_element_candidates(assessments, findings, divisions, thresholds=None):
     """S·W 후보. 돌려주는 각 항목의 key 로 이미 쓴 것을 걸러낸다.
 
     O·T 는 **여기서 안 만든다.** 만들 근거가 없다.
+
+    thresholds 를 안 주면 기본값을 쓴다 — 테스트가 설정 없이 부를 수 있게.
     """
+    thresholds = thresholds or {}
+    strong_at = thresholds.get('element_strong_at', STRONG_AT)
+    weak_at = thresholds.get('element_weak_at', WEAK_AT)
     names = {d.id: d.name for d in divisions}
     out = []
 
@@ -70,7 +76,7 @@ def derive_element_candidates(assessments, findings, divisions):
         where = names.get(division_id, '?')
         label = _label(category, dimension)
 
-        if level >= STRONG_AT:
+        if level >= strong_at:
             out.append({
                 'key': f'assessment:S:{category}:{dimension}:{division_id}',
                 'kind': 'S',
@@ -80,7 +86,7 @@ def derive_element_candidates(assessments, findings, divisions):
                 'division_id': division_id,
                 'source_type': 'assessment',
             })
-        elif level <= WEAK_AT:
+        elif level <= weak_at:
             out.append({
                 'key': f'assessment:W:{category}:{dimension}:{division_id}',
                 'kind': 'W',

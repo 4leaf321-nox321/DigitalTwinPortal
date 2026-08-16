@@ -260,7 +260,8 @@ def get_plan(year):
         taken_elements = {e['source_ref'] for e in elements if e.get('source_ref')}
 
         element_candidates = [
-            c for c in (derive_element_candidates(assessments, findings, divisions)
+            c for c in (derive_element_candidates(assessments, findings,
+                                                  divisions, thresholds)
                         # O·T 는 포탈에 없다. 설문에서만 온다.
                         + derive_element_survey(plan, min_sample))
             if c['key'] not in taken_elements
