@@ -30,6 +30,10 @@ const Layout = styled.div`
 const Wrap = styled.div`
   flex: 1;
   min-width: 0;   /* 표가 넓어도 목차를 밀어내지 않게 */
+  /* 글줄 상한. 본문이 이보다 넓어지면 한 줄이 너무 길어 눈이 줄을 놓친다.
+     곁가지(흐름도·후보 열)는 이 상한 **밖**이다. */
+  max-width: 1200px;
+
   display: flex;
   flex-direction: column;
   gap: 1.25rem;

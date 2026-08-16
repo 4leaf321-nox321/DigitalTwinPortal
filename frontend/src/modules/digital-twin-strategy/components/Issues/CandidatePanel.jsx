@@ -17,6 +17,7 @@ const Wrap = styled.div`
 
 const Head = styled.button`
   width: 100%;
+  cursor: ${p => (p.$fixed ? 'default' : 'pointer')};
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -161,8 +162,10 @@ const Check = styled.input`
   flex-shrink: 0;
 `;
 
-const CandidatePanel = ({ candidates, onPick, onBundle }) => {
-  const [open, setOpen] = useState(false);
+const CandidatePanel = ({ candidates, onPick, onBundle, rail = false }) => {
+  // 곁열에서는 늘 펴 둔다. 접는 것은 바닥에 있을 때의 배려지, 옆에 자리를
+  // 잡아 두고도 접어 두면 그 자리가 낭비다.
+  const [open, setOpen] = useState(rail);
   // 묶어서 새 난제로 만들 후보들. **여기가 없으면** 후보 여럿을 한 난제로
   // 묶으려면 하나씩 「난제 비움」으로 저장해 고아로 만든 뒤 다시 골라야 한다 —
   // 세 건이면 대화상자를 네 번 연다.
@@ -201,8 +204,8 @@ const CandidatePanel = ({ candidates, onPick, onBundle }) => {
 
   return (
     <Wrap>
-      <Head onClick={() => setOpen(v => !v)}>
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      <Head onClick={() => !rail && setOpen(v => !v)} $fixed={rail}>
+        {!rail && (open ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
         <HeadTitle>진단 격차에서 가져오기</HeadTitle>
         {candidates.length > 0 && <Count>{candidates.length}건</Count>}
         <Hint>목표를 정한 항목 중 차이가 큰 것</Hint>

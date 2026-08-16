@@ -4,6 +4,7 @@ import { Plus, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import IssueCard from './IssueCard';
 import IssueEditor from './IssueEditor';
 import FlowMap from '../FlowMap';
+import useWideScreen from '../../hooks/useWideScreen';
 import DivisionFilter, {
   countByDivision, inDivision,
 } from '../DivisionFilter';
@@ -35,6 +36,10 @@ const Layout = styled.div`
 const Wrap = styled.div`
   flex: 1;
   min-width: 0;
+  /* 글줄 상한. 본문이 이보다 넓어지면 한 줄이 너무 길어 눈이 줄을 놓친다.
+     곁가지(흐름도·후보 열)는 이 상한 **밖**이다. */
+  max-width: 1200px;
+
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -272,6 +277,20 @@ const SheetHint = styled.span`
   color: #94a3b8;
 `;
 
+// 후보를 오른쪽에 세워 두는 자리. **난제 목록을 보면서 고를 수 있어야** 묶기
+// 판단이 된다 — 바닥에 있으면 어느 난제와 겹치는지 보려고 위아래로 오간다.
+//
+// 폭이 되는 화면에서만 나온다. 안 되면 지금까지처럼 바닥에 붙는다.
+const Rail = styled.aside`
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: 20rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+`;
+
 const Empty = styled.div`
   padding: 2rem 1.25rem;
   text-align: center;
@@ -299,6 +318,25 @@ const IssuesView = ({
   const [division, setDivision] = useState(null);
   // 방금 만들거나 고친 이슈. 그 자리로 데려가고 잠깐 밝힌다.
   const [flashId, setFlashId] = useState(null);
+  // 흐름도(208) + 본문(1200) + 후보 열(320) + 여백이 들어갈 폭.
+  const wide = useWideScreen(1760);
+
+  // 곁열과 바닥이 **같은 것**을 그려야 한다. 두 군데에 따로 적으면 한쪽만
+  // 고치는 일이 반드시 생긴다.
+  const candidatePanel = (asRail) => (
+    <CandidatePanel
+      rail={asRail}
+      candidates={visibleCandidates}
+      onBundle={onRollup}
+      onPick={(c) => startNew('', {
+        title: c.title,
+        description: c.detail,
+        division_id: c.division_id,
+        source_type: c.source_type,
+        source_ref: c.source_ref,
+      })}
+    />
+  );
 
   const divisionName = (id) => divisions.find(d => d.id === id)?.name || null;
 
@@ -568,17 +606,9 @@ const IssuesView = ({
       {/* 곧바로 만들지 않고 편집기를 채워서 연다. 바로 만들면 난제에 안 걸린
           채로 생겨 빨간 경고로 떨어지는데, 그러면 그 경고가 무뎌진다.
           어느 난제 아래인지는 가져올 때 정하는 것이 맞다. */}
-      <CandidatePanel
-        candidates={visibleCandidates}
-        onBundle={onRollup}
-        onPick={(c) => startNew('', {
-          title: c.title,
-          description: c.detail,
-          division_id: c.division_id,
-          source_type: c.source_type,
-          source_ref: c.source_ref,
-        })}
-      />
+      {/* 넓으면 오른쪽 곁열에 세우고, 좁으면 지금까지처럼 바닥에 붙인다.
+          **두 곳에 그리지 않는다** — 고른 후보와 적던 제목이 두 벌이 된다. */}
+      {!wide && candidatePanel(false)}
 
       {/* 후보에서 온 것만 난제가 비어 있다. 그때는 어느 난제 아래인지가
           진짜로 정해지지 않았으므로 편집기가 물어본다.
@@ -612,6 +642,8 @@ const IssuesView = ({
         </div>
       )}
       </Wrap>
+
+      {wide && <Rail>{candidatePanel(true)}</Rail>}
     </Layout>
   );
 };
