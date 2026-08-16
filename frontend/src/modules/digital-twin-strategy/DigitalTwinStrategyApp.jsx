@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import Header from './components/Layout/Header';
 import DiagnosisView from './components/Diagnosis/DiagnosisView';
 import IssuesView from './components/Issues/IssuesView';
+import AnalysisView from './components/Analysis/AnalysisView';
 import ThresholdModal from './components/Settings/ThresholdModal';
 import strategyApi from './services/strategyApi';
 
@@ -286,6 +287,11 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
+  const handleElementCreate = (payload) =>
+    runAndReload(() => strategyApi.createElement(currentYear, payload));
+  const handleElementDelete = (id) =>
+    runAndReload(() => strategyApi.deleteElement(currentYear, id));
+
   // 이슈 여러 개를 묶어 난제로. 난제 생성과 이슈 재배치가 **한 번에** 일어나야
   // 하므로 서버가 한 트랜잭션으로 한다(cruxes/from-issues).
   const handleRollup = (payload) =>
@@ -384,10 +390,23 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       );
     }
 
+    if (stage === 'analysis') {
+      return (
+        <AnalysisView
+          elements={plan.elements || []}
+          candidates={plan.elementCandidates || []}
+          summary={plan.elementSummary}
+          divisions={meta?.divisions || []}
+          onCreate={handleElementCreate}
+          onDelete={handleElementDelete}
+        />
+      );
+    }
+
     return (
       <Panel>
         <PanelTitle>{STAGES.find(s => s.key === stage)?.label} 단계는 준비 중입니다</PanelTitle>
-        <div>지금은 ① 진단 ~ ② 이슈까지입니다. 계획은 PLAN.md 를 참고하세요.</div>
+        <div>지금은 ① 진단 ~ ③ 분석까지입니다. 계획은 PLAN.md 를 참고하세요.</div>
       </Panel>
     );
   };

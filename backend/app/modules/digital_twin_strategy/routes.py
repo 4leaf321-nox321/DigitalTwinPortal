@@ -15,7 +15,7 @@ from app.extensions import db
 from app.modules.auth.models import User, UserRole
 from .models import (
     StrategyPlan, StrategyAssessment, StrategyMetricTarget, StrategyCrux,
-    StrategyIssue,
+    StrategyIssue, StrategyElement,
 )
 from .evidence import get_evidence_source
 from .metrics import compute_metrics, compute_kpi_coverage
@@ -27,6 +27,7 @@ from .survey_voice import is_available as voices_available, summarize as summari
 from .issues import (
     derive_issue_candidates, derive_survey_candidates, summarize_coverage,
 )
+from .elements import derive_element_candidates, summarize_elements
 from .definitions import (
     CATEGORIES, CATEGORY_ORGANIZATION, DIMENSION_KEYS_BY_CATEGORY,
     ALL_ASSESSMENT_SLOTS,
@@ -246,6 +247,19 @@ def get_plan(year):
             i.to_dict() for i in StrategyIssue.query.filter_by(plan_id=plan.id)
             .order_by(StrategyIssue.order, StrategyIssue.id).all()
         ]
+        elements = [
+            e.to_dict() for e in StrategyElement.query.filter_by(plan_id=plan.id)
+            .order_by(StrategyElement.kind, StrategyElement.order,
+                      StrategyElement.id).all()
+        ]
+        # 이미 요소로 올린 것은 후보에서 뺀다. 안 빼면 같은 것이 목록에 계속
+        # 남아, 무엇을 아직 안 봤는지 읽을 수 없다(이슈 후보와 같은 규칙).
+        taken_elements = {e['source_ref'] for e in elements if e.get('source_ref')}
+
+        element_candidates = [
+            c for c in derive_element_candidates(assessments, findings, divisions)
+            if c['key'] not in taken_elements
+        ]
 
         # 이미 이슈로 만든 후보는 목록에서 뺀다. 같은 격차가 계속 남아 있으면
         # 무엇을 아직 안 다뤘는지 읽을 수 없다.
@@ -277,6 +291,9 @@ def get_plan(year):
                 'issues': issues,
                 'issueCandidates': candidates,
                 'issueCoverage': summarize_coverage(cruxes, issues),
+                'elements': elements,
+                'elementCandidates': element_candidates,
+                'elementSummary': summarize_elements(elements),
                 'metricsMode': source.mode,
                 'metricsError': metric_error,
             }
@@ -484,6 +501,80 @@ def _apply_issue_fields(issue, payload, plan):
             setattr(issue, field, payload[field])
 
     return None
+
+
+ELEMENT_KINDS = ('S', 'W', 'O', 'T')
+
+
+def _apply_element_fields(element, payload):
+    """요소의 값을 채운다. 오류 메시지를 돌려주며 None 이면 통과."""
+    if 'kind' in payload or not element.kind:
+        kind = (payload.get('kind') or '').strip().upper()
+        if kind not in ELEMENT_KINDS:
+            return f"S·W·O·T 중 하나여야 합니다: {payload.get('kind')}"
+        element.kind = kind
+    if 'title' in payload or not element.title:
+        title = (payload.get('title') or '').strip()
+        if not title:
+            return '내용이 비어 있습니다.'
+        element.title = title[:300]
+    for field in ('detail', 'division_id', 'source_type', 'source_ref'):
+        if field in payload:
+            setattr(element, field, payload[field])
+    return None
+
+
+@bp.route('/plans/<int:year>/elements', methods=['POST'])
+@office_required
+def create_element(year):
+    """전략 요소 추가. 후보에서 승격했거나 손으로 적은 것이다."""
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        element = StrategyElement(
+            plan_id=plan.id, kind='', title='',
+            order=StrategyElement.query.filter_by(plan_id=plan.id).count(),
+        )
+        error = _apply_element_fields(element, request.get_json() or {})
+        if error:
+            return _error(error, 400)
+
+        db.session.add(element)
+        db.session.commit()
+        return jsonify({'success': True, 'data': element.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
+@bp.route('/plans/<int:year>/elements/<int:element_id>',
+          methods=['PUT', 'DELETE'])
+@office_required
+def modify_element(year, element_id):
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        element = StrategyElement.query.filter_by(
+            id=element_id, plan_id=plan.id).first()
+        if not element:
+            return _error('전략 요소를 찾을 수 없습니다.', 404)
+
+        if request.method == 'DELETE':
+            db.session.delete(element)
+            db.session.commit()
+            return jsonify({'success': True})
+
+        error = _apply_element_fields(element, request.get_json() or {})
+        if error:
+            return _error(error, 400)
+        db.session.commit()
+        return jsonify({'success': True, 'data': element.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
 
 
 @bp.route('/plans/<int:year>/issues', methods=['POST'])

@@ -61,6 +61,22 @@ export const strategyApi = {
       body: JSON.stringify({ cells, overwrite_manual: overwriteManual }),
     }),
 
+  /** ③ 분석의 전략 요소(SWOT 한 칸). 후보에서 올렸거나 손으로 적은 것이다. */
+  createElement: (year, payload) =>
+    request(`/plans/${year}/elements`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateElement: (year, elementId, payload) =>
+    request(`/plans/${year}/elements/${elementId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteElement: (year, elementId) =>
+    request(`/plans/${year}/elements/${elementId}`, { method: 'DELETE' }),
+
   /** 이슈 여러 개를 **묶어서** 핵심 난제를 만든다. (아래에서 위로)
    *
    *  난제를 따로 만들고 이슈를 하나씩 옮기는 것과 결과는 같지만, 그 길은

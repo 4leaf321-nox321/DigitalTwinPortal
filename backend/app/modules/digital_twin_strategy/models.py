@@ -3,7 +3,7 @@ Digital Twin Strategy Models
 연도별 전략 기획 — 진단 / 이슈 / 근거
 
 계획서: frontend/src/modules/digital-twin-strategy/PLAN.md
-현재 범위는 ① 진단 ~ ② 이슈다. 분석 이후 단계는 뒤 Phase 에서 붙인다.
+현재 범위는 ① 진단 ~ ③ 분석이다. 솔루션 이후 단계는 뒤 Phase 에서 붙인다.
 """
 from app.extensions import db
 from app.shared.models import BaseModel
@@ -198,6 +198,46 @@ class StrategyIssue(BaseModel):
         d = super().to_dict()
         d['priority_score'] = self.priority_score
         return d
+
+
+class StrategyElement(BaseModel):
+    """
+    ③ 분석. SWOT 의 한 칸에 들어가는 **전략 요소** 하나.
+
+    ⚠️ **발견 사항과 겹치는 것은 정상이다.** 쓰이는 곳이 다르다.
+
+        발견 사항 → 핵심 난제 → 이슈       올해 다룰 것을 고르는 길
+        S·W·O·T  → TOWS(④)   → 솔루션     조합해서 수를 만드는 재료
+
+    ④ TOWS 가 S×O, W×O, S×T, W×T 네 조합에서 솔루션을 뽑으므로 네 칸이 다
+    있어야 한다. 그래서 발견 사항을 **후보로 제시하되 사람이 골라 승격**한다 —
+    자동으로 옮기면 이 칸이 발견 사항의 복사본이 되고, 그러면 조합할 것이
+    없어진다.
+
+    ⚠️ **status 를 두지 않는다.** 이슈에는 dropped 가 있지만(올해는 안 한다는
+    판단의 기록), 전략 요소에는 그 상태가 뜻이 없다. 아니면 지운다.
+
+    ⚠️ 근거의 무게가 칸마다 다르다. S·W 는 진단에서 나오지만 **O·T 는 포탈에
+    없는 정보**라 설문이나 사람 손에서 온다(source_type). 화면이 그 차이를
+    보여야 한다 — 넷을 같은 무게로 두면 O·T 가 인상평으로 채워진다.
+    """
+    __tablename__ = 'strategy_element'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+    # S 강점 / W 약점 / O 기회 / T 위협
+    kind = db.Column(db.String(1), nullable=False)
+    title = db.Column(db.String(300), nullable=False)
+    detail = db.Column(db.Text)
+    # 특정 사업부의 것이면 지정, 전사면 비운다.
+    division_id = db.Column(db.Integer, nullable=True, index=True)
+
+    # 어디서 왔나. assessment(진단 레벨) / finding(발견 사항) / survey / manual
+    source_type = db.Column(db.String(20), nullable=False, default='manual')
+    source_ref = db.Column(db.String(200))
+    order = db.Column(db.Integer, nullable=False, default=0)
 
 
 class StrategyEvidence(BaseModel):
