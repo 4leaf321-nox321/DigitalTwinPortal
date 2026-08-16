@@ -316,6 +316,79 @@ def create_crux(year):
         return _error(str(e))
 
 
+@bp.route('/plans/<int:year>/cruxes/from-issues', methods=['POST'])
+@office_required
+def crux_from_issues(year):
+    """이슈 여러 개를 **묶어서** 핵심 난제를 만든다. (아래에서 위로)
+
+    진단이 난제를 먼저 남기고 그것을 쪼개는 것이 본줄기지만, 실제로는 반대
+    방향도 일어난다 — 진단의 여러 곳에서 나온 것을 각각 이슈로 적어 놓고 보니
+    **그것들을 관통하는 하나**가 보이는 경우다. 그게 난제다.
+
+    그때 손으로 하려면 난제를 따로 만들고 이슈를 하나씩 열어 난제를 바꿔야
+    했다. 다섯 건이면 여섯 번을 눌러야 하고, 중간에 하나를 빠뜨리면 그 이슈는
+    고아로 남는다 — 화면이 빨갛게 경고하는 바로 그 상태로.
+
+    ⚠️ **한 트랜잭션이다.** 난제만 만들어지고 이슈가 안 붙으면, 방금 만든 난제가
+       빈 채로 남아 "넘겠다고 해놓고 아무것도 안 하는" 난제처럼 보인다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        payload = request.get_json() or {}
+        title = (payload.get('title') or '').strip()
+        if not title:
+            return _error('난제 제목이 필요합니다.', 400)
+
+        raw_ids = payload.get('issue_ids')
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return _error('묶을 이슈를 골라 주세요.', 400)
+        try:
+            issue_ids = {int(x) for x in raw_ids}
+        except (TypeError, ValueError):
+            return _error('이슈 번호가 올바르지 않습니다.', 400)
+
+        # ⚠️ **이 전략의 이슈만** 묶는다. 번호만 보내면 남의 연도 이슈가 딸려
+        #    올 수 있고, 그러면 그 이슈는 두 전략에 걸친다.
+        issues = StrategyIssue.query.filter(
+            StrategyIssue.plan_id == plan.id,
+            StrategyIssue.id.in_(issue_ids),
+        ).all()
+        missing = issue_ids - {i.id for i in issues}
+        if missing:
+            return _error(f"이 전략의 이슈가 아닙니다: {sorted(missing)}", 400)
+
+        crux = StrategyCrux(
+            plan_id=plan.id,
+            title=title,
+            rationale=payload.get('rationale'),
+            # 여러 사업부의 이슈를 묶었으면 전사 난제다. 하나뿐이면 그 사업부.
+            division_id=(issues[0].division_id
+                         if len({i.division_id for i in issues}) == 1 else None),
+            source_finding=payload.get('source_finding'),
+            order=StrategyCrux.query.filter_by(plan_id=plan.id).count(),
+        )
+        db.session.add(crux)
+        db.session.flush()
+
+        moved = []
+        for issue in issues:
+            # 이미 다른 난제에 매달린 것도 옮긴다. 고른 것은 고른 것이다 —
+            # 다만 무엇이 옮겨졌는지 돌려줘서 화면이 말할 수 있게 한다.
+            moved.append({'id': issue.id, 'from_crux_id': issue.crux_id})
+            issue.crux_id = crux.id
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': {
+            'crux': crux.to_dict(), 'moved': moved,
+        }}), 201
+    except Exception as e:
+        db.session.rollback()
+        return _error(str(e))
+
+
 @bp.route('/plans/<int:year>/cruxes/<int:crux_id>', methods=['PUT', 'DELETE'])
 @office_required
 def modify_crux(year, crux_id):

@@ -123,14 +123,21 @@ const Side = styled(Node)`
   margin-left: 0.9rem;
 `;
 
-// 밝힐 수 있는 칸. 화면의 섹션 id 와 같아야 한다.
-const SECTION_IDS = [
-  'sec-observed', 'sec-kpi', 'sec-survey', 'sec-voices',
-  'sec-findings', 'sec-cruxes', 'sec-grid',
-];
-
-const FlowMap = ({ hasSurvey, hasVoices, onJump }) => {
+/**
+ * items: 위에서 아래로 그릴 것들. 화면마다 흐름이 다르므로 **밖에서 준다** —
+ *        여기에 진단 흐름을 박아 두면 이슈 화면은 이 컴포넌트를 못 쓴다.
+ *
+ *   {kind:'group',  label}            묶음 제목
+ *   {kind:'node',   id, label, out}   상자. id 로 그 자리로 간다. out 이면 산출물
+ *   {kind:'side',   id, label}        본줄기에서 비켜난 상자 (들여씀)
+ *   {kind:'link',   note}             세로 연결선. note 는 그 위에 붙는 말
+ *   {kind:'branch', text}             곁가지 한 줄
+ *   {kind:'exit',   label}            이 화면 밖으로 나가는 칸. **안 눌린다**
+ */
+const FlowMap = ({ items, onJump }) => {
   const [active, setActive] = useState(null);
+
+  const ids = items.filter(i => i.id).map(i => i.id).join(',');
 
   // 지금 보고 있는 칸을 밝힌다. 목차가 하던 일이다.
   //
@@ -138,7 +145,7 @@ const FlowMap = ({ hasSurvey, hasVoices, onJump }) => {
   //    (MainContent)의 잘림까지 계산한다. 아래 70% 를 빼서 **위쪽 섹션**이
   //    잡히게 한다. 안 그러면 큰 표가 화면 가운데를 지날 때 앞뒤로 튄다.
   useEffect(() => {
-    const nodes = SECTION_IDS
+    const nodes = ids.split(',').filter(Boolean)
       .map(id => document.getElementById(id))
       .filter(Boolean);
     if (nodes.length === 0) return undefined;
@@ -155,7 +162,7 @@ const FlowMap = ({ hasSurvey, hasVoices, onJump }) => {
     );
     nodes.forEach(node => observer.observe(node));
     return () => observer.disconnect();
-  }, [hasSurvey, hasVoices]);
+  }, [ids]);
 
   const go = (id) => () => {
     onJump?.(id);
@@ -168,57 +175,33 @@ const FlowMap = ({ hasSurvey, hasVoices, onJump }) => {
   };
 
   return (
-    <Aside aria-label="진단 흐름">
+    <Aside aria-label="흐름">
       <Label>흐름</Label>
-
-      <GroupLabel>근거</GroupLabel>
-      <Node $active={active === 'sec-observed'} onClick={go('sec-observed')}>관측</Node>
-      <Node $active={active === 'sec-kpi'} onClick={go('sec-kpi')}>지표별 연결</Node>
-      {hasSurvey && (
-        <Node $active={active === 'sec-survey'}
-              onClick={go('sec-survey')}>설문 근거</Node>
-      )}
-
-      {/* 설문 근거만 본줄기를 벗어난다 — 발견 사항이 아니라 진단값으로 간다.
-          이 갈림이 화면에서 제일 안 보이던 것이다. */}
-      {hasSurvey && (
-        <Branch>
-          <Arrow>└▸</Arrow>
-          <span><strong>반영</strong>하면 조직 역량 칸으로</span>
-        </Branch>
-      )}
-      {hasSurvey && (
-        <Side $active={active === 'sec-grid'}
-              onClick={go('sec-grid')}>세부 판단</Side>
-      )}
-
-      <Link><LinkNote>⚙기준을 넘은 것만</LinkNote></Link>
-
-      <Node $active={active === 'sec-findings'} onClick={go('sec-findings')}>발견 사항</Node>
-
-      <Link><LinkNote>사람이 골라 올림</LinkNote></Link>
-
-      <Node $out $active={active === 'sec-cruxes'} onClick={go('sec-cruxes')}>핵심 난제</Node>
-
-      {hasVoices && (
-        <Branch>
-          <Arrow>◂┘</Arrow>
-          <span><strong>설문 이야기</strong>(AI)에서도 바로</span>
-        </Branch>
-      )}
-      <Branch>
-        <Arrow>◂┘</Arrow>
-        <span>직접 적어서도</span>
-      </Branch>
-
-      <Link />
-
-      <Exit>② 이슈 (다음 단계)</Exit>
-
-      <Branch>
-        <Arrow>◂┘</Arrow>
-        <span><strong>세부 판단</strong>의 목표−현재 격차에서도</span>
-      </Branch>
+      {items.map((item, i) => {
+        const key = `${item.kind}-${item.id || i}`;
+        if (item.kind === 'group') return <GroupLabel key={key}>{item.label}</GroupLabel>;
+        if (item.kind === 'link') {
+          return (
+            <Link key={key}>{item.note && <LinkNote>{item.note}</LinkNote>}</Link>
+          );
+        }
+        if (item.kind === 'branch') {
+          return (
+            <Branch key={key}>
+              <Arrow>{item.into ? '◂┘' : '└▸'}</Arrow>
+              <span>{item.text}</span>
+            </Branch>
+          );
+        }
+        if (item.kind === 'exit') return <Exit key={key}>{item.label}</Exit>;
+        const Box = item.kind === 'side' ? Side : Node;
+        return (
+          <Box key={key} $out={item.out} $active={active === item.id}
+               onClick={go(item.id)}>
+            {item.label}
+          </Box>
+        );
+      })}
     </Aside>
   );
 };

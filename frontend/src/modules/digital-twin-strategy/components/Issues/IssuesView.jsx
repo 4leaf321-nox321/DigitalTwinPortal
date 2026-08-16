@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Plus, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import IssueCard from './IssueCard';
 import IssueEditor from './IssueEditor';
+import FlowMap from '../FlowMap';
 import CandidatePanel from './CandidatePanel';
 
 // ② 이슈.
@@ -22,7 +23,15 @@ import CandidatePanel from './CandidatePanel';
 // 버튼을 두면 그것이 고아 이슈를 만드는 주 경로가 된다 — 이 화면이 빨갛게
 // 경고하는 바로 그 상태를. 추가는 난제 아래에서만, 또는 진단 격차에서 온다.
 
+const Layout = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+`;
+
 const Wrap = styled.div`
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -154,6 +163,55 @@ const OrphanHint = styled.div`
   opacity: 0.9;
 `;
 
+// 묶기 작업대. 고아 목록을 **경고로만** 두면 사람이 할 수 있는 일이 '지우기'
+// 뿐이라, 진단의 여러 곳에서 나온 것을 모아 난제를 세우는 길이 막힌다.
+const Rollup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: white;
+  border: 1px solid #fbbf24;
+  border-radius: 0.5rem;
+`;
+
+const RollupInput = styled.input`
+  flex: 1;
+  min-width: 12rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: #1e293b;
+  &:focus { outline: none; border-color: #7c3aed; }
+`;
+
+const RollupButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: #7c3aed;
+  color: white;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+`;
+
+const Pick = styled.label`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+  cursor: pointer;
+  > input { margin-top: 0.9rem; flex-shrink: 0; }
+  > div { flex: 1; min-width: 0; }
+`;
+
 const Toggle = styled.button`
   display: flex;
   align-items: center;
@@ -181,13 +239,16 @@ const Empty = styled.div`
 
 const IssuesView = ({
   cruxes, issues, candidates, coverage, divisions,
-  onCreate, onUpdate, onDelete,
+  onCreate, onUpdate, onDelete, onRollup,
 }) => {
   // editing: null | { mode:'new'|'edit', crux_id, draft }
   // draft 는 편집기에 미리 채워 넣을 값이다. 수정이면 이슈 그 자체이고,
   // 진단 격차에서 가져온 것이면 후보의 내용이 들어온다.
   const [editing, setEditing] = useState(null);
   const [showDropped, setShowDropped] = useState(false);
+  // 묶어서 난제로 만들 이슈. 고아 영역에서만 고른다.
+  const [picked, setPicked] = useState([]);
+  const [rollupTitle, setRollupTitle] = useState('');
 
   const divisionName = (id) => divisions.find(d => d.id === id)?.name || null;
 
@@ -216,6 +277,23 @@ const IssuesView = ({
     />
   );
 
+  // ⚠️ 진단이 난제를 먼저 남기고 그것을 쪼개는 것이 본줄기지만, 반대 방향도
+  //    일어난다 — 진단의 여러 곳에서 나온 것을 각각 이슈로 적어 놓고 보니
+  //    **그것들을 관통하는 하나**가 보이는 경우다. 그게 난제다.
+  const rollup = async () => {
+    const title = rollupTitle.trim();
+    if (!title || picked.length === 0) return;
+    const ok = await onRollup({ title, issue_ids: picked });
+    if (ok !== false) {
+      setPicked([]);
+      setRollupTitle('');
+    }
+  };
+
+  const togglePick = (id) => setPicked(prev => (
+    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+  ));
+
   const startNew = (cruxId, draft = {}) =>
     setEditing({ mode: 'new', crux_id: cruxId, draft: { ...draft, crux_id: cruxId } });
 
@@ -229,6 +307,36 @@ const IssuesView = ({
 
   const isEditing = (issue) =>
     editing?.mode === 'edit' && editing.draft.id === issue.id;
+
+  // 이 화면의 흐름. **아래에서 위로 가는 길**도 그린다 — 진단이 난제를 먼저
+  // 남기는 것이 본줄기지만, 이슈를 모아 놓고 보니 관통하는 하나가 보이는 일이
+  // 실제로 일어난다.
+  // ⚠️ 같은 id 를 두 번 넣지 않는다. 두 상자가 같은 자리를 가리키면 눌러도
+  //    같은 곳으로 가고, 현재 위치 표시가 둘 다 켜진다.
+  //
+  // 난제와 이슈는 **한 덩어리**다 — 난제가 축이고 그 아래에 이슈가 달린다.
+  // 그래서 상자 하나로 두고, 쪼갠다는 것은 연결선의 말로 적는다.
+  const flow = [
+    { kind: 'group', label: '① 진단에서' },
+    {
+      kind: 'node', id: 'sec-issue-cruxes', out: true,
+      label: '핵심 난제 ▸ 이슈',
+    },
+    ...(candidates?.length > 0 ? [{
+      kind: 'branch', into: true,
+      text: <><strong>이슈 후보</strong>에서 가져와서</>,
+    }] : []),
+    ...(orphans.length > 0 ? [
+      { kind: 'link', note: '난제를 아직 못 정한 것' },
+      { kind: 'node', id: 'sec-issue-orphans', label: '난제에 안 걸린 이슈' },
+      {
+        kind: 'branch',
+        text: <>골라서 <strong>난제로 묶기</strong> — 아래에서 위로</>,
+      },
+    ] : []),
+    { kind: 'link', note: '영향도 × 실행가능성' },
+    { kind: 'exit', label: '③ 분석 (다음 단계)' },
+  ];
 
   const renderCard = (issue) => (
     isEditing(issue)
@@ -257,7 +365,9 @@ const IssuesView = ({
   }
 
   return (
-    <Wrap>
+    <Layout>
+      <FlowMap items={flow} />
+      <Wrap>
       <Head>
         <Title>이슈</Title>
         {/* 한 줄로 전체 상태가 읽혀야 한다. 아래로 스크롤해야 알 수 있으면
@@ -271,7 +381,7 @@ const IssuesView = ({
         </Hint>
       </Head>
 
-      <CruxGrid>
+      <CruxGrid id="sec-issue-cruxes">
       {cruxes.map(crux => {
         const children = live.filter(i => i.crux_id === crux.id);
         return (
@@ -311,15 +421,50 @@ const IssuesView = ({
       </CruxGrid>
 
       {orphans.length > 0 && (
-        <OrphanBlock>
+        <OrphanBlock id="sec-issue-orphans">
           <OrphanHead>
             <OrphanTitle>어느 난제에도 안 걸린 이슈 · {orphans.length}건</OrphanTitle>
             <OrphanHint>
               전략과 무관한 일을 하고 있다는 신호입니다. 다만 난제 쪽이 틀렸을
-              수도 있습니다 — 이슈를 지울지, 난제를 새로 세울지 판단하세요.
+              수도 있습니다 — 이슈를 지울지, <strong>골라서 난제로 묶을지</strong>,
+              난제를 새로 세울지 판단하세요.
             </OrphanHint>
           </OrphanHead>
-          <Children>{orphans.map(renderCard)}</Children>
+
+          {/* 여러 이슈를 관통하는 하나가 보이면 그것이 난제다. 하나씩 옮기면
+              다섯 건에 여섯 번을 눌러야 하고, 빠뜨린 것은 고아로 남는다. */}
+          <Rollup>
+            <RollupInput
+              value={rollupTitle}
+              onChange={e => setRollupTitle(e.target.value)}
+              placeholder={picked.length > 0
+                ? `고른 ${picked.length}건을 관통하는 난제는 무엇입니까?`
+                : '아래에서 묶을 이슈를 고르세요'}
+              disabled={picked.length === 0}
+            />
+            <RollupButton
+              disabled={picked.length === 0 || !rollupTitle.trim()}
+              onClick={rollup}
+            >
+              {picked.length > 0 ? `${picked.length}건을 난제로 묶기` : '난제로 묶기'}
+            </RollupButton>
+          </Rollup>
+
+          <Children>
+            {orphans.map(issue => (
+              isEditing(issue) ? <div key={issue.id}>{editor()}</div> : (
+                <Pick key={issue.id}>
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(issue.id)}
+                    onChange={() => togglePick(issue.id)}
+                    aria-label={`${issue.title} 묶기`}
+                  />
+                  <div>{renderCard(issue)}</div>
+                </Pick>
+              )
+            ))}
+          </Children>
         </OrphanBlock>
       )}
 
@@ -354,7 +499,8 @@ const IssuesView = ({
           )}
         </div>
       )}
-    </Wrap>
+      </Wrap>
+    </Layout>
   );
 };
 

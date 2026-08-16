@@ -819,3 +819,73 @@ def test_진단값_근거는_아는_값만_받는다(client, world, office, auth
                     headers=auth(office))
     assert ok.status_code == 200
     assert StrategyAssessment.query.one().basis == 'manual'
+
+
+# ── 아래에서 위로: 이슈를 묶어 난제 만들기 ─────────────────────────────────
+
+def test_이슈_여러_개를_묶어_난제를_만든다(client, world, office, auth):
+    """진단이 난제를 먼저 남기고 쪼개는 것이 본줄기지만, 반대 방향도 일어난다 —
+    진단의 여러 곳에서 나온 것을 각각 이슈로 적어 놓고 보니 **그것들을 관통하는
+    하나**가 보이는 경우다. 그게 난제다.
+    """
+    from app.modules.digital_twin_strategy.models import StrategyCrux, StrategyIssue
+
+    made = []
+    for title in ('성과 정의가 과제마다 다르다', 'KPI 연결이 비어 있다'):
+        res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/issues',
+                          json={'title': title, 'division_id': world['mx'].id},
+                          headers=auth(office))
+        assert res.status_code == 201, res.get_json()
+        made.append(res.get_json()['data']['id'])
+
+    # 묶기 전에는 어느 난제에도 안 걸려 있다.
+    assert all(i.crux_id is None for i in StrategyIssue.query.all())
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes/from-issues',
+                      json={'title': '무엇을 성과로 볼지 합의가 없다',
+                            'issue_ids': made},
+                      headers=auth(office))
+    assert res.status_code == 201, res.get_json()
+
+    crux = StrategyCrux.query.one()
+    assert crux.title == '무엇을 성과로 볼지 합의가 없다'
+    # 두 이슈가 같은 사업부면 난제도 그 사업부다.
+    assert crux.division_id == world['mx'].id
+    assert {i.crux_id for i in StrategyIssue.query.all()} == {crux.id}
+
+
+def test_사업부가_섞이면_전사_난제가_된다(client, world, office, auth):
+    """MX 의 이슈와 VD 의 이슈를 함께 묶었다면 그것은 한 사업부의 문제가 아니다."""
+    from app.modules.digital_twin_strategy.models import StrategyCrux
+
+    ids = []
+    for division in (world['mx'], world['vd']):
+        res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/issues',
+                          json={'title': f'{division.name} 문제',
+                                'division_id': division.id},
+                          headers=auth(office))
+        ids.append(res.get_json()['data']['id'])
+
+    client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes/from-issues',
+                json={'title': '전사 공통', 'issue_ids': ids}, headers=auth(office))
+    assert StrategyCrux.query.one().division_id is None
+
+
+def test_남의_전략_이슈는_묶이지_않는다(client, world, office, auth):
+    """번호만 보내면 다른 연도의 이슈가 딸려 올 수 있고, 그러면 그 이슈가 두
+    전략에 걸친다. **난제도 안 만들어져야 한다** — 반쯤 된 상태가 제일 나쁘다."""
+    from app.modules.digital_twin_strategy.models import StrategyCrux, StrategyPlan
+
+    other = StrategyPlan(year=YEAR + 1, title='다음 해')
+    _db.session.add(other)
+    _db.session.commit()
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR + 1}/issues',
+                      json={'title': '남의 이슈'}, headers=auth(office))
+    stranger = res.get_json()['data']['id']
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/cruxes/from-issues',
+                      json={'title': '묶기', 'issue_ids': [stranger]},
+                      headers=auth(office))
+    assert res.status_code == 400
+    assert '이 전략의 이슈가 아닙니다' in res.get_json()['message']
+    assert StrategyCrux.query.count() == 0

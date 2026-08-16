@@ -122,6 +122,40 @@ const DiagnosisView = ({
   const totalSlots = (divisions?.length || 0) *
     (categories || []).reduce((n, c) => n + c.dimensions.length, 0);
 
+  // ⚠️ 화면에 **실제로 그린 것만** 넣는다. 없는 곳을 가리키면 눌러도 아무 일이
+  //    안 일어나서, 사용자는 흐름도가 고장 난 줄 안다.
+  const hasSurvey = surveyEvidence?.cells?.length > 0
+    || surveyEvidence?.surveys?.length > 0;
+  const hasVoices = surveyEvidence?.surveys?.length > 0;
+
+  const flow = [
+    { kind: 'group', label: '근거' },
+    { kind: 'node', id: 'sec-observed', label: '관측' },
+    ...(!metricsError ? [{ kind: 'node', id: 'sec-kpi', label: '지표별 연결' }] : []),
+    ...(hasSurvey ? [
+      { kind: 'node', id: 'sec-survey', label: '설문 근거' },
+      // 설문 근거만 본줄기를 벗어난다 — 발견 사항이 아니라 진단값으로 간다.
+      // 이 갈림이 화면에서 제일 안 보이던 것이다.
+      { kind: 'branch', text: <><strong>반영</strong>하면 조직 역량 칸으로</> },
+      { kind: 'side', id: 'sec-grid', label: '세부 판단' },
+    ] : []),
+    { kind: 'link', note: '⚙기준을 넘은 것만' },
+    { kind: 'node', id: 'sec-findings', label: '발견 사항' },
+    { kind: 'link', note: '사람이 골라 올림' },
+    { kind: 'node', id: 'sec-cruxes', label: '핵심 난제', out: true },
+    ...(hasVoices ? [{
+      kind: 'branch', into: true,
+      text: <><strong>설문 이야기</strong>(AI)에서도 바로</>,
+    }] : []),
+    { kind: 'branch', into: true, text: '직접 적어서도' },
+    { kind: 'link' },
+    { kind: 'exit', label: '② 이슈 (다음 단계)' },
+    {
+      kind: 'branch', into: true,
+      text: <><strong>세부 판단</strong>의 목표−현재 격차에서도</>,
+    },
+  ];
+
   const promote = (finding) => {
     onCruxAdd({
       title: finding.title,
@@ -135,12 +169,9 @@ const DiagnosisView = ({
     <Layout>
       {/* 무엇이 어디로 가는지 + 지금 어디인지. 한동안 목차를 따로 두었는데
           이름이 겹쳐 두 벌이 나란히 있는 꼴이라 이것 하나로 합쳤다. */}
-      <FlowMap
-        hasSurvey={surveyEvidence?.cells?.length > 0
-                   || surveyEvidence?.surveys?.length > 0}
-        hasVoices={surveyEvidence?.surveys?.length > 0}
-        onJump={(id) => { if (id === 'sec-grid') setShowGrid(true); }}
-      />
+      <FlowMap items={flow} onJump={(id) => {
+        if (id === 'sec-grid') setShowGrid(true);
+      }} />
       <Wrap>
         <Section id="sec-observed">
           <Head>

@@ -286,6 +286,11 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
+  // 이슈 여러 개를 묶어 난제로. 난제 생성과 이슈 재배치가 **한 번에** 일어나야
+  // 하므로 서버가 한 트랜잭션으로 한다(cruxes/from-issues).
+  const handleRollup = (payload) =>
+    runAndReload(() => strategyApi.createCruxFromIssues(currentYear, payload));
+
   const handleThresholdSave = async (thresholds) => {
     await strategyApi.updateThresholds(thresholds);
     // meta 도 다시 읽는다 — 관측 표의 색이 이 임계값을 쓰므로 같이 바뀌어야 한다.
@@ -374,6 +379,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           onCreate={handleIssueCreate}
           onUpdate={handleIssueUpdate}
           onDelete={handleIssueDelete}
+          onRollup={handleRollup}
         />
       );
     }

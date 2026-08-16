@@ -61,6 +61,17 @@ export const strategyApi = {
       body: JSON.stringify({ cells, overwrite_manual: overwriteManual }),
     }),
 
+  /** 이슈 여러 개를 **묶어서** 핵심 난제를 만든다. (아래에서 위로)
+   *
+   *  난제를 따로 만들고 이슈를 하나씩 옮기는 것과 결과는 같지만, 그 길은
+   *  다섯 건이면 여섯 번을 눌러야 하고 하나를 빠뜨리면 그 이슈가 고아로 남는다.
+   *  서버가 **한 트랜잭션**으로 처리한다. */
+  createCruxFromIssues: (year, payload) =>
+    request(`/plans/${year}/cruxes/from-issues`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   /** 설문 서술형을 AI 로 묶어 읽는다.
    *
    *  값을 바꾸지 않는데도 POST 다. **부르는 것 자체가 비용**이라, 새로고침에
