@@ -361,6 +361,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           metrics={plan.metrics}
           metricsError={plan.metricsError}
           kpiCoverage={plan.kpiCoverage}
+          processMetrics={plan.processMetrics}
           findings={plan.findings}
           cruxes={plan.cruxes}
           surveyEvidence={plan.surveyEvidence}

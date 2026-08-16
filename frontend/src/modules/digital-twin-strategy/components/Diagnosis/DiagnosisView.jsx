@@ -98,6 +98,28 @@ const Toggle = styled.button`
   font: inherit;
 `;
 
+// 관측을 어느 축으로 볼 것인가. **같은 과제를 다르게 자르는 것**이라 사람이
+// 채울 격자가 늘지 않는다 — 사업부 축이 "누가 못 하고 있나"를, 공정 단계 축이
+// "어디가 약한가"를 본다.
+const AxisTabs = styled.div`
+  display: flex;
+  gap: 0.3rem;
+  margin-left: auto;
+`;
+
+const AxisTab = styled.button`
+  padding: 0.2rem 0.6rem;
+  border: 1px solid ${p => (p.$on ? '#7c3aed' : '#e2e8f0')};
+  border-radius: 999px;
+  background: ${p => (p.$on ? '#7c3aed' : 'white')};
+  color: ${p => (p.$on ? 'white' : '#64748b')};
+  font-size: 0.75rem;
+  font-weight: ${p => (p.$on ? 700 : 500)};
+  font-family: inherit;
+  cursor: pointer;
+  &:hover { border-color: #a78bfa; }
+`;
+
 const Collapsed = styled.div`
   padding: 0.875rem 1.125rem;
   background: #f8fafc;
@@ -112,9 +134,12 @@ const DiagnosisView = ({
   categories, divisions, metricDefinitions, thresholds,
   assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
   surveyEvidence, surveyVoicesAvailable, onApplySurvey, onLoadVoices,
+  processMetrics,
   onChange, onTargetChange, onCruxAdd, onCruxUpdate, onCruxDelete,
 }) => {
   const [showGrid, setShowGrid] = useState(false);
+  // 'division' | 'process'
+  const [axis, setAxis] = useState('division');
 
   const filledCount = (assessments || []).filter(
     a => a.current_level !== null && a.current_level !== undefined
@@ -156,6 +181,18 @@ const DiagnosisView = ({
     },
   ];
 
+  // 공정 단계 축을 사업부 축과 **같은 모양**으로 바꾼다. 행렬 컴포넌트는
+  // id·name 과 평평한 조회만 쓰므로 그대로 쓸 수 있다 — 축마다 표를 따로
+  // 만들면 색 기준이나 단위가 갈린다.
+  const processAxis = processMetrics?.processes || [];
+  const processRows = processAxis.map(name => ({ id: name, name }));
+  const processCells = processAxis.flatMap(name => (
+    Object.entries(processMetrics?.values?.[name] || {}).map(([key, value]) => ({
+      division_id: name, metric_key: key, value,
+    }))
+  ));
+  const onProcess = axis === 'process' && processAxis.length > 0;
+
   const promote = (finding) => {
     onCruxAdd({
       title: finding.title,
@@ -181,16 +218,41 @@ const DiagnosisView = ({
               디지털 트윈 대시보드·DX KPI 관리에서 계산합니다.
               붉은 칸이 ⚙설정의 기준을 넘은 값입니다 — 칸에 대면 기준이 보입니다.
             </Hint>
+            {processAxis.length > 0 && !metricsError && (
+              <AxisTabs>
+                <AxisTab $on={!onProcess} onClick={() => setAxis('division')}
+                         title="누가 못 하고 있나">사업부</AxisTab>
+                <AxisTab $on={onProcess} onClick={() => setAxis('process')}
+                         title="어느 공정 단계가 약한가">공정 단계</AxisTab>
+              </AxisTabs>
+            )}
           </Head>
           {metricsError
             ? <Collapsed>{metricsError}</Collapsed>
             : (
-              <ObservedMatrix
-                definitions={metricDefinitions}
-                divisions={divisions}
-                metrics={metrics}
-                thresholds={thresholds}
-              />
+              <>
+                <ObservedMatrix
+                  definitions={onProcess
+                    // KPI 달성률은 사업부에 붙은 값이라 공정 단계로 나눌 수 없다.
+                    // 빈 줄로 두면 "계산이 안 됐나" 로 읽히므로 아예 뺀다.
+                    ? (metricDefinitions || []).filter(d => d.key !== 'kpi_achievement')
+                    : metricDefinitions}
+                  divisions={onProcess ? processRows : divisions}
+                  metrics={onProcess ? processCells : metrics}
+                  thresholds={thresholds}
+                />
+                {onProcess && (
+                  <Hint>
+                    같은 과제를 <strong>공정 단계로 자른 것</strong>입니다 — 사람이
+                    채울 것이 늘지 않습니다. KPI 달성률은 지표가 사업부에 붙어
+                    있어 이 축에서는 낼 수 없습니다.
+                    {processMetrics?.unknownCount > 0 && (
+                      <> 공정 단계를 안 적은 과제 {processMetrics.unknownCount}건은
+                      어느 칸에도 안 들어갔습니다.</>
+                    )}
+                  </Hint>
+                )}
+              </>
             )}
         </Section>
 

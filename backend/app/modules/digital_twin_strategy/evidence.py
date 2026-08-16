@@ -103,6 +103,9 @@ class LocalDbSource(EvidenceSource):
             result.append({
                 '과제명': p.title,
                 '사업부': p.division,
+                # ⚠️ 공정 단계. 진단을 **사업부 축과 프로세스 축 둘 다**로
+                #    보기 위한 것이다(Value Chain). 과제에 이미 붙어 있다.
+                '프로세스': p.process,
                 '담당부서목록': depts,
                 '진행상태': p.status,
                 '과제년도': p.year,

@@ -354,3 +354,85 @@ def derive_kpi_findings(coverage):
     order = {'high': 0, 'medium': 1, 'info': 2}
     findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
     return findings
+
+
+# ── 공정 단계에서 본 것 (Value Chain) ──────────────────────────────────────
+#
+# 사업부 축이 "누가 못 하고 있나"를 본다면 이쪽은 **"어느 공정 단계가 약한가"**
+# 를 본다. 같은 과제를 다른 축으로 자른 것이라 사람이 채울 격자가 늘지 않는다.
+#
+# ⚠️ **규칙을 둘만 둔다.** 다섯 단계 × 지표 열 개를 다 짚으면 발견 사항이 배로
+#    늘고, 그러면 사업부 축에서 나온 것까지 같이 안 읽힌다.
+
+# 프로세스 축에서 짚을 지표. 전부가 아니라 **공정 단계로 갈렸을 때 뜻이 있는
+# 것**만 고른다 — PL 집중도는 사람 문제라 사업부 축에서 보는 것이 맞다.
+_PROCESS_METRICS = (
+    ('no_performance_rate', 'no_performance', '성과를 정의하지 않았습니다'),
+    ('no_kpi_link_rate', 'no_kpi_link', '어느 KPI 에도 걸려 있지 않습니다'),
+)
+
+
+def derive_process_findings(values, processes, thresholds=None, unknown_count=0):
+    """공정 단계에서 본 발견 사항.
+
+    values      {프로세스명: {지표: 값}}
+    processes   순서를 지킬 프로세스 이름 목록
+    """
+    T = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
+    findings = []
+
+    def add(key, severity, title, detail, evidence=None):
+        findings.append({
+            'key': key, 'severity': severity, 'title': title, 'detail': detail,
+            # 공정 단계는 사업부가 아니다. 전사 사실로 둔다 — 특정 사업부에
+            # 매달면 다른 사업부 화면에서 사라진다.
+            'division_id': None, 'division_name': None,
+            'evidence': evidence or {},
+        })
+
+    scored = [p for p in processes if (values.get(p) or {}).get('project_count')]
+
+    # ── 그 단계만 유난히 나쁜가 ────────────────────────────────────────
+    #
+    # ⚠️ 전 단계가 다 나쁘면 **공정 문제가 아니라 전사 문제**다. 그건 사업부
+    #    축에서 이미 짚는다 — 여기서 또 짚으면 같은 사실이 두 번 뜬다.
+    for metric, threshold_key, phrase in _PROCESS_METRICS:
+        limit = T[threshold_key]
+        hits = [p for p in scored if (values[p].get(metric) or 0) >= limit]
+        if not hits or len(hits) == len(scored):
+            continue
+        worst = max(hits, key=lambda p: values[p][metric])
+        add(f'process_{metric}:{worst}', 'medium',
+            f'{worst} 단계 과제 {values[worst][metric]}% 가 {phrase}',
+            f'{len(scored)}개 공정 단계 중 {len(hits)}개만 기준을 넘었습니다 — '
+            '전사 문제가 아니라 이 단계의 문제로 보입니다. '
+            f"과제 {values[worst]['project_count']}건 기준입니다.",
+            {'process': worst, 'metric': metric, 'value': values[worst][metric]})
+
+    # ── 단계는 있는데 손대는 과제가 거의 없다 ──────────────────────────
+    total = sum((values.get(p) or {}).get('project_count') or 0 for p in processes)
+    if total:
+        share_limit = T['process_thin_share']
+        for name in processes:
+            count = (values.get(name) or {}).get('project_count') or 0
+            share = round(count * 100 / total, 1)
+            if share >= share_limit:
+                continue
+            add(f'process_thin:{name}', 'medium',
+                f'{name} 단계에 과제가 {count}건뿐입니다 (전체의 {share}%)',
+                '공정 단계로는 잡혀 있는데 실제로 손대는 과제가 거의 없습니다. '
+                '덜 중요해서인지, 손대기 어려워서인지, 아니면 아무도 맡지 '
+                '않아서인지는 사람이 답해야 합니다.',
+                {'process': name, 'count': count, 'share': share})
+
+    # ── 프로세스를 안 적은 과제 ────────────────────────────────────────
+    if unknown_count:
+        add('process_unknown', 'info',
+            f'공정 단계를 적지 않은 과제가 {unknown_count}건 있습니다',
+            '이 과제들은 공정 단계별 집계 어디에도 안 들어갑니다. '
+            '숫자가 안 맞는 이유가 여기 있습니다.',
+            {'count': unknown_count})
+
+    order = {'high': 0, 'medium': 1, 'info': 2}
+    findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
+    return findings

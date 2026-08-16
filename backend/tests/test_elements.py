@@ -283,3 +283,69 @@ def test_강점_기준을_설정에서_낮추면_후보가_늘어난다(client, 
                  if c['kind'] == 'S']
     assert len(strengths) == 1
     assert '준비도 4단계' in strengths[0]['title']
+
+
+# ── Value Chain: 공정 단계 축 ──────────────────────────────────────────────
+
+def test_공정_단계로도_같은_지표를_센다():
+    """⚠️ 축마다 따로 세면 같은 지표가 두 곳에서 계산되고, 그러면 "사업부 합과
+    공정 단계 합이 다른" 날이 온다. 세는 것은 measure() 하나다."""
+    from app.modules.digital_twin_strategy.metrics import measure
+
+    items = [
+        {'프로세스': '개발', 'performance_count': 0, 'kpi_links': []},
+        {'프로세스': '개발', 'performance_count': 1,
+         'kpi_links': [{'relation_type': 'primary'}]},
+    ]
+    m, _ctx = measure(items)
+    assert m['project_count'] == 2
+    assert m['no_performance_rate'] == 50.0
+    assert m['no_kpi_link_rate'] == 50.0
+
+
+def test_그_단계만_나쁠_때만_짚는다():
+    """전 단계가 다 나쁘면 **공정 문제가 아니라 전사 문제**다. 그건 사업부 축이
+    이미 짚는다 — 여기서 또 짚으면 같은 사실이 두 번 뜬다."""
+    from app.modules.digital_twin_strategy.findings import derive_process_findings
+
+    processes = ['개발', '제조', '품질']
+    # 셋 다 나쁨 → 안 짚는다.
+    everywhere = {p: {'project_count': 10, 'no_performance_rate': 90.0}
+                  for p in processes}
+    assert not [f for f in derive_process_findings(everywhere, processes)
+                if 'no_performance' in f['key']]
+
+    # 하나만 나쁨 → 짚는다.
+    only_one = {
+        '개발': {'project_count': 10, 'no_performance_rate': 90.0},
+        '제조': {'project_count': 10, 'no_performance_rate': 5.0},
+        '품질': {'project_count': 10, 'no_performance_rate': 5.0},
+    }
+    hits = [f for f in derive_process_findings(only_one, processes)
+            if 'no_performance' in f['key']]
+    assert len(hits) == 1
+    assert '개발' in hits[0]['title']
+
+
+def test_과제가_거의_없는_단계를_짚는다():
+    """단계로는 잡혀 있는데 실제로 손대는 과제가 거의 없다 — 사업부 축에서는
+    안 보이는 사실이다."""
+    from app.modules.digital_twin_strategy.findings import derive_process_findings
+
+    processes = ['개발', '연계']
+    values = {'개발': {'project_count': 100}, '연계': {'project_count': 2}}
+    thin = [f for f in derive_process_findings(values, processes)
+            if f['key'].startswith('process_thin:')]
+    assert len(thin) == 1
+    assert '연계' in thin[0]['title'] and '2건' in thin[0]['title']
+
+
+def test_공정_단계를_안_적은_과제를_숨기지_않는다():
+    """숨기면 합계가 안 맞는데 이유가 안 보인다."""
+    from app.modules.digital_twin_strategy.findings import derive_process_findings
+
+    found = derive_process_findings({'개발': {'project_count': 10}}, ['개발'],
+                                    unknown_count=7)
+    unknown = [f for f in found if f['key'] == 'process_unknown']
+    assert len(unknown) == 1
+    assert '7건' in unknown[0]['title']

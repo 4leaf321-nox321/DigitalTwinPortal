@@ -25,6 +25,129 @@ def _pct(part, whole):
     return round(part * 100 / whole, 1) if whole else None
 
 
+def measure(items):
+    """과제 묶음 하나의 관측값. **무엇으로 묶었는지는 모른다.**
+
+    사업부로 묶든 프로세스로 묶든 세는 방법은 같다. 축마다 따로 세면 같은
+    지표가 두 곳에서 계산되고, 그러면 "사업부 합과 프로세스 합이 다른" 날이
+    온다.
+
+    반환: (metrics, context)
+    """
+    m = {k: None for k in METRIC_KEYS}
+    ctx = {}
+    total = len(items)
+    m['project_count'] = total
+    if not total:
+        return m, ctx
+
+    # 부서별 과제 수. 한 과제에 여러 부서가 걸리면 각 부서에 한 번씩 센다 —
+    # 참여했는지를 보는 것이지 지분을 나누는 것이 아니다.
+    dept_counts = {}
+    for p in items:
+        for dept in (p.get('담당부서목록') or []):
+            if dept:
+                dept_counts[dept] = dept_counts.get(dept, 0) + 1
+
+    m['dept_spread'] = len(dept_counts)
+
+    if dept_counts:
+        top_dept, top_count = max(dept_counts.items(), key=lambda kv: kv[1])
+        total_assignments = sum(dept_counts.values())
+        m['dept_concentration'] = _pct(top_count, total_assignments)
+        ctx['top_dept'] = top_dept
+        ctx['top_dept_count'] = top_count
+        # 상위 3개까지 남긴다. "어느 부서만 많다"를 말하려면 목록이 있어야 한다.
+        ctx['dept_ranking'] = [
+            {'name': n, 'count': c}
+            for n, c in sorted(dept_counts.items(), key=lambda kv: -kv[1])[:3]
+        ]
+
+    # 무엇을 이루려는지 적지 않은 채 진행 중인 과제.
+    no_perf = sum(1 for p in items if not (p.get('performance_count') or 0))
+    m['no_performance_rate'] = _pct(no_perf, total)
+
+    # 어느 지표에도 걸려 있지 않은 과제 — 전략과 실행이 끊긴 지점.
+    no_link = sum(1 for p in items if not (p.get('kpi_links') or []))
+    m['no_kpi_link_rate'] = _pct(no_link, total)
+
+    # 걸긴 걸었는데 어떻게 기여하는지 정하지 않은 연결.
+    links = [l for p in items for l in (p.get('kpi_links') or [])]
+    if links:
+        unclassified = sum(1 for l in links if not l.get('relation_type'))
+        m['unclassified_link_rate'] = _pct(unclassified, len(links))
+
+        # 등급별로 따로 센다. 순서척도라 주=3·보조=2 로 합치면
+        # '간접 3건'과 '주 1건'이 같아진다(Dt2ProjectKpi 주석).
+        graded = [l for l in links if l.get('relation_type')]
+        if graded:
+            by_grade = {}
+            for l in graded:
+                g = l['relation_type']
+                by_grade[g] = by_grade.get(g, 0) + 1
+            m['primary_link_rate'] = _pct(by_grade.get('primary', 0), len(graded))
+            ctx['link_grades'] = {
+                'primary': by_grade.get('primary', 0),
+                'support': by_grade.get('support', 0),
+                'indirect': by_grade.get('indirect', 0),
+                'graded_total': len(graded),
+            }
+
+    # 한 사람에게 몰린 정도. 사람에 묶인 조직은 그 사람이 빠지면 멈춘다.
+    pl_counts = {}
+    for p in items:
+        pl = p.get('과제PL')
+        if pl:
+            pl_counts[pl] = pl_counts.get(pl, 0) + 1
+    if pl_counts:
+        m['pl_concentration'] = _pct(max(pl_counts.values()), total)
+
+    # 종료가 한 분기에 몰리면 검증 부하가 한꺼번에 닥친다.
+    quarters = {}
+    for p in items:
+        q = p.get('end_quarter')
+        if q:
+            quarters[q] = quarters.get(q, 0) + 1
+    if quarters:
+        m['deadline_crowding'] = _pct(max(quarters.values()), total)
+
+    # 선행·후속 어느 쪽과도 안 이어진 과제. 많으면 축적이 되지 않는다.
+    isolated = sum(1 for p in items if not (p.get('dependency_count') or 0))
+    m['isolated_rate'] = _pct(isolated, total)
+
+    return m, ctx
+
+
+def compute_process_metrics(source, year, processes):
+    """**프로세스별** 관측값. (Value Chain)
+
+    사업부 축이 "누가 못 하고 있나"를 본다면 이쪽은 "어느 공정 단계가 약한가"를
+    본다. 같은 과제를 다른 축으로 자르는 것이라 **사람이 채울 격자가 늘지
+    않는다** — 이 모듈이 격자를 늘리지 않으려는 이유가 그것이다.
+
+    ⚠️ **KPI 달성률은 안 낸다.** KPI 는 사업부에 붙어 있지 공정 단계에 붙어
+       있지 않다. 억지로 배분하면 그 숫자를 아무도 설명할 수 없다.
+    """
+    projects = source.get_projects(year) or []
+    known = list(processes or [])
+
+    grouped = {name: [] for name in known}
+    unknown = []
+    for p in projects:
+        name = (p.get('프로세스') or '').strip()
+        if name in grouped:
+            grouped[name].append(p)
+        else:
+            # 프로세스가 안 적힌 과제. **버리지 않는다** — 합계가 안 맞는데
+            # 이유가 안 보이는 것이 제일 나쁘다.
+            unknown.append(p)
+
+    values, context = {}, {}
+    for name, items in grouped.items():
+        values[name], context[name] = measure(items)
+    return values, context, len(unknown)
+
+
 def compute_metrics(source, year, divisions):
     """사업부별 관측값을 계산한다.
 
@@ -50,87 +173,9 @@ def compute_metrics(source, year, divisions):
             grouped[division_id].append(p)
 
     for division_id, items in grouped.items():
-        m = result[division_id]
-        total = len(items)
-        m['project_count'] = total
-        if not total:
-            continue
-
-        # 부서별 과제 수. 한 과제에 여러 부서가 걸리면 각 부서에 한 번씩 센다 —
-        # 참여했는지를 보는 것이지 지분을 나누는 것이 아니다.
-        dept_counts = {}
-        for p in items:
-            for dept in (p.get('담당부서목록') or []):
-                if dept:
-                    dept_counts[dept] = dept_counts.get(dept, 0) + 1
-
-        m['dept_spread'] = len(dept_counts)
-
-        if dept_counts:
-            top_dept, top_count = max(dept_counts.items(), key=lambda kv: kv[1])
-            total_assignments = sum(dept_counts.values())
-            m['dept_concentration'] = _pct(top_count, total_assignments)
-            context[division_id]['top_dept'] = top_dept
-            context[division_id]['top_dept_count'] = top_count
-            # 상위 3개까지 남긴다. "어느 부서만 많다"를 말하려면 목록이 있어야 한다.
-            context[division_id]['dept_ranking'] = [
-                {'name': n, 'count': c}
-                for n, c in sorted(dept_counts.items(), key=lambda kv: -kv[1])[:3]
-            ]
-
-        # 무엇을 이루려는지 적지 않은 채 진행 중인 과제.
-        # 끝나도 무엇이 좋아졌는지 말할 수 없다.
-        no_perf = sum(1 for p in items if not (p.get('performance_count') or 0))
-        m['no_performance_rate'] = _pct(no_perf, total)
-
-        # 어느 지표에도 걸려 있지 않은 과제 — 전략과 실행이 끊긴 지점.
-        no_link = sum(1 for p in items if not (p.get('kpi_links') or []))
-        m['no_kpi_link_rate'] = _pct(no_link, total)
-
-        # 걸긴 걸었는데 어떻게 기여하는지 정하지 않은 연결.
-        # 전부 동등해 보이면 무엇이 핵심인지 읽을 수 없다.
-        links = [l for p in items for l in (p.get('kpi_links') or [])]
-        if links:
-            unclassified = sum(1 for l in links if not l.get('relation_type'))
-            m['unclassified_link_rate'] = _pct(unclassified, len(links))
-
-            # 등급별로 따로 센다. 순서척도라 주=3·보조=2 로 합치면
-            # '간접 3건'과 '주 1건'이 같아진다(Dt2ProjectKpi 주석).
-            graded = [l for l in links if l.get('relation_type')]
-            if graded:
-                by_grade = {}
-                for l in graded:
-                    g = l['relation_type']
-                    by_grade[g] = by_grade.get(g, 0) + 1
-                m['primary_link_rate'] = _pct(by_grade.get('primary', 0), len(graded))
-                context[division_id]['link_grades'] = {
-                    'primary': by_grade.get('primary', 0),
-                    'support': by_grade.get('support', 0),
-                    'indirect': by_grade.get('indirect', 0),
-                    'graded_total': len(graded),
-                }
-
-        # 한 사람에게 몰린 정도. 사람에 묶인 조직은 그 사람이 빠지면 멈춘다.
-        pl_counts = {}
-        for p in items:
-            pl = p.get('과제PL')
-            if pl:
-                pl_counts[pl] = pl_counts.get(pl, 0) + 1
-        if pl_counts:
-            m['pl_concentration'] = _pct(max(pl_counts.values()), total)
-
-        # 종료가 한 분기에 몰리면 검증 부하가 한꺼번에 닥친다.
-        quarters = {}
-        for p in items:
-            q = p.get('end_quarter')
-            if q:
-                quarters[q] = quarters.get(q, 0) + 1
-        if quarters:
-            m['deadline_crowding'] = _pct(max(quarters.values()), total)
-
-        # 선행·후속 어느 쪽과도 안 이어진 과제. 많으면 축적이 되지 않는다.
-        isolated = sum(1 for p in items if not (p.get('dependency_count') or 0))
-        m['isolated_rate'] = _pct(isolated, total)
+        # 세는 일은 measure() 하나가 한다. 축마다 따로 세면 같은 지표가 두 곳에서
+        # 계산되고, 그러면 "사업부 합과 프로세스 합이 다른" 날이 온다.
+        result[division_id], context[division_id] = measure(items)
 
     # ── KPI 달성률 ────────────────────────────────────────────────────
     # 목표와 실적을 사업부별로 합산해 낸다. 지표별 달성률의 평균이 아니라
