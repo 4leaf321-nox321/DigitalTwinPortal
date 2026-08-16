@@ -355,7 +355,7 @@ def serialize_response(response, reveal=False, user_names=None):
     return data
 
 
-def _survey_dict(survey, with_questions=False, counts=None):
+def _survey_dict(survey, with_questions=False, counts=None, for_respondent=False):
     d = {
         'id': survey.id,
         'title': survey.title,
@@ -374,11 +374,21 @@ def _survey_dict(survey, with_questions=False, counts=None):
     if counts:
         d.update(counts)
     if with_questions:
-        d['questions'] = [_question_dict(q) for q in survey.questions.all()]
+        d['questions'] = [_question_dict(q, for_respondent)
+                          for q in survey.questions.all()]
     return d
 
 
-def _question_dict(q):
+def _question_dict(q, for_respondent=False):
+    """문항 하나를 화면이 쓰는 모양으로.
+
+    ⚠️ for_respondent 면 **보기 점수를 뺀다.** '매일=5, 쓰지 않음=1' 이 보이면
+       사람들은 높은 점수 쪽을 고른다 — 재려던 것이 사라지고 점수만 남는다.
+       관리 화면에서는 보여야 한다(그걸 정하는 자리다).
+    """
+    options = q.options or {}
+    if for_respondent and 'scores' in options:
+        options = {k: v for k, v in options.items() if k != 'scores'}
     return {
         'id': q.id,
         'order': q.order,
@@ -387,7 +397,7 @@ def _question_dict(q):
         'help_text': q.help_text,
         'qtype': q.qtype,
         'required': q.required,
-        'options': q.options or {},
+        'options': options,
         # 빈 배열이면 전원이 본다. 화면이 이 값으로 문항을 걸러 그린다.
         'audience_roles': q.audience_roles or [],
         'audience_processes': q.audience_processes or [],
@@ -476,6 +486,10 @@ def _add_questions(survey, items, order_base=None):
             return (f'{i + 1}번 문항의 연결키를 알 수 없습니다: {link_key} '
                     f"(쓸 수 있는 값: {', '.join(sorted(known))})")
 
+        error = _choice_scores_error(qtype, item.get('options') or {})
+        if error:
+            return f'{i + 1}번 문항의 {error}'
+
         order = item.get('order', i) if order_base is None else order_base + i
         db.session.add(SurveyQuestion(
             survey=survey,
@@ -494,6 +508,31 @@ def _add_questions(survey, items, order_base=None):
             link_type=link_type_for(link_key),
             link_key=link_key,
         ))
+    return None
+
+
+def _choice_scores_error(qtype, options):
+    """보기 점수가 쓸 수 있는 모양인가. 문제없으면 None.
+
+    표 경로는 파서가 이미 막지만(importer.parse_choice_scores), 편집기 경로는
+    화면이 만든 값을 그대로 받는다. 두 길의 규칙이 갈리면 "표로는 되는데
+    편집기로는 안 되는" 문항이 생긴다.
+    """
+    scores = options.get('scores')
+    if scores in (None, []):
+        return None
+    if qtype != 'choice':
+        return ('보기 점수는 객관식(단일 선택)에만 붙일 수 있습니다. '
+                '복수선택·순위는 고른 것이 여럿이라 한 사람의 점수가 하나로 '
+                '정해지지 않습니다.')
+    choices = options.get('choices') or []
+    if not isinstance(scores, list) or len(scores) != len(choices):
+        return '보기 점수의 개수가 보기 개수와 다릅니다.'
+    for value in scores:
+        if not isinstance(value, int) or isinstance(value, bool):
+            return f'보기 점수는 정수여야 합니다: {value}'
+        if not (LEVEL_MIN <= value <= LEVEL_MAX):
+            return f'보기 점수는 {LEVEL_MIN}~{LEVEL_MAX} 여야 합니다: {value}'
     return None
 
 
@@ -1710,7 +1749,7 @@ def survey_form(survey_id):
     derived = [r for r in derive_roles(user) if r in asked_roles]
 
     return jsonify({'success': True, 'data': {
-        **_survey_dict(survey, with_questions=True),
+        **_survey_dict(survey, with_questions=True, for_respondent=True),
         'already_answered': bool(existing and existing.submitted_at),
         # 사업부는 **읽기 전용**이다. 화면은 이 값을 보여 주기만 하고 되돌려
         # 보내지 않는다. 이름까지 주는 것은 화면이 사업부 목록을 따로 받아

@@ -199,6 +199,15 @@ def make_main_survey(plan_id, processes):
         survey, n, '공통', '가장 큰 걸림돌은 무엇입니까?',
         'choice', options={'choices': list(BLOCKERS)})
     n += 1
+    # 순서가 있는 객관식. **보기에 점수가 적혀 있어** 척도 문항과 같은 자격으로
+    # 진단 레벨에 들어간다. 순서 없는 '걸림돌' 문항과 나란히 두어 차이가 보이게 한다.
+    linked['usage'] = _q(
+        survey, n, '공통', '디지털 트윈 도구를 얼마나 자주 쓰십니까?',
+        'choice',
+        options={'choices': ['매일', '주 1~2회', '가끔', '쓰지 않음'],
+                 'scores': [5, 4, 2, 1]},
+        link_key='organization:redesign')
+    n += 1
     linked['ret_measure'] = _q(
         survey, n, '공통', '무엇으로 좋아졌다고 말할지 정해져 있습니까?',
         'scale', options=dict(SCALE), link_key='organization:return')
@@ -300,6 +309,9 @@ def answer_main(survey, linked, people, processes):
         # ⚠️ 성과 측정은 **어디서나 낮게** 둔다 — 전사 공통 저점 규칙이 뜨는
         #    것을 화면에서 봐야 한다. 사업부 성향(mood)을 일부러 안 섞는다.
         put(linked['ret_measure'], _clamp(RNG.gauss(1.9, 0.55)))
+        # 사업부 성향을 빈도에도 반영한다. 잘하는 곳이 더 자주 쓴다.
+        usage = ['쓰지 않음', '가끔', '가끔', '주 1~2회', '매일']
+        put(linked['usage'], json_value=usage[_clamp(mood + RNG.gauss(0, 0.6)) - 1])
 
         if role in (ROLE_PL, ROLE_MEMBER):
             put(linked['ready_data'], _score(mood, -0.3))

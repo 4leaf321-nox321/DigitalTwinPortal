@@ -16,12 +16,18 @@ from app.modules.digital_twin_strategy.models import StrategyAssessment, Strateg
 from app.modules.survey.models import Survey, SurveyQuestion, SurveyResponse, SurveyAnswer
 
 STRATEGY_BASE = '/api/digital-twin-strategy'
+RESPOND_BASE = '/api/surveys'
 YEAR = 2026
 
 
 @pytest.fixture()
 def office(make_user):
     return make_user('office@test.local', UserRole.DT_OFFICE_MEMBER)
+
+
+@pytest.fixture()
+def staff(make_user):
+    return make_user('staff@test.local', UserRole.USER, department='생산기술팀')
 
 
 @pytest.fixture()
@@ -515,3 +521,98 @@ def test_읽을_원문이_모자라면_로그도_안_남는다(client, world, of
                       json={}, headers=auth(office))
     assert res.status_code == 200
     assert SurveyAccessLog.query.count() == 0
+
+
+# ── 점수 붙은 객관식 ───────────────────────────────────────────────────────
+
+def _scored(survey, text, link_key, order=0):
+    """'얼마나 자주' 처럼 **순서가 있는** 객관식. 보기마다 점수가 적혀 있다."""
+    q = SurveyQuestion(
+        survey_id=survey.id, order=order, text=text, qtype='choice',
+        required=True, link_key=link_key, link_type='strategy_dimension',
+        options={'choices': ['매일', '주 1~2회', '가끔', '쓰지 않음'],
+                 'scores': [5, 4, 2, 1]})
+    _db.session.add(q)
+    _db.session.flush()
+    return q
+
+
+def _pick(survey, division, question, label, role='PL'):
+    from app.modules.survey.models import SurveyAnswer as _A
+    response = _answer(survey, division, {}, role=role)
+    _db.session.add(_A(response_id=response.id, question_id=question.id,
+                       value_json=label))
+    return response
+
+
+def test_점수가_붙은_객관식은_레벨에_들어간다(client, world, office, auth):
+    """'얼마나 자주 쓰십니까'는 사실상 척도인데 보기로 물었을 뿐이다. 보기에
+    점수를 적어 두면 척도 문항과 **같은 자격**으로 진단에 들어가야 한다."""
+    survey = _survey(world['plan'])
+    q = _scored(survey, '도구를 얼마나 자주 쓰십니까?', 'organization:redesign')
+    _db.session.commit()
+    for label in ['매일', '매일', '주 1~2회', '가끔', '쓰지 않음']:
+        _pick(survey, world['mx'], q, label)
+    _db.session.commit()
+
+    cell = next(c for c in _evidence(client, office, auth)['cells']
+                if c['dimension'] == 'redesign')
+    assert cell['respondent_count'] == 5
+    assert cell['average'] == 3.4          # (5+5+4+2+1)/5
+    assert cell['suggested_level'] == 3
+
+
+def test_점수와_척도가_한_사람_안에서_같이_평균된다(client, world, office, auth):
+    """둘 다 1~5 라는 같은 자에서 나온 값이다. 한 사람이 척도 하나와 점수 객관식
+    하나를 받았으면 **그 둘의 평균**이 그 사람의 점수다."""
+    from app.modules.survey.models import SurveyAnswer as _A
+
+    survey = _survey(world['plan'])
+    scale_q = _question(survey, '자리잡았습니까?', 'organization:redesign', 0)
+    choice_q = _scored(survey, '얼마나 자주?', 'organization:redesign', 1)
+    _db.session.commit()
+    for _ in range(5):
+        response = _answer(survey, world['mx'], {scale_q: 5})
+        _db.session.add(_A(response_id=response.id, question_id=choice_q.id,
+                           value_json='가끔'))          # 2점
+    _db.session.commit()
+
+    cell = next(c for c in _evidence(client, office, auth)['cells']
+                if c['dimension'] == 'redesign')
+    assert cell['average'] == 3.5          # (5 + 2) / 2
+    assert cell['respondent_count'] == 5   # 문항이 둘이어도 한 사람이다
+
+
+def test_점수_없는_객관식은_레벨에_안_들어간다(client, world, office, auth):
+    """'데이터 정합성'과 '인력 부족' 중 어느 쪽이 높은 단계인지는 정해질 수 없다.
+    순서가 없는 보기라서다 — 시스템이 짐작해 매기면 그 매핑을 아무도 설명하지
+    못한다."""
+    survey = _survey(world['plan'])
+    _question(survey, '준비도', 'organization:readiness', 0)   # 후보 자격용
+    plain = SurveyQuestion(
+        survey_id=survey.id, order=1, text='가장 큰 걸림돌은?', qtype='choice',
+        required=True, link_key='organization:redesign',
+        link_type='strategy_dimension',
+        options={'choices': ['데이터 정합성', '인력 부족']})
+    _db.session.add(plain)
+    _db.session.commit()
+    for _ in range(6):
+        _pick(survey, world['mx'], plain, '데이터 정합성')
+    _db.session.commit()
+
+    dims = {c['dimension'] for c in _evidence(client, office, auth)['cells']}
+    assert 'redesign' not in dims
+
+
+def test_응답자에게는_보기_점수를_보여주지_않는다(client, world, staff, auth):
+    """'매일=5, 쓰지 않음=1' 이 보이면 사람들은 높은 쪽을 고른다 — 재려던 것이
+    사라지고 점수만 남는다."""
+    survey = _survey(world['plan'], status='open')
+    q = _scored(survey, '얼마나 자주?', 'organization:redesign')
+    _db.session.commit()
+
+    res = client.get(f'{RESPOND_BASE}/{survey.id}/form', headers=auth(staff))
+    assert res.status_code == 200
+    options = res.get_json()['data']['questions'][0]['options']
+    assert options['choices'] == ['매일', '주 1~2회', '가끔', '쓰지 않음']
+    assert 'scores' not in options        # ← 요점

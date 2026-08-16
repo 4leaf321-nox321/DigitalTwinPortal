@@ -285,14 +285,42 @@ const emptyQuestion = () => ({
 });
 
 /** options.choices ↔ 여러 줄 텍스트. 보기를 한 줄에 하나씩 적게 하는 편이
- *  쉼표보다 낫다 — 보기 안에 쉼표가 들어가는 경우가 실제로 많다. */
+ *  쉼표보다 낫다 — 보기 안에 쉼표가 들어가는 경우가 실제로 많다.
+ *
+ *  **보기 뒤에 `=점수` 를 붙일 수 있다**(`매일=5`). 순서가 있는 객관식을 진단
+ *  레벨로 쓰기 위한 것이고, 표 붙여넣기와 **같은 형식**이라 두 경로로 만든
+ *  문항이 서로 다른 모양이 되지 않는다(importer.parse_choice_scores). */
 const choicesToText = (options) => {
   const raw = options?.choices;
   if (!Array.isArray(raw)) return '';
-  return raw.map(c => (c && typeof c === 'object' ? (c.label ?? c.value ?? '') : c)).join('\n');
+  const scores = Array.isArray(options?.scores) ? options.scores : null;
+  return raw.map((c, i) => {
+    const label = (c && typeof c === 'object') ? (c.label ?? c.value ?? '') : c;
+    return scores && scores[i] != null ? `${label}=${scores[i]}` : label;
+  }).join('\n');
 };
-const textToChoices = (text) =>
-  text.split('\n').map(s => s.trim()).filter(Boolean);
+
+/** 여러 줄 텍스트 → {choices, scores}.
+ *
+ *  점수는 **전부 적혔을 때만** 싣는다. 절반만 적힌 것을 그대로 보내면 서버가
+ *  400 을 주는데, 사용자는 아직 적는 중이었을 뿐이라 그 오류가 뜬금없다. */
+const textToChoiceOptions = (text) => {
+  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+  const choices = [];
+  const scores = [];
+  let marked = 0;
+  lines.forEach((line) => {
+    const at = line.lastIndexOf('=');
+    const tail = at >= 0 ? line.slice(at + 1).trim() : '';
+    const score = at >= 0 && /^[1-5]$/.test(tail) ? Number(tail) : null;
+    choices.push(score === null ? line : line.slice(0, at).trim());
+    scores.push(score);
+    if (score !== null) marked += 1;
+  });
+  return (marked > 0 && marked === lines.length)
+    ? { choices, scores }
+    : { choices, scores: undefined };
+};
 
 /** 역할·프로세스 ↔ 쉼표 구분 한 줄. 보기(줄바꿈)와 규칙이 다른 이유는,
  *  보기 안에는 쉼표가 자주 들어가지만 역할·프로세스 이름에는 안 들어가기
@@ -670,7 +698,7 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
                       onChange={e => {
                         const raw = e.target.value;
                         setChoiceDraft(d => ({ ...d, [i]: raw }));
-                        setOpt(i, { choices: textToChoices(raw) });
+                        setOpt(i, textToChoiceOptions(raw));
                       }}
                       onBlur={() => setChoiceDraft(d => {
                         // 손을 떼면 정규화된 모습으로 정리해 보여준다.
@@ -678,6 +706,22 @@ const SurveyEditor = ({ survey, onSave, onCancel }) => {
                         return rest;
                       })}
                       placeholder={'첫 번째 보기\n두 번째 보기'} />
+                    {/* 점수는 **순서가 있는 보기**에만 뜻이 있다. '데이터 정합성'과
+                        '인력 부족' 중 어느 쪽이 높은 단계인지는 정해질 수 없다. */}
+                    {q.qtype === 'choice' ? (
+                      <Hint>
+                        보기 뒤에 <strong>=점수</strong>(1~5)를 붙이면 이 문항이
+                        진단 레벨에 들어갑니다 — <strong>매일=5</strong>,{' '}
+                        <strong>쓰지 않음=1</strong>. 순서가 있는 보기에만 붙이세요.
+                        전부 붙이거나 전부 안 붙이거나입니다.
+                        응답자에게는 점수가 보이지 않습니다.
+                      </Hint>
+                    ) : (
+                      <Hint>
+                        복수선택·순위에는 점수를 붙일 수 없습니다 — 고른 것이 여럿이라
+                        한 사람의 점수가 하나로 정해지지 않습니다.
+                      </Hint>
+                    )}
                   </Field>
                 )}
 

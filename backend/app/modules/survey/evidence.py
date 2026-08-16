@@ -20,9 +20,66 @@
 from .models import Survey, SurveyAnswer, SurveyQuestion, SurveyResponse
 from .links import allowed_link_keys
 
-# 레벨을 만들 수 있는 문항 유형. 객관식·순위·서술은 1~5 로 환산할 방법이 없고,
-# 억지로 매기면 그 매핑을 아무도 설명하지 못한다. 그것들은 findings 쪽으로 간다.
+# 레벨을 만들 수 있는 문항.
+#
+#   척도(scale)            답이 곧 1~5 다
+#   객관식(choice) + 점수  **보기마다 점수가 적혀 있을 때만**
+#
+# 순위·복수선택은 고른 것이 여럿이라 한 사람의 점수가 하나로 정해지지 않는다.
+# 서술형은 환산할 방법이 없다. 둘 다 findings 쪽으로 간다.
+#
+# ⚠️ 점수 없는 객관식은 **여기 안 온다.** '데이터 정합성'과 '인력 부족' 중
+#    어느 쪽이 높은 단계인지는 정해질 수 없다 — 순서가 없는 보기다. 시스템이
+#    점수를 짐작해 매기면 그 매핑을 나중에 아무도 설명하지 못한다.
 LEVEL_QTYPE = 'scale'
+SCORED_QTYPE = 'choice'
+
+
+def _scores_of(question):
+    """이 문항의 보기별 점수. {보기: 점수} — 없으면 빈 표."""
+    options = question.options or {}
+    labels = options.get('choices') or []
+    scores = options.get('scores') or []
+    if not scores or len(scores) != len(labels):
+        return {}
+    out = {}
+    for label, score in zip(labels, scores):
+        text = (label.get('label', label.get('value')) if isinstance(label, dict)
+                else label)
+        text = str(text).strip() if text is not None else ''
+        if text and isinstance(score, int) and not isinstance(score, bool):
+            out[text] = score
+    return out
+
+
+def levels_question(question, known):
+    """이 문항이 진단 레벨에 들어가는가."""
+    if not question.link_key or (known and question.link_key not in known):
+        return False
+    if question.qtype == LEVEL_QTYPE:
+        return True
+    return question.qtype == SCORED_QTYPE and bool(_scores_of(question))
+
+
+def answer_level(question, answer):
+    """이 답이 몇 점인가. 셀 수 없으면 None.
+
+    척도는 숫자 그대로, 점수 붙은 객관식은 고른 보기의 점수다. 두 값이 같은
+    자에서 나오므로 **한 사람 안에서 같이 평균 낼 수 있다** — 척도 문항 셋과
+    점수 객관식 하나를 받은 사람은 그 넷의 평균이 자기 점수가 된다.
+    """
+    if question.qtype == LEVEL_QTYPE:
+        return answer.value_number
+    scores = _scores_of(question)
+    if not scores:
+        return None
+    picked = answer.value_json
+    if isinstance(picked, list):
+        # 단일 선택인데 목록으로 온 옛 답. 하나짜리면 인정한다.
+        picked = picked[0] if len(picked) == 1 else None
+    if picked is None:
+        return None
+    return scores.get(str(picked).strip())
 
 
 def _mean(values):
@@ -49,12 +106,7 @@ def candidate_surveys(context_type=None, context_id=None):
     known = allowed_link_keys()
     out = []
     for survey in query.order_by(Survey.id.desc()).all():
-        linked = [
-            q for q in survey.questions.all()
-            if q.qtype == LEVEL_QTYPE and q.link_key and
-            (not known or q.link_key in known)
-        ]
-        if linked:
+        if any(levels_question(q, known) for q in survey.questions.all()):
             out.append(survey)
     return out
 
@@ -72,11 +124,8 @@ def dimension_cells(survey):
     응답 수 합계가 안 맞는데 화면 어디에도 그 이유가 없다.
     """
     known = allowed_link_keys()
-    questions = {
-        q.id: q for q in survey.questions.all()
-        if q.qtype == LEVEL_QTYPE and q.link_key and
-        (not known or q.link_key in known)
-    }
+    questions = {q.id: q for q in survey.questions.all()
+                 if levels_question(q, known)}
     if not questions:
         return []
 
@@ -92,7 +141,7 @@ def dimension_cells(survey):
         SurveyAnswer.response_id.in_([r.id for r in responses]),
         SurveyAnswer.question_id.in_(list(questions)),
     ).all():
-        if a.value_number is not None:
+        if answer_level(questions[a.question_id], a) is not None:
             by_response.setdefault(a.response_id, []).append(a)
 
     cells = {}
@@ -103,8 +152,9 @@ def dimension_cells(survey):
         # 이 사람이 축마다 몇 점을 줬나. **먼저 사람 안에서 접는다.**
         per_key = {}
         for a in answers:
-            key = questions[a.question_id].link_key
-            per_key.setdefault(key, []).append(a.value_number)
+            question = questions[a.question_id]
+            per_key.setdefault(question.link_key, []).append(
+                answer_level(question, a))
 
         for key, values in per_key.items():
             cell = cells.setdefault((key, response.division_id), {
@@ -154,12 +204,9 @@ def respondents_by_division(survey):
        나왔다 — 사람 수를 말하는 자리에서는 사람을 세야 한다.
     """
     known = allowed_link_keys()
-    question_ids = [
-        q.id for q in survey.questions.all()
-        if q.qtype == LEVEL_QTYPE and q.link_key and
-        (not known or q.link_key in known)
-    ]
-    if not question_ids:
+    questions = {q.id: q for q in survey.questions.all()
+                 if levels_question(q, known)}
+    if not questions:
         return {}
 
     responses = {
@@ -173,9 +220,11 @@ def respondents_by_division(survey):
     seen = set()
     for a in SurveyAnswer.query.filter(
         SurveyAnswer.response_id.in_(list(responses)),
-        SurveyAnswer.question_id.in_(question_ids),
+        SurveyAnswer.question_id.in_(list(questions)),
     ).all():
-        if a.value_number is None or a.response_id in seen:
+        if a.response_id in seen:
+            continue
+        if answer_level(questions[a.question_id], a) is None:
             continue
         seen.add(a.response_id)
         division_id = responses[a.response_id]

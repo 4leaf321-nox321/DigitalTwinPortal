@@ -123,6 +123,51 @@ def _split_choices(value):
     return [p.strip() for p in value.split('|') if p.strip()]
 
 
+def parse_choice_scores(parts):
+    """보기에 붙은 점수를 뗀다. 돌려주는 값은 (보기, 점수 또는 None, 오류).
+
+        ['매일=5', '주 1~2회=4', '가끔=2', '쓰지 않음=1']
+            → (['매일', '주 1~2회', '가끔', '쓰지 않음'], [5, 4, 2, 1], None)
+
+    **순서가 있는 객관식**을 진단 레벨로 쓰기 위한 것이다. "얼마나 자주
+    쓰십니까"는 사실상 척도인데 보기로 물었을 뿐이라, 점수를 적어 두면 척도
+    문항과 같은 자격으로 진단에 들어갈 수 있다.
+
+    ⚠️ **점수는 사람이 적는다. 시스템이 짐작하지 않는다.** '가끔'이 2점인지
+       3점인지는 그 문항을 쓴 사람만 안다. 시스템이 추측해 매기면 그 매핑을
+       나중에 아무도 설명하지 못한다.
+
+    ⚠️ **전부 적거나 전부 안 적거나다.** 절반만 적힌 문항은 나머지를 0으로 볼지
+       빼고 셀지가 갈리는데, 어느 쪽이든 조용히 틀린 평균이 나온다.
+    """
+    labels, scores = [], []
+    marked = 0
+    for part in parts:
+        label, sep, raw = part.rpartition('=')
+        if not sep:
+            labels.append(part)
+            scores.append(None)
+            continue
+        token = raw.strip()
+        try:
+            value = int(token)
+        except ValueError:
+            return parts, None, f"보기의 점수가 숫자가 아닙니다: {part}"
+        if not (1 <= value <= 5):
+            return parts, None, f"보기의 점수는 1~5 여야 합니다: {part}"
+        labels.append(label.strip())
+        scores.append(value)
+        marked += 1
+
+    if marked == 0:
+        return labels, None, None
+    if marked != len(parts):
+        missing = [p for p, sc in zip(parts, scores) if sc is None]
+        return labels, None, ('보기에 점수를 적으려면 **전부** 적어야 합니다. '
+                              f"빠진 것: {', '.join(missing)}")
+    return labels, scores, None
+
+
 def parse_required(value):
     """필수 칸. 비우면 필수, 못 알아들으면 None(= 호출부가 오류로 본다)."""
     token = (value or '').strip().lower()
@@ -287,7 +332,17 @@ def parse_table(text):
                 )
 
         # ── 보기 ─────────────────────────────────────────────────────────
-        choices = _split_choices(cells[COL_CHOICES])
+        raw_choices = _split_choices(cells[COL_CHOICES])
+        choices, choice_scores, score_error = parse_choice_scores(raw_choices)
+        if score_error:
+            errors.append(f'{line}행: {score_error}')
+        # 점수는 **단일 선택에만** 붙인다. 복수선택·순위는 고른 것이 여럿이라
+        # 한 사람의 점수가 하나로 정해지지 않는다 — 평균을 내든 합하든 그 값이
+        # 무엇을 뜻하는지 설명할 수 없다.
+        if choice_scores and qtype != 'choice':
+            errors.append(f'{line}행: 보기 점수는 객관식(단일 선택)에만 붙일 수 '
+                          f'있습니다. 지금 유형은 {cells[COL_QTYPE]} 입니다.')
+            choice_scores = None
         if qtype in CHOICE_QTYPES and not choices:
             errors.append(
                 f'{line}행: {cells[COL_QTYPE]} 문항에는 보기가 필요합니다. '
@@ -307,6 +362,8 @@ def parse_table(text):
             options = dict(SCALE_DEFAULT)
         elif qtype in CHOICE_QTYPES:
             options = {'choices': choices}
+            if choice_scores:
+                options['scores'] = choice_scores
 
         # ── 필수 ─────────────────────────────────────────────────────────
         required = parse_required(cells[COL_REQUIRED])
