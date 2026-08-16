@@ -99,7 +99,7 @@ const Toggle = styled.button`
 `;
 
 // 관측을 어느 축으로 볼 것인가. **같은 과제를 다르게 자르는 것**이라 사람이
-// 채울 격자가 늘지 않는다 — 사업부 축이 "누가 못 하고 있나"를, 공정 단계 축이
+// 채울 격자가 늘지 않는다 — 사업부 축이 "누가 못 하고 있나"를, 프로세스 축이
 // "어디가 약한가"를 본다.
 const AxisTabs = styled.div`
   display: flex;
@@ -118,6 +118,18 @@ const AxisTab = styled.button`
   font-family: inherit;
   cursor: pointer;
   &:hover { border-color: #a78bfa; }
+`;
+
+const AxisSelect = styled.select`
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: white;
+  color: #475569;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  &:focus { outline: none; border-color: #7c3aed; }
 `;
 
 const Collapsed = styled.div`
@@ -140,6 +152,8 @@ const DiagnosisView = ({
   const [showGrid, setShowGrid] = useState(false);
   // 'division' | 'process'
   const [axis, setAxis] = useState('division');
+  // 프로세스 축에서 어느 사업부를 볼 것인가. '' 이면 전사 합계.
+  const [processIn, setProcessIn] = useState('');
 
   const filledCount = (assessments || []).filter(
     a => a.current_level !== null && a.current_level !== undefined
@@ -181,13 +195,17 @@ const DiagnosisView = ({
     },
   ];
 
-  // 공정 단계 축을 사업부 축과 **같은 모양**으로 바꾼다. 행렬 컴포넌트는
-  // id·name 과 평평한 조회만 쓰므로 그대로 쓸 수 있다 — 축마다 표를 따로
-  // 만들면 색 기준이나 단위가 갈린다.
+  // ⚠️ **프로세스는 사업부 아래에 있다.** MX 의 개발과 VD 의 개발은 서로
+  //    독립적인 조직이라, 둘을 더한 "개발 49.5%" 는 어느 사업부 이야기인지
+  //    말해 주지 않는다. 그래서 프로세스를 볼 때 **어느 사업부 안인지**를
+  //    함께 고르게 한다. 전사 합계도 볼 수 있게 두되 합친 값임을 적는다.
   const processAxis = processMetrics?.processes || [];
   const processRows = processAxis.map(name => ({ id: name, name }));
+  const processSource = processIn === ''
+    ? (processMetrics?.totals || {})
+    : (processMetrics?.byDivision?.[processIn] || {});
   const processCells = processAxis.flatMap(name => (
-    Object.entries(processMetrics?.values?.[name] || {}).map(([key, value]) => ({
+    Object.entries(processSource[name] || {}).map(([key, value]) => ({
       division_id: name, metric_key: key, value,
     }))
   ));
@@ -223,7 +241,20 @@ const DiagnosisView = ({
                 <AxisTab $on={!onProcess} onClick={() => setAxis('division')}
                          title="누가 못 하고 있나">사업부</AxisTab>
                 <AxisTab $on={onProcess} onClick={() => setAxis('process')}
-                         title="어느 공정 단계가 약한가">공정 단계</AxisTab>
+                         title="사업부 안에서 어느 프로세스가 약한가">
+                  사업부 안 프로세스
+                </AxisTab>
+                {/* 프로세스는 사업부 아래에 있다. 그래서 축을 고르면 **어느
+                    사업부 안인지**를 바로 옆에서 고르게 한다. */}
+                {onProcess && (
+                  <AxisSelect value={processIn}
+                              onChange={e => setProcessIn(e.target.value)}>
+                    <option value="">전사 합계 (합친 값)</option>
+                    {divisions.map(d => (
+                      <option key={d.id} value={d.id}>{d.name} 안에서</option>
+                    ))}
+                  </AxisSelect>
+                )}
               </AxisTabs>
             )}
           </Head>
@@ -233,7 +264,7 @@ const DiagnosisView = ({
               <>
                 <ObservedMatrix
                   definitions={onProcess
-                    // KPI 달성률은 사업부에 붙은 값이라 공정 단계로 나눌 수 없다.
+                    // KPI 달성률은 사업부에 붙은 값이라 프로세스로 나눌 수 없다.
                     // 빈 줄로 두면 "계산이 안 됐나" 로 읽히므로 아예 뺀다.
                     ? (metricDefinitions || []).filter(d => d.key !== 'kpi_achievement')
                     : metricDefinitions}
@@ -243,11 +274,23 @@ const DiagnosisView = ({
                 />
                 {onProcess && (
                   <Hint>
-                    같은 과제를 <strong>공정 단계로 자른 것</strong>입니다 — 사람이
-                    채울 것이 늘지 않습니다. KPI 달성률은 지표가 사업부에 붙어
-                    있어 이 축에서는 낼 수 없습니다.
+                    {processIn === '' ? (
+                      <>
+                        <strong>전사 합계입니다.</strong> 프로세스는 사업부 아래에
+                        있어서 — MX 의 개발과 VD 의 개발은 서로 독립적인 조직입니다 —
+                        이 값은 그것들을 <strong>합친 것</strong>입니다. 어느
+                        사업부 이야기인지 보려면 위에서 사업부를 고르세요.
+                      </>
+                    ) : (
+                      <>
+                        <strong>{divisions.find(d => String(d.id) === String(processIn))?.name}</strong>
+                        {' '}안에서만 본 값입니다.
+                      </>
+                    )}
+                    {' '}KPI 달성률은 지표가 사업부에 붙어 있어 이 축에서는 낼 수
+                    없습니다.
                     {processMetrics?.unknownCount > 0 && (
-                      <> 공정 단계를 안 적은 과제 {processMetrics.unknownCount}건은
+                      <> 프로세스를 안 적은 과제 {processMetrics.unknownCount}건은
                       어느 칸에도 안 들어갔습니다.</>
                     )}
                   </Hint>

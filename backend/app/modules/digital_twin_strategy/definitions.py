@@ -345,8 +345,8 @@ THRESHOLDS = [
      'detail': '선후 관계가 없는 과제 비율.'},
     {'key': 'kpi_shortfall', 'label': 'KPI 달성률 하한', 'unit': '%', 'default': 80.0, 'max': 100,
      'detail': '달성률이 이 아래면 미달로 본다.'},
-    {'key': 'process_thin_share', 'label': '공정 단계 과제 하한', 'unit': '%', 'default': 5.0, 'max': 100,
-     'detail': '전체 과제 중 이 비율에 못 미치는 공정 단계는 짚는다. '
+    {'key': 'process_thin_share', 'label': '프로세스 과제 하한', 'unit': '%', 'default': 5.0, 'max': 100,
+     'detail': '전체 과제 중 이 비율에 못 미치는 프로세스는 짚는다. '
                '단계는 있는데 손대는 과제가 거의 없다는 뜻이다.'},
     {'key': 'spread_concentrated', 'label': '참여 부서 하한', 'unit': '개', 'default': 4, 'max': 50,
      'detail': '참여 부서가 이 이하면 확산이 안 된 것으로 본다.'},

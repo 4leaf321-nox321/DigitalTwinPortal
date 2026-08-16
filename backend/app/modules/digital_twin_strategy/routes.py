@@ -194,18 +194,18 @@ def get_plan(year):
         try:
             observed, observed_context = compute_metrics(source, year, divisions)
             kpi_coverage = compute_kpi_coverage(source, year, divisions)
-            # 같은 과제를 **공정 단계로도** 자른다(Value Chain). 사람이 채울
+            # 같은 과제를 **프로세스로도** 자른다(Value Chain). 사람이 채울
             # 격자가 늘지 않는다 — 축만 바꿔 다시 세는 것이다.
             from app.modules.survey.roles import process_names
             process_list = process_names()
-            process_values, process_context, process_unknown = (
-                compute_process_metrics(source, year, process_list))
+            process_by_division, process_totals, process_unknown = (
+                compute_process_metrics(source, year, process_list, divisions))
             metric_error = None
         except NotImplementedError as e:
             observed = {d.id: {k: None for k in METRIC_KEYS} for d in divisions}
             observed_context = {}
             kpi_coverage = []
-            process_list, process_values, process_context = [], {}, {}
+            process_list, process_by_division, process_totals = [], {}, {}
             process_unknown = 0
             metric_error = str(e)
 
@@ -247,8 +247,9 @@ def get_plan(year):
             findings = (
                 derive_findings(observed, divisions, observed_context, thresholds)
                 + derive_kpi_findings(kpi_coverage)
-                # 같은 과제를 공정 단계로 자른 것. 사업부 축이 못 보는 것을 본다.
-                + derive_process_findings(process_values, process_list,
+                # 같은 과제를 프로세스로 자른 것. 사업부 축이 못 보는 것을 본다.
+                + derive_process_findings(process_by_division, process_totals,
+                                          process_list, divisions,
                                           thresholds, process_unknown)
             )
         # 설문 규칙은 지표를 못 읽어도 돌아야 한다. 둘은 서로 다른 원천이다.
@@ -319,8 +320,11 @@ def get_plan(year):
                 # 축이 다르다고 다른 지표를 재면 두 화면을 견줄 수 없다.
                 'processMetrics': {
                     'processes': process_list,
-                    'values': process_values,
-                    'context': process_context,
+                    # ⚠️ **사업부 아래에 프로세스가 있다.** MX 의 개발과 VD 의
+                    #    개발은 다른 조직이라 같은 칸에 놓을 수 없다.
+                    'byDivision': process_by_division,
+                    # 전사 합계는 **참고용**이다. 화면이 합친 값임을 말해야 한다.
+                    'totals': process_totals,
                     # 프로세스가 안 적힌 과제. 숨기면 합계가 안 맞는데 이유가
                     # 안 보인다.
                     'unknownCount': process_unknown,

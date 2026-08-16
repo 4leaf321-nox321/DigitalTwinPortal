@@ -285,11 +285,11 @@ def test_강점_기준을_설정에서_낮추면_후보가_늘어난다(client, 
     assert '준비도 4단계' in strengths[0]['title']
 
 
-# ── Value Chain: 공정 단계 축 ──────────────────────────────────────────────
+# ── Value Chain: 프로세스 축 ──────────────────────────────────────────────
 
-def test_공정_단계로도_같은_지표를_센다():
+def test_프로세스로도_같은_지표를_센다():
     """⚠️ 축마다 따로 세면 같은 지표가 두 곳에서 계산되고, 그러면 "사업부 합과
-    공정 단계 합이 다른" 날이 온다. 세는 것은 measure() 하나다."""
+    프로세스 합이 다른" 날이 온다. 세는 것은 measure() 하나다."""
     from app.modules.digital_twin_strategy.metrics import measure
 
     items = [
@@ -303,49 +303,85 @@ def test_공정_단계로도_같은_지표를_센다():
     assert m['no_kpi_link_rate'] == 50.0
 
 
-def test_그_단계만_나쁠_때만_짚는다():
-    """전 단계가 다 나쁘면 **공정 문제가 아니라 전사 문제**다. 그건 사업부 축이
-    이미 짚는다 — 여기서 또 짚으면 같은 사실이 두 번 뜬다."""
+class _Div:
+    """사업부 대역. 이름·id 만 있으면 된다."""
+
+    def __init__(self, id, name):
+        self.id, self.name = id, name
+
+
+_MX, _VD = _Div(1, 'MX'), _Div(2, 'VD')
+
+
+def test_같은_사업부_안에서_튀는_프로세스만_짚는다():
+    """⚠️ **프로세스는 사업부 아래에 있다.** MX 의 개발과 VD 의 개발은 서로
+    독립적인 조직이라, 합쳐서 "개발이 나쁘다" 고 하면 어느 사업부 이야기인지 알
+    수 없고 한 사업부가 나쁜 것이 나머지까지 나쁜 것처럼 보인다.
+
+    그리고 **그 사업부의 프로세스가 전부 나쁘면 안 짚는다** — 그건 프로세스
+    문제가 아니라 그 사업부의 문제이고, 사업부 축 규칙이 이미 짚는다.
+    """
     from app.modules.digital_twin_strategy.findings import derive_process_findings
 
-    processes = ['개발', '제조', '품질']
-    # 셋 다 나쁨 → 안 짚는다.
-    everywhere = {p: {'project_count': 10, 'no_performance_rate': 90.0}
-                  for p in processes}
-    assert not [f for f in derive_process_findings(everywhere, processes)
-                if 'no_performance' in f['key']]
-
-    # 하나만 나쁨 → 짚는다.
-    only_one = {
-        '개발': {'project_count': 10, 'no_performance_rate': 90.0},
-        '제조': {'project_count': 10, 'no_performance_rate': 5.0},
-        '품질': {'project_count': 10, 'no_performance_rate': 5.0},
+    by_division = {
+        # MX: 제조만 나쁘다 → 짚는다
+        1: {'개발': {'project_count': 10, 'no_performance_rate': 5.0},
+            '제조': {'project_count': 10, 'no_performance_rate': 90.0}},
+        # VD: 둘 다 나쁘다 → 사업부 문제라 안 짚는다
+        2: {'개발': {'project_count': 10, 'no_performance_rate': 88.0},
+            '제조': {'project_count': 10, 'no_performance_rate': 92.0}},
     }
-    hits = [f for f in derive_process_findings(only_one, processes)
+    totals = {'개발': {'project_count': 20}, '제조': {'project_count': 20}}
+
+    hits = [f for f in derive_process_findings(by_division, totals,
+                                               ['개발', '제조'], [_MX, _VD])
             if 'no_performance' in f['key']]
     assert len(hits) == 1
-    assert '개발' in hits[0]['title']
+    assert 'MX · 제조' in hits[0]['title']
+    assert hits[0]['division_id'] == 1        # 그 사업부의 발견이다
 
 
-def test_과제가_거의_없는_단계를_짚는다():
-    """단계로는 잡혀 있는데 실제로 손대는 과제가 거의 없다 — 사업부 축에서는
-    안 보이는 사실이다."""
+def test_과제가_너무_적은_프로세스는_판정하지_않는다():
+    """세 건 중 세 건이 성과 미정의면 100% 지만, 그 100% 는 조직의 성질이 아니라
+    표본의 성질이다."""
     from app.modules.digital_twin_strategy.findings import derive_process_findings
 
-    processes = ['개발', '연계']
-    values = {'개발': {'project_count': 100}, '연계': {'project_count': 2}}
-    thin = [f for f in derive_process_findings(values, processes)
+    by_division = {
+        1: {'개발': {'project_count': 10, 'no_performance_rate': 5.0},
+            '제조': {'project_count': 3, 'no_performance_rate': 100.0}},
+    }
+    hits = [f for f in derive_process_findings(
+        by_division, {'개발': {'project_count': 10}, '제조': {'project_count': 3}},
+        ['개발', '제조'], [_MX]) if 'no_performance' in f['key']]
+    assert hits == []
+
+
+def test_어디서도_거의_안_하는_프로세스를_짚는다():
+    """한 사업부에서만 적은 것은 그 사업부의 선택일 수 있지만, **어디서도 안
+    하고 있으면** 조직이 그 프로세스를 비워 둔 것이다."""
+    from app.modules.digital_twin_strategy.findings import derive_process_findings
+
+    by_division = {
+        1: {'개발': {'project_count': 100}, '연계': {'project_count': 1}},
+        2: {'개발': {'project_count': 0}, '연계': {'project_count': 1}},
+    }
+    totals = {'개발': {'project_count': 100}, '연계': {'project_count': 2}}
+    thin = [f for f in derive_process_findings(by_division, totals,
+                                               ['개발', '연계'], [_MX, _VD])
             if f['key'].startswith('process_thin:')]
     assert len(thin) == 1
     assert '연계' in thin[0]['title'] and '2건' in thin[0]['title']
+    # 어느 사업부가 손대고 있는지 말해 준다.
+    assert 'MX' in thin[0]['detail'] and 'VD' in thin[0]['detail']
 
 
-def test_공정_단계를_안_적은_과제를_숨기지_않는다():
+def test_프로세스를_안_적은_과제를_숨기지_않는다():
     """숨기면 합계가 안 맞는데 이유가 안 보인다."""
     from app.modules.digital_twin_strategy.findings import derive_process_findings
 
-    found = derive_process_findings({'개발': {'project_count': 10}}, ['개발'],
-                                    unknown_count=7)
+    found = derive_process_findings({1: {'개발': {'project_count': 10}}},
+                                    {'개발': {'project_count': 10}},
+                                    ['개발'], [_MX], unknown_count=7)
     unknown = [f for f in found if f['key'] == 'process_unknown']
     assert len(unknown) == 1
     assert '7건' in unknown[0]['title']

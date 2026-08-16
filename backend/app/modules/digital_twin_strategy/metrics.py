@@ -118,34 +118,50 @@ def measure(items):
     return m, ctx
 
 
-def compute_process_metrics(source, year, processes):
-    """**프로세스별** 관측값. (Value Chain)
+def compute_process_metrics(source, year, processes, divisions):
+    """**사업부 안에서** 프로세스별 관측값. (Value Chain)
 
-    사업부 축이 "누가 못 하고 있나"를 본다면 이쪽은 "어느 공정 단계가 약한가"를
-    본다. 같은 과제를 다른 축으로 자르는 것이라 **사람이 채울 격자가 늘지
-    않는다** — 이 모듈이 격자를 늘리지 않으려는 이유가 그것이다.
+    ⚠️ **프로세스는 사업부와 같은 레벨이 아니다.** 먼저 사업부가 나뉘고 그
+       안에서 프로세스가 나뉜다 — **MX 의 개발과 VD 의 개발은 서로 독립적인
+       조직**이다. 둘을 더해 "개발 49.5%" 라고 말하면 어느 사업부 이야기인지
+       알 수 없고, 한 사업부가 나쁘면 나머지까지 나쁜 것처럼 보인다.
 
-    ⚠️ **KPI 달성률은 안 낸다.** KPI 는 사업부에 붙어 있지 공정 단계에 붙어
+    돌려주는 값:
+        by_division  {division_id: {프로세스: {지표: 값}}}
+        totals       {프로세스: {지표: 값}}   전사 합계. **참고용**이다
+        unknown      프로세스를 안 적은 과제 수
+
+    totals 를 같이 내는 이유는 "개발 전반이 약한가" 도 볼 만해서다. 다만
+    그것이 합친 값임을 화면이 말해야 한다.
+
+    ⚠️ **KPI 달성률은 안 낸다.** KPI 는 사업부에 붙어 있지 프로세스에 붙어
        있지 않다. 억지로 배분하면 그 숫자를 아무도 설명할 수 없다.
     """
     projects = source.get_projects(year) or []
     known = list(processes or [])
+    by_name = {d.name: d.id for d in divisions}
 
-    grouped = {name: [] for name in known}
-    unknown = []
+    cells = {d.id: {name: [] for name in known} for d in divisions}
+    totals_items = {name: [] for name in known}
+    unknown = 0
     for p in projects:
         name = (p.get('프로세스') or '').strip()
-        if name in grouped:
-            grouped[name].append(p)
-        else:
+        if name not in totals_items:
             # 프로세스가 안 적힌 과제. **버리지 않는다** — 합계가 안 맞는데
             # 이유가 안 보이는 것이 제일 나쁘다.
-            unknown.append(p)
+            unknown += 1
+            continue
+        totals_items[name].append(p)
+        division_id = by_name.get(p.get('사업부'))
+        if division_id is not None:
+            cells[division_id][name].append(p)
 
-    values, context = {}, {}
-    for name, items in grouped.items():
-        values[name], context[name] = measure(items)
-    return values, context, len(unknown)
+    by_division = {
+        division_id: {name: measure(items)[0] for name, items in rows.items()}
+        for division_id, rows in cells.items()
+    }
+    totals = {name: measure(items)[0] for name, items in totals_items.items()}
+    return by_division, totals, unknown
 
 
 def compute_metrics(source, year, divisions):
