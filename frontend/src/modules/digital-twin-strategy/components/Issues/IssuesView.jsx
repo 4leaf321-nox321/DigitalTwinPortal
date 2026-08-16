@@ -214,14 +214,30 @@ const RollupButton = styled.button`
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 
-const Pick = styled.label`
+// ⚠️ **카드 어디를 눌러도 골라진다.** 체크박스만 표적으로 두면 겨눠야 하고,
+//    여러 건을 묶는 것이 이 영역의 주 동작이라 그 겨냥이 반복된다.
+//
+// 예전에는 <label> 로 감쌌는데, 그러면 카드 안 「수정」·「삭제」를 눌러도
+// 선택이 같이 뒤집혔다. 지금은 그 버튼들이 클릭을 멈춘다(IssueCard).
+const Pick = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.15rem 0;
   cursor: pointer;
-  > input { margin-top: 0.9rem; flex-shrink: 0; }
+  border-radius: 0.5rem;
+  box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #7c3aed' : 'none')};
+  background: ${p => (p.$on ? '#f5f3ff' : 'transparent')};
+  > input {
+    margin-top: 0.9rem;
+    flex-shrink: 0;
+    width: 1.05rem;
+    height: 1.05rem;
+    accent-color: #7c3aed;
+    pointer-events: none;   /* 누르는 것은 줄 전체다 */
+  }
   > div { flex: 1; min-width: 0; }
+  &:focus-visible { outline: 2px solid #a78bfa; outline-offset: -2px; }
 `;
 
 const Toggle = styled.button`
@@ -600,13 +616,23 @@ const IssuesView = ({
           <Children>
             {orphans.map(issue => (
               isEditing(issue) ? <div key={issue.id}>{editor()}</div> : (
-                <Pick key={issue.id}>
-                  <input
-                    type="checkbox"
-                    checked={picked.includes(issue.id)}
-                    onChange={() => togglePick(issue.id)}
-                    aria-label={`${issue.title} 묶기`}
-                  />
+                <Pick
+                  key={issue.id}
+                  $on={picked.includes(issue.id)}
+                  role="checkbox"
+                  aria-checked={picked.includes(issue.id)}
+                  aria-label={`${issue.title} 묶기`}
+                  tabIndex={0}
+                  onClick={() => togglePick(issue.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      togglePick(issue.id);
+                    }
+                  }}
+                >
+                  <input type="checkbox" checked={picked.includes(issue.id)}
+                         readOnly tabIndex={-1} />
                   <div>{renderCard(issue)}</div>
                 </Pick>
               )

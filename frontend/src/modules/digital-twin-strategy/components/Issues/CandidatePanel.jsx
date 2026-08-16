@@ -55,14 +55,22 @@ const List = styled.div`
   flex-direction: column;
 `;
 
+// ⚠️ **카드 어디를 눌러도 골라진다.** 체크박스만 누르게 두면 표적이 13px 라
+//    마우스로 겨눠야 하고, 여러 건을 묶으려면 그 겨냥을 반복해야 한다.
+//    고르는 것이 이 패널의 주 동작이므로 표적이 카드만큼 커야 한다.
 const Item = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 0.875rem;
   padding: 0.75rem 1rem;
   border-top: 1px solid #f1f5f9;
+  cursor: pointer;
+  background: ${p => (p.$on ? '#f5f3ff' : 'transparent')};
+  /* 고른 것은 왼쪽 선으로도 표시한다. 배경색만으로는 흰 배경에서 옅다. */
+  box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #7c3aed' : 'none')};
 
-  &:hover { background: #fafafa; }
+  &:hover { background: ${p => (p.$on ? '#f5f3ff' : '#fafafa')}; }
+  &:focus-visible { outline: 2px solid #a78bfa; outline-offset: -2px; }
 `;
 
 const Body = styled.div`
@@ -157,9 +165,14 @@ const BundleButton = styled.button`
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 
+// 표시용이다. 누르는 것은 카드 전체라, 이 칸이 클릭을 가로채면 두 번 뒤집힌다.
 const Check = styled.input`
-  margin-top: 0.2rem;
+  margin-top: 0.15rem;
   flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: #7c3aed;
+  pointer-events: none;
 `;
 
 const CandidatePanel = ({ candidates, onPick, onBundle, rail = false }) => {
@@ -243,25 +256,41 @@ const CandidatePanel = ({ candidates, onPick, onBundle, rail = false }) => {
                 </BundleButton>
               </Bundle>
 
-              {candidates.map(c => (
-                <Item key={c.key}>
-                  <Check
-                    type="checkbox"
-                    checked={picked.includes(c.key)}
-                    onChange={() => toggle(c.key)}
-                    aria-label={`${c.title} 묶기`}
-                  />
-                  <Body>
-                    <Title><Group>{c.group}</Group>{c.title}</Title>
-                    <Detail>{c.detail}</Detail>
-                  </Body>
-                  <AddButton onClick={() => onPick(c)}
-                             title="이 격차 하나를 이슈로 만듭니다">
-                    <Plus size={13} />
-                    이슈로
-                  </AddButton>
-                </Item>
-              ))}
+              {candidates.map(c => {
+                const on = picked.includes(c.key);
+                return (
+                  <Item
+                    key={c.key}
+                    $on={on}
+                    role="checkbox"
+                    aria-checked={on}
+                    tabIndex={0}
+                    onClick={() => toggle(c.key)}
+                    onKeyDown={(e) => {
+                      if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault();
+                        toggle(c.key);
+                      }
+                    }}
+                    title="눌러서 묶을 후보로 고릅니다"
+                  >
+                    <Check type="checkbox" checked={on} readOnly tabIndex={-1} />
+                    <Body>
+                      <Title><Group>{c.group}</Group>{c.title}</Title>
+                      <Detail>{c.detail}</Detail>
+                    </Body>
+                    {/* ⚠️ 카드가 통째로 선택 영역이므로 **여기서 멈춰야** 한다.
+                        안 그러면 「이슈로」를 눌렀는데 선택까지 같이 뒤집힌다. */}
+                    <AddButton
+                      onClick={(e) => { e.stopPropagation(); onPick(c); }}
+                      title="이 격차 하나를 바로 이슈로 만듭니다"
+                    >
+                      <Plus size={13} />
+                      이슈로
+                    </AddButton>
+                  </Item>
+                );
+              })}
             </>
           )}
         </List>

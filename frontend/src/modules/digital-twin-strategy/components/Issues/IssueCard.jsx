@@ -127,7 +127,9 @@ const IssueCard = ({ issue, divisionName, flash,
         </Tags>
       </Body>
 
-      <Actions className="issue-actions">
+      {/* ⚠️ 카드가 선택 영역 안에 있을 수 있다(고아 이슈 묶기). 그때 이 버튼들이
+          클릭을 위로 흘리면, 「수정」을 눌렀는데 선택까지 같이 뒤집힌다. */}
+      <Actions className="issue-actions" onClick={e => e.stopPropagation()}>
         <IconButton onClick={() => onEdit(issue)} title="수정">
           <Pencil size={15} />
         </IconButton>
