@@ -138,7 +138,7 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
       {!cruxes?.length && !adding && (
         <Empty>
           아직 고른 핵심 난제가 없습니다.<br />
-          왼쪽 <strong>발견 사항</strong>에서 <strong>[핵심 난제로 →]</strong>를 눌러
+          위 <strong>발견 사항</strong>에서 <strong>[핵심 난제로 ↓]</strong>를 눌러
           1~3개만 옮기세요. 여기 적은 것이 <strong>② 이슈</strong>에서 할 일로
           이어집니다.
         </Empty>

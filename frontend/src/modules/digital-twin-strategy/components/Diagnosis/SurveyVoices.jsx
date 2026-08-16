@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { MessageSquare, Loader2, ArrowUpRight, Info } from 'lucide-react';
+import { MessageSquare, Loader2, ArrowDown, Info } from 'lucide-react';
 
 // 설문 서술형을 AI 가 묶어 읽은 것. (LINK_PLAN 6-1)
 //
@@ -169,7 +169,7 @@ const SurveyVoices = ({ available, onLoad, onPromote }) => {
               })}
               title="이것을 올해의 핵심 난제 후보로 올립니다"
             >
-              <ArrowUpRight size={13} /> 핵심 난제로
+              <ArrowDown size={13} /> 핵심 난제로
             </Promote>
           </Head>
           <Summary>{theme.summary}</Summary>

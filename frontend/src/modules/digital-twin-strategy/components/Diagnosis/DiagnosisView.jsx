@@ -42,20 +42,11 @@ const Section = styled.section`
   min-width: 0;   /* 표가 넓어도 격자 칸을 밀어내지 않게 */
 `;
 
-// 발견 사항 → 핵심 난제는 흐름이다. [핵심 난제로 →] 버튼이 왼쪽에서 오른쪽으로
-// 보내는 것이므로, 세로로 쌓아 스크롤로 갈라놓으면 그 관계가 안 보인다.
+// 발견 사항 → 핵심 난제는 흐름이라 한동안 가로로 나란히 두었다. 그런데 둘 다
+// 목록이라 나란히 두면 한쪽이 길어질 때 다른 쪽 아래가 텅 비고, 좁은 화면에서는
+// 어차피 세로로 떨어져 규칙이 화면 폭마다 달랐다. 지금은 **항상 세로**다 —
+// 흐름은 [핵심 난제로 ↓] 버튼과 목차의 ②③ 이 말해 준다.
 // 좁은 화면에서는 한 줄로 되돌아간다.
-const Columns = styled.div`
-  display: grid;
-  gap: 1.25rem;
-  grid-template-columns: 1fr;
-  align-items: start;
-
-  @media (min-width: 1200px) {
-    grid-template-columns: 1.4fr 1fr;
-  }
-`;
-
 const Head = styled.div`
   display: flex;
   align-items: baseline;
@@ -141,8 +132,8 @@ const DiagnosisView = ({
       ? [{ id: 'sec-voices', label: '설문 이야기', step: 1 }] : []),
     // 발견 사항과 핵심 난제는 **가로로 나란히** 있다. 목차에 둘로 적으면 같은
     // 자리로 가는 항목이 두 개가 되고, 둘째는 영영 안 밝는다.
-    // 발견 사항(②)과 핵심 난제(③)가 한 줄인 것은 가로로 나란히 놓여서다.
-    { id: 'sec-findings', label: '발견 사항 → 핵심 난제', step: 2 },
+    { id: 'sec-findings', label: '발견 사항', step: 2 },
+    { id: 'sec-cruxes', label: '핵심 난제', step: 3 },
     // ⚠️ 세부 판단에는 **번호를 붙이지 않는다.** 화면의 그 섹션에도 단계 배지가
     //    없다 — 세 단계 밖의 보조 영역이라 그렇다. 목차에만 번호를 지어 붙이면
     //    화면과 목차가 다른 말을 한다.
@@ -242,34 +233,32 @@ const DiagnosisView = ({
           </Section>
         )}
 
-        <Columns id="sec-findings">
-          <Section>
-            <Head>
-              <StepBadge>2</StepBadge>
-              <Title>발견 사항</Title>
-              {findings?.length > 0 && <Count>{findings.length}건</Count>}
-              <Hint>
-                관측 지표와 설문에서 ⚙설정의 기준을 넘은 것을 골랐습니다.
-                중요한 것을 오른쪽으로 올리세요.
-              </Hint>
-            </Head>
-            <FindingsPanel findings={findings} onPromote={promote} />
-          </Section>
+        <Section id="sec-findings">
+          <Head>
+            <StepBadge>2</StepBadge>
+            <Title>발견 사항</Title>
+            {findings?.length > 0 && <Count>{findings.length}건</Count>}
+            <Hint>
+              관측 지표와 설문에서 ⚙설정의 기준을 넘은 것을 골랐습니다.
+              중요한 것을 아래로 올리세요.
+            </Hint>
+          </Head>
+          <FindingsPanel findings={findings} onPromote={promote} />
+        </Section>
 
-          <Section>
-            <Head>
-              <StepBadge>3</StepBadge>
-              <Title>핵심 난제</Title>
-              <Hint>올해 이것만은 넘겠다고 정하는 자리. 1~3개. ② 이슈에서 할 일로 이어집니다.</Hint>
-            </Head>
-            <CruxPanel
-              cruxes={cruxes}
-              onAdd={onCruxAdd}
-              onUpdate={onCruxUpdate}
-              onDelete={onCruxDelete}
-            />
-          </Section>
-        </Columns>
+        <Section id="sec-cruxes">
+          <Head>
+            <StepBadge>3</StepBadge>
+            <Title>핵심 난제</Title>
+            <Hint>올해 이것만은 넘겠다고 정하는 자리. 1~3개. ② 이슈에서 할 일로 이어집니다.</Hint>
+          </Head>
+          <CruxPanel
+            cruxes={cruxes}
+            onAdd={onCruxAdd}
+            onUpdate={onCruxUpdate}
+            onDelete={onCruxDelete}
+          />
+        </Section>
 
         <Section id="sec-grid">
           <Head>

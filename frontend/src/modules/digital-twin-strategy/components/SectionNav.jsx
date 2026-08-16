@@ -27,7 +27,8 @@ const Nav = styled.nav`
     top: 0;
     align-self: flex-start;
     flex-shrink: 0;
-    width: 11rem;
+    /* 항목 이름이 잘리면 목차 구실을 못 한다. 제일 긴 이름이 들어갈 만큼. */
+    width: 13rem;
     padding-right: 0.75rem;
     border-right: 1px solid #e2e8f0;
   }
