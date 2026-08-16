@@ -477,7 +477,11 @@ def modify_crux(year, crux_id):
 
 # ── ② 이슈 ────────────────────────────────────────────────────────────────
 
-ISSUE_SOURCE_TYPES = {'crux', 'gap', 'metric', 'manual'}
+# 이 이슈가 어디서 왔나. **후보를 내는 쪽과 같은 집합이어야 한다** —
+# issues.derive_survey_candidates 가 'finding' 을 달아 보내는데 여기 없어서,
+# 「이슈로」를 누르면 "알 수 없는 출처입니다: finding" 으로 막혔다.
+# 후보의 source_type 을 늘릴 때는 여기도 같이 늘려야 한다.
+ISSUE_SOURCE_TYPES = {'crux', 'gap', 'metric', 'finding', 'manual'}
 ISSUE_STATUSES = {'open', 'dropped'}
 SCORE_MIN, SCORE_MAX = 1, 5
 

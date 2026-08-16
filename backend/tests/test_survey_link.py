@@ -889,3 +889,50 @@ def test_남의_전략_이슈는_묶이지_않는다(client, world, office, auth
     assert res.status_code == 400
     assert '이 전략의 이슈가 아닙니다' in res.get_json()['message']
     assert StrategyCrux.query.count() == 0
+
+
+def test_발견_사항_후보를_이슈로_만들_수_있다(client, world, office, auth):
+    """⚠️ 실제로 막혀 있었다. 후보는 source_type='finding' 을 달아 보내는데
+    이슈 저장 쪽 허용 목록에 그 값이 없어서, 「이슈로」를 누르면
+    "알 수 없는 출처입니다: finding" 이 떴다.
+
+    **후보를 내는 쪽과 받는 쪽의 집합이 갈리면 그 후보는 영영 못 쓴다.**
+    """
+    from app.modules.digital_twin_strategy.models import StrategyIssue
+
+    survey = _survey(world['plan'])
+    q = _question(survey, '성과를 재는가', 'organization:return')
+    _db.session.commit()
+    for division in (world['mx'], world['vd']):
+        for _ in range(5):
+            _answer(survey, division, {q: 2})
+    _db.session.commit()
+
+    data = client.get(f'{STRATEGY_BASE}/plans/{YEAR}',
+                      headers=auth(office)).get_json()['data']
+    candidate = next(c for c in data['issueCandidates']
+                     if c['source_type'] == 'finding')
+
+    res = client.post(f'{STRATEGY_BASE}/plans/{YEAR}/issues', headers=auth(office),
+                      json={'title': candidate['title'],
+                            'description': candidate['detail'],
+                            'division_id': candidate['division_id'],
+                            'source_type': candidate['source_type'],
+                            'source_ref': candidate['source_ref']})
+    assert res.status_code == 201, res.get_json()
+    assert StrategyIssue.query.one().source_type == 'finding'
+
+
+def test_후보의_출처는_전부_이슈로_저장될_수_있다(client, world, office, auth):
+    """후보가 내는 source_type 이 저장 쪽 집합 안에 있는지 **전부** 본다.
+    한 종류만 확인하면 다음에 늘어난 것이 또 막힌다."""
+    from app.modules.digital_twin_strategy.routes import ISSUE_SOURCE_TYPES
+    from app.modules.digital_twin_strategy.issues import (
+        derive_issue_candidates, derive_survey_candidates,
+    )
+
+    findings = [{'key': 'survey_role_gap:role', 'severity': 'high',
+                 'title': 'x', 'detail': '', 'division_id': None}]
+    produced = {c['source_type'] for c in derive_survey_candidates(findings, set())}
+    produced |= {c['source_type'] for c in derive_issue_candidates([], [], [])}
+    assert produced <= ISSUE_SOURCE_TYPES, produced - ISSUE_SOURCE_TYPES

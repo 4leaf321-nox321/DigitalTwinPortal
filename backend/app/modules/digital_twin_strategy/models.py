@@ -174,7 +174,9 @@ class StrategyIssue(BaseModel):
     # 특정 사업부의 이슈면 지정, 전사면 비운다.
     division_id = db.Column(db.Integer, nullable=True, index=True)
 
-    # crux: 난제를 쪼갬 / gap: 진단 격차에서 / metric: 지표 미달에서 / manual: 손으로
+    # crux: 난제를 쪼갬 / gap: 진단 격차에서 / metric: 지표 미달에서
+    # finding: 발견 사항에서 바로(설문이 짚은 것 — 격차가 아니라 지목이라
+    #          목표 레벨 없이도 이슈가 된다) / manual: 손으로
     source_type = db.Column(db.String(20), nullable=False, default='manual')
     source_ref = db.Column(db.String(200))
 
