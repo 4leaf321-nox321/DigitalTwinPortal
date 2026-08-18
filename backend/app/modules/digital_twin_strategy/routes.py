@@ -103,6 +103,22 @@ def _error(message, status=500):
     return jsonify({'success': False, 'message': message}), status
 
 
+def _crashed():
+    """예상 못 한 오류.
+
+    ⚠️ **예외 문자열을 화면에 내보내지 않는다.** `str(e)` 를 그대로 돌려주면
+       DB 오류의 테이블·컬럼 이름과 SQL 조각이 사용자 화면에 뜬다. 그리고
+       그걸 본 사람은 무엇을 해야 할지 모른다.
+
+    ⚠️ **대신 로그에 남긴다.** 지금까지는 어디에도 안 남아서, 500 이 나면
+       원인을 추측할 수밖에 없었다(2026-08-17 실제로 겪음). traceback 이
+       있어야 다음에 같은 일이 나도 십 분 안에 찾는다.
+    """
+    current_app.logger.exception('[전략] %s 실패', request.endpoint or '?')
+    return _error('처리 중 오류가 생겼습니다. 잠시 후 다시 해보시고, '
+                  '계속되면 관리자에게 알려주세요.')
+
+
 @bp.route('/meta', methods=['GET'])
 @view_required
 def get_meta():
@@ -185,9 +201,9 @@ def update_thresholds():
             'thresholds': get_thresholds(),
             'overridden': sorted(cleaned),
         }})
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>', methods=['GET'])
@@ -367,8 +383,8 @@ def get_plan(year):
                 'metricsError': metric_error,
             }
         })
-    except Exception as e:
-        return _error(str(e))
+    except Exception:
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/cruxes', methods=['POST'])
@@ -397,9 +413,9 @@ def create_crux(year):
         db.session.add(crux)
         db.session.commit()
         return jsonify({'success': True, 'data': crux.to_dict()}), 201
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/cruxes/from-issues', methods=['POST'])
@@ -502,9 +518,9 @@ def crux_from_issues(year):
             'crux': crux.to_dict(), 'moved': moved,
             'created': [i.id for i in made],
         }}), 201
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/cruxes/<int:crux_id>', methods=['PUT', 'DELETE'])
@@ -536,9 +552,9 @@ def modify_crux(year, crux_id):
 
         db.session.commit()
         return jsonify({'success': True, 'data': crux.to_dict()})
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 # ── ② 이슈 ────────────────────────────────────────────────────────────────
@@ -649,9 +665,9 @@ def create_element(year):
         db.session.add(element)
         db.session.commit()
         return jsonify({'success': True, 'data': element.to_dict()}), 201
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/elements/<int:element_id>',
@@ -677,9 +693,9 @@ def modify_element(year, element_id):
             return _error(error, 400)
         db.session.commit()
         return jsonify({'success': True, 'data': element.to_dict()})
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/issues', methods=['POST'])
@@ -707,9 +723,9 @@ def create_issue(year):
         db.session.add(issue)
         db.session.commit()
         return jsonify({'success': True, 'data': issue.to_dict()}), 201
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/issues/<int:issue_id>', methods=['PUT', 'DELETE'])
@@ -740,9 +756,9 @@ def modify_issue(year, issue_id):
 
         db.session.commit()
         return jsonify({'success': True, 'data': issue.to_dict()})
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans', methods=['POST'])
@@ -780,9 +796,9 @@ def create_plan():
 
         db.session.commit()
         return jsonify({'success': True, 'data': plan.to_dict()}), 201
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/assessments/<int:division_id>/<category>/<dimension>',
@@ -838,9 +854,9 @@ def update_assessment(year, division_id, category, dimension):
 
         db.session.commit()
         return jsonify({'success': True, 'data': assessment.to_dict()})
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/survey-voices', methods=['POST'])
@@ -863,8 +879,8 @@ def survey_voices(year):
         viewer_id = int(get_jwt_identity())
         return jsonify({'success': True,
                         'data': summarize_voices(plan, viewer_id)})
-    except Exception as e:
-        return _error(str(e))
+    except Exception:
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/assessments/apply-survey', methods=['POST'])
@@ -970,9 +986,9 @@ def apply_survey_evidence(year):
         return jsonify({'success': True, 'data': {
             'applied': applied, 'skipped': skipped,
         }})
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/metric-targets/<int:division_id>/<metric_key>',
@@ -1011,9 +1027,9 @@ def update_metric_target(year, division_id, metric_key):
     except (TypeError, ValueError):
         db.session.rollback()
         return _error('target_value 는 숫자여야 합니다.', 400)
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return _error(str(e))
+        return _crashed()
 
 
 @bp.route('/evidence-preview/<int:year>', methods=['GET'])
