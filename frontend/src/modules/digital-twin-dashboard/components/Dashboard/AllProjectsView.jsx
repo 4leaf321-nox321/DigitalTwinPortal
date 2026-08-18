@@ -1480,6 +1480,61 @@ const migrateColumnSettings = (settings) => {
   return result;
 };
 
+// 유형 × 사업부 표. 「따로 얘기한다」면 어느 조직 문제인지가 먼저 나와야 한다.
+const RiskBoard = styled.div`
+  margin: 0 0 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  background: #fffbfb;
+  overflow: hidden;
+`;
+
+const RiskBoardHead = styled.div`
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #fee2e2;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #b91c1c;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+
+  small { font-weight: 500; color: #f87171; font-size: 0.72rem; }
+`;
+
+const RiskGrid = styled.div`
+  display: grid;
+  grid-template-columns: 7.5rem repeat(${p => p.$cols}, minmax(2.6rem, 1fr)) 3rem;
+  font-size: 0.78rem;
+`;
+
+const RiskCell = styled.div`
+  padding: 0.35rem 0.4rem;
+  text-align: center;
+  border-top: 1px solid #fee2e2;
+  color: ${p => (p.$zero ? '#e5e7eb' : p.$total ? '#b91c1c' : '#475569')};
+  font-weight: ${p => (p.$head || p.$total ? 700 : 500)};
+  background: ${p => (p.$head ? '#fef2f2' : 'transparent')};
+  ${p => p.$head && 'border-top: none; color: #b91c1c; font-size: 0.72rem;'}
+`;
+
+const RiskKindCell = styled.button`
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  border: none;
+  border-top: 1px solid #fee2e2;
+  border-left: 3px solid ${p => (p.$on ? '#dc2626' : 'transparent')};
+  background: ${p => (p.$on ? '#fee2e2' : 'transparent')};
+  color: ${p => (p.$on ? '#991b1b' : '#b91c1c')};
+  font-size: 0.75rem;
+  font-weight: ${p => (p.$on ? 700 : 600)};
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { background: #fee2e2; }
+`;
+
 // ── 일정 위험 ────────────────────────────────────────────────────────────────
 //
 // 「기간이 지난 만큼 진척이 안 따라온다」로 볼 최소 격차.
@@ -1541,6 +1596,7 @@ const AllProjectsView = ({
   const [perfViewDivisionFilter, setPerfViewDivisionFilter] = useState('all'); // 성과 보기 사업부 필터
   const [recencyFilter, setRecencyFilter] = useState(''); // '' | 'week' | 'month' | 'none'
   const [riskFilter, setRiskFilter] = useState(false);    // 일정 위험만 보기
+  const [riskKind, setRiskKind] = useState('');           // '' | overdue | behind | backloaded
 
   // 경과율의 기준이 되는 「지금」.
   //
@@ -1780,20 +1836,59 @@ const AllProjectsView = ({
       }
 
       // 일정 위험만 보기 — 「이 과제들만 따로 얘기한다」가 이 필터의 쓸모다.
-      if (riskFilter && scheduleRiskApplies && !getScheduleRisk(project)) return false;
+      if (riskFilter && scheduleRiskApplies) {
+        const risk = getScheduleRisk(project);
+        if (!risk) return false;
+        // 유형을 고르면 그것만. 「막판 몰림」과 「기한 지남」은 할 말이 다르다.
+        if (riskKind && risk.kind !== riskKind) return false;
+      }
 
       return true;
     });
   }, [projects, currentYear, searchTerm, showTrash, recencyFilter, selectedProjectStatuses,
-      riskFilter, scheduleRiskApplies, thisMonth]);
+      riskFilter, riskKind, scheduleRiskApplies, thisMonth]);
+
+  /** 유형 × 사업부. 「따로 얘기한다」면 **어느 조직 문제인지**가 먼저 나와야 한다.
+   *
+   *  ⚠️ 세 유형은 **할 말이 서로 다르다.** 「기한 지남」은 이미 끝난 이야기이고,
+   *     「일정 뒤처짐」은 지금 밀리는 중이고, 「막판 몰림」은 아직 안 늦었지만
+   *     계획이 뒤에 쏠려 있다는 예고다. 한 덩어리로 세면 그 구별이 사라진다.
+   *
+   *  ⚠️ 모수는 **필터를 거치지 않은 그 해 과제**다. 필터가 걸린 목록으로 세면
+   *     유형을 하나 고르는 순간 나머지 칸이 0 이 되어 표가 자기 자신을 지운다.
+   */
+  const scheduleRiskSummary = useMemo(() => {
+    const empty = { total: 0, kinds: [], divisions: [] };
+    if (!scheduleRiskApplies) return empty;
+
+    const byKind = {};
+    const divisions = new Set();
+    let total = 0;
+    projects.forEach(p => {
+      if (p._deleted || projectYearOf(p) !== Number(currentYear)) return;
+      const risk = getScheduleRisk(p);
+      if (!risk) return;
+      total += 1;
+      const division = p.사업부 || '미지정';
+      divisions.add(division);
+      const slot = byKind[risk.kind] || (byKind[risk.kind] = { total: 0, by: {} });
+      slot.total += 1;
+      slot.by[division] = (slot.by[division] || 0) + 1;
+    });
+
+    // 급한 순으로 세운다 — 이미 기한이 지난 것이 맨 위다.
+    const order = ['overdue', 'behind', 'backloaded'];
+    return {
+      total,
+      divisions: [...divisions].sort(),
+      kinds: order.filter(k => byKind[k]).map(k => ({
+        kind: k, label: SCHEDULE_RISK_LABEL[k], ...byKind[k],
+      })),
+    };
+  }, [projects, currentYear, scheduleRiskApplies, thisMonth]);
 
   /** 칩에 붙일 수. 눌러보기 전에 **몇 건인지 먼저 보여야** 누를 마음이 생긴다. */
-  const scheduleRiskCount = useMemo(() => {
-    if (!scheduleRiskApplies) return 0;
-    return projects.filter(p => !p._deleted
-      && projectYearOf(p) === Number(currentYear)
-      && getScheduleRisk(p)).length;
-  }, [projects, currentYear, scheduleRiskApplies, thisMonth]);
+  const scheduleRiskCount = scheduleRiskSummary.total;
 
   /**
    * 사업부(설정 순서) → 과제명 순.
@@ -2523,7 +2618,9 @@ const AllProjectsView = ({
                 $borderColor="#fecaca"
                 $textColor="#dc2626"
                 $active={riskFilter}
-                onClick={() => setRiskFilter(!riskFilter)}
+                /* 끌 때 유형 선택도 같이 푼다 — 안 그러면 다시 켰을 때 왜
+                   3건뿐인지 모른 채 목록을 본다. */
+                onClick={() => { setRiskFilter(!riskFilter); setRiskKind(''); }}
                 title="기간이 지난 만큼 진척이 안 따라온 과제만 봅니다"
               >
                 <AlertTriangle size={12} />
@@ -2575,6 +2672,44 @@ const AllProjectsView = ({
             )}
           </LegendNote>
         ) : null}
+
+        {/* 유형 × 사업부. **필터를 켰을 때만** 편다 — 평소에 깔아 두면 아무도 안
+            누르는 표가 목록 위 자리를 늘 차지한다. */}
+        {riskFilter && scheduleRiskApplies && scheduleRiskSummary.total > 0 && (
+          <RiskBoard>
+            <RiskBoardHead>
+              유형별 · 사업부별
+              <small>
+                유형을 누르면 그것만 봅니다
+                {riskKind && ` · 지금 「${SCHEDULE_RISK_LABEL[riskKind]}」만 보는 중`}
+              </small>
+            </RiskBoardHead>
+            <RiskGrid $cols={scheduleRiskSummary.divisions.length}>
+              <RiskCell $head />
+              {scheduleRiskSummary.divisions.map(d => (
+                <RiskCell key={d} $head>{d}</RiskCell>
+              ))}
+              <RiskCell $head $total>합</RiskCell>
+
+              {scheduleRiskSummary.kinds.map(k => (
+                <React.Fragment key={k.kind}>
+                  <RiskKindCell
+                    $on={riskKind === k.kind}
+                    onClick={() => setRiskKind(riskKind === k.kind ? '' : k.kind)}
+                    title={`「${k.label}」 ${k.total}건만 봅니다`}
+                  >
+                    ⚠ {k.label}
+                  </RiskKindCell>
+                  {scheduleRiskSummary.divisions.map(d => (
+                    /* 0 은 흐리게. 있는 칸이 눈에 먼저 들어와야 한다. */
+                    <RiskCell key={d} $zero={!k.by[d]}>{k.by[d] || 0}</RiskCell>
+                  ))}
+                  <RiskCell $total>{k.total}</RiskCell>
+                </React.Fragment>
+              ))}
+            </RiskGrid>
+          </RiskBoard>
+        )}
 
         {sortedProjects.length === 0 ? (
           <EmptyState>
