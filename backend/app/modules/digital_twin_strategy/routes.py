@@ -39,6 +39,7 @@ from .elements import (
     summarize_elements,
 )
 from .threshold_preview import summarize as summarize_thresholds, curve as threshold_curve
+from .metric_detail import explain as explain_metric
 from .document import (
     SECTIONS as DOC_SECTIONS, SECTION_KEYS, MANUAL_KEYS, assemble, summarize,
 )
@@ -243,6 +244,51 @@ def threshold_preview(year):
             data = {'base': summarize_thresholds(
                 plan, build_plan_payload, values, source)}
         return jsonify({'success': True, 'data': data})
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/metrics/<metric_key>/detail', methods=['GET'])
+@view_required
+def metric_detail(year, metric_key):
+    """관측값 하나를 **풀어서** 보여준다 — 어떻게 셌고 어느 과제가 그 수를 만들었나.
+
+    division_id  그 사업부만 (없으면 전사)
+    process      그 프로세스만. **사업부와 같이 주는 것이 정상**이다 —
+                 MX 의 개발과 VD 의 개발은 다른 조직이라 합치면 뜻이 없다
+                 (compute_process_metrics 주석과 같은 규칙).
+
+    ⚠️ **누를 때만 부른다.** 관측을 그릴 때마다 지표 10개 × 사업부 5개를 미리
+       풀면 payload 가 열 배가 된다.
+
+    ⚠️ 묶는 방법이 compute_metrics 와 **같아야** 한다. 여기서 다르게 묶으면
+       화면의 숫자와 목록의 건수가 어긋난다 — 그때 어느 쪽이 맞는지 알 수 없다.
+    """
+    try:
+        source = get_evidence_source()
+        projects = source.get_projects(year) or []
+
+        division_id = request.args.get('division_id', type=int)
+        process = (request.args.get('process') or '').strip()
+        scope = []
+        if division_id:
+            names = {d.id: d.name for d in get_target_divisions()}
+            name = names.get(division_id)
+            if not name:
+                return _error('대상 사업부가 아닙니다.', 400)
+            projects = [p for p in projects if p.get('사업부') == name]
+            scope.append(name)
+        if process:
+            projects = [p for p in projects if (p.get('프로세스') or '') == process]
+            scope.append(process)
+
+        data = explain_metric(metric_key, projects)
+        data['scope'] = ' · '.join(scope) if scope else '전사'
+        # 합친 값임을 화면이 말할 수 있어야 한다(프로세스 전사 합계와 같은 이유).
+        data['isCompany'] = not division_id
+        return jsonify({'success': True, 'data': data})
+    except ValueError as e:
+        return _error(str(e), 400)
     except Exception:
         return _crashed()
 

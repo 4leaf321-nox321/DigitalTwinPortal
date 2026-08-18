@@ -577,6 +577,8 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       return (
         <DiagnosisView
           canEdit={canEdit}
+          onMetricDetail={(metricKey, scope) =>
+            strategyApi.metricDetail(year, metricKey, scope)}
           categories={meta?.categories || []}
           divisions={meta?.divisions || []}
           metricDefinitions={meta?.metrics || []}

@@ -46,6 +46,18 @@ const ValueCell = styled(Cell)`
   font-weight: 700;
   color: ${p => p.$color};
   background: ${p => p.$bg || 'transparent'};
+
+  /* ⚠️ **누를 수 있다는 것이 보여야 한다.** 숫자가 눌린다는 걸 모르면 그 기능은
+     없는 것과 같다. 밑줄을 옅게 깔아 두고 올리면 진해진다. */
+  ${p => p.$clickable && `
+    cursor: pointer;
+    text-decoration: underline dotted rgba(100, 116, 139, 0.45);
+    text-underline-offset: 3px;
+    &:hover {
+      background: #f5f3ff;
+      text-decoration-color: #7c3aed;
+    }
+  `}
 `;
 
 const HintIcon = styled(HelpCircle)`
@@ -90,7 +102,7 @@ function tone(value, direction, limit) {
   return { color: '#047857' };
 }
 
-const ObservedMatrix = ({ definitions, divisions, metrics, thresholds }) => {
+const ObservedMatrix = ({ definitions, divisions, metrics, thresholds, onOpen }) => {
   const byKey = {};
   (metrics || []).forEach(m => {
     byKey[`${m.division_id}:${m.metric_key}`] = m;
@@ -120,11 +132,16 @@ const ObservedMatrix = ({ definitions, divisions, metrics, thresholds }) => {
               const limitText = typeof limit === 'number'
                 ? ` · 기준 ${def.direction === 'lower' ? '≥' : '≤'} ${limit}${def.unit}`
                 : '';
+              // 근거가 없는 칸은 눌러도 보여줄 것이 없다.
+              const clickable = !empty && !!onOpen;
               return (
                 <ValueCell key={d.id} $color={t.color} $bg={t.bg}
+                  $clickable={clickable}
+                  onClick={clickable ? () => onOpen(def, d) : undefined}
                   title={empty
                     ? '계산할 근거가 없습니다'
-                    : `${def.label}: ${m.value}${def.unit}${limitText}`}>
+                    : `${def.label}: ${m.value}${def.unit}${limitText}`
+                      + (clickable ? ' · 눌러서 셈법과 과제 보기' : '')}>
                   {empty ? '—' : m.value}
                   {!empty && <Unit>{def.unit}</Unit>}
                 </ValueCell>

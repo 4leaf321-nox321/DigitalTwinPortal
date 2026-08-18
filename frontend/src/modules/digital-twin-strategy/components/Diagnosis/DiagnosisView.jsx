@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import ObservedMatrix from './ObservedMatrix';
+import MetricDetail from './MetricDetail';
 import KpiCoverage from './KpiCoverage';
 import FindingsPanel from './FindingsPanel';
 import PromoteCrux from './PromoteCrux';
@@ -151,7 +152,7 @@ const DiagnosisView = ({
   categories, divisions, metricDefinitions, thresholds,
   assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
   surveyEvidence, surveyVoicesAvailable, onApplySurvey, onLoadVoices,
-  processMetrics, canEdit,
+  processMetrics, canEdit, onMetricDetail,
   onChange, onTargetChange, onBumpTargets,
   onCruxAdd, onCruxUpdate, onCruxDelete, onCruxDemote,
   issues,
@@ -223,6 +224,27 @@ const DiagnosisView = ({
   //    여덟 개가 이슈 0건이었다(PromoteCrux 주석). 제목을 다시 쓰게 한다.
   const [promoting, setPromoting] = useState(null);
 
+  // 관측값 하나를 풀어 보는 창. **누를 때만 부른다** — 미리 다 풀어 두면
+  // payload 가 열 배가 된다(임계값 미리보기와 같은 규칙).
+  const [detail, setDetail] = useState(null);
+
+  const openDetail = async (def, col) => {
+    // ⚠️ 프로세스 축이면 **사업부도 같이** 보낸다. MX 의 개발과 VD 의 개발은
+    //    다른 조직이라, 프로세스만 보내면 합친 값이 돌아온다. 전사 합계를
+    //    보고 있을 때(processIn === '')만 사업부 없이 보낸다.
+    const scope = onProcess
+      ? { process: col.id, divisionId: processIn || undefined }
+      : { divisionId: col.id };
+    setDetail({ loading: true, data: null, error: null });
+    try {
+      const data = await onMetricDetail(def.key, scope);
+      setDetail({ loading: false, data, error: null });
+    } catch (e) {
+      setDetail({ loading: false, data: null,
+                  error: e?.message || '불러오지 못했습니다.' });
+    }
+  };
+
   const promote = (finding) => setPromoting(finding);
 
   const confirmPromote = async (payload) => {
@@ -232,6 +254,12 @@ const DiagnosisView = ({
 
   return (
     <Layout>
+      {detail && (
+        <MetricDetail
+          {...detail}
+          onClose={() => setDetail(null)}
+        />
+      )}
       {promoting && (
         <PromoteCrux
           finding={promoting}
@@ -289,6 +317,7 @@ const DiagnosisView = ({
                   divisions={onProcess ? processRows : divisions}
                   metrics={onProcess ? processCells : metrics}
                   thresholds={thresholds}
+                  onOpen={onMetricDetail ? openDetail : undefined}
                 />
                 {onProcess && (
                   <Hint>

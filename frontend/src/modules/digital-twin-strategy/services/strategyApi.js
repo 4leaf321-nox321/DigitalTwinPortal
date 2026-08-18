@@ -199,6 +199,21 @@ export const strategyApi = {
       body: JSON.stringify({ step }),
     }),
 
+  /** 관측값 하나를 **풀어서** 본다 — 어떻게 셌고 어느 과제가 그 수를 만들었나.
+   *
+   *  ⚠️ 프로세스를 볼 때는 **사업부도 같이** 준다. MX 의 개발과 VD 의 개발은
+   *     다른 조직이라, 프로세스만 주면 합친 값이 나온다.
+   *
+   *  ⚠️ 누를 때만 부른다. 관측을 그릴 때마다 미리 풀면 payload 가 열 배가 된다. */
+  metricDetail: (year, metricKey, { divisionId, process } = {}) => {
+    const params = new URLSearchParams();
+    if (divisionId) params.set('division_id', divisionId);
+    if (process) params.set('process', process);
+    const query = params.toString();
+    return request(
+      `/plans/${year}/metrics/${metricKey}/detail${query ? `?${query}` : ''}`);
+  },
+
   /** ⚙ 임계값 미리보기.
    *
    *  key 없이 부르면 「지금 몇 건인가」 하나, key 를 주면 그 값을 **범위 전체로**
