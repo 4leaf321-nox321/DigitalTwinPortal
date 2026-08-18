@@ -32,9 +32,12 @@
 from .definitions import CATEGORIES, METRICS
 
 
-# 격차가 이보다 작으면 후보로 내밀지 않는다. 한 단계 차이는 대부분의 조직에
-# 늘 있는 것이라, 그것까지 늘어놓으면 목록이 25줄이 되고 아무도 안 읽는다.
-GAP_MIN = 2
+# 격차가 이보다 작으면 후보로 내밀지 않는다. **운영에서 정한다**(issue_gap_min).
+#
+# ⚠️ 한동안 2 로 박아 두었는데, 그러면 목표를 「올해 한 단계」로 잡는 조직에서는
+#    이슈 후보가 하나도 안 나온다 — 「진단을 채우면 후보가 뜬다」는 약속이
+#    기본 사용법에서 깨졌다. 코드의 기본값은 안전한 쪽(1)이다.
+GAP_MIN = 1
 
 
 def _by_key(items):
@@ -90,7 +93,8 @@ def derive_survey_candidates(findings, promoted=None):
     return out
 
 
-def derive_issue_candidates(assessments, metrics, divisions):
+def derive_issue_candidates(assessments, metrics, divisions,
+                            thresholds=None):
     """진단 격차를 이슈 후보로 바꾼다.
 
     assessments / metrics 는 routes.get_plan 이 화면에 내려주는 것과 같은 모양의
@@ -100,12 +104,13 @@ def derive_issue_candidates(assessments, metrics, divisions):
     쓴다. strategy_issue.source_ref 에 그대로 저장되므로 안정적이어야 한다.
     """
     names = {d.id: d.name for d in divisions}
+    gap_min = (thresholds or {}).get('issue_gap_min', GAP_MIN)
     candidates = []
 
     # ── A. 성숙도 격차 ────────────────────────────────────────────────────
     for a in assessments:
         gap = a.get('gap')
-        if gap is None or gap < GAP_MIN:
+        if gap is None or gap < gap_min:
             continue
 
         category, dimension = a.get('category'), a.get('dimension')
@@ -121,6 +126,9 @@ def derive_issue_candidates(assessments, metrics, divisions):
 
         candidates.append({
             'key': f'gap:{category}:{dimension}:{division_id}',
+            # 같은 축인지 알아보려면 사업부를 뺀 식별자가 필요하다.
+            'dimension_key': f'{category}:{dimension}',
+            'group_label': meta['label'],
             'title': f'{names.get(division_id, "?")} · {meta["label"]} '
                      f'{current}단계 → {target}단계',
             'detail': f'{meta["question"]} — 지금은 {current}단계({current_label}), '
@@ -169,8 +177,42 @@ def derive_issue_candidates(assessments, metrics, divisions):
             'weight': abs(shortfall) / 10,
         })
 
-    candidates.sort(key=lambda c: -c['weight'])
+    _rank_by_shared_dimension(candidates)
     return candidates
+
+
+def _rank_by_shared_dimension(candidates):
+    """**여러 사업부가 같이 낮은 차원을 위로.**
+
+    ⚠️ 격차만으로는 순서를 못 정한다. 조직은 목표를 「올해 한 단계」로 잡으므로
+       격차가 거의 전부 1 이 되고, 그러면 서른 줄이 다 같은 무게로 늘어선다
+       (2026-08-17 한 사이클 실측: 31건 전부 gap=1).
+
+    그래서 **몇 개 사업부가 같은 축에서 낮은가**를 무게로 쓴다. 네 사업부가
+    「통합」에서 걸려 있으면 그건 개별 조직의 문제가 아니라 구조 문제이고,
+    하나를 고치면 넷이 같이 좋아진다. 혼자만 낮은 것은 그 사업부의 사정일
+    가능성이 높아 아래로 간다.
+
+    지표 후보(활용과 성과)는 원래대로 격차 크기를 따른다 — 그쪽은 값이
+    연속이라 격차가 실제로 갈린다.
+    """
+    shared = {}
+    for c in candidates:
+        if c.get('source_type') != 'gap':
+            continue
+        shared[c['dimension_key']] = shared.get(c['dimension_key'], 0) + 1
+
+    for c in candidates:
+        if c.get('source_type') != 'gap':
+            continue
+        n = shared[c['dimension_key']]
+        c['shared_count'] = n
+        # 지표 후보와 한 목록에 섞이므로 자릿수를 맞춘다. 여러 사업부가 걸린
+        # 축은 격차가 1 이어도 위로 온다.
+        c['weight'] = n + c['gap'] / 10
+
+    candidates.sort(key=lambda c: (-c['weight'], c.get('group_label', ''),
+                                   c.get('title', '')))
 
 
 def summarize_coverage(cruxes, issues):

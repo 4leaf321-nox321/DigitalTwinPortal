@@ -256,6 +256,10 @@ const CandidatePanel = ({ candidates, onPick, onBundle, rail = false }) => {
                 </BundleButton>
               </Bundle>
 
+              {/* ⚠️ **여러 사업부가 같이 낮은 축을 위에 둔다**(서버가 정렬).
+                  격차가 거의 전부 1 이라 격차만으로는 순서가 안 나온다 —
+                  실측 31건이 전부 gap=1 이었다. 그 사실을 여기 적어 두면
+                  사람이 왜 이 순서인지 안다. */}
               {candidates.map(c => {
                 const on = picked.includes(c.key);
                 return (
@@ -276,7 +280,15 @@ const CandidatePanel = ({ candidates, onPick, onBundle, rail = false }) => {
                   >
                     <Check type="checkbox" checked={on} readOnly tabIndex={-1} />
                     <Body>
-                      <Title><Group>{c.group}</Group>{c.title}</Title>
+                      <Title>
+                        <Group>{c.group}</Group>
+                        {c.shared_count > 1 && (
+                          <Group style={{ background: '#f0fdf4', color: '#15803d' }}>
+                            사업부 {c.shared_count}곳
+                          </Group>
+                        )}
+                        {c.title}
+                      </Title>
                       <Detail>{c.detail}</Detail>
                     </Body>
                     {/* ⚠️ 카드가 통째로 선택 영역이므로 **여기서 멈춰야** 한다.
