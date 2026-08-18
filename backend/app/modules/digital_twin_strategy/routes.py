@@ -46,23 +46,54 @@ from .definitions import (
 
 bp = Blueprint('digital_twin_strategy', __name__, url_prefix='/api/digital-twin-strategy')
 
-ALLOWED_ROLES = (UserRole.ADMIN, UserRole.DT_OFFICE_MEMBER)
+# ── 권한 ───────────────────────────────────────────────────────────────────
+#
+# **조회는 모두, 편집은 매니저 이상.**
+#
+# ⚠️ 한동안 전 화면이 사무국 전용이었다. 그러면 사업부장이 자기 사업부 진단조차
+#    못 보고, 전략은 "사무국이 만든 남의 문서"가 된다 — 정작 실행할 조직이 안
+#    읽는다. 설문으로 의견은 받으면서 결과는 안 보여주는 구조이기도 했다.
+EDIT_ROLES = (UserRole.ADMIN, UserRole.DT_OFFICE_MEMBER, UserRole.MANAGER)
+
+
+def _current_user():
+    return User.query.get(int(get_jwt_identity()))
+
+
+def can_edit(user):
+    return bool(user) and user.role in EDIT_ROLES
 
 # 진단값을 무엇으로 매겼나. models.StrategyAssessment 의 주석과 같은 집합이다.
 #   auto  포탈 데이터로 채움 / survey  설문 / manual  손으로 입력
 ASSESSMENT_BASIS = {'auto', 'survey', 'manual'}
 
 
-def office_required(fn):
-    """사무국/관리자만 통과시킨다."""
+def view_required(fn):
+    """로그인한 사람은 모두 본다.
+
+    ⚠️ **읽기 전용 경로에만 붙인다.** 무엇을 바꾸는 경로에 이걸 달면 아무나
+       진단을 고칠 수 있게 된다 — GET 인지 아닌지가 아니라 **바꾸는지**로 가른다.
+    """
     @wraps(fn)
     @jwt_required()
     def wrapper(*args, **kwargs):
-        user = User.query.get(int(get_jwt_identity()))
-        if not user or user.role not in ALLOWED_ROLES:
+        if not _current_user():
+            return jsonify({'success': False,
+                            'message': '로그인이 필요합니다.'}), 403
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def edit_required(fn):
+    """매니저 이상만 바꾼다."""
+    @wraps(fn)
+    @jwt_required()
+    def wrapper(*args, **kwargs):
+        if not can_edit(_current_user()):
             return jsonify({
                 'success': False,
-                'message': '전략 기획은 사무국/관리자만 접근할 수 있습니다.'
+                'message': '전략 기획의 편집은 매니저 이상만 할 수 있습니다. '
+                           '조회는 그대로 하실 수 있습니다.'
             }), 403
         return fn(*args, **kwargs)
     return wrapper
@@ -73,7 +104,7 @@ def _error(message, status=500):
 
 
 @bp.route('/meta', methods=['GET'])
-@office_required
+@view_required
 def get_meta():
     """진단 기준과 대상 사업부, 근거 원천 모드.
 
@@ -89,6 +120,9 @@ def get_meta():
             'metrics': METRICS,
             'divisions': [{'id': d.id, 'name': d.name, 'color': d.color} for d in divisions],
             'evidenceMode': source.mode,
+            # 화면이 편집 단추를 감출지 정하는 값. **서버가 정본**이고,
+            # 이건 편의다 — 감춰도 막는 것은 위 데코레이터다.
+            'canEdit': can_edit(_current_user()),
             'thresholdDefinitions': THRESHOLDS,
             'thresholds': get_thresholds(),
         }
@@ -96,7 +130,7 @@ def get_meta():
 
 
 @bp.route('/settings/thresholds', methods=['PUT'])
-@office_required
+@edit_required
 def update_thresholds():
     """진단 임계값 저장.
 
@@ -157,7 +191,7 @@ def update_thresholds():
 
 
 @bp.route('/plans/<int:year>', methods=['GET'])
-@office_required
+@view_required
 def get_plan(year):
     """해당 연도 전략 조회. 없으면 data 가 None 이다(404 가 아니다 — 아직 안 만든
     것은 오류가 아니라 정상 상태다)."""
@@ -338,7 +372,7 @@ def get_plan(year):
 
 
 @bp.route('/plans/<int:year>/cruxes', methods=['POST'])
-@office_required
+@edit_required
 def create_crux(year):
     """크럭스 추가. 진단의 산출물이며 다음 단계의 입력이 된다."""
     try:
@@ -369,7 +403,7 @@ def create_crux(year):
 
 
 @bp.route('/plans/<int:year>/cruxes/from-issues', methods=['POST'])
-@office_required
+@edit_required
 def crux_from_issues(year):
     """이슈 여러 개를 **묶어서** 핵심 난제를 만든다. (아래에서 위로)
 
@@ -474,7 +508,7 @@ def crux_from_issues(year):
 
 
 @bp.route('/plans/<int:year>/cruxes/<int:crux_id>', methods=['PUT', 'DELETE'])
-@office_required
+@edit_required
 def modify_crux(year, crux_id):
     try:
         plan = StrategyPlan.query.filter_by(year=year).first()
@@ -596,7 +630,7 @@ def _apply_element_fields(element, payload):
 
 
 @bp.route('/plans/<int:year>/elements', methods=['POST'])
-@office_required
+@edit_required
 def create_element(year):
     """전략 요소 추가. 후보에서 승격했거나 손으로 적은 것이다."""
     try:
@@ -622,7 +656,7 @@ def create_element(year):
 
 @bp.route('/plans/<int:year>/elements/<int:element_id>',
           methods=['PUT', 'DELETE'])
-@office_required
+@edit_required
 def modify_element(year, element_id):
     try:
         plan = StrategyPlan.query.filter_by(year=year).first()
@@ -649,7 +683,7 @@ def modify_element(year, element_id):
 
 
 @bp.route('/plans/<int:year>/issues', methods=['POST'])
-@office_required
+@edit_required
 def create_issue(year):
     """이슈 추가. 핵심 난제를 쪼갠 것이거나, 진단 격차에서 가져온 것이다."""
     try:
@@ -679,7 +713,7 @@ def create_issue(year):
 
 
 @bp.route('/plans/<int:year>/issues/<int:issue_id>', methods=['PUT', 'DELETE'])
-@office_required
+@edit_required
 def modify_issue(year, issue_id):
     """이슈 수정·삭제.
 
@@ -712,7 +746,7 @@ def modify_issue(year, issue_id):
 
 
 @bp.route('/plans', methods=['POST'])
-@office_required
+@edit_required
 def create_plan():
     """연도별 전략 생성. 같은 해에 두 번 만들 수 없다."""
     try:
@@ -753,7 +787,7 @@ def create_plan():
 
 @bp.route('/plans/<int:year>/assessments/<int:division_id>/<category>/<dimension>',
           methods=['PUT'])
-@office_required
+@edit_required
 def update_assessment(year, division_id, category, dimension):
     """진단 항목 수정."""
     try:
@@ -810,7 +844,7 @@ def update_assessment(year, division_id, category, dimension):
 
 
 @bp.route('/plans/<int:year>/survey-voices', methods=['POST'])
-@office_required
+@edit_required
 def survey_voices(year):
     """설문 서술형을 AI 로 묶어 읽는다.
 
@@ -834,7 +868,7 @@ def survey_voices(year):
 
 
 @bp.route('/plans/<int:year>/assessments/apply-survey', methods=['POST'])
-@office_required
+@edit_required
 def apply_survey_evidence(year):
     """설문 제안값을 진단에 **반영한다.** 읽기(진단 조회)와 쓰기를 가른 자리다.
 
@@ -943,7 +977,7 @@ def apply_survey_evidence(year):
 
 @bp.route('/plans/<int:year>/metric-targets/<int:division_id>/<metric_key>',
           methods=['PUT'])
-@office_required
+@edit_required
 def update_metric_target(year, division_id, metric_key):
     """활용·성과 지표의 목표값 설정. 관측값은 계산되므로 저장하지 않는다."""
     try:
@@ -983,7 +1017,7 @@ def update_metric_target(year, division_id, metric_key):
 
 
 @bp.route('/evidence-preview/<int:year>', methods=['GET'])
-@office_required
+@edit_required
 def evidence_preview(year):
     """근거 원천이 실제로 무엇을 돌려주는지 확인용."""
     source = get_evidence_source()
