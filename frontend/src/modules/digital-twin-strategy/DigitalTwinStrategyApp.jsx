@@ -577,8 +577,12 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       return (
         <DiagnosisView
           canEdit={canEdit}
+          /* ⚠️ request() 는 {success, data} **봉투 전체**를 돌려준다. 다른
+             호출들처럼 여기서 벗긴다 — 안 벗기면 창이 label·projects 를 못 찾아
+             제목이 「관측값」으로, 목록이 「없습니다」로 나온다. */
           onMetricDetail={(metricKey, scope) =>
-            strategyApi.metricDetail(currentYear, metricKey, scope)}
+            strategyApi.metricDetail(currentYear, metricKey, scope)
+              .then(res => res.data)}
           categories={meta?.categories || []}
           divisions={meta?.divisions || []}
           metricDefinitions={meta?.metrics || []}
