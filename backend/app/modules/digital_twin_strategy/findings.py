@@ -463,3 +463,51 @@ def derive_process_findings(by_division, totals, processes, divisions,
     order = {'high': 0, 'medium': 1, 'info': 2}
     findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
     return findings
+
+
+# 같은 규칙에서 나온 것들을 묶을 때 쓰는 이름.
+#
+# ⚠️ **없으면 안 묶는 것이 아니라 대표 문장으로 묶는다.** 규칙을 새로 넣을 때
+#    여기 적는 걸 잊어도 화면이 깨지지 않아야 한다(assert 를 안 건 이유).
+#    한 사이클을 돌려 보니 같은 모양 문장이 다섯 줄씩 이어져 목록이 안 읽혔다.
+RULE_LABELS = {
+    'gap_performance': '성과를 정의하지 않은 과제',
+    'gap_kpi_link': 'KPI 에 안 걸린 과제',
+    'gap_link_grade': '연결 등급을 안 정한 과제',
+    'few_primary_links': '주기여 연결이 적음',
+    'concentration_pl': '한 사람에게 몰림',
+    'concentration_deadline': '일정이 한 분기에 몰림',
+    'concentration_dept': '한 부서에 몰림',
+    'concentration_dept_skew': '참여 부서가 이름뿐',
+    'isolated_projects': '따로 도는 과제',
+    'volume_without_outcome': '과제는 많은데 성과가 안 보임',
+    'kpi_shortfall': 'KPI 달성률 미달',
+    'kpi_single_division': '지표에 한 사업부만',
+    'kpi_no_primary': '주기여로 미는 과제가 없음',
+    'spread_stalled_company': '전사 확산 정체',
+    'division_gap': '사업부 간 격차',
+    'process_thin': '과제가 거의 없는 프로세스',
+    'process_unknown': '프로세스를 안 적은 과제',
+    'strategy_unlinked': '전략에 안 걸린 과제',
+    'survey_division_gap': '설문 · 사업부 간 격차',
+    'survey_role_gap': '설문 · 역할 간 인식 차',
+    'survey_low_level': '설문 · 전사 공통 저점',
+    'survey_choice_top': '설문 · 한 보기로 쏠림',
+    'survey_choice_split': '설문 · 누가 답했느냐로 갈림',
+}
+
+
+def attach_rules(findings):
+    """발견 사항마다 어느 규칙에서 나왔는지 붙인다.
+
+    key 앞자리가 곧 규칙이다. 규칙 이름을 모르면 그 묶음의 **첫 제목**을
+    이름으로 쓴다 — 이름을 몰라 안 묶는 것보다 낫다.
+    """
+    first = {}
+    for f in findings or []:
+        rule = (f.get('key') or '').split(':')[0]
+        f['rule'] = rule
+        first.setdefault(rule, f.get('title') or rule)
+    for f in findings or []:
+        f['ruleLabel'] = RULE_LABELS.get(f['rule']) or first[f['rule']]
+    return findings
