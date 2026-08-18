@@ -10,12 +10,12 @@ from .routes import bp
 # routes 가 쓰지 않는 모델도 여기서 잡아준다.
 from .models import (  # noqa: F401
     StrategyPlan, StrategyAssessment, StrategyMetricTarget,
-    StrategyCrux, StrategyIssue, StrategyEvidence, StrategyElement,
-    StrategySolution, StrategyGate,
+    StrategyCrux, StrategyIssue, StrategyElement, StrategySolution,
+    StrategyGate, StrategyDocument,
 )
 
 __all__ = [
     'bp', 'StrategyPlan', 'StrategyAssessment', 'StrategyMetricTarget',
-    'StrategyCrux', 'StrategyIssue', 'StrategyEvidence', 'StrategyElement',
-    'StrategySolution', 'StrategyGate',
+    'StrategyCrux', 'StrategyIssue', 'StrategyElement', 'StrategySolution',
+    'StrategyGate', 'StrategyDocument',
 ]

@@ -253,38 +253,6 @@ class StrategyElement(BaseModel):
     order = db.Column(db.Integer, nullable=False, default=0)
 
 
-class StrategyEvidence(BaseModel):
-    """
-    모든 단계 공용 근거. 포탈 데이터와 설문 결과가 함께 들어온다.
-
-    snapshot 이 핵심이다. 근거로 삼은 **시점의 값을 복사**해 둔다. 원본 과제
-    데이터가 나중에 바뀌어도 "그때 이 숫자를 보고 이렇게 판단했다"가 남아야
-    전략 문서가 검증 가능하다.
-
-    source_mode 는 그 근거가 진짜 데이터인지 개발용 합성 데이터인지 구분한다.
-    fixture 로 만든 전략이 운영 산출물로 오인되면 안 된다.
-    """
-    __tablename__ = 'strategy_evidence'
-
-    plan_id = db.Column(
-        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
-        nullable=False, index=True
-    )
-    # 어느 항목에 붙은 근거인가 (assessment / issue / element / solution)
-    target_type = db.Column(db.String(30), nullable=False)
-    target_id = db.Column(db.Integer, nullable=False)
-
-    kind = db.Column(db.String(20), nullable=False, default='portal')  # portal | survey
-    source_module = db.Column(db.String(50), nullable=False)  # digital_twin_dashboard 등
-    source_ref = db.Column(db.String(200))                    # 원본 식별자
-    source_mode = db.Column(db.String(20), nullable=False, default='local')  # local | fixture
-
-    snapshot = db.Column(JSON, nullable=False, default=dict)
-    label = db.Column(db.String(300))  # 화면에 보일 한 줄 요약
-
-    __table_args__ = (
-        db.Index('ix_evidence_target', 'target_type', 'target_id'),
-    )
 class StrategySolution(BaseModel):
     """
     ④ 솔루션. **SWOT 을 엮어 만든 솔루션** 하나.
