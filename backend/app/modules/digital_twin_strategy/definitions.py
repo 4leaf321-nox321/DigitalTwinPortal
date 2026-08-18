@@ -453,6 +453,44 @@ THRESHOLDS = [
 ]
 
 DEFAULT_THRESHOLDS = {t['key']: t['default'] for t in THRESHOLDS}
+# ⚙ 미리보기가 쓰는 두 가지.
+#
+# step     한 칸 움직이는 폭. **단위마다 다르다** — %는 5, 단계는 1, 점은 0.1.
+#          너무 잘게 움직이면 건수가 안 바뀌어 조정에 도움이 안 되고, 너무 크게
+#          움직이면 "그 사이 어딘가"를 못 찾는다.
+# counts   그 값이 무엇의 개수를 좌우하는가. 화면이 「12건」의 「건」이 무엇인지
+#          말해 줄 수 있어야 한다 — 발견 사항과 후보는 다른 것이다.
+THRESHOLD_STEPS = {'%': 5.0, '개': 1.0, '명': 1.0, '점': 0.1, '단계': 1.0,
+                   '건': 1.0}
+
+COUNTS_FINDINGS = 'findings'          # 발견 사항
+COUNTS_ISSUES = 'issueCandidates'      # ② 이슈 후보
+COUNTS_ELEMENTS = 'elementCandidates'  # ③ 전략 요소 후보
+COUNTS_NOW = 'nowSolutions'            # ④ 「먼저 한다」 칸
+
+THRESHOLD_COUNTS = {
+    'issue_gap_min': COUNTS_ISSUES,
+    'element_strong_at': COUNTS_ELEMENTS,
+    'element_weak_at': COUNTS_ELEMENTS,
+    'solution_now_max': COUNTS_NOW,
+}
+
+
+def threshold_step(spec):
+    """이 값을 한 번에 얼마나 움직일 것인가."""
+    return THRESHOLD_STEPS.get(spec.get('unit'), 1.0)
+
+
+def threshold_counts(key):
+    """이 값이 좌우하는 것. 안 적힌 것은 전부 발견 사항이다."""
+    return THRESHOLD_COUNTS.get(key, COUNTS_FINDINGS)
+
+
+assert set(THRESHOLD_COUNTS) <= {t['key'] for t in THRESHOLDS},     '없는 임계값이 THRESHOLD_COUNTS 에 있습니다.'
+assert all(t.get('unit') in THRESHOLD_STEPS for t in THRESHOLDS),     '걸음 폭을 모르는 단위가 있습니다: ' + str(
+        sorted({t.get('unit') for t in THRESHOLDS} - set(THRESHOLD_STEPS)))
+
+
 THRESHOLD_KEYS = set(DEFAULT_THRESHOLDS)
 
 # 항목마다 상한이 다르다. **비율만 있는 것이 아니다** — 척도 격차는 1~5 점

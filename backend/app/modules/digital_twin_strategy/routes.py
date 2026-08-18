@@ -38,6 +38,7 @@ from .elements import (
     derive_element_candidates, derive_survey_candidates as derive_element_survey,
     summarize_elements,
 )
+from .threshold_preview import summarize as summarize_thresholds, curve as threshold_curve
 from .document import (
     SECTIONS as DOC_SECTIONS, SECTION_KEYS, MANUAL_KEYS, assemble, summarize,
 )
@@ -209,6 +210,40 @@ def bump_targets(year):
         }})
     except Exception:
         db.session.rollback()
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/thresholds/preview', methods=['GET'])
+@edit_required
+def threshold_preview(year):
+    """지금 설정이면 몇 건인가. key 를 주면 그 값을 **범위 전체로** 훑는다.
+
+    ⚠️ **누를 때만 부른다.** 규칙 전체를 다시 돌리는 일이라 진단 화면을 열
+       때마다 하면 안 된다. ⚙ 설정에서만 부른다.
+
+    ⚠️ 편집 권한자만이다. 조회만 하는 사람은 이 값을 바꿀 수 없으니 「이 값이면
+       몇 건」을 보여 줄 이유가 없다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        values = get_thresholds()
+        source = get_evidence_source()
+        key = (request.args.get('key') or '').strip()
+
+        if key:
+            try:
+                data = threshold_curve(plan, build_plan_payload, values,
+                                       source, key)
+            except ValueError as e:
+                return _error(str(e), 400)
+        else:
+            data = {'base': summarize_thresholds(
+                plan, build_plan_payload, values, source)}
+        return jsonify({'success': True, 'data': data})
+    except Exception:
         return _crashed()
 
 

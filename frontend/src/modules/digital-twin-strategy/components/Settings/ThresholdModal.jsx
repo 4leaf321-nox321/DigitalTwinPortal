@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { X, RotateCcw } from 'lucide-react';
+import { X, RotateCcw, BarChart3, Loader2 } from 'lucide-react';
 
 // 진단 임계값 설정.
 //
@@ -83,7 +83,8 @@ const GROUPS = [
   {
     label: '관측 · 지표',
     note: '포탈 데이터에서 계산한 값이 이 선을 넘으면 발견 사항으로 짚습니다.',
-    match: (key) => !key.startsWith('survey_') && !key.startsWith('element_'),
+    match: (key) => !key.startsWith('survey_') && !key.startsWith('element_')
+      && !key.startsWith('solution_'),
   },
   {
     label: '설문',
@@ -94,6 +95,12 @@ const GROUPS = [
     label: '③ 분석 (SWOT 후보)',
     note: '진단 레벨의 어디까지를 강점·약점 후보로 낼지. 발견 사항과는 무관합니다.',
     match: (key) => key.startsWith('element_'),
+  },
+  {
+    label: '④ 솔루션',
+    note: '우선순위와 실행 연결. 한 해에 실제로 해내는 양은 조직마다 달라서, '
+      + '이 값들은 특히 운영에서 한 바퀴 돌려 보고 정해야 합니다.',
+    match: (key) => key.startsWith('solution_'),
   },
 ];
 
@@ -107,6 +114,77 @@ const Intro = styled.p`
   font-size: 0.8125rem;
   color: #64748b;
   line-height: 1.6;
+`;
+
+// ── 「이 값이면 몇 건인가」 ─────────────────────────────────────────────────
+//
+// ⚠️ **이 화면의 값들은 전부 짐작이다.** 조정 도구가 없으면 조정이 안 일어난다 —
+//    지금까지는 값을 바꾸고 저장하고 진단 화면으로 가서 목록을 눈으로 세야 했다.
+//
+// ⚠️ 값 하나씩만 훑는다. 스물한 개를 한꺼번에 보면 삼 초를 기다려야 하고,
+//    사람은 어차피 한 번에 하나를 만진다.
+const PeekButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.3rem;
+  background: white;
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  &:hover { border-color: #7c3aed; color: #6d28d9; }
+  &:disabled { opacity: 0.5; cursor: wait; }
+`;
+
+const Curve = styled.div`
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.2rem;
+  padding: 0.5rem 0 0.25rem;
+`;
+
+const Bar = styled.button`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+
+  /* 막대. 지금 값은 진하게 — 기준이 안 보이면 비교가 안 된다. */
+  &::before {
+    content: '';
+    width: 100%;
+    height: ${p => p.$height}px;
+    border-radius: 0.15rem 0.15rem 0 0;
+    background: ${p => (p.$now ? '#7c3aed' : '#ddd6fe')};
+  }
+  &:hover::before { background: ${p => (p.$now ? '#6d28d9' : '#c4b5fd')}; }
+`;
+
+const BarLabel = styled.span`
+  font-size: 0.5625rem;
+  color: ${p => (p.$now ? '#6d28d9' : '#94a3b8')};
+  font-weight: ${p => (p.$now ? 700 : 500)};
+  white-space: nowrap;
+`;
+
+const CurveNote = styled.div`
+  grid-column: 1 / -1;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  line-height: 1.55;
+  padding-bottom: 0.35rem;
 `;
 
 const Row = styled.div`
@@ -220,10 +298,41 @@ const ErrorBox = styled.div`
   font-size: 0.8125rem;
 `;
 
-const ThresholdModal = ({ definitions, values, onSave, onClose }) => {
+// 무엇을 세는가. 화면이 「12건」의 「건」이 무엇인지 말해야 한다.
+const COUNT_LABEL = {
+  findings: '발견 사항',
+  elementCandidates: '③ 요소 후보',
+  nowSolutions: '④ 「먼저 한다」',
+};
+
+const ThresholdModal = ({ definitions, values, onSave, onPreview, onClose }) => {
   const [draft, setDraft] = useState({});
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  // 지금 설정이면 몇 건인가. 화면을 열 때 한 번만 센다.
+  const [base, setBase] = useState(null);
+  // {key: {points, now, counts, flat}} — 훑어 본 값만 들어 있다.
+  const [curves, setCurves] = useState({});
+  const [peeking, setPeeking] = useState(null);
+
+  useEffect(() => {
+    if (!onPreview) return;
+    onPreview().then(d => setBase(d?.base || null));
+  }, [onPreview]);
+
+  const peek = async (key) => {
+    if (curves[key]) {
+      setCurves(c => ({ ...c, [key]: null }));   // 다시 누르면 접는다
+      return;
+    }
+    setPeeking(key);
+    try {
+      const data = await onPreview(key);
+      if (data) setCurves(c => ({ ...c, [key]: data }));
+    } finally {
+      setPeeking(null);
+    }
+  };
 
   useEffect(() => {
     const next = {};
@@ -264,6 +373,45 @@ const ThresholdModal = ({ definitions, values, onSave, onClose }) => {
 
   const changedCount = (definitions || []).filter(isDirty).length;
 
+  const renderCurve = (d, curve) => {
+    const top = Math.max(...curve.points.map(p => p.count), 1);
+    return (
+      <React.Fragment>
+        <Curve>
+          {curve.points.map(p => (
+            <Bar
+              key={p.value}
+              $now={p.value === curve.now}
+              // 0 건도 자리는 보여야 한다 — 막대가 아예 없으면 안 재 본 것처럼
+              // 보인다. 그래서 최소 높이를 준다.
+              $height={Math.max(3, Math.round((p.count / top) * 48))}
+              title={`${p.value}${d.unit} 이면 ${p.count}건`}
+              onClick={() => setDraft(v => ({ ...v, [d.key]: String(p.value) }))}
+            >
+              <BarLabel $now={p.value === curve.now}>{p.count}</BarLabel>
+              <BarLabel $now={p.value === curve.now}>{p.value}</BarLabel>
+            </Bar>
+          ))}
+        </Curve>
+        <CurveNote>
+          {curve.flat ? (
+            <>
+              <strong>이 값을 어디로 옮겨도 건수가 안 바뀝니다.</strong> 규칙이
+              지금 데이터에서는 안 걸리거나, 이미 전부 걸려 있다는 뜻입니다 —
+              이 값은 지금 아무 일도 하지 않습니다.
+            </>
+          ) : (
+            <>
+              막대는 <strong>{COUNT_LABEL[curve.counts] || curve.counts}</strong>{' '}
+              건수입니다. 눌러서 그 값으로 넣을 수 있습니다.
+              진한 막대가 지금 값입니다.
+            </>
+          )}
+        </CurveNote>
+      </React.Fragment>
+    );
+  };
+
   const renderRow = (d) => (
     <Row key={d.key}>
       <div>
@@ -289,6 +437,18 @@ const ThresholdModal = ({ definitions, values, onSave, onClose }) => {
       >
         <RotateCcw size={15} />
       </ResetButton>
+
+      {onPreview && (
+        <div style={{ gridColumn: '1 / -1', paddingTop: '0.15rem' }}>
+          <PeekButton onClick={() => peek(d.key)} disabled={peeking === d.key}>
+            {peeking === d.key
+              ? <><Loader2 size={11} /> 세는 중…</>
+              : <><BarChart3 size={11} /> {curves[d.key] ? '접기' : '이 값이면 몇 건?'}</>}
+          </PeekButton>
+        </div>
+      )}
+
+      {curves[d.key] && renderCurve(d, curves[d.key])}
     </Row>
   );
 
@@ -307,6 +467,14 @@ const ThresholdModal = ({ definitions, values, onSave, onClose }) => {
             기본값과 다른 항목만 저장되므로, 나중에 기본값이 바뀌면 손대지 않은
             항목은 새 기본값을 따라갑니다.
           </Intro>
+
+          {base && (
+            <Intro style={{ marginBottom: '0.75rem', color: '#475569' }}>
+              지금 설정이면 <strong>발견 사항 {base.findings}건</strong> ·{' '}
+              ③ 요소 후보 {base.elementCandidates}건 ·{' '}
+              ④ 「먼저 한다」 {base.nowSolutions}건입니다.
+            </Intro>
+          )}
 
           {error && <ErrorBox>{error}</ErrorBox>}
 

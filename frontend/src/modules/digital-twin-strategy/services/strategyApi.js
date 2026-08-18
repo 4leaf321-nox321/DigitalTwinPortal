@@ -199,6 +199,13 @@ export const strategyApi = {
       body: JSON.stringify({ step }),
     }),
 
+  /** ⚙ 임계값 미리보기.
+   *
+   *  key 없이 부르면 「지금 몇 건인가」 하나, key 를 주면 그 값을 **범위 전체로**
+   *  훑은 곡선. 규칙을 여러 번 다시 돌리는 일이라 **설정을 열 때만** 부른다. */
+  previewThresholds: (year, key) =>
+    request(`/plans/${year}/thresholds/preview${key ? `?key=${key}` : ''}`),
+
   /** 진단 임계값. 기본값과 다른 항목만 저장된다. */
   updateThresholds: (thresholds) =>
     request('/settings/thresholds', {
