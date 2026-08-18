@@ -47,9 +47,28 @@ class LocalDbSource(EvidenceSource):
     과제마다 따로 물으면 N+1 이 되므로, 연도 단위로 한 번에 모아 붙인다.
 
     ⚠️ 여기서 읽는 것은 전부 **읽기 전용**이다. 진단은 관찰이지 개입이 아니다.
+
+    ⚠️ **지운 과제는 세지 않는다.** 아래 `_live` 를 거치지 않는 질의를 새로 넣으면
+       그 숫자만 조용히 부풀어 오른다.
     """
 
     mode = 'local'
+
+    @staticmethod
+    def _live(query):
+        """휴지통에 있는 과제를 뺀다.
+
+        ⚠️ **한동안 안 빼고 있었다.** 2026년을 222건으로 세고 있었는데 실제로 살아
+           있는 것은 101건이었고, 2025년은 205건으로 세면서 실제로는 **한 건도
+           없었다**(전부 휴지통, 2026-08-18 실측). 관측·발견 사항·KPI 연결률이
+           전부 이 수 위에 서 있으므로 숫자가 통째로 틀려 있었다.
+
+        ⚠️ 기준은 `is_deleted` 다. 대시보드의 `assemble` 은 `is_permanently_deleted`
+           로 거르지만 그쪽은 **휴지통 화면을 그려야 해서** 소프트 삭제를 남긴다.
+           전략은 휴지통을 그리지 않는다 — 지운 과제는 올해 한 일이 아니다.
+        """
+        from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+        return query.filter(Dt2Project.is_deleted.isnot(True))
 
     def get_projects(self, year):
         from app.modules.digital_twin_dashboard.models_v2 import (
@@ -57,7 +76,7 @@ class LocalDbSource(EvidenceSource):
         )
         from app.modules.dx_kpi_management.models import KpiDefinition
 
-        projects = Dt2Project.query.filter_by(year=year).all()
+        projects = self._live(Dt2Project.query.filter_by(year=year)).all()
         if not projects:
             return []
 

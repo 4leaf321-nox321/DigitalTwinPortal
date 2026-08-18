@@ -945,8 +945,11 @@ def _apply_solution_fields(solution, payload, plan):
         wanted = {str(x) for x in raw if str(x).strip()}
         if wanted:
             from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+            # 지운 과제는 **없는 과제로 본다.** 걸 수 있게 두면 휴지통에 있는
+            # 것을 근거로 "하고 있다"고 말하는 솔루션이 생긴다.
             found = {p.uuid for p in Dt2Project.query.filter(
-                Dt2Project.uuid.in_(wanted)).all()}
+                Dt2Project.uuid.in_(wanted),
+                Dt2Project.is_deleted.isnot(True)).all()}
             missing = wanted - found
             if missing:
                 # 없는 과제에 걸어 두면 그 솔루션은 아무것도 안 하는 것과 같은데
@@ -1258,7 +1261,8 @@ def load_projects(uuids):
     if not uuids:
         return {}
     from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
-    rows = Dt2Project.query.filter(Dt2Project.uuid.in_(list(uuids))).all()
+    rows = Dt2Project.query.filter(Dt2Project.uuid.in_(list(uuids)),
+                                   Dt2Project.is_deleted.isnot(True)).all()
     return {p.uuid: {
         'uuid': p.uuid, 'code': p.code, 'title': p.title,
         'division': p.division, 'year': p.year, 'status': p.status,
@@ -1287,7 +1291,8 @@ def search_projects(year):
         q = (request.args.get('q') or '').strip()
         division_id = request.args.get('division_id', type=int)
 
-        query = Dt2Project.query
+        # 지운 과제는 고를 수 없다. 목록에 내밀면 걸 수 있는 것처럼 보인다.
+        query = Dt2Project.query.filter(Dt2Project.is_deleted.isnot(True))
         if q:
             like = f'%{q}%'
             query = query.filter(db.or_(Dt2Project.title.ilike(like),

@@ -211,3 +211,63 @@ def test_먼저_할_일이_과제로_안_이어지면_보인다(client, world, o
 
     res = client.get(f'{BASE}/plans/{YEAR}/document', headers=auth(office))
     assert '과제 없음' in str(res.get_json()['data']['sections'][0]['blocks'])
+
+
+# ── 지운 과제 ──────────────────────────────────────────────────────────────
+#
+# ⚠️ **한동안 휴지통에 있는 과제까지 세고 있었다.** 개발 DB 에서 2026년을 222건으로
+#    세고 있었는데 살아 있는 것은 101건이었고, 2025년은 205건으로 세면서 실제로는
+#    한 건도 없었다(2026-08-18 실측). 관측·발견 사항·KPI 연결률이 전부 그 수 위에
+#    서 있으므로 숫자가 통째로 틀려 있었다.
+#
+#    그런데 **202개 시험이 전부 통과했다.** 아무도 이 경계를 안 보고 있었기 때문이다.
+
+
+@pytest.fixture()
+def trashed(world):
+    """휴지통에 넣은 과제 하나. 살아 있는 다섯과 같은 해·같은 사업부다."""
+    from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+
+    p = Dt2Project(uuid='p-gone', code='MX-9', title='지운 과제',
+                   division='MX', division_id=world['mx'].id, year=YEAR,
+                   status='진행', is_deleted=True)
+    _db.session.add(p)
+    _db.session.commit()
+    return p
+
+
+def test_지운_과제는_검색에_안_나온다(client, world, office, auth, trashed):
+    """고를 수 있는 목록에 내밀면 **걸 수 있는 것처럼 보인다.**"""
+    data = client.get(f'{BASE}/plans/{YEAR}/projects',
+                      headers=auth(office)).get_json()['data']
+
+    uuids = {x['uuid'] for x in data['items']}
+    assert 'p-gone' not in uuids
+    assert data['total'] == 5            # 살아 있는 다섯만
+
+
+def test_지운_과제에는_솔루션을_못_건다(client, world, office, auth, trashed):
+    """**없는 과제로 본다.** 걸 수 있게 두면 휴지통에 있는 것을 근거로
+    "하고 있다"고 말하는 솔루션이 생긴다."""
+    res = client.post(f'{BASE}/plans/{YEAR}/solutions', headers=auth(office),
+                      json={'tows': 'SO', 'title': '가상검증 확대',
+                            'project_uuids': ['p-gone']})
+    assert res.status_code == 400
+    assert 'p-gone' in res.get_json()['message']
+
+
+def test_지운_과제는_관측_모수에서_빠진다(client, world, office, auth, trashed):
+    """① 진단의 모든 숫자가 이 모수 위에 선다 — 여기가 틀리면 전부 틀린다."""
+    from app.modules.digital_twin_strategy.evidence import LocalDbSource
+
+    rows = LocalDbSource().get_projects(YEAR)
+    assert len(rows) == 5
+    assert all(r.get('_uuid') != 'p-gone' for r in rows)
+
+
+def test_지운_과제는_이름표에도_안_뜬다(client, world, office, auth, trashed):
+    """이미 걸어 둔 과제가 나중에 지워지면 **조용히 빠진다** — 근거가 사라진
+    것이지 그 솔루션이 틀린 것이 아니다(전략 요소와 같은 규칙)."""
+    from app.modules.digital_twin_strategy.routes import load_projects
+
+    assert load_projects(['p-1', 'p-gone']).keys() == {'p-1'}
