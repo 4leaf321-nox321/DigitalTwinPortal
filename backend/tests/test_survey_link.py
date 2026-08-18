@@ -448,10 +448,17 @@ def test_원문에_없는_인용은_버린다():
     assert dropped == ['예산이 부족해서 아무것도 못 합니다']
 
 
-def test_서술형이_적으면_묶지_않는다(client, world, office, auth):
+def test_서술형이_적으면_묶지_않는다(client, world, office, auth, monkeypatch):
     """두세 건을 묶어 "이런 의견이 있다"고 말하는 것은 요약이 아니라 지목이다."""
+    from app.modules.digital_twin_strategy import survey_voice
     from app.modules.digital_twin_strategy.survey_voice import summarize
     from app.modules.survey.models import SurveyAnswer as _A
+
+    # ⚠️ LLM 이 설정돼 있어야 여기까지 온다. 안 그러면 세기도 전에 「LLM 서버가
+    #    없습니다」로 빠져 answer_count 가 0 이 된다 — 그러면 이 시험은 **적어서
+    #    안 묶은 것인지 LLM 이 없어 안 묶은 것인지 구별하지 못한다.**
+    #    개발자 .env 에 LLM_BASE_URL 이 있어 로컬에서만 통과하고 CI 에서 깨졌다.
+    monkeypatch.setattr(survey_voice.dt_llm, 'is_configured', lambda: True)
 
     survey = _survey(world['plan'])
     _question(survey, '준비도', 'organization:readiness')

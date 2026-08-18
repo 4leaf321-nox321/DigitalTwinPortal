@@ -24,6 +24,21 @@ def office(make_user):
     return make_user('office@test.local', UserRole.DT_OFFICE_MEMBER)
 
 
+@pytest.fixture(autouse=True)
+def local_source(app, monkeypatch):
+    """근거 원천을 **시험이 직접 정한다.**
+
+    ⚠️ 기본값은 fixture 이고, 합성 과제에는 uuid 가 없어 「전략 미연결」 규칙이
+       아무것도 안 짚는다(그건 규칙이 의도한 동작이다). 그러면 짚어야 할 때를
+       보는 시험은 실패하고, **안 짚어야 할 때를 보는 시험은 틀린 이유로
+       통과한다** — 뒤쪽이 더 나쁘다. 규칙을 통째로 지워도 초록으로 남는다.
+
+    ⚠️ 개발자 .env 에 STRATEGY_EVIDENCE_SOURCE=local 이 있어 로컬에서는 통과하고
+       CI 에서만 깨졌다. **추적되지 않는 파일에 기댄 시험은 시험이 아니다.**
+    """
+    monkeypatch.setitem(app.config, 'STRATEGY_EVIDENCE_SOURCE', 'local')
+
+
 @pytest.fixture()
 def world(db):
     from app.modules.digital_twin_dashboard.models import Division
