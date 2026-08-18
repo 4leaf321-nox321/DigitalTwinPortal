@@ -36,7 +36,7 @@ _CATEGORY_LABEL = {c['key']: c['label'] for c in CATEGORIES}
 #
 #    4단계까지 올리면 개발 DB 에서만 후보가 31건이 나왔다. 그 목록은 안 읽힌다.
 #    강점의 주 원천은 오히려 **사업부 간 격차**다 — "MX 에서는 이미 되고 있다"
-#    는 옮길 수 있다는 뜻이라, 그대로 수가 된다.
+#    는 옮길 수 있다는 뜻이라, 그대로 솔루션이 된다.
 #
 #    다만 이 판단은 **실제 진단값 분포를 보기 전에 내린 것**이다. 그래서 코드에
 #    박아 두지 않는다.
@@ -99,7 +99,7 @@ def derive_element_candidates(assessments, findings, divisions, thresholds=None)
     # ── 발견 사항 ─────────────────────────────────────────────────────
     #
     # ⚠️ 대부분 약점이지만 **사업부 간 격차는 강점이기도 하다** — 잘하는 곳이
-    #    있다는 뜻이라, 그쪽을 S 로 세워야 ④ 에서 "옮기는 수" 가 나온다.
+    #    있다는 뜻이라, 그쪽을 S 로 세워야 ④ 에서 "옮기는 솔루션" 이 나온다.
     for f in findings or []:
         key = f.get('key') or ''
         if key.startswith('survey_division_gap:'):
@@ -186,20 +186,43 @@ def derive_survey_candidates(plan, min_sample):
     return out
 
 
-def summarize_elements(elements):
+def summarize_elements(elements, candidates=None, assessments=None,
+                       thresholds=None):
     """네 칸이 어떻게 차 있는지. 화면이 "무엇이 비었나"를 말할 수 있게.
 
     ⚠️ **비어 있다고 틀린 것이 아니다.** 특히 O·T 는 설문을 돌리기 전에는 빌
        수밖에 없다. 세기만 하고 판정하지 않는다.
+
+    ⚠️ **후보가 0건인 이유까지 말한다.** 한 사이클을 실제로 돌려 보니 강점
+       후보가 0건이었는데, 화면은 그냥 비어 있었다. 원인은 기준이 5단계로
+       저장돼 있고 진단 최고가 4단계여서였다 — 즉 **아무리 기다려도 안 나오는
+       상태**였는데 사람은 그걸 알 길이 없었다. 「없다」와 「기준 때문에 없다」는
+       다른 말이고, 뒤쪽만이 다음 행동을 알려준다.
     """
     counts = {k: 0 for k in ('S', 'W', 'O', 'T')}
     for element in elements:
         kind = element.get('kind')
         if kind in counts:
             counts[kind] += 1
+
+    T = thresholds or {}
+    candidate_counts = {k: 0 for k in counts}
+    for c in (candidates or []):
+        if c.get('kind') in candidate_counts:
+            candidate_counts[c['kind']] += 1
+
+    levels = [a.get('current_level') for a in (assessments or [])]
+    levels = [x for x in levels if x is not None]
+
     return {
         'counts': counts,
         # ④ TOWS 는 S×O, W×O, S×T, W×T 를 조합한다. 한 축이 통째로 비면
         # 그 조합이 아예 안 나온다 — 그 사실을 화면이 미리 말해야 한다.
         'emptyKinds': [k for k, n in counts.items() if n == 0],
+        'candidateCounts': candidate_counts,
+        # 화면이 「기준이 N단계인데 진단 최고가 M단계입니다」를 말할 수 있게.
+        'strongAt': T.get('element_strong_at', STRONG_AT),
+        'weakAt': T.get('element_weak_at', WEAK_AT),
+        'maxLevel': max(levels) if levels else None,
+        'minLevel': min(levels) if levels else None,
     }
