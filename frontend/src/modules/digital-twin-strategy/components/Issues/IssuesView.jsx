@@ -330,7 +330,7 @@ const Empty = styled.div`
 `;
 
 const IssuesView = ({
-  cruxes, issues, candidates, coverage, divisions,
+  cruxes, issues, candidates, coverage, divisions, canEdit,
   onCreate, onUpdate, onDelete, onRollup,
 }) => {
   // editing: null | { mode:'new'|'edit', crux_id, draft }
@@ -450,13 +450,14 @@ const IssuesView = ({
   const startNew = (cruxId, draft = {}) =>
     setEditing({ mode: 'new', crux_id: cruxId, draft: { ...draft, crux_id: cruxId } });
 
-  const cardProps = {
+  // 조회만 하는 사람에게는 손댈 곳을 안 넘긴다. 카드가 알아서 안 그린다.
+  const cardProps = canEdit ? {
     onEdit: (issue) =>
       setEditing({ mode: 'edit', crux_id: issue.crux_id, draft: issue }),
     onToggleDrop: (issue) =>
       onUpdate(issue.id, { status: issue.status === 'dropped' ? 'open' : 'dropped' }),
     onDelete: (issue) => onDelete(issue.id),
-  };
+  } : {};
 
   const isEditing = (issue) =>
     editing?.mode === 'edit' && editing.draft.id === issue.id;
@@ -570,7 +571,8 @@ const IssuesView = ({
               {/* 라벨에 '쪼개기' 같은 말을 쓰지 않는다. 그 말을 이해해야 누를
                   수 있는 버튼이 된다. 이 버튼은 난제 카드 **안**에 있으므로
                   위치가 이미 "이 난제의" 를 말해준다. */}
-              {editing?.mode === 'new' && editing.crux_id === crux.id
+              {!canEdit ? null
+                : editing?.mode === 'new' && editing.crux_id === crux.id
                 ? editor()
                 : (
                   <SplitButton onClick={() => startNew(crux.id)}>
@@ -596,6 +598,7 @@ const IssuesView = ({
 
           {/* 여러 이슈를 관통하는 하나가 보이면 그것이 난제다. 하나씩 옮기면
               다섯 건에 여섯 번을 눌러야 하고, 빠뜨린 것은 고아로 남는다. */}
+          {canEdit && (
           <Rollup>
             <RollupInput
               value={rollupTitle}
@@ -612,6 +615,7 @@ const IssuesView = ({
               {picked.length > 0 ? `${picked.length}건을 난제로 묶기` : '난제로 묶기'}
             </RollupButton>
           </Rollup>
+          )}
 
           <Children>
             {orphans.map(issue => (
@@ -646,7 +650,7 @@ const IssuesView = ({
           어느 난제 아래인지는 가져올 때 정하는 것이 맞다. */}
       {/* 넓으면 오른쪽 곁열에 세우고, 좁으면 지금까지처럼 바닥에 붙인다.
           **두 곳에 그리지 않는다** — 고른 후보와 적던 제목이 두 벌이 된다. */}
-      {!wide && candidatePanel(false)}
+      {canEdit && !wide && candidatePanel(false)}
 
       {/* 후보에서 온 것만 난제가 비어 있다. 그때는 어느 난제 아래인지가
           진짜로 정해지지 않았으므로 편집기가 물어본다.
@@ -681,7 +685,7 @@ const IssuesView = ({
       )}
       </Wrap>
 
-      {wide && <Rail>{candidatePanel(true)}</Rail>}
+      {canEdit && wide && <Rail>{candidatePanel(true)}</Rail>}
     </Layout>
   );
 };

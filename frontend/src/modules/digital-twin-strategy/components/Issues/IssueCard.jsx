@@ -129,6 +129,8 @@ const IssueCard = ({ issue, divisionName, flash,
 
       {/* ⚠️ 카드가 선택 영역 안에 있을 수 있다(고아 이슈 묶기). 그때 이 버튼들이
           클릭을 위로 흘리면, 「수정」을 눌렀는데 선택까지 같이 뒤집힌다. */}
+      {/* 손댈 곳을 안 넘겨받았으면 조회 전용이다 — 단추를 아예 안 그린다. */}
+      {onEdit && (
       <Actions className="issue-actions" onClick={e => e.stopPropagation()}>
         <IconButton onClick={() => onEdit(issue)} title="수정">
           <Pencil size={15} />
@@ -143,6 +145,7 @@ const IssueCard = ({ issue, divisionName, flash,
           <Trash2 size={15} />
         </IconButton>
       </Actions>
+      )}
     </Card>
   );
 };

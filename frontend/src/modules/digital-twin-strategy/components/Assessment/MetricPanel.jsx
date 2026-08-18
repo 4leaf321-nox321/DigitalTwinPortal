@@ -134,8 +134,9 @@ const MetricPanel = ({ metrics, definitions, divisionId, error, onTargetChange }
               <TargetInput
                 type="number"
                 key={`${divisionId}-${def.key}-${m.target_value ?? ''}`}
+                readOnly={!onTargetChange}
                 defaultValue={m.target_value ?? ''}
-                placeholder="목표 없음"
+                placeholder={onTargetChange ? '목표 없음' : '—'}
                 onBlur={e => {
                   const raw = e.target.value.trim();
                   const next = raw === '' ? null : Number(raw);

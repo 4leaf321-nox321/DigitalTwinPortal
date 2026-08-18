@@ -251,10 +251,14 @@ const SurveyEvidence = ({ evidence, onApply }) => {
                 {survey.title}
               </Toggle>
               <Meta>응답 {survey.response_count}명 · 근거 {rows.length}칸</Meta>
-              <Primary disabled={busy || usable.length === 0}
-                       onClick={() => apply(usable)}>
-                <Check size={13} /> 이 설문으로 {usable.length}칸 반영
-              </Primary>
+              {/* 「반영」은 진단값을 바꾼다. 조회만 하는 사람에게는 안 보인다 —
+                  집계는 그대로 읽을 수 있다. */}
+              {onApply && (
+                <Primary disabled={busy || usable.length === 0}
+                         onClick={() => apply(usable)}>
+                  <Check size={13} /> 이 설문으로 {usable.length}칸 반영
+                </Primary>
+              )}
             </SurveyHead>
 
             {isOpen && (
@@ -303,10 +307,12 @@ const SurveyEvidence = ({ evidence, onApply }) => {
                         </Roles>
                       </Td>
                       <Td>
-                        <Button disabled={busy || c.insufficient}
-                                onClick={() => apply([c])}>
-                          반영
-                        </Button>
+                        {onApply ? (
+                          <Button disabled={busy || c.insufficient}
+                                  onClick={() => apply([c])}>
+                            반영
+                          </Button>
+                        ) : '—'}
                       </Td>
                     </tr>
                   ))}
