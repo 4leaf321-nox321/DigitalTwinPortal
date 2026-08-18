@@ -77,6 +77,39 @@ export const strategyApi = {
   deleteElement: (year, elementId) =>
     request(`/plans/${year}/elements/${elementId}`, { method: 'DELETE' }),
 
+  /** ④ 솔루션. TOWS 네 갈래 중 하나에 적은 솔루션 하나다.
+   *
+   *  element_ids 는 **근거**이지 필수가 아니다. 대라고 막으면 아무거나 붙는다. */
+  createSolution: (year, payload) =>
+    request(`/plans/${year}/solutions`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateSolution: (year, solutionId, payload) =>
+    request(`/plans/${year}/solutions/${solutionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteSolution: (year, solutionId) =>
+    request(`/plans/${year}/solutions/${solutionId}`, { method: 'DELETE' }),
+
+  /** AX-5R 게이트 한 칸. **막는 관문이 아니라 표시다.**
+   *
+   *  status 는 answered | na 이고 둘 다 내용이 있어야 한다 — 이유 없는
+   *  '해당 없음'은 안 답한 것과 구별이 안 되면서 다 채운 것처럼 보인다. */
+  saveGate: (year, solutionId, gate, payload) =>
+    request(`/plans/${year}/solutions/${solutionId}/gates/${gate}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  /** 답을 지운다 = 안 답한 상태로 되돌린다. */
+  clearGate: (year, solutionId, gate) =>
+    request(`/plans/${year}/solutions/${solutionId}/gates/${gate}`,
+      { method: 'DELETE' }),
+
   /** 이슈 여러 개를 **묶어서** 핵심 난제를 만든다. (아래에서 위로)
    *
    *  난제를 따로 만들고 이슈를 하나씩 옮기는 것과 결과는 같지만, 그 길은

@@ -1,9 +1,13 @@
 """
 Digital Twin Strategy Models
-연도별 전략 기획 — 진단 / 이슈 / 근거
+연도별 전략 기획 — ① 진단 ~ ⑤ 기획서
 
 계획서: frontend/src/modules/digital-twin-strategy/PLAN.md
-현재 범위는 ① 진단 ~ ③ 분석이다. 솔루션 이후 단계는 뒤 Phase 에서 붙인다.
+
+⚠️ **안 쓰는 표를 두지 않는다.** 한동안 `strategy_evidence`(근거 시점 스냅샷)가
+   여기 있었는데 한 번도 안 썼다. 그 목적은 이미 다른 것들이 하고 있다 —
+   확정본은 `strategy_document.snapshot` 이, 설문 근거는 볼 때마다 계산이.
+   안 쓰는 표가 남아 있으면 다음 사람은 그게 쓰이는 줄 알고 거기에 맞춰 짠다.
 """
 from app.extensions import db
 from app.shared.models import BaseModel
@@ -16,7 +20,14 @@ class StrategyPlan(BaseModel):
 
     year = db.Column(db.Integer, nullable=False, index=True)
     title = db.Column(db.String(200), nullable=False)
-    # draft: 작성 중 / review: 검토 / confirmed: 확정
+    # draft: 작성 중 / confirmed: 확정
+    #
+    # ⚠️ **기획서(⑤)를 확정하면 여기가 따라 바뀐다.** 두 곳에서 따로 정하게 두면
+    #    "전략은 확정인데 기획서는 초안" 같은 상태가 생기고, 그때 무엇이 맞는지
+    #    아무도 모른다. 확정의 정의는 하나다 — **기획서를 굳혔는가.**
+    #
+    #    'review'(검토) 는 두지 않는다. 정의만 있고 아무도 안 바꾸던 값이었다.
+    #    검토 단계가 실제로 필요해지면 그때 넣는 것이 맞다.
     status = db.Column(db.String(20), nullable=False, default='draft')
     owner_id = db.Column(db.Integer, nullable=True)
 
@@ -209,7 +220,7 @@ class StrategyElement(BaseModel):
     ⚠️ **발견 사항과 겹치는 것은 정상이다.** 쓰이는 곳이 다르다.
 
         발견 사항 → 핵심 난제 → 이슈       올해 다룰 것을 고르는 길
-        S·W·O·T  → TOWS(④)   → 솔루션     조합해서 수를 만드는 재료
+        S·W·O·T  → TOWS(④)   → 솔루션     조합해서 솔루션을 만드는 재료
 
     ④ TOWS 가 S×O, W×O, S×T, W×T 네 조합에서 솔루션을 뽑으므로 네 칸이 다
     있어야 한다. 그래서 발견 사항을 **후보로 제시하되 사람이 골라 승격**한다 —
@@ -273,4 +284,93 @@ class StrategyEvidence(BaseModel):
 
     __table_args__ = (
         db.Index('ix_evidence_target', 'target_type', 'target_id'),
+    )
+class StrategySolution(BaseModel):
+    """
+    ④ 솔루션. **SWOT 을 엮어 만든 솔루션** 하나.
+
+    TOWS 는 SWOT 을 분석에서 끝내지 않고 솔루션으로 바꾸는 도구다. 네 갈래가 있다.
+
+        SO  강점으로 기회를 잡는다
+        WO  약점을 메워 기회를 잡는다
+        ST  강점으로 위협을 막는다
+        WT  약점과 위협이 겹치는 곳 — 최소한의 방어
+
+    ⚠️ **조합 격자를 그리지 않는다.** 강점 5개 × 기회 5개면 25칸이고, 그걸
+       채우라고 하면 이 모듈이 계속 피해 온 「격자 채우기」가 그대로 재현된다 —
+       진단 격자를 접어 내리고, SWOT 을 후보로 내밀고, 프로세스 축에 격자를 안
+       늘린 이유가 전부 그것이었다.
+
+       대신 네 갈래를 **바구니**로 두고, 솔루션을 적을 때 무엇과 무엇을 엮은
+       것인지를 고르게 한다. 빈 칸이 아니라 **빈 목록**이라 채울 의무가 없다.
+
+    ⚠️ element_ids 는 **근거**다. 그 요소가 지워지면 근거가 사라진 것이므로
+       화면에서 조용히 빠진다 — 없는 것을 있는 척 보여주지 않는다.
+    """
+    __tablename__ = 'strategy_solution'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+    # SO | WO | ST | WT
+    tows = db.Column(db.String(2), nullable=False)
+    title = db.Column(db.String(300), nullable=False)
+    detail = db.Column(db.Text)
+    # 특정 사업부의 솔루션이면 지정, 전사면 비운다.
+    division_id = db.Column(db.Integer, nullable=True, index=True)
+    # 엮은 전략 요소(StrategyElement) id 목록.
+    element_ids = db.Column(JSON, nullable=False, default=list)
+
+    # 사분면용. 1~5, **둘 다 nullable** — 이슈와 같은 규칙이다.
+    #
+    # ⚠️ **안 매긴 것을 0 으로 두지 않는다.** 그러면 아직 판단하지 않은 솔루션이
+    #    「영향 낮음 × 어려움」 칸으로 조용히 굴러떨어져 '하지 않는다'로 읽힌다.
+    #    안 매긴 것은 사분면 밖에 따로 세어 보여준다.
+    impact = db.Column(db.Integer, nullable=True)
+    feasibility = db.Column(db.Integer, nullable=True)
+
+    # 이 솔루션이 움직이려는 지표(KpiDefinition) id 목록. **전략과 실행을 잇는 자리**다 —
+    # 여기까지 와야 ① 진단에서 본 'KPI 에 안 걸린 과제' 문제가 반대편에서 닫힌다.
+    kpi_ids = db.Column(JSON, nullable=False, default=list)
+    order = db.Column(db.Integer, nullable=False, default=0)
+
+
+class StrategyGate(BaseModel):
+    """
+    AX-5R 횡단 게이트. 지금은 ④ 솔루션에 붙는다.
+
+    솔루션을 하나 낼 때마다 다섯 가지를 묻는다 — 준비도·업무 정착·역할·리스크·성과.
+    **진단의 조직 역량과 같은 다섯 축이지만 시제가 다르다**(definitions.GATES).
+
+    ⚠️ **막는 관문이 아니다.** 다 안 채웠다고 저장을 거절하면 사람은 아무 말이나
+       적어 넣는다. 안 채워진 것은 화면에 그대로 보이기만 한다 — "그럴듯한
+       전략"과 "실행 가능한 전략"을 가르는 표시다.
+
+    ⚠️ **답을 적은 게이트만 행이 생긴다.** 솔루션을 만들 때 빈 다섯 줄을 미리 깔면
+       그 빈 줄이 "답했는데 내용이 없는 것"과 구별되지 않는다.
+
+    ⚠️ target_id 에는 외래키가 없다(횡단이라 붙을 곳이 여럿이다). 그래서 **대상을
+       지울 때 여기도 같이 지워야 한다** — routes 의 삭제 경로가 그 일을 한다.
+       안 지우면 나중에 같은 번호를 받은 다른 솔루션에 남의 답이 붙는다.
+    """
+    __tablename__ = 'strategy_gate'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, index=True
+    )
+    # 지금은 'solution' 뿐. 게이트는 횡단이라 나중에 이슈에도 붙을 수 있다.
+    target_type = db.Column(db.String(30), nullable=False)
+    target_id = db.Column(db.Integer, nullable=False)
+    # readiness | redesign | role | risk | return
+    gate = db.Column(db.String(20), nullable=False)
+    answer = db.Column(db.Text, nullable=False)
+    # answered | na — '해당 없음'도 이유를 적어야 남는다.
+    status = db.Column(db.String(10), nullable=False, default='answered')
+
+    __table_args__ = (
+        db.UniqueConstraint('target_type', 'target_id', 'gate',
+                            name='uq_strategy_gate_target'),
+        db.Index('ix_strategy_gate_target', 'target_type', 'target_id'),
     )

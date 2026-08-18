@@ -8,14 +8,15 @@ Digital Twin Strategy Routes
 from datetime import datetime
 from functools import wraps
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.extensions import db
+from app.shared.timeutil import KST
 from app.modules.auth.models import User, UserRole
 from .models import (
     StrategyPlan, StrategyAssessment, StrategyMetricTarget, StrategyCrux,
-    StrategyIssue, StrategyElement,
+    StrategyIssue, StrategyElement, StrategySolution, StrategyGate,
 )
 from .evidence import get_evidence_source
 from .metrics import (
@@ -23,6 +24,7 @@ from .metrics import (
 )
 from .findings import (
     derive_findings, derive_kpi_findings, derive_process_findings,
+    attach_rules,
 )
 from .survey_link import (
     attach_current, collect, derive_choice_findings, derive_survey_findings,
@@ -40,6 +42,7 @@ from .definitions import (
     ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
     THRESHOLDS, THRESHOLD_KEYS, THRESHOLD_MAX, DEFAULT_THRESHOLDS,
+    GATES, GATE_KEYS, GATE_STATUSES,
     MODULE_KEY, THRESHOLD_SETTINGS_KEY,
     get_target_divisions, get_thresholds,
 )
@@ -139,6 +142,11 @@ def get_meta():
             # 화면이 편집 단추를 감출지 정하는 값. **서버가 정본**이고,
             # 이건 편의다 — 감춰도 막는 것은 위 데코레이터다.
             'canEdit': can_edit(_current_user()),
+            'gates': GATES,
+            # ④ 에서 솔루션을 지표에 건다. 이름이 아니라 **번호로** 건다 —
+            # kpi_records 가 이름 문자열로 물려 있어 라벨이 바뀌면 조용히
+            # 끊기는 문제를 여기서까지 반복하지 않는다.
+            'kpis': list_kpi_definitions(),
             'thresholdDefinitions': THRESHOLDS,
             'thresholds': get_thresholds(),
         }
@@ -206,6 +214,202 @@ def update_thresholds():
         return _crashed()
 
 
+def build_plan_payload(plan, thresholds=None, source=None):
+    """전략 하나의 **모든 계산 결과**를 조립한다.
+
+    ⚠️ 화면(get_plan)과 ⑤ 기획서와 ⚙ 임계값 미리보기가 **같은 것을 본다.**
+       각자 계산하면 "화면에는 발견 사항 12건인데 기획서에는 9건"인 날이 오고,
+       그때 어느 쪽이 맞는지 아무도 모른다. 임계값을 한 곳에 모은 것과 같은
+       이유다. 그래서 규칙을 다시 구현하는 대신 **이 함수를 다른 임계값으로
+       다시 부른다.**
+
+    thresholds  없으면 저장된 값을 쓴다. 미리보기가 「이 값이면 몇 건인가」를
+                물을 때 후보 값을 넣는다
+    source      없으면 설정이 정한 원천. 미리보기는 **읽은 것을 재사용하는**
+                감싼 원천을 넣어 같은 질의를 마흔 번 하지 않게 한다
+
+    저장하지 않는다. 관측·발견 사항·후보는 원본이 바뀌면 따라 바뀌어야 한다.
+    """
+    year = plan.year
+    divisions = get_target_divisions()
+    saved = {
+        (a.division_id, a.category, a.dimension): a
+        for a in plan.assessments.all()
+    }
+
+    # 사업부 × 차원 격자를 항상 채워서 내려준다. 빈 칸도 자리가 보여야
+    # 무엇을 아직 안 매겼는지 알 수 있다.
+    assessments = []
+    for division in divisions:
+        for category, dimension in ALL_ASSESSMENT_SLOTS:
+            a = saved.get((division.id, category, dimension))
+            assessments.append(a.to_dict() if a else {
+                'division_id': division.id,
+                'category': category,
+                'dimension': dimension,
+                'current_level': None,
+                'target_level': None,
+                'gap': None,
+                'basis': 'manual',
+                'note': None,
+            })
+
+    # B 는 저장하지 않고 매번 계산한다. 원본이 바뀌면 따라 바뀌어야 한다.
+    source = source or get_evidence_source()
+    try:
+        observed, observed_context = compute_metrics(source, year, divisions)
+        kpi_coverage = compute_kpi_coverage(source, year, divisions)
+        # 같은 과제를 **프로세스로도** 자른다(Value Chain). 사람이 채울
+        # 격자가 늘지 않는다 — 축만 바꿔 다시 세는 것이다.
+        from app.modules.survey.roles import process_names
+        process_list = process_names()
+        process_by_division, process_totals, process_unknown = (
+            compute_process_metrics(source, year, process_list, divisions))
+        metric_error = None
+    except NotImplementedError as e:
+        observed = {d.id: {k: None for k in METRIC_KEYS} for d in divisions}
+        observed_context = {}
+        kpi_coverage = []
+        process_list, process_by_division, process_totals = [], {}, {}
+        process_unknown = 0
+        metric_error = str(e)
+
+    targets = {
+        (t.division_id, t.metric_key): t
+        for t in StrategyMetricTarget.query.filter_by(plan_id=plan.id).all()
+    }
+    metrics = []
+    for division in divisions:
+        for key in METRIC_KEYS:
+            t = targets.get((division.id, key))
+            value = observed.get(division.id, {}).get(key)
+            target_value = t.target_value if t else None
+            gap = None
+            if value is not None and target_value is not None:
+                gap = round(target_value - value, 1)
+            metrics.append({
+                'division_id': division.id,
+                'metric_key': key,
+                'value': value,
+                'target_value': target_value,
+                'gap': gap,
+                'note': t.note if t else None,
+            })
+
+    # 설문이 말하는 것. **한 번만 계산해서** 제안값과 findings 가 같이 쓴다 —
+    # 따로 세면 화면의 제안값과 발견 사항이 서로 다른 숫자를 근거로 삼는다.
+    thresholds = thresholds if thresholds is not None else get_thresholds()
+    min_sample = int(thresholds.get('survey_min_sample', 5) or 5)
+    survey_evidence = attach_current(
+        collect(plan, divisions, min_sample), assessments)
+
+    # 데이터가 먼저 말하는 부분. 사람이 아무것도 안 매겨도 볼 것이 있어야 한다.
+    if metric_error:
+        findings = []
+    else:
+        # 사업부에서 본 것과 지표에서 본 것을 합친다. 뒤집어 봐야만
+        # 드러나는 공백이 있다 — 아무도 주기여로 밀지 않는 지표 같은 것.
+        findings = (
+            derive_findings(observed, divisions, observed_context, thresholds)
+            + derive_kpi_findings(kpi_coverage)
+            # 같은 과제를 프로세스로 자른 것. 사업부 축이 못 보는 것을 본다.
+            + derive_process_findings(process_by_division, process_totals,
+                                      process_list, divisions,
+                                      thresholds, process_unknown)
+        )
+    # 설문 규칙은 지표를 못 읽어도 돌아야 한다. 둘은 서로 다른 원천이다.
+    findings += derive_survey_findings(survey_evidence, thresholds, min_sample)
+    findings += derive_choice_findings(plan, thresholds, min_sample, divisions)
+    # ⚠️ 정렬은 아래에서 한다. 전략 ↔ 실행 규칙은 솔루션을 읽어야 해서 여기서
+    #    낼 수 없고, 여기서 정렬하면 그 규칙만 목록 끝에 붙는다.
+
+    cruxes = [
+        c.to_dict() for c in StrategyCrux.query.filter_by(plan_id=plan.id)
+        .order_by(StrategyCrux.order, StrategyCrux.id).all()
+    ]
+    issues = [
+        i.to_dict() for i in StrategyIssue.query.filter_by(plan_id=plan.id)
+        .order_by(StrategyIssue.order, StrategyIssue.id).all()
+    ]
+    solutions = [
+        x.to_dict() for x in StrategySolution.query.filter_by(plan_id=plan.id)
+        .order_by(StrategySolution.tows, StrategySolution.order,
+                  StrategySolution.id).all()
+    ]
+    attach_gates(plan.id, 'solution', solutions)
+    order = {'high': 0, 'medium': 1, 'info': 2}
+    findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
+    # 어느 규칙에서 나왔는지 붙인다. 화면과 문서가 이걸로 묶는다.
+    attach_rules(findings)
+    elements = [
+        e.to_dict() for e in StrategyElement.query.filter_by(plan_id=plan.id)
+        .order_by(StrategyElement.kind, StrategyElement.order,
+                  StrategyElement.id).all()
+    ]
+    # 이미 요소로 올린 것은 후보에서 뺀다. 안 빼면 같은 것이 목록에 계속
+    # 남아, 무엇을 아직 안 봤는지 읽을 수 없다(이슈 후보와 같은 규칙).
+    taken_elements = {e['source_ref'] for e in elements if e.get('source_ref')}
+
+    element_candidates = [
+        c for c in (derive_element_candidates(assessments, findings,
+                                              divisions, thresholds)
+                    # O·T 는 포탈에 없다. 설문에서만 온다.
+                    + derive_element_survey(plan, min_sample))
+        if c['key'] not in taken_elements
+    ]
+
+    # 이미 이슈로 만든 후보는 목록에서 뺀다. 같은 격차가 계속 남아 있으면
+    # 무엇을 아직 안 다뤘는지 읽을 수 없다.
+    taken = {
+        f"{i['source_type']}:{i['source_ref']}:{i['division_id']}"
+        for i in issues if i.get('source_ref')
+    }
+    # 설문에서 나온 사실은 **격차가 없어도** 이슈가 될 수 있다. 목표 레벨을
+    # 안 넣어도 '63% 가 데이터 정합성을 꼽았다'는 그대로 할 일이다.
+    promoted = {c['source_finding'] for c in cruxes if c.get('source_finding')}
+    candidates = [
+        c for c in (derive_issue_candidates(assessments, metrics, divisions,
+                                            thresholds)
+                    + derive_survey_candidates(findings, promoted))
+        if c['key'] not in taken
+    ]
+
+    return {
+    **plan.to_dict(),
+    'assessments': assessments,
+    'metrics': metrics,
+    'kpiCoverage': kpi_coverage,
+    'findings': findings,
+    'surveyEvidence': survey_evidence,
+    # 버튼을 띄울지 정하는 데만 쓴다. 부르는 것은 사람이 누를 때다.
+    'surveyVoicesAvailable': voices_available(),
+    'cruxes': cruxes,
+    'issues': issues,
+    'issueCandidates': candidates,
+    'issueCoverage': summarize_coverage(cruxes, issues),
+    'elements': elements,
+    'elementCandidates': element_candidates,
+    'elementSummary': summarize_elements(
+        elements, element_candidates, assessments, thresholds),
+    'solutions': solutions,
+    # 프로세스 축. 지표 정의는 사업부 축과 **같은 것**을 쓴다 —
+    # 축이 다르다고 다른 지표를 재면 두 화면을 견줄 수 없다.
+    'processMetrics': {
+        'processes': process_list,
+        # ⚠️ **사업부 아래에 프로세스가 있다.** MX 의 개발과 VD 의
+        #    개발은 다른 조직이라 같은 칸에 놓을 수 없다.
+        'byDivision': process_by_division,
+        # 전사 합계는 **참고용**이다. 화면이 합친 값임을 말해야 한다.
+        'totals': process_totals,
+        # 프로세스가 안 적힌 과제. 숨기면 합계가 안 맞는데 이유가
+        # 안 보인다.
+        'unknownCount': process_unknown,
+    },
+    'metricsMode': source.mode,
+    'metricsError': metric_error,
+    }
+
+
 @bp.route('/plans/<int:year>', methods=['GET'])
 @view_required
 def get_plan(year):
@@ -215,174 +419,7 @@ def get_plan(year):
         plan = StrategyPlan.query.filter_by(year=year).first()
         if not plan:
             return jsonify({'success': True, 'data': None})
-
-        divisions = get_target_divisions()
-        saved = {
-            (a.division_id, a.category, a.dimension): a
-            for a in plan.assessments.all()
-        }
-
-        # 사업부 × 차원 격자를 항상 채워서 내려준다. 빈 칸도 자리가 보여야
-        # 무엇을 아직 안 매겼는지 알 수 있다.
-        assessments = []
-        for division in divisions:
-            for category, dimension in ALL_ASSESSMENT_SLOTS:
-                a = saved.get((division.id, category, dimension))
-                assessments.append(a.to_dict() if a else {
-                    'division_id': division.id,
-                    'category': category,
-                    'dimension': dimension,
-                    'current_level': None,
-                    'target_level': None,
-                    'gap': None,
-                    'basis': 'manual',
-                    'note': None,
-                })
-
-        # B 는 저장하지 않고 매번 계산한다. 원본이 바뀌면 따라 바뀌어야 한다.
-        source = get_evidence_source()
-        try:
-            observed, observed_context = compute_metrics(source, year, divisions)
-            kpi_coverage = compute_kpi_coverage(source, year, divisions)
-            # 같은 과제를 **프로세스로도** 자른다(Value Chain). 사람이 채울
-            # 격자가 늘지 않는다 — 축만 바꿔 다시 세는 것이다.
-            from app.modules.survey.roles import process_names
-            process_list = process_names()
-            process_by_division, process_totals, process_unknown = (
-                compute_process_metrics(source, year, process_list, divisions))
-            metric_error = None
-        except NotImplementedError as e:
-            observed = {d.id: {k: None for k in METRIC_KEYS} for d in divisions}
-            observed_context = {}
-            kpi_coverage = []
-            process_list, process_by_division, process_totals = [], {}, {}
-            process_unknown = 0
-            metric_error = str(e)
-
-        targets = {
-            (t.division_id, t.metric_key): t
-            for t in StrategyMetricTarget.query.filter_by(plan_id=plan.id).all()
-        }
-        metrics = []
-        for division in divisions:
-            for key in METRIC_KEYS:
-                t = targets.get((division.id, key))
-                value = observed.get(division.id, {}).get(key)
-                target_value = t.target_value if t else None
-                gap = None
-                if value is not None and target_value is not None:
-                    gap = round(target_value - value, 1)
-                metrics.append({
-                    'division_id': division.id,
-                    'metric_key': key,
-                    'value': value,
-                    'target_value': target_value,
-                    'gap': gap,
-                    'note': t.note if t else None,
-                })
-
-        # 설문이 말하는 것. **한 번만 계산해서** 제안값과 findings 가 같이 쓴다 —
-        # 따로 세면 화면의 제안값과 발견 사항이 서로 다른 숫자를 근거로 삼는다.
-        thresholds = get_thresholds()
-        min_sample = int(thresholds.get('survey_min_sample', 5) or 5)
-        survey_evidence = attach_current(
-            collect(plan, divisions, min_sample), assessments)
-
-        # 데이터가 먼저 말하는 부분. 사람이 아무것도 안 매겨도 볼 것이 있어야 한다.
-        if metric_error:
-            findings = []
-        else:
-            # 사업부에서 본 것과 지표에서 본 것을 합친다. 뒤집어 봐야만
-            # 드러나는 공백이 있다 — 아무도 주기여로 밀지 않는 지표 같은 것.
-            findings = (
-                derive_findings(observed, divisions, observed_context, thresholds)
-                + derive_kpi_findings(kpi_coverage)
-                # 같은 과제를 프로세스로 자른 것. 사업부 축이 못 보는 것을 본다.
-                + derive_process_findings(process_by_division, process_totals,
-                                          process_list, divisions,
-                                          thresholds, process_unknown)
-            )
-        # 설문 규칙은 지표를 못 읽어도 돌아야 한다. 둘은 서로 다른 원천이다.
-        findings += derive_survey_findings(survey_evidence, thresholds, min_sample)
-        findings += derive_choice_findings(plan, thresholds, min_sample, divisions)
-        order = {'high': 0, 'medium': 1, 'info': 2}
-        findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
-
-        cruxes = [
-            c.to_dict() for c in StrategyCrux.query.filter_by(plan_id=plan.id)
-            .order_by(StrategyCrux.order, StrategyCrux.id).all()
-        ]
-        issues = [
-            i.to_dict() for i in StrategyIssue.query.filter_by(plan_id=plan.id)
-            .order_by(StrategyIssue.order, StrategyIssue.id).all()
-        ]
-        elements = [
-            e.to_dict() for e in StrategyElement.query.filter_by(plan_id=plan.id)
-            .order_by(StrategyElement.kind, StrategyElement.order,
-                      StrategyElement.id).all()
-        ]
-        # 이미 요소로 올린 것은 후보에서 뺀다. 안 빼면 같은 것이 목록에 계속
-        # 남아, 무엇을 아직 안 봤는지 읽을 수 없다(이슈 후보와 같은 규칙).
-        taken_elements = {e['source_ref'] for e in elements if e.get('source_ref')}
-
-        element_candidates = [
-            c for c in (derive_element_candidates(assessments, findings,
-                                                  divisions, thresholds)
-                        # O·T 는 포탈에 없다. 설문에서만 온다.
-                        + derive_element_survey(plan, min_sample))
-            if c['key'] not in taken_elements
-        ]
-
-        # 이미 이슈로 만든 후보는 목록에서 뺀다. 같은 격차가 계속 남아 있으면
-        # 무엇을 아직 안 다뤘는지 읽을 수 없다.
-        taken = {
-            f"{i['source_type']}:{i['source_ref']}:{i['division_id']}"
-            for i in issues if i.get('source_ref')
-        }
-        # 설문에서 나온 사실은 **격차가 없어도** 이슈가 될 수 있다. 목표 레벨을
-        # 안 넣어도 '63% 가 데이터 정합성을 꼽았다'는 그대로 할 일이다.
-        promoted = {c['source_finding'] for c in cruxes if c.get('source_finding')}
-        candidates = [
-            c for c in (derive_issue_candidates(assessments, metrics, divisions)
-                        + derive_survey_candidates(findings, promoted))
-            if c['key'] not in taken
-        ]
-
-        return jsonify({
-            'success': True,
-            'data': {
-                **plan.to_dict(),
-                'assessments': assessments,
-                'metrics': metrics,
-                'kpiCoverage': kpi_coverage,
-                'findings': findings,
-                'surveyEvidence': survey_evidence,
-                # 버튼을 띄울지 정하는 데만 쓴다. 부르는 것은 사람이 누를 때다.
-                'surveyVoicesAvailable': voices_available(),
-                'cruxes': cruxes,
-                'issues': issues,
-                'issueCandidates': candidates,
-                'issueCoverage': summarize_coverage(cruxes, issues),
-                'elements': elements,
-                'elementCandidates': element_candidates,
-                'elementSummary': summarize_elements(elements),
-                # 프로세스 축. 지표 정의는 사업부 축과 **같은 것**을 쓴다 —
-                # 축이 다르다고 다른 지표를 재면 두 화면을 견줄 수 없다.
-                'processMetrics': {
-                    'processes': process_list,
-                    # ⚠️ **사업부 아래에 프로세스가 있다.** MX 의 개발과 VD 의
-                    #    개발은 다른 조직이라 같은 칸에 놓을 수 없다.
-                    'byDivision': process_by_division,
-                    # 전사 합계는 **참고용**이다. 화면이 합친 값임을 말해야 한다.
-                    'totals': process_totals,
-                    # 프로세스가 안 적힌 과제. 숨기면 합계가 안 맞는데 이유가
-                    # 안 보인다.
-                    'unknownCount': process_unknown,
-                },
-                'metricsMode': source.mode,
-                'metricsError': metric_error,
-            }
-        })
+        return jsonify({'success': True, 'data': build_plan_payload(plan)})
     except Exception:
         return _crashed()
 
@@ -643,6 +680,266 @@ def _apply_element_fields(element, payload):
         if field in payload:
             setattr(element, field, payload[field])
     return None
+
+
+# ④ 솔루션. TOWS 네 갈래 — 무엇을 무엇으로 푸느냐가 이름에 들어 있다.
+TOWS_KINDS = ('SO', 'WO', 'ST', 'WT')
+
+# 각 갈래가 엮을 수 있는 요소. SO 는 강점과 기회를 엮는 솔루션이다.
+TOWS_ELEMENTS = {
+    'SO': ('S', 'O'), 'WO': ('W', 'O'),
+    'ST': ('S', 'T'), 'WT': ('W', 'T'),
+}
+
+
+def _apply_solution_fields(solution, payload, plan):
+    """솔루션의 값을 채운다. 오류 메시지를 돌려주며 None 이면 통과."""
+    if 'tows' in payload or not solution.tows:
+        tows = (payload.get('tows') or '').strip().upper()
+        if tows not in TOWS_KINDS:
+            return f"SO·WO·ST·WT 중 하나여야 합니다: {payload.get('tows')}"
+        solution.tows = tows
+    if 'title' in payload or not solution.title:
+        title = (payload.get('title') or '').strip()
+        if not title:
+            return '내용이 비어 있습니다.'
+        solution.title = title[:300]
+    for field in ('detail', 'division_id'):
+        if field in payload:
+            setattr(solution, field, payload[field])
+
+    # 사분면 축. **비울 수 있다** — 근거 없이 매긴 숫자는 사분면을 거짓말로 만든다.
+    for field in ('impact', 'feasibility'):
+        if field in payload:
+            raw = payload.get(field)
+            if raw in (None, ''):
+                setattr(solution, field, None)
+                continue
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                return f'{field} 는 1~5 의 숫자여야 합니다.'
+            if not 1 <= value <= 5:
+                return f'{field} 는 1~5 여야 합니다: {value}'
+            setattr(solution, field, value)
+
+    if 'kpi_ids' in payload:
+        raw = payload.get('kpi_ids') or []
+        if not isinstance(raw, list):
+            return 'kpi_ids 는 목록이어야 합니다.'
+        try:
+            wanted = {int(x) for x in raw}
+        except (TypeError, ValueError):
+            return '지표 번호가 올바르지 않습니다.'
+        if wanted:
+            from app.modules.dx_kpi_management.models import KpiDefinition
+            found = {k.id for k in KpiDefinition.query.filter(
+                KpiDefinition.id.in_(wanted)).all()}
+            missing = wanted - found
+            if missing:
+                # 없는 지표에 걸어 두면 그 솔루션은 어느 지표에도 안 걸린 것과 같은데
+                # 화면에는 걸린 것처럼 보인다.
+                return f'없는 지표입니다: {sorted(missing)}'
+        solution.kpi_ids = sorted(wanted)
+
+    if 'element_ids' in payload:
+        raw = payload.get('element_ids') or []
+        if not isinstance(raw, list):
+            return 'element_ids 는 목록이어야 합니다.'
+        try:
+            wanted = {int(x) for x in raw}
+        except (TypeError, ValueError):
+            return '전략 요소 번호가 올바르지 않습니다.'
+        if wanted:
+            found = StrategyElement.query.filter(
+                StrategyElement.plan_id == plan.id,
+                StrategyElement.id.in_(wanted),
+            ).all()
+            missing = wanted - {e.id for e in found}
+            if missing:
+                # ⚠️ 남의 전략 요소를 엮으면 그 근거가 이 전략에서는 안 보인다.
+                return f'이 전략의 요소가 아닙니다: {sorted(missing)}'
+            # 갈래에 맞는 것만 엮는다. SO 에 위협을 엮으면 그 솔루션이 무엇을
+            # 푸는 것인지 이름과 내용이 어긋난다.
+            allowed = TOWS_ELEMENTS[solution.tows]
+            wrong = [e for e in found if e.kind not in allowed]
+            if wrong:
+                return (f"{solution.tows} 는 {'·'.join(allowed)} 만 엮습니다: "
+                        + ', '.join(f'{e.kind} {e.title}' for e in wrong))
+        solution.element_ids = sorted(wanted)
+
+    return None
+
+
+def list_kpi_definitions():
+    """솔루션을 걸 수 있는 지표 목록.
+
+    platform 종류도 함께 낸다. 달성률이 없을 뿐 **전략이 겨누는 대상**이기는
+    같아서다 — 시스템을 만드는 솔루션을 걸 곳이 없으면 그 솔루션만 지표에서 빠진다.
+    """
+    try:
+        from app.modules.dx_kpi_management.models import KpiDefinition
+    except Exception:
+        return []
+    rows = KpiDefinition.query.order_by(
+        KpiDefinition.sort_order, KpiDefinition.id).all()
+    return [{
+        'id': k.id,
+        'label': k.label,
+        'category': k.category,
+        'unit': k.unit,
+        'kind': k.kind or 'metric',
+        # 빈 배열이면 전 사업부 공통이다.
+        'divisions': k.divisions or [],
+    } for k in rows]
+
+
+def attach_gates(plan_id, target_type, items):
+    """항목마다 게이트 답을 얹는다. **답한 것만 들어 있다.**
+
+    화면은 다섯 축(meta.gates)을 늘 그리고, 여기 없는 축은 안 답한 것으로 본다.
+    빈 다섯 줄을 미리 만들지 않는 이유는 그 빈 줄이 "답했는데 내용이 없는 것"과
+    구별되지 않아서다.
+    """
+    if not items:
+        return items
+    rows = StrategyGate.query.filter(
+        StrategyGate.plan_id == plan_id,
+        StrategyGate.target_type == target_type,
+        StrategyGate.target_id.in_([x['id'] for x in items]),
+    ).all()
+
+    by_target = {}
+    for r in rows:
+        by_target.setdefault(r.target_id, {})[r.gate] = {
+            'answer': r.answer, 'status': r.status,
+        }
+    for item in items:
+        item['gates'] = by_target.get(item['id'], {})
+    return items
+
+
+def clear_gates(plan_id, target_type, target_id):
+    """대상을 지울 때 게이트도 지운다.
+
+    ⚠️ target_id 에 외래키가 없어 DB 가 대신 해주지 않는다. 안 지우면 나중에 같은
+       번호를 받은 다른 항목에 남의 답이 붙는다.
+    """
+    StrategyGate.query.filter_by(
+        plan_id=plan_id, target_type=target_type, target_id=target_id,
+    ).delete(synchronize_session=False)
+
+
+@bp.route('/plans/<int:year>/solutions/<int:solution_id>/gates/<gate>',
+          methods=['PUT', 'DELETE'])
+@edit_required
+def set_solution_gate(year, solution_id, gate):
+    """게이트 하나에 답한다. **막는 관문이 아니라 표시다.**
+
+    PUT    {answer, status}  — status 는 answered | na
+    DELETE                   — 답을 지운다(안 답한 상태로 되돌린다)
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        if gate not in GATE_KEYS:
+            return _error(f'알 수 없는 게이트입니다: {gate}', 400)
+        solution = StrategySolution.query.filter_by(
+            id=solution_id, plan_id=plan.id).first()
+        if not solution:
+            return _error('솔루션을 찾을 수 없습니다.', 404)
+
+        row = StrategyGate.query.filter_by(
+            plan_id=plan.id, target_type='solution',
+            target_id=solution.id, gate=gate).first()
+
+        if request.method == 'DELETE':
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+            return jsonify({'success': True})
+
+        payload = request.get_json() or {}
+        answer = (payload.get('answer') or '').strip()
+        status = (payload.get('status') or 'answered').strip()
+        if status not in GATE_STATUSES:
+            return _error(f'알 수 없는 상태입니다: {status}', 400)
+        if not answer:
+            # ⚠️ '해당 없음'도 이유를 적어야 한다. 이유 없는 해당 없음은 안 답한
+            #    것과 구별이 안 되면서 화면에서는 다 채운 것처럼 보인다.
+            return _error('내용이 비어 있습니다. 해당 없음도 이유를 적어야 합니다.',
+                          400)
+
+        if not row:
+            row = StrategyGate(plan_id=plan.id, target_type='solution',
+                               target_id=solution.id, gate=gate)
+            db.session.add(row)
+        row.answer = answer
+        row.status = status
+        db.session.commit()
+        return jsonify({'success': True,
+                        'data': {'gate': gate, 'answer': answer,
+                                 'status': status}})
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/solutions', methods=['POST'])
+@edit_required
+def create_solution(year):
+    """솔루션 추가. SWOT 을 엮어 만든 솔루션 하나다."""
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        solution = StrategySolution(
+            plan_id=plan.id, tows='', title='', element_ids=[], kpi_ids=[],
+            order=StrategySolution.query.filter_by(plan_id=plan.id).count(),
+        )
+        error = _apply_solution_fields(solution, request.get_json() or {}, plan)
+        if error:
+            return _error(error, 400)
+
+        db.session.add(solution)
+        db.session.commit()
+        return jsonify({'success': True, 'data': solution.to_dict()}), 201
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/solutions/<int:solution_id>',
+          methods=['PUT', 'DELETE'])
+@edit_required
+def modify_solution(year, solution_id):
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        solution = StrategySolution.query.filter_by(
+            id=solution_id, plan_id=plan.id).first()
+        if not solution:
+            return _error('솔루션을 찾을 수 없습니다.', 404)
+
+        if request.method == 'DELETE':
+            # 게이트에는 외래키가 없다. 여기서 안 지우면 나중에 같은 번호를
+            # 받은 다른 솔루션에 남의 답이 붙는다.
+            clear_gates(plan.id, 'solution', solution.id)
+            db.session.delete(solution)
+            db.session.commit()
+            return jsonify({'success': True})
+
+        error = _apply_solution_fields(solution, request.get_json() or {}, plan)
+        if error:
+            return _error(error, 400)
+        db.session.commit()
+        return jsonify({'success': True, 'data': solution.to_dict()})
+    except Exception:
+        db.session.rollback()
+        return _crashed()
 
 
 @bp.route('/plans/<int:year>/elements', methods=['POST'])
@@ -918,7 +1215,10 @@ def apply_survey_evidence(year):
         }
 
         applied, skipped = [], []
-        stamp = datetime.utcnow().strftime('%Y-%m-%d')
+        # ⚠️ **사람이 읽는 날짜다.** UTC 로 찍으면 한국시간 자정~아침 아홉 시
+        #    사이에 「어제」가 적힌다. 메모에 남는 값이라 나중에 그 날짜를 보고
+        #    무슨 일이 있었는지 되짚는다.
+        stamp = datetime.now(KST).strftime('%Y-%m-%d')
 
         for item in wanted:
             try:
