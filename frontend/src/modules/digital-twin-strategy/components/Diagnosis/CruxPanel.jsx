@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 , ArrowDown } from 'lucide-react';
 
 // 진단의 산출물. 올해 넘어야 할 결정적 지점 1~3개.
 //
@@ -14,6 +14,53 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
+`;
+
+// 이 난제를 이슈로 내리는 자리.
+//
+// ⚠️ **이 길이 없으면 잘못 올린 난제를 지우는 수밖에 없다.** 한 사이클을 돌려
+//    보니 난제 열 개 중 여덟이 이슈 0건이었다 — 관측 문장이 난제 자리에 올라가
+//    있었고, 그것들이 갈 곳은 삭제가 아니라 **다른 난제 아래의 이슈**였다.
+const DemoteRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #e2e8f0;
+`;
+
+const DemoteLabel = styled.span`
+  font-size: 0.75rem;
+  color: #64748b;
+`;
+
+const Select = styled.select`
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.3rem;
+  background: white;
+  color: #334155;
+  font-size: 0.75rem;
+  font-family: inherit;
+  max-width: 18rem;
+`;
+
+const SmallButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.3rem;
+  background: white;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  &:hover { border-color: #7c3aed; color: #6d28d9; }
 `;
 
 const Card = styled.div`
@@ -122,7 +169,14 @@ const Warn = styled.div`
   font-size: 0.8125rem;
 `;
 
-const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
+const CruxPanel = ({ cruxes, issueCounts, onAdd, onUpdate, onDelete,
+                     onDemote }) => {
+  // 어느 난제를 내리는 중인가. {cruxId: 옮길 난제 id 또는 ''}
+  const [demoting, setDemoting] = useState(null);
+  const [target, setTarget] = useState('');
+
+  const counts = issueCounts || {};
+  const emptyCount = (cruxes || []).filter(c => !counts[c.id]).length;
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -149,6 +203,7 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
           <Index>{i + 1}</Index>
           <Body>
             <TitleInput
+              readOnly={!onUpdate}
               defaultValue={c.title}
               key={`t-${c.id}-${c.title}`}
               onBlur={e => {
@@ -158,6 +213,7 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
               }}
             />
             <RationaleInput
+              readOnly={!onUpdate}
               defaultValue={c.rationale || ''}
               key={`r-${c.id}-${c.rationale || ''}`}
               placeholder="왜 이것이 핵심 난제인가. 근거 없이 고르면 그냥 인상입니다."
@@ -167,10 +223,49 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
                 }
               }}
             />
+
+            {onDemote && (demoting === c.id ? (
+              <DemoteRow>
+              <DemoteLabel>어느 난제 아래의 이슈로?</DemoteLabel>
+              <Select value={target} onChange={e => setTarget(e.target.value)}>
+                <option value="">난제 없이 (고아로 둠)</option>
+                {(cruxes || []).filter(o => o.id !== c.id).map(o => (
+                  <option key={o.id} value={o.id}>{o.title}</option>
+                ))}
+              </Select>
+              <SmallButton onClick={async () => {
+                const ok = await onDemote(c.id,
+                  target === '' ? null : Number(target));
+                if (ok !== false) { setDemoting(null); setTarget(''); }
+              }}>
+                <ArrowDown size={13} /> 내리기
+              </SmallButton>
+              <SmallButton onClick={() => setDemoting(null)}>취소</SmallButton>
+              </DemoteRow>
+            ) : (
+              <DemoteRow>
+              {!counts[c.id] && (
+                <DemoteLabel>
+                  이 난제에는 할 일이 없습니다.
+                  {' '}<strong>넘겠다고 적어 놓고 아무것도 안 하는 상태</strong>입니다.
+                </DemoteLabel>
+              )}
+              <SmallButton
+                style={{ marginLeft: 'auto' }}
+                onClick={() => { setDemoting(c.id); setTarget(''); }}
+                title="난제가 아니라 이슈였다면 여기서 되돌립니다"
+              >
+                <ArrowDown size={13} /> 이슈로 내리기
+              </SmallButton>
+              </DemoteRow>
+            ))}
           </Body>
-          <IconButton onClick={() => onDelete(c.id)} title="삭제">
-            <Trash2 size={16} />
-          </IconButton>
+          {onDelete && (
+            <IconButton onClick={() => onDelete(c.id)} title="삭제">
+              <Trash2 size={16} />
+            </IconButton>
+          )}
+
         </Card>
       ))}
 
@@ -178,6 +273,15 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
         <Warn>
           핵심 난제가 {cruxes.length}개입니다. 전부가 중요하면 아무것도 중요하지 않습니다 —
           {RECOMMENDED_MAX}개 이하로 좁히는 것을 권합니다.
+          {emptyCount > 0 && (
+            <>
+              {' '}그중 <strong>{emptyCount}개는 할 일이 하나도 없습니다</strong> —
+              대개 난제가 아니라 <strong>이슈였던 것</strong>입니다.
+              {/* 없는 단추를 쓰라고 하지 않는다 — 조회만 하는 사람에게는
+                  이 문장이 화면이 고장 난 것처럼 읽힌다. */}
+              {onDemote && ' 각 카드의 「이슈로 내리기」로 되돌릴 수 있습니다.'}
+            </>
+          )}
         </Warn>
       )}
 
@@ -198,12 +302,12 @@ const CruxPanel = ({ cruxes, onAdd, onUpdate, onDelete }) => {
             />
           </Body>
         </Card>
-      ) : (
+      ) : onAdd ? (
         <AddButton onClick={() => setAdding(true)}>
           <Plus size={16} />
           핵심 난제 직접 추가
         </AddButton>
-      )}
+      ) : null}
     </Wrap>
   );
 };

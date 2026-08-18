@@ -470,6 +470,71 @@ def create_crux(year):
         return _crashed()
 
 
+@bp.route('/plans/<int:year>/cruxes/<int:crux_id>/demote', methods=['POST'])
+@edit_required
+def demote_crux(year, crux_id):
+    """**난제를 이슈로 내린다.** (위에서 아래로 — 올린 것을 되돌리는 길)
+
+    ⚠️ 이 길이 없으면 잘못 올린 난제를 **지우는 수밖에 없다.** 그러면 그 사실이
+       통째로 사라진다 — 발견 사항에서 올린 것이니 근거는 남아 있지만, 사람이
+       "이건 다루기로 했다" 고 판단한 기록은 없어진다.
+
+    한 사이클을 실제로 돌려 보니 난제 열 개 중 여덟 개가 **이슈 0건**이었다
+    (2026-08-17). 관측 문장이 난제 자리에 올라가 있었던 것이고, 그것들이
+    가야 할 곳은 삭제가 아니라 **다른 난제 아래의 이슈**였다.
+
+    ⚠️ **딸린 이슈도 같이 옮긴다.** 안 옮기면 그 이슈들이 고아가 된다 — 화면이
+       빨갛게 경고하는 바로 그 상태를, 정리하려다 만들게 된다.
+
+    ⚠️ **한 트랜잭션이다.** 난제만 지워지고 이슈가 안 생기면 사람이 판단한
+       것이 조용히 사라진다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        crux = StrategyCrux.query.filter_by(id=crux_id, plan_id=plan.id).first()
+        if not crux:
+            return _error('핵심 난제를 찾을 수 없습니다.', 404)
+
+        payload = request.get_json() or {}
+        target_id = payload.get('crux_id')
+        if target_id is not None:
+            target_id = int(target_id)
+            if target_id == crux.id:
+                return _error('자기 자신 아래로는 내릴 수 없습니다.', 400)
+            target = StrategyCrux.query.filter_by(
+                id=target_id, plan_id=plan.id).first()
+            if not target:
+                return _error('옮길 난제를 찾을 수 없습니다.', 404)
+
+        # 1) 난제를 이슈로. 근거(rationale)는 설명으로 내려간다.
+        moved = StrategyIssue(
+            plan_id=plan.id, crux_id=target_id, title=crux.title,
+            description=crux.rationale, division_id=crux.division_id,
+            source_type='crux', source_ref=str(crux.id),
+            status='open',
+            order=StrategyIssue.query.filter_by(plan_id=plan.id).count(),
+        )
+        db.session.add(moved)
+
+        # 2) 딸려 있던 이슈들을 새 부모로. 안 옮기면 고아가 된다.
+        children = StrategyIssue.query.filter_by(
+            plan_id=plan.id, crux_id=crux.id).all()
+        for child in children:
+            child.crux_id = target_id
+
+        db.session.delete(crux)
+        db.session.commit()
+        return jsonify({'success': True, 'data': {
+            'issue': moved.to_dict(),
+            'movedChildren': len(children),
+        }})
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
 @bp.route('/plans/<int:year>/cruxes/from-issues', methods=['POST'])
 @edit_required
 def crux_from_issues(year):

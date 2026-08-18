@@ -110,6 +110,16 @@ export const strategyApi = {
     request(`/plans/${year}/solutions/${solutionId}/gates/${gate}`,
       { method: 'DELETE' }),
 
+  /** 난제를 **이슈로 내린다.** (위에서 아래로 — 올린 것을 되돌리는 길)
+   *
+   *  ⚠️ 이 길이 없으면 잘못 올린 난제를 지우는 수밖에 없다. 딸린 이슈도 같이
+   *     옮기므로 서버가 한 트랜잭션으로 한다. */
+  demoteCrux: (year, cruxId, targetCruxId) =>
+    request(`/plans/${year}/cruxes/${cruxId}/demote`, {
+      method: 'POST',
+      body: JSON.stringify({ crux_id: targetCruxId ?? null }),
+    }),
+
   /** 이슈 여러 개를 **묶어서** 핵심 난제를 만든다. (아래에서 위로)
    *
    *  난제를 따로 만들고 이슈를 하나씩 옮기는 것과 결과는 같지만, 그 길은

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import ObservedMatrix from './ObservedMatrix';
 import KpiCoverage from './KpiCoverage';
 import FindingsPanel from './FindingsPanel';
+import PromoteCrux from './PromoteCrux';
 import CruxPanel from './CruxPanel';
 import SurveyEvidence from './SurveyEvidence';
 import SurveyVoices from './SurveyVoices';
@@ -150,8 +151,10 @@ const DiagnosisView = ({
   categories, divisions, metricDefinitions, thresholds,
   assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
   surveyEvidence, surveyVoicesAvailable, onApplySurvey, onLoadVoices,
-  processMetrics,
-  onChange, onTargetChange, onCruxAdd, onCruxUpdate, onCruxDelete,
+  processMetrics, canEdit,
+  onChange, onTargetChange, onBumpTargets,
+  onCruxAdd, onCruxUpdate, onCruxDelete, onCruxDemote,
+  issues,
 }) => {
   const [showGrid, setShowGrid] = useState(false);
   // 'division' | 'process'
@@ -215,17 +218,28 @@ const DiagnosisView = ({
   ));
   const onProcess = axis === 'process' && processAxis.length > 0;
 
-  const promote = (finding) => {
-    onCruxAdd({
-      title: finding.title,
-      rationale: finding.detail,
-      division_id: finding.division_id ?? null,
-      source_finding: finding.key,
-    });
+  // ⚠️ **바로 만들지 않는다.** 발견 사항 제목을 그대로 난제로 삼으면 관측이
+  //    난제 자리에 앉고, 그런 난제에는 할 일이 안 붙는다 — 실제로 열 개 중
+  //    여덟 개가 이슈 0건이었다(PromoteCrux 주석). 제목을 다시 쓰게 한다.
+  const [promoting, setPromoting] = useState(null);
+
+  const promote = (finding) => setPromoting(finding);
+
+  const confirmPromote = async (payload) => {
+    const ok = await onCruxAdd(payload);
+    if (ok !== false) setPromoting(null);
   };
 
   return (
     <Layout>
+      {promoting && (
+        <PromoteCrux
+          finding={promoting}
+          cruxCount={(cruxes || []).length}
+          onConfirm={confirmPromote}
+          onCancel={() => setPromoting(null)}
+        />
+      )}
       {/* 무엇이 어디로 가는지 + 지금 어디인지. 한동안 목차를 따로 두었는데
           이름이 겹쳐 두 벌이 나란히 있는 꼴이라 이것 하나로 합쳤다. */}
       <FlowMap items={flow} onJump={(id) => {
@@ -337,7 +351,8 @@ const DiagnosisView = ({
               조직 역량 칸이 그 값으로 바뀝니다.
             </Hint>
           </Head>
-          <SurveyEvidence evidence={surveyEvidence} onApply={onApplySurvey} />
+          <SurveyEvidence evidence={surveyEvidence}
+                          onApply={canEdit ? onApplySurvey : null} />
         </Section>
 
         {/* 서술형은 규칙으로 못 짚는다. "이런 말이 많았다"는 판단이라 AI 의 일이다.
@@ -355,11 +370,27 @@ const DiagnosisView = ({
                 <strong>바로 핵심 난제로</strong> 올릴 수 있습니다.
               </Hint>
             </Head>
-            <SurveyVoices
-              available={surveyVoicesAvailable}
-              onLoad={onLoadVoices}
-              onPromote={onCruxAdd}
-            />
+            {/* ⚠️ 서술형은 **원문 인용**을 읽는다. 설문 응답자에게 「관리자는
+                확인 가능」이라고 고지했지 「전 직원이 확인 가능」이라고 하지
+                않았다. 열람은 감사 로그에도 남는다. */}
+            {canEdit ? (
+              <SurveyVoices
+                available={surveyVoicesAvailable}
+                onLoad={onLoadVoices}
+                // ⚠️ 서술형 요약도 **AI 가 붙인 제목**이다. 그대로 난제로
+                //    삼지 않고 같은 대화상자를 태운다 — 난제의 말은 사람이
+                //    골라야 한다.
+                onPromote={(p) => promote({
+                  title: p.title, detail: p.rationale,
+                  division_id: null, key: p.source_finding,
+                })}
+              />
+            ) : (
+              <Hint>
+                서술형에서 나온 이야기는 <strong>편집 권한이 있는 분만</strong>{' '}
+                볼 수 있습니다. 응답자에게 그렇게 고지하고 받은 답변입니다.
+              </Hint>
+            )}
           </Section>
         )}
 
@@ -374,7 +405,8 @@ const DiagnosisView = ({
               적혀 있습니다. 중요한 것을 아래로 올리세요.
             </Hint>
           </Head>
-          <FindingsPanel findings={findings} onPromote={promote} />
+          <FindingsPanel findings={findings}
+                         onPromote={canEdit ? promote : null} />
         </Section>
 
         <Section id="sec-cruxes">
@@ -390,9 +422,16 @@ const DiagnosisView = ({
           </Head>
           <CruxPanel
             cruxes={cruxes}
-            onAdd={onCruxAdd}
-            onUpdate={onCruxUpdate}
-            onDelete={onCruxDelete}
+            issueCounts={(issues || []).reduce((acc, i) => {
+              if (i.crux_id && i.status !== 'dropped') {
+                acc[i.crux_id] = (acc[i.crux_id] || 0) + 1;
+              }
+              return acc;
+            }, {})}
+            onDemote={canEdit ? onCruxDemote : null}
+            onAdd={canEdit ? onCruxAdd : null}
+            onUpdate={canEdit ? onCruxUpdate : null}
+            onDelete={canEdit ? onCruxDelete : null}
           />
         </Section>
 
@@ -418,8 +457,9 @@ const DiagnosisView = ({
               assessments={assessments}
               metrics={metrics}
               metricsError={metricsError}
-              onChange={onChange}
-              onTargetChange={onTargetChange}
+              onChange={canEdit ? onChange : null}
+              onTargetChange={canEdit ? onTargetChange : null}
+              onBumpTargets={canEdit ? onBumpTargets : null}
               hideMetrics
             />
           ) : (
