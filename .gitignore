@@ -45,9 +45,9 @@ desktop.ini
 .idea/
 *.sublime-workspace
 *.sublime-project
-# 사람마다 다른 로컬 허용 목록이다. .claude/settings.json 은 프로젝트 공용이라
-# 추적해도 된다 — 그쪽은 팀이 같이 쓰는 값이다.
-.claude/settings.local.json
+# 에이전트 설정. 사람마다 다르고, 지금 들어 있는 것은 이 PC 의 절대경로와
+# 일회성 명령뿐이라 공유할 값이 없다. 팀 공용으로 둘 것이 생기면 그때 푼다.
+.claude/
 
 # Env
 .env
