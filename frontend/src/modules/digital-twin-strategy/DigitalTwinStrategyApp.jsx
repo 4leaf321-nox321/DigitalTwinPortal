@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Eye } from 'lucide-react';
 import Header from './components/Layout/Header';
 import DiagnosisView from './components/Diagnosis/DiagnosisView';
 import IssuesView from './components/Issues/IssuesView';
 import AnalysisView from './components/Analysis/AnalysisView';
+import SolutionsView from './components/Solutions/SolutionsView';
+import DocumentView from './components/Document/DocumentView';
 import ThresholdModal from './components/Settings/ThresholdModal';
 import strategyApi from './services/strategyApi';
 
@@ -91,6 +93,24 @@ const StageTabs = styled.div`
   border: 1px solid #e2e8f0;
 `;
 
+// 탭에 붙는 수. **어디가 비었는지 탭만 보고 알아야 한다** — 지금까지는
+// 눌러 봐야 알았다.
+const StageCount = styled.span`
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: ${p => {
+    if (p.$active) return 'rgba(255, 255, 255, 0.22)';
+    return p.$empty ? '#fef3c7' : '#f1f5f9';
+  }};
+  color: ${p => {
+    if (p.$active) return 'white';
+    return p.$empty ? '#b45309' : '#64748b';
+  }};
+`;
+
 const StageTab = styled.button`
   padding: 0.5rem 0.875rem;
   border: none;
@@ -145,6 +165,37 @@ const YearDisplay = styled.div`
   text-align: center;
 `;
 
+// ⚠️ **확정은 ⑤ 에서만 하지만 어느 단계에서나 보여야 한다.** 확정본을 보고
+//    있는 줄 모르고 진단을 고치면, 고친 것이 문서에 안 들어간 이유를 못 찾는다.
+// 조회 전용임을 늘 보이게 둔다. 단추가 안 보이는 이유를 모르면 사람은
+// 화면이 고장 난 줄 안다.
+const ReadOnlyBar = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+`;
+
+const ConfirmedBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.3rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  font-size: 0.6875rem;
+  font-weight: 700;
+`;
+
 const Panel = styled.div`
   background: white;
   border: 1px dashed #cbd5e1;
@@ -179,6 +230,18 @@ const CreateButton = styled.button`
 
 // 고정 바 안에 둔다. 화면 아래에서 저장하다 실패했는데 오류가 맨 위에만
 // 뜨면 아무도 못 본다 — 저장이 안 된 줄 모르고 넘어간다.
+// ⚠️ **된 일을 빨간 상자에 띄우지 않는다.** 「목표 19칸을 정했습니다」가
+//    오류처럼 보이면 사람은 뭔가 잘못된 줄 알고 손을 멈춘다.
+const NoticeBox = styled.div`
+  padding: 0.75rem 1rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.5rem;
+  color: #15803d;
+  font-size: 0.875rem;
+  margin-top: 0.875rem;
+`;
+
 const ErrorBox = styled.div`
   padding: 0.75rem 1rem;
   background: #fef2f2;
@@ -198,6 +261,10 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState(null);
+  // 된 일. 오류와 자리는 같지만 **색이 달라야 한다.**
+  const [notice, setNotice] = useState(null);
+  // ⑤ 기획서. plan 과 따로 읽는다 — 문서를 안 보는 동안 조립할 이유가 없다.
+  const [document_, setDocument] = useState(null);
 
   useEffect(() => {
     strategyApi.getMeta()
@@ -229,6 +296,44 @@ function DigitalTwinStrategyApp({ onGoHome }) {
 
   useEffect(() => { loadPlan(currentYear); }, [currentYear, loadPlan]);
 
+  // 단계에 들어올 때, 그리고 앞 단계를 고친 뒤 돌아올 때 다시 읽는다.
+  // ⚠️ **plan 이 바뀌면 같이 읽어야 한다.** 문서는 앞 단계를 조립한 것이라,
+  //    진단을 고치고 ⑤ 로 오면 옛 조립본이 보이면 안 된다.
+  useEffect(() => {
+    if (stage !== 'document' || !plan) { return; }
+    strategyApi.getDocument(currentYear)
+      .then(res => setDocument(res.data))
+      .catch(e => setError(e.message));
+  }, [stage, plan, currentYear]);
+
+  const runDocument = async (fn) => {
+    if (!canEdit) { setError(denied); return false; }
+    setError(null);
+    try {
+      const res = await fn();
+      setDocument(res.data);
+      return true;
+    } catch (e) {
+      setError(e.message);
+      return false;
+    }
+  };
+
+  const handleDocumentSave = (sections) =>
+    runDocument(() => strategyApi.updateDocument(currentYear, sections));
+
+  const handleDocumentStatus = (status) =>
+    runDocument(() => strategyApi.setDocumentStatus(currentYear, status));
+
+  const handleDocumentExport = async () => {
+    setError(null);
+    try {
+      await strategyApi.downloadDocument(currentYear);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const handleCreate = async () => {
     setError(null);
     try {
@@ -255,6 +360,10 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   // 던지지 않고 성공 여부를 돌려준다. 던지면 호출부가 안 잡았을 때 unhandled
   // rejection 이 되고, 화면은 저장된 것처럼 보인다.
   const runAndReload = async (fn) => {
+    // ⚠️ **한 곳에서 막는다.** 화면마다 단추를 감추지만 하나쯤 빠뜨리기 마련이라,
+    //    보내기 전에 여기서 한 번 더 본다. 서버도 막지만 그건 403 이고,
+    //    사람에게는 여기서 나온 말이 더 친절하다.
+    if (!canEdit) { setError(denied); return false; }
     setError(null);
     try {
       // ⚠️ 서버가 돌려준 것을 **그대로 넘긴다.** 만들자마자 그 항목으로
@@ -272,8 +381,9 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   };
 
   // 반영하고 전체를 다시 읽는다. 반영 결과(몇 칸이 되고 몇 칸이 건너뛰어졌나)는
-  // **돌려준다** — 화면이 그 자리에서 이유를 보여줘야 사용자가 다음 수를 안다.
+  // **돌려준다** — 화면이 그 자리에서 이유를 보여줘야 사용자가 다음에 무엇을 할지 안다.
   const handleApplySurvey = async (cells) => {
+    if (!canEdit) { setError(denied); return false; }
     setError(null);
     try {
       const res = await strategyApi.applySurveyEvidence(currentYear, cells);
@@ -288,6 +398,9 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   // 결과를 저장하지 않고 돌려주기만 한다. 저장하면 원문이 늘어난 뒤에도 낡은
   // 요약이 남고, 그것이 어느 시점의 것인지 아무도 모른다.
   const handleLoadVoices = async () => {
+    // ⚠️ 서술형 **원문 인용**을 읽는다. 설문 응답자에게 「관리자는 확인 가능」
+    //    이라고 고지했지 「전 직원이 확인 가능」이라고 하지 않았다.
+    if (!canEdit) { setError(denied); return null; }
     setError(null);
     try {
       const res = await strategyApi.loadSurveyVoices(currentYear);
@@ -305,6 +418,47 @@ function DigitalTwinStrategyApp({ onGoHome }) {
   const handleElementDelete = (id) =>
     runAndReload(() => strategyApi.deleteElement(currentYear, id));
 
+  const handleSolutionCreate = (payload) =>
+    runAndReload(() => strategyApi.createSolution(currentYear, payload));
+  const handleSolutionUpdate = (id, payload) =>
+    runAndReload(() => strategyApi.updateSolution(currentYear, id, payload));
+  const handleSolutionDelete = (id) =>
+    runAndReload(() => strategyApi.deleteSolution(currentYear, id));
+
+  // 게이트 다섯 칸을 **한 번에** 저장한다. 칸마다 저장하면 다섯 번 저장하고 다섯
+  // 번 새로 읽는 동안 화면이 다섯 번 흔들린다. 비운 칸은 지우기다 — 안 답한
+  // 상태로 되돌린다.
+  // 과제 검색. **plan 을 다시 읽지 않는다** — 검색은 읽기라 화면을 흔들 이유가
+  // 없다. 실패하면 빈 목록을 돌려주고 오류를 위에 띄운다.
+  const handleSearchProjects = async ({ q, divisionId }) => {
+    try {
+      const res = await strategyApi.searchProjects(currentYear, { q, divisionId });
+      return res?.data || { items: [], total: 0, truncated: false };
+    } catch (e) {
+      setError(e.message);
+      return { items: [], total: 0, truncated: false };
+    }
+  };
+
+  const handleGatesSave = async (solutionId, entries) => {
+    setError(null);
+    try {
+      for (const e of entries) {
+        if (e.answer) {
+          await strategyApi.saveGate(currentYear, solutionId, e.gate,
+            { answer: e.answer, status: e.status });
+        } else {
+          await strategyApi.clearGate(currentYear, solutionId, e.gate);
+        }
+      }
+      await fetchPlan(currentYear);
+      return true;
+    } catch (e) {
+      setError(e.message);
+      return false;
+    }
+  };
+
   // 이슈 여러 개를 묶어 난제로. 난제 생성과 이슈 재배치가 **한 번에** 일어나야
   // 하므로 서버가 한 트랜잭션으로 한다(cruxes/from-issues).
   const handleRollup = (payload) =>
@@ -318,11 +472,36 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     await fetchPlan(currentYear);
   };
 
+  // 목표 일괄. 몇 칸이 바뀌었고 몇 칸이 왜 안 바뀌었는지 그 자리에서 말한다 —
+  // 「50칸인데 19칸만 바뀌었다」가 왜인지 모르면 고장으로 읽힌다.
+  const handleBumpTargets = async () => {
+    if (!canEdit) { setError(denied); return; }
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await strategyApi.bumpTargets(currentYear);
+      const d = res?.data || {};
+      await fetchPlan(currentYear);
+      const rest = [
+        d.keptExisting ? `이미 목표가 있는 ${d.keptExisting}칸은 그대로` : null,
+        d.skippedNoLevel ? `현재 수준이 없는 ${d.skippedNoLevel}칸은 건너뜀` : null,
+      ].filter(Boolean).join(' · ');
+      setNotice(`목표 ${d.changed || 0}칸을 한 단계 위로 정했습니다.`
+                + (rest ? ` (${rest})` : ''));
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const handleCruxAdd = (payload) =>
     runAndReload(() => strategyApi.createCrux(currentYear, payload));
 
   const handleCruxUpdate = (cruxId, payload) =>
     runAndReload(() => strategyApi.updateCrux(currentYear, cruxId, payload));
+
+  // 난제를 이슈로 내린다. 딸린 이슈도 같이 옮기므로 서버가 한 트랜잭션으로 한다.
+  const handleCruxDemote = (cruxId, targetCruxId) =>
+    runAndReload(() => strategyApi.demoteCrux(currentYear, cruxId, targetCruxId));
 
   const handleCruxDelete = (cruxId) =>
     runAndReload(() => strategyApi.deleteCrux(currentYear, cruxId));
@@ -348,6 +527,39 @@ function DigitalTwinStrategyApp({ onGoHome }) {
 
   const isFixture = meta?.evidenceMode === 'fixture';
 
+  // 단계마다 「얼마나 찼나」. 비면 노란색으로 뜬다.
+  const stageCount = (key) => {
+    if (!plan) return null;
+    if (key === 'assessment') {
+      const filled = (plan.assessments || [])
+        .filter(a => a.current_level !== null).length;
+      return { text: `${filled}/${(plan.assessments || []).length}`,
+               empty: filled === 0 };
+    }
+    if (key === 'issue') {
+      const live = (plan.issues || []).filter(i => i.status !== 'dropped').length;
+      return { text: String(live), empty: live === 0 };
+    }
+    if (key === 'analysis') {
+      const n = (plan.elements || []).length;
+      return { text: String(n), empty: n === 0 };
+    }
+    if (key === 'solution') {
+      const n = (plan.solutions || []).length;
+      return { text: String(n), empty: n === 0 };
+    }
+    if (key === 'document') {
+      // 기획서는 건수가 아니라 상태다. 「몇 장」은 늘 열 장이라 뜻이 없다.
+      return plan.status === 'confirmed'
+        ? { text: '확정', empty: false } : { text: '초안', empty: false };
+    }
+    return null;
+  };
+  // ⚠️ **서버가 정본이다.** 이 값은 단추를 감추는 편의일 뿐이고, 실제로 막는
+  //    것은 라우트의 edit_required 다. meta 를 못 읽었으면 못 고치는 쪽으로 둔다.
+  const canEdit = meta?.canEdit === true;
+  const denied = '편집은 매니저 이상만 할 수 있습니다. 조회는 그대로 하실 수 있습니다.';
+
   const renderStage = () => {
     if (loading) return <Panel>불러오는 중…</Panel>;
 
@@ -364,11 +576,13 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     if (stage === 'assessment') {
       return (
         <DiagnosisView
+          canEdit={canEdit}
           categories={meta?.categories || []}
           divisions={meta?.divisions || []}
           metricDefinitions={meta?.metrics || []}
           thresholds={meta?.thresholds || {}}
           assessments={plan.assessments}
+          issues={plan.issues || []}
           metrics={plan.metrics}
           metricsError={plan.metricsError}
           kpiCoverage={plan.kpiCoverage}
@@ -381,9 +595,11 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           onLoadVoices={handleLoadVoices}
           onChange={handleAssessmentChange}
           onTargetChange={handleMetricTargetChange}
+          onBumpTargets={handleBumpTargets}
           onCruxAdd={handleCruxAdd}
           onCruxUpdate={handleCruxUpdate}
           onCruxDelete={handleCruxDelete}
+          onCruxDemote={handleCruxDemote}
         />
       );
     }
@@ -391,6 +607,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     if (stage === 'issue') {
       return (
         <IssuesView
+          canEdit={canEdit}
           cruxes={plan.cruxes || []}
           issues={plan.issues || []}
           candidates={plan.issueCandidates || []}
@@ -407,6 +624,7 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     if (stage === 'analysis') {
       return (
         <AnalysisView
+          canEdit={canEdit}
           elements={plan.elements || []}
           candidates={plan.elementCandidates || []}
           summary={plan.elementSummary}
@@ -418,10 +636,44 @@ function DigitalTwinStrategyApp({ onGoHome }) {
       );
     }
 
+    if (stage === 'solution') {
+      return (
+        <SolutionsView
+          canEdit={canEdit}
+          solutions={plan.solutions || []}
+          elements={plan.elements || []}
+          divisions={meta?.divisions || []}
+          gateDefinitions={meta?.gates || []}
+          kpiDefinitions={meta?.kpis || []}
+          linkedProjects={plan.linkedProjects || {}}
+          nowMax={meta?.thresholds?.solution_now_max ?? 5}
+          onSearchProjects={handleSearchProjects}
+          onGoAnalysis={() => setStage('analysis')}
+          onCreate={handleSolutionCreate}
+          onUpdate={handleSolutionUpdate}
+          onDelete={handleSolutionDelete}
+          onGatesSave={handleGatesSave}
+        />
+      );
+    }
+
+    if (stage === 'document') {
+      return (
+        <DocumentView
+          canEdit={canEdit}
+          year={currentYear}
+          doc={document_}
+          onSave={handleDocumentSave}
+          onSetStatus={handleDocumentStatus}
+          onExport={handleDocumentExport}
+        />
+      );
+    }
+
     return (
       <Panel>
         <PanelTitle>{STAGES.find(s => s.key === stage)?.label} 단계는 준비 중입니다</PanelTitle>
-        <div>지금은 ① 진단 ~ ③ 분석까지입니다. 계획은 PLAN.md 를 참고하세요.</div>
+        <div>계획은 PLAN.md 를 참고하세요.</div>
       </Panel>
     );
   };
@@ -445,24 +697,48 @@ function DigitalTwinStrategyApp({ onGoHome }) {
        <Bounded>
         <TopBar>
           <StageTabs>
-            {STAGES.map(s => (
-              <StageTab
-                key={s.key}
-                $active={stage === s.key}
-                onClick={() => setStage(s.key)}
-              >
-                {s.label}
-              </StageTab>
-            ))}
+            {STAGES.map(s => {
+              const count = stageCount(s.key);
+              return (
+                <StageTab
+                  key={s.key}
+                  $active={stage === s.key}
+                  onClick={() => setStage(s.key)}
+                >
+                  {s.label}
+                  {count && (
+                    <StageCount $active={stage === s.key} $empty={count.empty}>
+                      {count.text}
+                    </StageCount>
+                  )}
+                </StageTab>
+              );
+            })}
           </StageTabs>
 
           <YearSelector>
             <YearButton onClick={() => setCurrentYear(y => y - 1)} title="이전 년도">‹</YearButton>
             <YearDisplay>{currentYear}년</YearDisplay>
+            {plan?.status === 'confirmed' && (
+              <ConfirmedBadge title="⑤ 기획서를 확정했습니다. 앞 단계를 고쳐도 그 문서는 안 바뀝니다.">
+                확정
+              </ConfirmedBadge>
+            )}
             <YearButton onClick={() => setCurrentYear(y => y + 1)} title="다음 년도">›</YearButton>
           </YearSelector>
         </TopBar>
 
+        {!canEdit && (
+          <ReadOnlyBar>
+            <Eye size={15} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+            <span>
+              <strong>조회 전용입니다.</strong> 편집은 매니저 이상이 합니다 —
+              진단·이슈·솔루션·기획서를 보고 사업부로 걸러 볼 수 있고,
+              기획서를 Word 로 받을 수도 있습니다.
+            </span>
+          </ReadOnlyBar>
+        )}
+        {notice && <NoticeBox>{notice}</NoticeBox>}
         {error && <ErrorBox>{error}</ErrorBox>}
        </Bounded>
       </StickyBar>
@@ -478,6 +754,10 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           definitions={meta?.thresholdDefinitions || []}
           values={meta?.thresholds || {}}
           onSave={handleThresholdSave}
+          onPreview={(key) => strategyApi
+            .previewThresholds(currentYear, key)
+            .then(res => res?.data || null)
+            .catch(() => null)}
           onClose={() => setShowSettings(false)}
         />
       )}
