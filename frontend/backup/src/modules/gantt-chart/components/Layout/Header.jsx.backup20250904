@@ -1,5 +1,0 @@
-import React from 'react';
-import { Calendar, Home, Plus, RotateCcw, PlusSquare } from 'lucide-react';
-import { ImportDropdown, ExportDropdown } from '../../../../shared/components/ImportExport';
-import { tasksToCSV, csvToTasks, validateGanttCSVData } from '../../utils/csvUtils';
-import './Header.css';

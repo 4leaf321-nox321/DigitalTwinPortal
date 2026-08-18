@@ -44,7 +44,6 @@
 │   │   └── utils/                    # 전역 유틸리티
 │   │       └── colorUtils.js        # 색상 관련 유틸리티
 │   │
-│   ├── backup/                       # 백업 파일들
 │   ├── dist/                         # 빌드 결과물
 │   ├── node_modules/                 # NPM 패키지
 │   ├── MODULE_TEMPLATE/              # 새 모듈 생성용 템플릿
@@ -401,7 +400,8 @@ npm run preview
 - `frontend.zip`, `frontend (2).zip`: 전체 프로젝트 백업
 
 ### 개별 모듈 백업
-- `frontend/backup/`: 주요 변경 사항 백업
+- 손으로 만드는 백업 사본은 두지 않습니다. 지난 판은 git 히스토리에 있고,
+  사본을 옆에 두면 어느 쪽이 정본인지 읽는 사람이 알 수 없습니다.
 
 ---
 
