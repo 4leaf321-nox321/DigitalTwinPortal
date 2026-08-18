@@ -25,7 +25,7 @@ from .metrics import (
 )
 from .findings import (
     derive_findings, derive_kpi_findings, derive_process_findings,
-    attach_rules,
+    derive_strategy_link_findings, attach_rules,
 )
 from .survey_link import (
     attach_current, collect, derive_choice_findings, derive_survey_findings,
@@ -341,6 +341,15 @@ def build_plan_payload(plan, thresholds=None, source=None):
                   StrategySolution.id).all()
     ]
     attach_gates(plan.id, 'solution', solutions)
+    # 화면이 uuid 대신 이름을 보여줄 수 있게 한 번에 읽는다.
+    linked_uuids = {u for x in solutions for u in (x.get('project_uuids') or [])}
+    linked_projects = load_projects(linked_uuids)
+
+    # 전략 ↔ 실행. **④ 를 채운 뒤라야 값이 생긴다** — 솔루션이 하나도 없으면
+    # 전부 미연결이라, 짚어 봐야 "아직 시작 안 했다"는 말밖에 안 된다.
+    if solutions and not metric_error:
+        findings += derive_strategy_link_findings(
+            source.get_projects(year), linked_uuids, divisions, thresholds)
     order = {'high': 0, 'medium': 1, 'info': 2}
     findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
     # 어느 규칙에서 나왔는지 붙인다. 화면과 문서가 이걸로 묶는다.
@@ -396,6 +405,8 @@ def build_plan_payload(plan, thresholds=None, source=None):
     'elementSummary': summarize_elements(
         elements, element_candidates, assessments, thresholds),
     'solutions': solutions,
+    # uuid → 과제. 못 찾는 것은 여기 없다(지워진 과제).
+    'linkedProjects': linked_projects,
     # 프로세스 축. 지표 정의는 사업부 축과 **같은 것**을 쓴다 —
     # 축이 다르다고 다른 지표를 재면 두 화면을 견줄 수 없다.
     'processMetrics': {
@@ -772,6 +783,21 @@ def _apply_solution_fields(solution, payload, plan):
                         + ', '.join(f'{e.kind} {e.title}' for e in wrong))
         solution.element_ids = sorted(wanted)
 
+    if 'project_uuids' in payload:
+        raw = payload.get('project_uuids') or []
+        if not isinstance(raw, list):
+            return 'project_uuids 는 목록이어야 합니다.'
+        wanted = {str(x) for x in raw if str(x).strip()}
+        if wanted:
+            from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+            found = {p.uuid for p in Dt2Project.query.filter(
+                Dt2Project.uuid.in_(wanted)).all()}
+            missing = wanted - found
+            if missing:
+                # 없는 과제에 걸어 두면 그 솔루션은 아무것도 안 하는 것과 같은데
+                # 화면에는 하고 있는 것처럼 보인다.
+                return f'없는 과제입니다: {sorted(missing)}'
+        solution.project_uuids = sorted(wanted)
     return None
 
 
@@ -1062,6 +1088,79 @@ def export_document(year):
         return _crashed()
 
 
+# 과제 검색 상한. 한 해치(개발 DB 실측 220여 건)는 다 내려도 되는 양이라,
+# 이 상한은 검색이 폭주하는 것만 막는다. **모듈 상수로 둔 것은 시험하기 위해서다** —
+# 함수 안에 숨겨 두면 "잘랐을 때 잘랐다고 말하는가"를 확인할 길이 없다.
+PROJECT_SEARCH_LIMIT = 300
+
+
+def load_projects(uuids):
+    """연결된 과제의 이름표. **화면이 uuid 를 그대로 보여줄 수는 없다.**
+
+    못 찾는 것은 조용히 빠진다 — 과제가 지워졌으면 근거가 사라진 것이지 이
+    솔루션이 틀린 것이 아니다(전략 요소와 같은 규칙).
+    """
+    if not uuids:
+        return {}
+    from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+    rows = Dt2Project.query.filter(Dt2Project.uuid.in_(list(uuids))).all()
+    return {p.uuid: {
+        'uuid': p.uuid, 'code': p.code, 'title': p.title,
+        'division': p.division, 'year': p.year, 'status': p.status,
+    } for p in rows}
+
+
+@bp.route('/plans/<int:year>/projects', methods=['GET'])
+@view_required
+def search_projects(year):
+    """솔루션에 걸 과제를 찾는다.
+
+    개발 DB 실측(2026-08-17): 전체 436건, 그중 2026년 222건, 사업부별 28~97건.
+    **한 해치를 다 내려도 되는 양**이지만, 그래도 범위를 좁혀 내민다 — 목록이
+    222줄이면 스크롤로 찾는 것보다 검색이 빠르고, 무엇보다 **고를 것이 그
+    사업부 안에 있을 확률이 높다.**
+
+    기본은 그 전략 연도이고, 사업부를 주면 그 사업부부터 본다. 이름으로 검색하면
+    그 범위를 넘어 찾는다(연도를 걸치는 과제가 있다 — 2027·2028년 것도 9건 있다).
+
+    limit 100 은 검색 결과가 폭주하는 것만 막는 안전장치다. 지금 규모에서는
+    거의 안 걸린다.
+    """
+    from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+
+    try:
+        q = (request.args.get('q') or '').strip()
+        division_id = request.args.get('division_id', type=int)
+
+        query = Dt2Project.query
+        if q:
+            like = f'%{q}%'
+            query = query.filter(db.or_(Dt2Project.title.ilike(like),
+                                        Dt2Project.code.ilike(like)))
+        else:
+            # 검색어가 없을 때만 범위를 좁힌다. 찾으러 온 사람을 막지 않는다.
+            query = query.filter(Dt2Project.year == year)
+            if division_id:
+                query = query.filter(Dt2Project.division_id == division_id)
+
+        # ⚠️ **자르면 자른다고 말한다.** 한 해가 220여 건이라 상한에 잘 안
+        #    닿지만, 닿았을 때 조용히 100건만 보이면 찾던 과제가 없는 것과
+        #    구별이 안 된다 — 이 모듈이 다른 곳에서 거부해 온 동작이다.
+        total = query.count()
+        rows = (query.order_by(Dt2Project.year.desc(), Dt2Project.code)
+                .limit(PROJECT_SEARCH_LIMIT).all())
+        return jsonify({'success': True, 'data': {
+            'total': total,
+            'truncated': total > len(rows),
+            'items': [{
+                'uuid': p.uuid, 'code': p.code, 'title': p.title,
+                'division': p.division, 'year': p.year, 'status': p.status,
+            } for p in rows],
+        }})
+    except Exception:
+        return _crashed()
+
+
 @bp.route('/plans/<int:year>/solutions', methods=['POST'])
 @edit_required
 def create_solution(year):
@@ -1073,6 +1172,7 @@ def create_solution(year):
 
         solution = StrategySolution(
             plan_id=plan.id, tows='', title='', element_ids=[], kpi_ids=[],
+            project_uuids=[],
             order=StrategySolution.query.filter_by(plan_id=plan.id).count(),
         )
         error = _apply_solution_fields(solution, request.get_json() or {}, plan)

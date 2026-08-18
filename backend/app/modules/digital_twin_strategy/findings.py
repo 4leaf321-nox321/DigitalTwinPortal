@@ -465,6 +465,91 @@ def derive_process_findings(by_division, totals, processes, divisions,
     return findings
 
 
+def derive_strategy_link_findings(projects, linked_uuids, divisions,
+                                  thresholds=None):
+    """**어느 솔루션에도 안 걸린 과제.** (전략 ↔ 실행)
+
+    ① 진단은 「KPI 에 안 걸린 과제」를 짚는다. 이건 그 짝이다 — 지표에는 걸렸어도
+    **올해 전략이 하겠다고 한 것과 무관하게** 도는 과제가 얼마나 되는가.
+
+    둘은 다른 것을 본다.
+
+        KPI 미연결    과제가 무엇을 올리려는지 안 적혔다      (과제 쪽 문제)
+        전략 미연결   전략이 그 과제를 자기 것이라 안 했다    (전략 쪽 문제)
+
+    ⚠️ **과제를 나무라는 규칙이 아니다.** 비율이 높다고 현장이 잘못한 것이
+       아니라, 전략이 현장에서 이미 벌어지는 일을 안 담은 것일 수 있다. 그래서
+       문구가 어느 한쪽을 탓하지 않는다.
+
+    ⚠️ **합성 데이터에서는 안 짚는다.** fixture 과제에는 uuid 가 없어 고를 수가
+       없고, 그러면 무조건 100% 미연결이 나온다. 그건 조직의 상태가 아니라
+       모드의 성질이다(과제 5건 미만은 판정하지 않는 것과 같은 이유).
+    """
+    T = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
+    names = {d.name: d.id for d in divisions}
+    names_by_id = {d.id: d.name for d in divisions}
+
+    # 식별자가 없는 원천(fixture)에서는 판단하지 않는다.
+    known = [p for p in (projects or []) if p.get('_uuid')]
+    if not known:
+        return []
+
+    linked = set(linked_uuids or ())
+    findings = []
+
+    def add(key, severity, title, detail, division_id=None, evidence=None):
+        findings.append({
+            'key': key, 'severity': severity, 'title': title, 'detail': detail,
+            'division_id': division_id,
+            'division_name': next((n for n, i in names.items()
+                                   if i == division_id), None),
+            'evidence': evidence or {},
+        })
+
+    limit = T['solution_unlinked_share']
+
+    # 사업부별로 본다. 전사 하나로 뭉치면 어느 조직의 이야기인지 알 수 없다 —
+    # 프로세스 축에서 겪은 것과 같은 함정이다.
+    by_division = {}
+    for p in known:
+        by_division.setdefault(names.get(p.get('사업부')), []).append(p)
+
+    for division_id, items in by_division.items():
+        if division_id is None:
+            continue
+        loose = [p for p in items if p['_uuid'] not in linked]
+        share = round(len(loose) * 100 / len(items), 1)
+        if share < limit:
+            continue
+        # ⚠️ **제목에 사업부를 적는다.** 안 적으면 목록에 「과제 21건(100%)이…」가
+        #    사업부 수만큼 똑같이 늘어서, 어느 조직 이야기인지 알 수 없다.
+        #    다른 규칙들은 「MX 과제 63.3%…」처럼 이미 그렇게 한다.
+        add(f'strategy_unlinked:{division_id}', 'medium',
+            f'{names_by_id.get(division_id, "?")} 과제 {len(loose)}건({share}%)이 '
+            f'올해 전략의 어느 솔루션에도 안 걸려 있습니다',
+            '전략이 현장에서 이미 벌어지는 일을 안 담은 것일 수도, 과제가 '
+            '전략과 무관하게 도는 것일 수도 있습니다. ④ 솔루션에서 과제를 '
+            '걸거나, 그 과제들이 무엇을 위한 것인지 되물어야 합니다.',
+            division_id,
+            {'unlinked': len(loose), 'total': len(items), 'share': share})
+
+    # 반대쪽. 하겠다고 적어 놓고 아무도 안 하는 것 — 이쪽이 더 급하다.
+    total_share = round(
+        len([p for p in known if p['_uuid'] not in linked]) * 100 / len(known), 1)
+    if total_share >= limit and not findings:
+        # 사업부별로 안 걸렸으면 전사로 한 번은 짚는다(사업부를 못 붙인 과제 등).
+        add('strategy_unlinked:all', 'medium',
+            f'과제의 {total_share}% 가 올해 전략의 어느 솔루션에도 안 걸려 '
+            f'있습니다',
+            '④ 솔루션에서 과제를 걸거나, 그 과제들이 무엇을 위한 것인지 '
+            '되물어야 합니다.',
+            None, {'share': total_share, 'total': len(known)})
+
+    order = {'high': 0, 'medium': 1, 'info': 2}
+    findings.sort(key=lambda f: (order.get(f['severity'], 9), f['title']))
+    return findings
+
+
 # 같은 규칙에서 나온 것들을 묶을 때 쓰는 이름.
 #
 # ⚠️ **없으면 안 묶는 것이 아니라 대표 문장으로 묶는다.** 규칙을 새로 넣을 때

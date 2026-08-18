@@ -446,6 +446,10 @@ THRESHOLDS = [
      'default': 5, 'max': 50,
      'detail': '영향·실행가능성이 둘 다 높은 솔루션이 이보다 많으면 짚는다. '
                '다 1순위면 순위를 안 정한 것과 같다.'},
+    {'key': 'solution_unlinked_share', 'label': '전략 미연결 과제 비율', 'unit': '%',
+     'default': 70, 'max': 100,
+     'detail': '어느 솔루션에도 안 걸린 과제가 이 비율을 넘으면 짚는다. '
+               '전략과 실행이 따로 도는 정도를 본다.'},
 ]
 
 DEFAULT_THRESHOLDS = {t['key']: t['default'] for t in THRESHOLDS}

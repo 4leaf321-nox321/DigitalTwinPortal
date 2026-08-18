@@ -333,6 +333,18 @@ class StrategySolution(BaseModel):
     # 이 솔루션이 움직이려는 지표(KpiDefinition) id 목록. **전략과 실행을 잇는 자리**다 —
     # 여기까지 와야 ① 진단에서 본 'KPI 에 안 걸린 과제' 문제가 반대편에서 닫힌다.
     kpi_ids = db.Column(JSON, nullable=False, default=list)
+
+    # 이 솔루션을 **실제로 해내는 과제**(dt2_projects.uuid) 목록.
+    #
+    # ⚠️ 지표 연결만으로는 폐루프가 안 닫힌다. "가상검증률을 올리겠다"는 겨냥이고,
+    #    그것을 **누가 무엇으로 하는가**는 과제다. 여기가 비어 있으면 그 솔루션은
+    #    아직 말뿐이고, 그 사실이 화면과 문서에 보여야 한다.
+    #
+    # ⚠️ 외래키를 걸지 않는다. 과제는 `dt2_projects` 의 것이고 전략이 그 표의
+    #    수명을 좌우해서는 안 된다 — 과제가 지워지면 근거가 사라진 것이지 이
+    #    솔루션이 틀린 것이 아니다(element_ids 와 같은 규칙).
+    project_uuids = db.Column(JSON, nullable=False, default=list)
+
     order = db.Column(db.Integer, nullable=False, default=0)
 
 

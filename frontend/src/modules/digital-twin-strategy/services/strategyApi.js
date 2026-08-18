@@ -128,6 +128,18 @@ export const strategyApi = {
   loadSurveyVoices: (year) =>
     request(`/plans/${year}/survey-voices`, { method: 'POST', body: '{}' }),
 
+  /** 솔루션에 걸 과제를 찾는다.
+   *
+   *  검색어가 없으면 그 전략 연도(+사업부)만, 있으면 그 범위를 넘어 찾는다.
+   *  (한 해 200여 건이라 다 받아도 되지만, 좁혀 주는 편이 고르기 쉽다) */
+  searchProjects: (year, { q, divisionId } = {}) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (divisionId) params.set('division_id', divisionId);
+    const query = params.toString();
+    return request(`/plans/${year}/projects${query ? `?${query}` : ''}`);
+  },
+
   /** ⑤ 기획서. **본문은 서버가 매번 조립한다** — 앞 단계를 고치면 따라 바뀐다.
    *  확정한 뒤에는 그 시점이 굳는다. */
   getDocument: (year) => request(`/plans/${year}/document`),
