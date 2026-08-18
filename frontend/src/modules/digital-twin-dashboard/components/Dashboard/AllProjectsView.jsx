@@ -1480,6 +1480,29 @@ const migrateColumnSettings = (settings) => {
   return result;
 };
 
+// ── 일정 위험 ────────────────────────────────────────────────────────────────
+//
+// 「기간이 지난 만큼 진척이 안 따라온다」로 볼 최소 격차.
+//
+// 0.2 인 이유는 실측이다(2026-08-18 개발 DB, 2026년 **살아 있는** 진행 과제 94건).
+//     0.1 → 30건(32%)   0.15 → 14건   0.2 → 6건(6%)   0.25 → 4건   0.3 → 0건
+// 「따로 얘기할 목록」이라 서른 줄이면 안 읽힌다. 6% 가 그 크기다.
+//
+// ⚠️ **처음에 0.3 으로 잡았다가 0건이 떴다.** 임계값을 삭제된 과제까지 포함해
+//    쟀기 때문이다 — 휴지통에 시험용 과제(「테스트과제33」 같은)가 쌓여 있었고,
+//    그것들이 격차 30~59% 로 걸려 "4건 잡힌다"고 착각했다. 화면은 삭제된 과제를
+//    안 보여주므로 실제로는 아무것도 안 떴다.
+//    **기준을 정할 때는 화면이 실제로 보는 모수로 재야 한다.**
+//
+// ⚠️ 운영 DB 는 분포가 또 다르다. 너무 많거나 적으면 이 값부터 만진다.
+const SCHEDULE_RISK_GAP = 0.2;
+
+const SCHEDULE_RISK_LABEL = {
+  overdue: '기한 지남',
+  behind: '일정 뒤처짐',
+  backloaded: '막판 몰림',
+};
+
 const AllProjectsView = ({
   projects,
   globalPerformances = [],
@@ -1517,6 +1540,16 @@ const AllProjectsView = ({
   const [pivotDivisionFilter, setPivotDivisionFilter] = useState(''); // 피봇 보기 사업부 필터
   const [perfViewDivisionFilter, setPerfViewDivisionFilter] = useState('all'); // 성과 보기 사업부 필터
   const [recencyFilter, setRecencyFilter] = useState(''); // '' | 'week' | 'month' | 'none'
+  const [riskFilter, setRiskFilter] = useState(false);    // 일정 위험만 보기
+
+  // 경과율의 기준이 되는 「지금」.
+  //
+  // ⚠️ **보고 있는 연도가 올해일 때만 뜻이 있다.** 2025년을 열어 보면 모든 과제의
+  //    경과율이 100% 라 전부 위험으로 걸리고, 그건 아무 말도 아니다. 지난 해는
+  //    「기한 내 못 끝낸 과제」라는 다른 이야기이므로 여기서는 아예 안 짚는다.
+  const thisYear = new Date().getFullYear();
+  const thisMonth = new Date().getMonth() + 1;
+  const scheduleRiskApplies = Number(currentYear) === thisYear && !showTrash;
   const [selectedProjectStatuses, setSelectedProjectStatuses] = useState(new Set()); // 과제 상태 (진행상태) 필터
 
   // 열 배치 설정 (prop 또는 기본값 사용, 구버전 마이그레이션 적용)
@@ -1583,6 +1616,72 @@ const AllProjectsView = ({
     });
 
     return totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  };
+
+  /**
+   * 일정이 지난 만큼 진척이 안 따라온 과제. 아니면 null.
+   *
+   * ⚠️ **판정은 「기간이 얼마나 지났나 − 얼마나 끝냈나」 하나로 한다.**
+   *    처음에는 목표일이 뒤로 몰린 것을 보려 했는데, 개발 DB 로 재 보니
+   *    **이미 100% 끝낸 과제가 걸렸다**(MX-32). 목표일을 안 적었을 뿐 일은 다 한
+   *    것이었다. 목표일은 판정에서 빼고 **왜 그런지 나누는 데만** 쓴다.
+   *
+   * ⚠️ **액션아이템이 없으면 판단하지 않는다.** 진척을 0% 로 두면 전부 걸리는데,
+   *    그건 늦은 게 아니라 **아직 안 적은 것**이다.
+   *
+   * ⚠️ `시작`·`종료` 는 **월 번호(1~12)** 이지 날짜가 아니다(field_maps.py:45).
+   *    그래서 경과율의 해상도는 12단계뿐이다. 일 단위로 쪼개면 정밀해 보이지만
+   *    원 데이터에 없는 정밀도라 거짓이다.
+   *
+   * ⚠️ 진척은 **`calculateProgress` 를 그대로 쓴다.** 여기서 따로 세면 화면이
+   *    보여주는 진행률과 배지가 어긋나고, 그때 어느 쪽이 맞는지 아무도 모른다.
+   */
+  const getScheduleRisk = (project) => {
+    if ((project.진행상태 || '') === '완료' || (project.진행상태 || '') === '취소'
+        || (project.진행상태 || '') === '미착수') return null;
+
+    const items = project.액션아이템목록 || [];
+    if (items.length === 0) return null;           // 안 적은 것은 늦은 것이 아니다
+
+    const start = Number(project.시작), end = Number(project.종료);
+    if (!start || !end || end < start) return null;
+    const span = end - start + 1;
+    // 기간이 짧으면 경과율이 33%씩 뚝뚝 끊겨 신호가 안 된다.
+    if (span < 3) return null;
+
+    const elapsed = Math.min(1, Math.max(0, (thisMonth - start + 1) / span));
+    const actual = calculateProgress(project) / 100;
+    const gap = elapsed - actual;
+    if (gap < SCHEDULE_RISK_GAP) return null;
+
+    // ── 여기부터는 「왜」다. 판정은 위에서 끝났다. ──
+    let due = 0, dueTotal = 0;
+    items.forEach(it => {
+      const raw = String(it.목표일 || '').trim();
+      if (!raw) return;
+      dueTotal += 1;
+      if (raw.slice(0, 10) <= todayLocalYmd()) due += 1;
+    });
+    const plannedRate = dueTotal > 0 ? due / dueTotal : null;
+
+    let kind, why;
+    if (elapsed >= 1) {
+      kind = 'overdue';
+      why = `과제 기한(${start}~${end}월)이 지났는데 진척이 ${Math.round(actual * 100)}% 입니다.`;
+    } else if (plannedRate !== null && plannedRate - actual >= 0.2) {
+      kind = 'behind';
+      why = `이번 달까지 ${Math.round(plannedRate * 100)}% 가 끝났어야 하는데 `
+          + `${Math.round(actual * 100)}% 입니다.`;
+    } else if (plannedRate !== null && plannedRate <= 0.1) {
+      kind = 'backloaded';
+      why = `기간의 ${Math.round(elapsed * 100)}% 가 지났는데 이번 달까지 목표일인 `
+          + `액션아이템이 없습니다. 남은 일이 뒤에 몰려 있습니다.`;
+    } else {
+      kind = 'behind';
+      why = `기간의 ${Math.round(elapsed * 100)}% 가 지났는데 진척은 `
+          + `${Math.round(actual * 100)}% 입니다.`;
+    }
+    return { kind, gap, elapsed, actual, why, label: SCHEDULE_RISK_LABEL[kind] };
   };
 
   // 최근 업데이트 여부 확인: 'week' | 'month' | null
@@ -1680,9 +1779,21 @@ const AllProjectsView = ({
         if (!selectedProjectStatuses.has(project.진행상태)) return false;
       }
 
+      // 일정 위험만 보기 — 「이 과제들만 따로 얘기한다」가 이 필터의 쓸모다.
+      if (riskFilter && scheduleRiskApplies && !getScheduleRisk(project)) return false;
+
       return true;
     });
-  }, [projects, currentYear, searchTerm, showTrash, recencyFilter, selectedProjectStatuses]);
+  }, [projects, currentYear, searchTerm, showTrash, recencyFilter, selectedProjectStatuses,
+      riskFilter, scheduleRiskApplies, thisMonth]);
+
+  /** 칩에 붙일 수. 눌러보기 전에 **몇 건인지 먼저 보여야** 누를 마음이 생긴다. */
+  const scheduleRiskCount = useMemo(() => {
+    if (!scheduleRiskApplies) return 0;
+    return projects.filter(p => !p._deleted
+      && projectYearOf(p) === Number(currentYear)
+      && getScheduleRisk(p)).length;
+  }, [projects, currentYear, scheduleRiskApplies, thisMonth]);
 
   /**
    * 사업부(설정 순서) → 과제명 순.
@@ -2405,6 +2516,20 @@ const AllProjectsView = ({
               <LegendIndicator $color="#e2e8f0" />
               그 외
             </LegendFilterButton>
+            {/* 일정 위험. **0건이면 칩을 안 그린다** — 눌러도 빈 목록이 나오는
+                칩이 늘 떠 있으면 다음부터 아무도 안 누른다. */}
+            {scheduleRiskApplies && scheduleRiskCount > 0 && (
+              <LegendFilterButton
+                $borderColor="#fecaca"
+                $textColor="#dc2626"
+                $active={riskFilter}
+                onClick={() => setRiskFilter(!riskFilter)}
+                title="기간이 지난 만큼 진척이 안 따라온 과제만 봅니다"
+              >
+                <AlertTriangle size={12} />
+                일정 위험 {scheduleRiskCount}
+              </LegendFilterButton>
+            )}
             {recencyFilter && (
               <LegendFilterButton
                 $borderColor="#94a3b8"
@@ -2952,6 +3077,18 @@ const AllProjectsView = ({
                       🔒 사업부내
                     </MetaBadge>
                   )}
+                  {/* 일정 위험. **필터를 켜지 않아도 보인다** — 걸러야만 보이는
+                      신호는 누가 걸러 볼 생각을 해야 존재를 안다. 이유는 title 에
+                      붙여 두어 왜 걸렸는지 그 자리에서 읽을 수 있게 한다. */}
+                  {scheduleRiskApplies && (() => {
+                    const risk = getScheduleRisk(project);
+                    if (!risk) return null;
+                    return (
+                      <MetaBadge $bg="#fef2f2" $color="#dc2626" title={risk.why}>
+                        ⚠ {risk.label}
+                      </MetaBadge>
+                    );
+                  })()}
                 </ProjectMeta>
 
                 {showTrash ? (
