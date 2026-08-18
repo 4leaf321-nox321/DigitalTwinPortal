@@ -60,31 +60,22 @@
 │   ├── frontend4.zip
 │   └── 지식그래프데이터.xlsx          # 샘플 데이터
 │
-├── useless/                          # 사용하지 않는 파일들
-│   ├── backups/
-│   ├── components/
-│   ├── debug-files/
-│   ├── main-app/
-│   ├── src/
-│   └── *.md                          # 구 문서 파일들
+├── docs/                             # 문서
+│   ├── deploy/                       # 배포·오프라인 설치
+│   ├── runbook/                      # 운영 런북 (0-0 ~ 통합 Phase1)
+│   ├── plan/                         # 계획·설계 기록
+│   └── guide/                        # 구조·기능 가이드 (이 문서)
 │
 ├── README.md                         # 프로젝트 README
-├── CSV_IMPORT_EXPORT_README.md       # CSV 가져오기/내보내기 문서
-├── HYBRID_CSV_GUIDE.md               # 하이브리드 CSV 가이드
+├── CONTRIBUTING.md
+├── CHANGELOG.md
+├── LICENSE
 │
-├── test-tech-radar-data.csv          # 테스트 데이터 파일
-├── test-tech-radar-data.json
-├── test-tech-radar-simple.json
-├── test-digital-twin-hybrid-sample.csv
-├── test-digital-twin-multi-table-sample.csv
-│
-├── frontend.zip                      # 프론트엔드 백업 아카이브
-├── frontend (2).zip
-│
-├── 디지털트윈 대시보드.xlsx           # 샘플 데이터 파일
+├── 디지털트윈 대시보드.xlsx           # 업무 문서
 ├── 디지털트윈 대시보드 new.xlsx
 ├── 통합 문서1.xlsx
-└── 로드맵 관련 모듈.txt               # 메모 파일
+├── 플랫폼현황.xlsx
+└── 신규개발기능.pptx
 ```
 
 ---
@@ -338,7 +329,7 @@ shared/
 ### Swimlane Chart
 - **프로세스**: id, name, lane, connections
 
-자세한 내용은 `CSV_IMPORT_EXPORT_README.md`를 참조하세요.
+자세한 내용은 `docs/guide/CSV_IMPORT_EXPORT_README.md`를 참조하세요.
 
 ---
 
@@ -354,8 +345,11 @@ shared/
 ### 파일 관리 규칙
 
 - 700줄 이상 파일은 자동으로 리팩토링하여 분할
-- 백업 파일은 `파일명.backup날짜` 형식으로 생성
-- 사용하지 않는 파일은 `useless/` 폴더로 이동
+- **손으로 백업 사본을 만들지 않는다.** `파일명.backup날짜` 를 옆에 두면
+  어느 쪽이 정본인지 알 수 없고, 검색이 늘 두 벌씩 걸린다. 지난 판이
+  필요하면 git 에서 꺼낸다 — 그게 git 이 하는 일이다.
+- 안 쓰는 파일은 **지운다.** 옆에 모아 두면 어느 쪽이 정본인지 알 수 없고,
+  지난 판은 어차피 git 히스토리에 있다.
 
 ### 코드 컨벤션
 
@@ -409,8 +403,8 @@ npm run preview
 
 - **README.md**: 프로젝트 전체 개요
 - **PROJECT_STRUCTURE.md**: 상세 프로젝트 구조 (이 문서)
-- **CSV_IMPORT_EXPORT_README.md**: CSV 가져오기/내보내기 가이드
-- **HYBRID_CSV_GUIDE.md**: 하이브리드 CSV 포맷 가이드
+- **docs/guide/CSV_IMPORT_EXPORT_README.md**: CSV 가져오기/내보내기 가이드
+- **docs/guide/HYBRID_CSV_GUIDE.md**: 하이브리드 CSV 포맷 가이드
 - **MODULE_CREATION_GUIDE.md**: 새 모듈 생성 가이드
 
 ---

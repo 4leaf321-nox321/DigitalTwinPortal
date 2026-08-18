@@ -107,12 +107,12 @@
 │   ├── PROJECT_ARCHITECTURE.md
 │   └── MODULE_TEMPLATE/      # 새 모듈 생성용 템플릿
 │
-├── CSV_IMPORT_EXPORT_README.md  # CSV 가져오기/내보내기 문서
-├── test-tech-radar-data.csv     # 테스트 데이터 파일들
-├── test-tech-radar-data.json
-├── test-tech-radar-simple.json
+├── docs/                        # 📚 문서
+│   ├── deploy/                  # 배포·오프라인 설치
+│   ├── runbook/                 # 운영 런북
+│   ├── plan/                    # 계획·설계 기록
+│   └── guide/                   # 구조·기능 가이드
 ├── 통합 문서1.xlsx
-├── useless/                     # 사용하지 않는 파일들
 └── README.md                    # 📖 이 파일
 ```
 
@@ -192,7 +192,9 @@
 
 ### 파일 관리 규칙
 - 700줄 이상 파일은 자동으로 리팩토링하여 분할
-- 백업 파일은 `파일명.backup날짜` 형식으로 생성
+- **손으로 백업 사본을 만들지 않는다.** `파일명.backup날짜` 를 옆에 두면
+  어느 쪽이 정본인지 알 수 없고, 검색이 늘 두 벌씩 걸린다. 지난 판이
+  필요하면 git 에서 꺼낸다 — 그게 git 이 하는 일이다.
 
 ## 📊 데이터 형식
 
@@ -206,7 +208,7 @@
 핵심 흐름
 - 로컬 개발 → Push → GitHub Actions(Windows)에서 빌드/패키지 → Tag(push)로 Release 생성 → 운영서버에서 `deploy.ps1` 실행
 
-배포 절차 전체는 [DEPLOY_WINDOWS.md](DEPLOY_WINDOWS.md)를 참고하세요. 요약하면 태그를 푸시해
+배포 절차 전체는 [docs/deploy/DEPLOY_WINDOWS.md](docs/deploy/DEPLOY_WINDOWS.md)를 참고하세요. 요약하면 태그를 푸시해
 릴리스를 만든 뒤, 운영서버에서 앱을 중지하고 아래를 실행합니다.
 
 ```powershell
@@ -253,7 +255,7 @@ powershell -File .\scripts\ci\package_deploy.ps1
 - **Tech Radar**: 기술/성숙도 데이터
 - **Swimlane Chart**: 프로세스/플로우 데이터
 
-자세한 내용은 `CSV_IMPORT_EXPORT_README.md`를 참조하세요.
+자세한 내용은 `docs/guide/CSV_IMPORT_EXPORT_README.md`를 참조하세요.
 
 ## 📁 아키텍처
 
