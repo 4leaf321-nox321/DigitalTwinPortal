@@ -128,6 +128,46 @@ export const strategyApi = {
   loadSurveyVoices: (year) =>
     request(`/plans/${year}/survey-voices`, { method: 'POST', body: '{}' }),
 
+  /** ⑤ 기획서. **본문은 서버가 매번 조립한다** — 앞 단계를 고치면 따라 바뀐다.
+   *  확정한 뒤에는 그 시점이 굳는다. */
+  getDocument: (year) => request(`/plans/${year}/document`),
+
+  /** 사람이 정하는 것만 보낸다 — 구간 포함 여부와 손으로 쓴 글. */
+  updateDocument: (year, sections) =>
+    request(`/plans/${year}/document`, {
+      method: 'PUT',
+      body: JSON.stringify({ sections }),
+    }),
+
+  setDocumentStatus: (year, status) =>
+    request(`/plans/${year}/document/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
+
+  /** ⚠️ 파일이라 request() 를 안 쓴다 — 그쪽은 JSON 을 기대한다.
+   *  브라우저가 내려받게 하려면 Blob 을 만들어 링크를 눌러 줘야 한다. */
+  downloadDocument: async (year) => {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(`${API_BASE}/plans/${year}/document/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      let message = `내보내기 실패 (${res.status})`;
+      try { message = (await res.json())?.message || message; } catch { /* 본문 없음 */ }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${year}년_디지털트윈_전략기획서.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
   /** 진단 임계값. 기본값과 다른 항목만 저장된다. */
   updateThresholds: (thresholds) =>
     request('/settings/thresholds', {

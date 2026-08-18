@@ -374,3 +374,36 @@ class StrategyGate(BaseModel):
                             name='uq_strategy_gate_target'),
         db.Index('ix_strategy_gate_target', 'target_type', 'target_id'),
     )
+
+
+class StrategyDocument(BaseModel):
+    """
+    ⑤ 기획서. **전략 하나에 한 벌**이다.
+
+    ⚠️ 본문을 저장하지 않는다. 진단·이슈·SWOT·솔루션은 이미 각 단계에 있고,
+       그것을 여기에 복사해 두면 그 순간부터 둘이 갈라진다. 평소에는 볼 때마다
+       **지금 데이터로 조립**한다(document.assemble).
+
+       여기 담기는 것은 두 가지뿐이다.
+         sections  사람이 정한 것 — 포함 여부와 손으로 쓴 구간의 글
+         snapshot  **확정한 시점**의 조립 결과
+
+    ⚠️ **확정하면 굳는다.** 승인받은 기획서가 뒤에서 조용히 바뀌면 그 문서로
+       한 결정을 되짚을 수 없다. 그래서 확정 시점의 조립 결과를 통째로 복사해
+       둔다. 다시 확정하면 그때
+       것으로 덮는다(판을 쌓지는 않는다. 필요해지면 그때 표를 나눈다).
+    """
+    __tablename__ = 'strategy_document'
+
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey('strategy_plan.id', ondelete='CASCADE'),
+        nullable=False, unique=True, index=True
+    )
+    # {구간키: {'included': bool, 'text': str}}
+    sections = db.Column(JSON, nullable=False, default=dict)
+    # draft | confirmed
+    status = db.Column(db.String(10), nullable=False, default='draft')
+    confirmed_at = db.Column(db.DateTime)
+    confirmed_by = db.Column(db.Integer)
+    # 확정 시점의 조립 결과. draft 면 None 이다.
+    snapshot = db.Column(JSON)

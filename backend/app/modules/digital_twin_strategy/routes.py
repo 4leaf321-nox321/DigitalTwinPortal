@@ -12,11 +12,12 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.extensions import db
-from app.shared.timeutil import KST
+from app.shared.timeutil import KST, iso_kst
 from app.modules.auth.models import User, UserRole
 from .models import (
     StrategyPlan, StrategyAssessment, StrategyMetricTarget, StrategyCrux,
     StrategyIssue, StrategyElement, StrategySolution, StrategyGate,
+    StrategyDocument,
 )
 from .evidence import get_evidence_source
 from .metrics import (
@@ -36,6 +37,9 @@ from .issues import (
 from .elements import (
     derive_element_candidates, derive_survey_candidates as derive_element_survey,
     summarize_elements,
+)
+from .document import (
+    SECTIONS as DOC_SECTIONS, SECTION_KEYS, MANUAL_KEYS, assemble, summarize,
 )
 from .definitions import (
     CATEGORIES, CATEGORY_ORGANIZATION, DIMENSION_KEYS_BY_CATEGORY,
@@ -883,6 +887,178 @@ def set_solution_gate(year, solution_id, gate):
                                  'status': status}})
     except Exception:
         db.session.rollback()
+        return _crashed()
+
+
+def _document_row(plan):
+    """기획서 행. 없으면 만든다 — 전략마다 한 벌이라 따로 만들 이유가 없다."""
+    row = StrategyDocument.query.filter_by(plan_id=plan.id).first()
+    if not row:
+        row = StrategyDocument(plan_id=plan.id, sections={}, status='draft')
+        db.session.add(row)
+        db.session.commit()
+    return row
+
+
+def _document_view(plan, row):
+    """확정본이면 굳은 것을, 아니면 지금 데이터로 조립한 것을 돌려준다."""
+    if row.status == 'confirmed' and row.snapshot:
+        sections = row.snapshot.get('sections') or []
+    else:
+        payload = build_plan_payload(plan)
+        sections = assemble(
+            payload,
+            [{'id': d.id, 'name': d.name} for d in get_target_divisions()],
+            list_kpi_definitions(),
+            row.sections or {},
+        )
+    return {
+        'status': row.status,
+        # 오프셋 없이 내보내면 브라우저가 로컬로 읽어 아홉 시간 어긋난다.
+        'confirmedAt': iso_kst(row.confirmed_at),
+        'sections': sections,
+        'summary': summarize(sections),
+        # 화면이 목차와 도움말을 여기서 받는다. 두 곳에 적으면 갈라진다.
+        'definitions': DOC_SECTIONS,
+    }
+
+
+@bp.route('/plans/<int:year>/document', methods=['GET'])
+@view_required
+def get_document(year):
+    """기획서를 본다.
+
+    ⚠️ **평소에는 살아 있다.** 진단을 고치면 문서도 따라 바뀐다 — 본문을
+       복사해 두지 않기 때문이다. 확정한 뒤에는 그 시점이 굳는다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        return jsonify({'success': True,
+                        'data': _document_view(plan, _document_row(plan))})
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/document', methods=['PUT'])
+@edit_required
+def update_document(year):
+    """사람이 정하는 것만 저장한다 — 구간 포함 여부와 손으로 쓴 글."""
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        row = _document_row(plan)
+        if row.status == 'confirmed':
+            # ⚠️ 확정본을 고치면 승인받은 문서가 조용히 달라진다.
+            return _error('확정된 기획서입니다. 되돌린 뒤에 고치세요.', 409)
+
+        payload = request.get_json() or {}
+        raw = payload.get('sections')
+        if not isinstance(raw, dict):
+            return _error('sections 는 객체여야 합니다.', 400)
+
+        saved = dict(row.sections or {})
+        for key, conf in raw.items():
+            if key not in SECTION_KEYS:
+                return _error(f'알 수 없는 구간입니다: {key}', 400)
+            if not isinstance(conf, dict):
+                return _error(f'{key} 설정이 올바르지 않습니다.', 400)
+            entry = dict(saved.get(key) or {})
+            if 'included' in conf:
+                entry['included'] = bool(conf['included'])
+            if 'text' in conf:
+                if key not in MANUAL_KEYS:
+                    # 조립 구간에 글을 넣게 두면 그 글이 단계와 갈라진다.
+                    return _error(f'{key} 는 단계에서 조립됩니다. 글을 넣을 수 '
+                                  f'없습니다.', 400)
+                entry['text'] = (conf['text'] or '')[:20000]
+            saved[key] = entry
+
+        row.sections = saved
+        db.session.commit()
+        return jsonify({'success': True, 'data': _document_view(plan, row)})
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/document/status', methods=['PUT'])
+@edit_required
+def set_document_status(year):
+    """확정하거나 되돌린다.
+
+    확정하면 **그 시점의 조립 결과를 통째로 복사**해 둔다. 그래야 승인받은
+    문서가 뒤에서 바뀌지 않는다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        row = _document_row(plan)
+
+        status = ((request.get_json() or {}).get('status') or '').strip()
+        if status not in ('draft', 'confirmed'):
+            return _error(f'알 수 없는 상태입니다: {status}', 400)
+
+        if status == 'confirmed':
+            view = _document_view(plan, StrategyDocument(
+                plan_id=plan.id, sections=row.sections, status='draft'))
+            row.snapshot = {'sections': view['sections']}
+            # ⚠️ **UTC 로 저장한다.** 이 표의 created_at·updated_at 이 전부
+            #    utcnow 이고, 직렬화가 「naive 는 UTC」로 보고 KST 를 붙인다
+            #    (app/shared/timeutil.py). 여기만 로컬시로 넣으면 한 표에 시계가
+            #    두 개가 되고, 확정 시각이 아홉 시간 뒤로 표시된다.
+            row.confirmed_at = datetime.utcnow()
+            row.confirmed_by = int(get_jwt_identity())
+        else:
+            # 되돌리면 굳은 것을 버린다. 남겨 두면 다음에 확정할 때 어느 쪽이
+            # 보이는지 헷갈린다.
+            row.snapshot = None
+            row.confirmed_at = None
+            row.confirmed_by = None
+        row.status = status
+
+        # ⚠️ **전략의 상태는 기획서를 따라간다.** 두 곳에서 따로 정하게 두면
+        #    "전략은 확정인데 기획서는 초안" 같은 상태가 생기고, 그때 무엇이
+        #    맞는지 아무도 모른다. 확정의 정의는 하나다 — 기획서를 굳혔는가.
+        plan.status = status
+        db.session.commit()
+        return jsonify({'success': True, 'data': _document_view(plan, row)})
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/document/export', methods=['GET'])
+@view_required
+def export_document(year):
+    """Word 로 내보낸다.
+
+    ⚠️ **슬라이드가 아니라 문서다.** 난제·발견 사항·솔루션의 근거는 문장이라,
+       슬라이드에 넣으면 글자만 빽빽한 장이 된다. 발표용이 필요하면 이 문서에서
+       추려 만드는 것이 맞다.
+    """
+    from io import BytesIO
+    from flask import send_file
+    from .docx_writer import write_document
+
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+        view = _document_view(plan, _document_row(plan))
+
+        stream = BytesIO()
+        write_document(stream, plan, view)
+        stream.seek(0)
+        return send_file(
+            stream, as_attachment=True,
+            download_name=f'{plan.year}년_디지털트윈_전략기획서.docx',
+            mimetype='application/vnd.openxmlformats-officedocument'
+                     '.wordprocessingml.document')
+    except Exception:
         return _crashed()
 
 
