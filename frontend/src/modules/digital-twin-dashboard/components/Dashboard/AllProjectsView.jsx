@@ -1540,8 +1540,8 @@ const RiskKindCell = styled.button`
 // 「기간이 지난 만큼 진척이 안 따라온다」로 볼 최소 격차.
 //
 // 0.2 인 이유는 실측이다(2026-08-18 개발 DB, 2026년 **살아 있는** 진행 과제 94건).
-//     0.1 → 30건(32%)   0.15 → 14건   0.2 → 6건(6%)   0.25 → 4건   0.3 → 0건
-// 「따로 얘기할 목록」이라 서른 줄이면 안 읽힌다. 6% 가 그 크기다.
+//     0.1 → 14건(15%)   0.15 → 7건   0.2 → 4건(4%)   0.25 → 0건
+// 「따로 얘기할 목록」이라 서른 줄이면 안 읽힌다. 4% 가 그 크기다.
 //
 // ⚠️ **처음에 0.3 으로 잡았다가 0건이 떴다.** 임계값을 삭제된 과제까지 포함해
 //    쟀기 때문이다 — 휴지통에 시험용 과제(「테스트과제33」 같은)가 쌓여 있었고,
@@ -1605,6 +1605,16 @@ const AllProjectsView = ({
   //    「기한 내 못 끝낸 과제」라는 다른 이야기이므로 여기서는 아예 안 짚는다.
   const thisYear = new Date().getFullYear();
   const thisMonth = new Date().getMonth() + 1;
+  // 이번 달이 **얼마나 지났는가**. 8월 18일이면 0.58 이다.
+  //
+  // ⚠️ 이걸 안 세면 이번 달을 통째로 지나간 것으로 친다. 그러면 8~12월 과제가
+  //    8월 1일부터 「경과 100%」가 되고, 종료월에 들어서는 순간 기한이 지난
+  //    것으로 읽힌다(2026-08-18 신고: 8월까지인 과제가 18일에 기한 지남).
+  //
+  //    과제의 시작·종료는 월 단위라 그 이상 쪼갤 수 없지만, **오늘이 며칠인지는
+  //    아는 값**이다. 그것까지 버릴 이유가 없다.
+  const thisMonthProgress =
+    new Date().getDate() / new Date(thisYear, thisMonth, 0).getDate();
   const scheduleRiskApplies = Number(currentYear) === thisYear && !showTrash;
   const [selectedProjectStatuses, setSelectedProjectStatuses] = useState(new Set()); // 과제 상태 (진행상태) 필터
 
@@ -1705,7 +1715,9 @@ const AllProjectsView = ({
     // 기간이 짧으면 경과율이 33%씩 뚝뚝 끊겨 신호가 안 된다.
     if (span < 3) return null;
 
-    const elapsed = Math.min(1, Math.max(0, (thisMonth - start + 1) / span));
+    // 지난 달까지는 통째로, 이번 달은 지나간 만큼만.
+    const elapsed = Math.min(1, Math.max(0,
+      ((thisMonth - start) + thisMonthProgress) / span));
     const actual = calculateProgress(project) / 100;
     const gap = elapsed - actual;
     if (gap < SCHEDULE_RISK_GAP) return null;
@@ -1721,7 +1733,10 @@ const AllProjectsView = ({
     const plannedRate = dueTotal > 0 ? due / dueTotal : null;
 
     let kind, why;
-    if (elapsed >= 1) {
+    // ⚠️ 「기한 지남」은 **종료월이 실제로 지났을 때만**이다. 경과율로 판정하면
+    //    종료월 말일에 반올림 언저리에서 갈리는데, 마감 당일은 아직 지난 것이
+    //    아니다. 달 비교는 그런 흔들림이 없다.
+    if (thisMonth > end) {
       kind = 'overdue';
       why = `과제 기한(${start}~${end}월)이 지났는데 진척이 ${Math.round(actual * 100)}% 입니다.`;
     } else if (plannedRate !== null && plannedRate - actual >= 0.2) {
@@ -1846,7 +1861,7 @@ const AllProjectsView = ({
       return true;
     });
   }, [projects, currentYear, searchTerm, showTrash, recencyFilter, selectedProjectStatuses,
-      riskFilter, riskKind, scheduleRiskApplies, thisMonth]);
+      riskFilter, riskKind, scheduleRiskApplies, thisMonth, thisMonthProgress]);
 
   /** 유형 × 사업부. 「따로 얘기한다」면 **어느 조직 문제인지**가 먼저 나와야 한다.
    *
@@ -1885,7 +1900,7 @@ const AllProjectsView = ({
         kind: k, label: SCHEDULE_RISK_LABEL[k], ...byKind[k],
       })),
     };
-  }, [projects, currentYear, scheduleRiskApplies, thisMonth]);
+  }, [projects, currentYear, scheduleRiskApplies, thisMonth, thisMonthProgress]);
 
   /** 칩에 붙일 수. 눌러보기 전에 **몇 건인지 먼저 보여야** 누를 마음이 생긴다. */
   const scheduleRiskCount = scheduleRiskSummary.total;
