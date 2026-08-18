@@ -190,6 +190,15 @@ export const strategyApi = {
     URL.revokeObjectURL(url);
   },
 
+  /** 목표를 한 번에 한 단계 위로. **현재 수준은 안 건드린다** —
+   *  목표는 의지의 표현이라 일괄로 정해도 거짓이 안 되지만, 현재를 복사하면
+   *  안 본 칸이 매긴 값으로 남는다. */
+  bumpTargets: (year, step = 1) =>
+    request(`/plans/${year}/assessments/targets/bump`, {
+      method: 'POST',
+      body: JSON.stringify({ step }),
+    }),
+
   /** 진단 임계값. 기본값과 다른 항목만 저장된다. */
   updateThresholds: (thresholds) =>
     request('/settings/thresholds', {

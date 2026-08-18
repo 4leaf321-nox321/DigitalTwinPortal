@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { HelpCircle, ClipboardList } from 'lucide-react';
+import { HelpCircle, ClipboardList , ArrowUp } from 'lucide-react';
 import MetricPanel from './MetricPanel';
 
 // ① 현재 상태 진단. 세 겹이다.
@@ -200,10 +200,40 @@ const LegendNum = styled.span`
   color: #7c3aed;
 `;
 
+const BumpRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.875rem;
+`;
+
+const BumpButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #ddd6fe;
+  border-radius: 0.375rem;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  &:hover { background: #ede9fe; border-color: #c4b5fd; }
+`;
+
+const BumpHint = styled.span`
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.55;
+`;
+
 const AssessmentView = ({
   categories, divisions, assessments,
   metricDefinitions, metrics, metricsError,
-  onChange, onTargetChange, hideMetrics = false,
+  onChange, onTargetChange, onBumpTargets, hideMetrics = false,
 }) => {
   const [activeDivision, setActiveDivision] = useState(divisions?.[0]?.id ?? null);
 
@@ -225,19 +255,23 @@ const AssessmentView = ({
         a.current_level !== null && a.current_level !== undefined
     ).length;
 
+  // onChange 를 안 넘겨받았으면 조회 전용이다 — 눌러도 아무 일 없게 두지 않고
+  // 아예 못 누르게 한다. 눌리는데 안 바뀌면 사람은 고장으로 읽는다.
   const renderLevels = (category, dimension, field, value, levels) => (
     <LevelPicker>
       {levels.map(level => (
         <LevelButton
           key={level.value}
           $active={value === level.value}
-          onClick={() => onChange(division.id, category, dimension, { [field]: level.value })}
+          disabled={!onChange}
+          onClick={() => onChange
+            && onChange(division.id, category, dimension, { [field]: level.value })}
           title={`${level.value} ${level.label}\n${level.detail}`}
         >
           {level.value}
         </LevelButton>
       ))}
-      {value !== null && value !== undefined && (
+      {onChange && value !== null && value !== undefined && (
         // 0 과 미입력은 다른 뜻이다. 지우면 null 로 되돌린다.
         <ClearButton
           onClick={() => onChange(division.id, category, dimension, { [field]: null })}
@@ -263,6 +297,24 @@ const AssessmentView = ({
           </DivisionTab>
         ))}
       </DivisionTabs>
+
+      {/* ⚠️ **진단 격자가 50칸이다.** 현재와 목표를 따로 매기면 클릭이 백 번이고,
+          그 벽에서 사람은 두 번째 해에 이 화면을 안 연다. 그런데 목표는 실제로
+          거의 늘 「올해 한 단계」다.
+
+          ⚠️ **현재 레벨은 손대지 않는다.** 목표는 의지의 표현이라 일괄로 정해도
+             거짓이 안 되지만, 현재를 복사하면 안 본 칸이 매긴 값으로 남는다. */}
+      {onBumpTargets && (
+        <BumpRow>
+          <BumpButton onClick={onBumpTargets}>
+            <ArrowUp size={14} /> 목표를 전부 한 단계 위로
+          </BumpButton>
+          <BumpHint>
+            현재 수준을 매긴 칸만, <strong>목표가 빈 칸만</strong> 채웁니다 —
+            이미 정한 목표와 현재 수준은 그대로 둡니다.
+          </BumpHint>
+        </BumpRow>
+      )}
 
       {(categories || []).map(cat => (
         <Section key={cat.key}>
@@ -308,6 +360,7 @@ const AssessmentView = ({
                       : (a.gap > 0 ? `+${a.gap}` : a.gap)}
                   </Gap>
                   <NoteInput
+                    readOnly={!onChange}
                     key={`${division.id}-${cat.key}-${dim.key}-${a.note || ''}`}
                     defaultValue={a.note || ''}
                     placeholder="판단 근거나 메모"

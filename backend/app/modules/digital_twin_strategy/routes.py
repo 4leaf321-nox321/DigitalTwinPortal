@@ -157,6 +157,61 @@ def get_meta():
     })
 
 
+@bp.route('/plans/<int:year>/assessments/targets/bump', methods=['POST'])
+@edit_required
+def bump_targets(year):
+    """**목표를 한 번에 한 단계 위로.**
+
+    ⚠️ 진단 격자가 사업부 5 × 차원 10 = 50칸이고, 현재와 목표를 따로 매기면
+       클릭이 백 번이다. 그 벽에서 사람은 두 번째 해에 화면을 안 연다.
+       그런데 목표는 실제로 거의 늘 「올해 한 단계」다.
+
+    ⚠️ **현재 레벨은 손대지 않는다.** 목표는 의지의 표현이라 일괄로 정해도
+       거짓이 안 되지만, 현재 레벨을 복사하면 **안 본 칸이 매긴 값으로 남는다** —
+       이 모듈이 계속 피해 온 것(안 매긴 것을 0으로 두지 않는다)과 같은 종류다.
+
+    ⚠️ **이미 정한 목표는 안 덮는다.** 사람이 신중히 정한 값이 단추 하나로
+       날아가면 안 된다. 덮고 싶으면 overwrite 를 준다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        payload = request.get_json() or {}
+        step = int(payload.get('step') or 1)
+        overwrite = bool(payload.get('overwrite'))
+        if not 1 <= step <= 4:
+            return _error('한 번에 1~4단계까지만 올립니다.', 400)
+
+        rows = StrategyAssessment.query.filter_by(plan_id=plan.id).all()
+        changed, skipped_empty, kept = 0, 0, 0
+        for a in rows:
+            if a.current_level is None:
+                # 현재를 안 매긴 칸은 기준이 없어 목표를 정할 수 없다.
+                skipped_empty += 1
+                continue
+            if a.target_level is not None and not overwrite:
+                kept += 1
+                continue
+            wanted = min(LEVEL_MAX, a.current_level + step)
+            if wanted != a.target_level:
+                a.target_level = wanted
+                changed += 1
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': {
+            'changed': changed,
+            # 안 채운 이유를 돌려준다. 「50칸인데 12칸만 바뀌었다」가 왜인지
+            # 화면이 말할 수 있어야 한다.
+            'skippedNoLevel': skipped_empty,
+            'keptExisting': kept,
+        }})
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
 @bp.route('/settings/thresholds', methods=['PUT'])
 @edit_required
 def update_thresholds():
