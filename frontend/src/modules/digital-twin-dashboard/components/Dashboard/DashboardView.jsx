@@ -5820,15 +5820,8 @@ const DashboardView = ({
     const acPairs = perfs.filter(p => getActual(p) !== null && isValidVal(p.현재수준));
     const actualSaving = savingOf(acPairs, p => getActual(p));
 
-    // ── 달성률 모수: 목표·현재·실적이 **모두** 있는 성과만 ──
-    //
-    // 두 막대는 서로 다른 성과 집합을 쓴다(목표만 적힌 성과, 실적만 적힌 성과가
-    // 섞인다). 그 둘을 그냥 나누면 분모와 분자의 모수가 달라 달성률이 엉뚱해진다.
-    // 그래서 달성률은 **둘 다 적힌 성과**만으로 따로 낸다.
-    const ratePairs = perfs.filter(p =>
-      isValidVal(p.목표수준) && isValidVal(p.현재수준) && getActual(p) !== null);
-    const rateTargetSaving = savingOf(ratePairs, p => convertedNum(p.목표수준, p));
-    const rateActualSaving = savingOf(ratePairs, p => getActual(p));
+    // 달성률은 이 두 값(목표·실적 절감액)을 그대로 나눈다 — execAchievementRate 참고.
+    // 분모가 **세운 목표 전부**여야 해서 따로 모수를 잡지 않는다.
 
     // 검증 모달용 raw 데이터 (각 성과의 변환 후 값 + 포함 여부)
     const sourceRows = perfs.map(p => {
@@ -5851,7 +5844,6 @@ const DashboardView = ({
         actual: actualNum,
         usedInTarget: targetNum !== null && currentNum !== null,
         usedInActual: actualNum !== null && currentNum !== null,
-        usedInRate: targetNum !== null && currentNum !== null && actualNum !== null,
         projects: getLinkedProjects(p)
       };
     });
@@ -5864,10 +5856,6 @@ const DashboardView = ({
       // 툴팁 부호 표시용 (signed 절감액)
       targetSaving: round(targetSaving),
       actualSaving: round(actualSaving),
-      // 달성률용 (목표·실적 모두 적힌 성과만)
-      rateTargetSaving: round(rateTargetSaving),
-      rateActualSaving: round(rateActualSaving),
-      ratePairCount: ratePairs.length,
       sourceRows,
       tcPairCount: tcPairs.length,
       acPairCount: acPairs.length,
@@ -5895,15 +5883,18 @@ const DashboardView = ({
 
   // 달성률 = |실적 절감액| / |목표 절감액|.
   //
-  // 반드시 **같은 성과 집합**에서 나온 두 값(rate*)으로만 낸다. 막대에 쓰는
-  // targetSaving/actualSaving 을 그대로 나누면, 목표만 적힌 성과와 실적만 적힌
-  // 성과 때문에 분모·분자의 모수가 달라 몇십 배짜리 달성률이 나온다.
+  // 분모는 **세운 목표 전부**다 — 실적이 아직 안 들어온 성과의 목표도 분모에 든다.
+  // 조직이 세운 목표 대비 지금까지 얼마나 왔는지를 보는 자리라, 실적이 있는 것만
+  // 골라 견주면 아직 손도 못 댄 목표가 셈에서 빠져 실제보다 높게 나온다.
+  // 그래서 화면의 두 막대(목표·실적)를 그대로 나눈다.
+  //
+  // 실적이 하나도 없으면 0% 다(미기록이 아니라 '아직 못 했다'로 읽는다).
+  // 목표가 없거나 0 이면 나눌 것이 없어 '–' 다.
   const execAchievementRate = (g) => {
-    if (!g || !g.ratePairCount) return null;
-    const t = g.rateTargetSaving;
-    const a = g.rateActualSaving;
-    if (t == null || a == null || Math.abs(t) <= 0.001) return null;
-    return (Math.abs(a) / Math.abs(t)) * 100;
+    if (!g) return null;
+    const t = g.targetSaving;
+    if (t == null || Math.abs(t) <= 0.001) return null;
+    return (Math.abs(g.actualSaving ?? 0) / Math.abs(t)) * 100;
   };
 
   // KPI 카드 집계 — 환산 후 단위별 묶음 배열을 돌려준다.
@@ -7862,23 +7853,19 @@ const DashboardView = ({
                                       fontSize: 12
                                     }}>
                                       {items.map(it => {
-                                        // 달성률은 목표·실적이 **모두 적힌** 성과만으로 낸다.
-                                        // 두 막대는 서로 다른 성과 집합을 쓰므로 그대로 나누면 모수가 어긋난다.
+                                        // 달성률 = 실적 막대 ÷ 목표 막대. 분모는 세운 목표 전부다.
                                         const rate = execAchievementRate(it);
                                         const rateColor = rate == null ? '#94a3b8'
                                                         : rate >= 100 ? '#10b981'
                                                         : rate >= 70 ? '#f59e0b' : '#ef4444';
-                                        const partial = rate != null
-                                          && (it.ratePairCount < it.tcPairCount || it.ratePairCount < it.acPairCount);
                                         return (
                                           <div key={it.id} style={{ flex: 1, textAlign: 'center', whiteSpace: 'nowrap' }}>
                                             <span style={{ color: '#64748b' }}>달성률</span>{' '}
                                             <span style={{ fontWeight: 700, color: rateColor }}
                                               title={rate == null
-                                                ? '목표와 실적이 모두 적힌 성과가 없어 달성률을 낼 수 없습니다'
-                                                : `목표·실적이 모두 적힌 성과 ${it.ratePairCount}개 기준`}>
+                                                ? '목표가 없어 달성률을 낼 수 없습니다'
+                                                : `전체 목표(${it.tcPairCount}개) 대비 실적(${it.acPairCount}개)`}>
                                               {rate != null ? `${rate.toFixed(1)}%` : '–'}
-                                              {partial ? '*' : ''}
                                             </span>
                                           </div>
                                         );
@@ -7928,7 +7915,7 @@ const DashboardView = ({
                                                 </div>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 3, paddingTop: 3, borderTop: '1px solid #f1f5f9', color: '#94a3b8' }}>
                                                   <span>집계 대상</span>
-                                                  <span>목표 {it.tcPairCount} · 실적 {it.acPairCount} · 달성률 {it.ratePairCount}</span>
+                                                  <span>목표 {it.tcPairCount} · 실적 {it.acPairCount}</span>
                                                 </div>
                                               </div>
                                             );
@@ -7993,12 +7980,12 @@ const DashboardView = ({
                               {cards.map(card => {
                                 // 단위가 둘 이상이면 차트를 나눠 그린다. 하나면 지금까지와 똑같이 보인다.
                                 const showUnitCaption = card.unitCharts.length > 1;
-                                // 카드 달성률: 소분류들의 '목표·실적 모두 적힌' 절감액만 합쳐서 낸다.
+                                // 카드 달성률: 소분류들의 목표·실적 절감액을 그대로 합쳐서 낸다.
+                                // 분모는 세운 목표 전부 — 실적이 없는 소분류의 목표도 든다.
                                 const allSubs = card.unitCharts.flatMap(c => c.subcategories);
                                 const cardRate = execAchievementRate({
-                                  ratePairCount: allSubs.reduce((n, s) => n + (s.ratePairCount || 0), 0),
-                                  rateTargetSaving: allSubs.reduce((n, s) => n + Math.abs(s.rateTargetSaving || 0), 0),
-                                  rateActualSaving: allSubs.reduce((n, s) => n + Math.abs(s.rateActualSaving || 0), 0)
+                                  targetSaving: allSubs.reduce((n, s) => n + Math.abs(s.targetSaving || 0), 0),
+                                  actualSaving: allSubs.reduce((n, s) => n + Math.abs(s.actualSaving || 0), 0)
                                 });
                                 const rateColor = cardRate == null ? '#94a3b8'
                                                 : cardRate >= 100 ? '#10b981'
@@ -8023,7 +8010,7 @@ const DashboardView = ({
                                       </div>
                                       {cardRate != null && (
                                         <span style={{ fontSize: '0.78rem', fontWeight: 700, color: rateColor }}
-                                          title="목표와 실적이 모두 적힌 성과만으로 낸 달성률입니다">
+                                          title="세운 목표 전부 대비 실적입니다">
                                           달성률 {cardRate.toFixed(1)}%
                                         </span>
                                       )}
@@ -8101,7 +8088,7 @@ const DashboardView = ({
                                                       </div>
                                                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 3, paddingTop: 3, borderTop: '1px solid #f1f5f9', color: '#94a3b8' }}>
                                                         <span>집계 대상</span>
-                                                        <span>목표 {sub.tcPairCount} · 실적 {sub.acPairCount} · 달성률 {sub.ratePairCount}</span>
+                                                        <span>목표 {sub.tcPairCount} · 실적 {sub.acPairCount}</span>
                                                       </div>
                                                     </div>
                                                   );
@@ -8946,8 +8933,8 @@ const DashboardView = ({
                             모집단 {item.acPairCount}개 (실적·현재 모두 유효)
                           </div>
                         </div>
-                        {/* 위 두 값은 모집단이 서로 다를 수 있다. 달성률은 그래서
-                            목표·실적이 **모두 적힌** 성과만으로 따로 낸다. */}
+                        {/* 달성률의 분모는 **세운 목표 전부**다 — 실적이 아직 없는
+                            성과의 목표도 든다. 그래서 위 두 모집단이 달라도 그대로 나눈다. */}
                         <div>
                           <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>달성률</div>
                           <div style={{ fontSize: '1.1rem', fontWeight: 700, color: color }}>
@@ -8956,7 +8943,7 @@ const DashboardView = ({
                               : `${execAchievementRate(item).toFixed(1)}%`}
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
-                            모집단 {item.ratePairCount ?? 0}개 (목표·실적 모두 유효)
+                            실적 ÷ 목표 (실적 미기입 성과의 목표도 분모에 듦)
                           </div>
                         </div>
                       </div>
