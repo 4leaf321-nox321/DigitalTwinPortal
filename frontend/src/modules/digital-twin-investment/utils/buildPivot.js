@@ -63,8 +63,13 @@ const compareLabel = (a, b, order = []) => {
   return a.localeCompare(b, 'ko');
 };
 
-const dimValue = (row, key) => (isBlank(row[key]) ? UNSET : String(row[key]));
-const yearOf = (row) => (isBlank(row.year) ? NO_YEAR : String(row.year));
+// 기준열 값 하나를 꺼낸다. 비어 있으면 UNSET. 우측 요약 패널도 같은 규칙을 써야
+// 표에서 고른 칸과 그래프의 범위가 어긋나지 않는다.
+export const dimValueOf = (row, key) => (isBlank(row[key]) ? UNSET : String(row[key]));
+export const yearKeyOf = (row) => (isBlank(row.year) ? NO_YEAR : String(row.year));
+
+const dimValue = dimValueOf;
+const yearOf = yearKeyOf;
 
 /**
  * @param {Array} rows 투자 건 목록 (이미 걸러진 것)

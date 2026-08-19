@@ -1,13 +1,30 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { AMOUNT_UNIT, formatAmount } from '../constants';
 import { PIVOT_DIMENSIONS, UNSET, buildPivot } from '../utils/buildPivot';
+import { NO_SCOPES, applyScopePick, hasScope, makeScope, removeScope } from '../utils/pivotSummary';
+import PivotSummaryPanel from './PivotSummaryPanel';
+
+// 표는 넓고 패널은 좁다. 표가 자기 상자 안에서만 가로로 흐르게 두어야
+// 페이지 전체가 옆으로 밀리지 않는다. 좁은 화면에서는 위아래로 쌓는다.
+const Layout = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  gap: 1rem;
+  align-items: start;
+
+  /* 패널이 넓어진 만큼 표에 남는 폭도 줄어든다. 표가 눌리기 전에 위아래로 쌓는다. */
+  @media (max-width: 1360px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
 
 const Wrapper = styled.div`
   background: white;
   border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
   overflow: auto;
+  min-width: 0;
 `;
 
 const Caption = styled.div`
@@ -41,6 +58,13 @@ const Table = styled.table`
     vertical-align: top;
     color: #1e293b;
     background: #fcfdff;
+    cursor: pointer;
+  }
+  tbody td.dim:hover { background: #eef2ff; }
+  tbody td.dim.picked {
+    background: #e0e7ff;
+    box-shadow: inset 2px 0 0 #4f46e5;
+    font-weight: 700;
   }
 
   tbody tr:hover td:not(.dim) { background: #eef2ff; }
@@ -65,11 +89,14 @@ const TotalHead = styled.th`
 `;
 
 const SubtotalRow = styled.tr`
+  cursor: pointer;
+
   td {
-    background: #f8fafc;
-    font-weight: 600;
+    background: ${props => (props.$picked ? '#e0e7ff' : '#f8fafc')};
+    font-weight: ${props => (props.$picked ? 700 : 600)};
     color: #334155;
   }
+  &:hover td { background: #eef2ff; }
 `;
 
 const GrandRow = styled.tr`
@@ -108,6 +135,14 @@ const Amount = ({ cell, field, groupStart }) => {
 
 const PivotView = ({ investments, orders }) => {
   const pivot = useMemo(() => buildPivot(investments, orders), [investments, orders]);
+  // 표에서 고른 범위들. 우측 그래프가 이 범위만 본다. 빈 배열이면 전체다.
+  const [scopes, setScopes] = useState(NO_SCOPES);
+
+  // 기준열 칸을 누르면 그 깊이까지 좁힌다 — 사업부 칸이면 투자 유형 ▸ 사업부.
+  // Ctrl(맥은 ⌘)을 누른 채면 이미 고른 것에 **더한다**.
+  const pickScope = (event, path, depth) =>
+    setScopes(prev => applyScopePick(prev, makeScope(path, depth), event.ctrlKey || event.metaKey));
+  const isPicked = (path, depth) => hasScope(scopes, makeScope(path, depth));
 
   if (pivot.rowCount === 0) {
     return (
@@ -116,6 +151,7 @@ const PivotView = ({ investments, orders }) => {
       </Wrapper>
     );
   }
+
 
   const { years, groups, grandTotal } = pivot;
 
@@ -134,64 +170,88 @@ const PivotView = ({ investments, orders }) => {
   );
 
   return (
-    <Wrapper>
-      <Caption>
-        단위: {AMOUNT_UNIT} · 가로는 투자년도, 세로는 {PIVOT_DIMENSIONS.map(d => d.label).join(' › ')} 차례
-      </Caption>
-      <Table>
-        <thead>
-          <tr>
-            {PIVOT_DIMENSIONS.map(d => <th key={d.key} rowSpan={2}>{d.label}</th>)}
-            {years.map(year => (
-              <YearHead key={year} colSpan={2}>{year === '미지정' ? '년도 미지정' : `${year}년`}</YearHead>
-            ))}
-            <TotalHead colSpan={2}>합계</TotalHead>
-          </tr>
-          <tr>
-            {years.map(year => (
-              <React.Fragment key={year}>
-                <YearHead>계획</YearHead>
-                <th>실적</th>
+    <Layout>
+      <Wrapper>
+        <Caption>
+          단위: {AMOUNT_UNIT} · 가로는 투자년도, 세로는 {PIVOT_DIMENSIONS.map(d => d.label).join(' › ')} 차례
+          {' · '}기준열 칸을 누르면 오른쪽이 그 범위만 봅니다 (Ctrl+클릭으로 여러 영역)
+        </Caption>
+        <Table>
+          <thead>
+            <tr>
+              {PIVOT_DIMENSIONS.map(d => <th key={d.key} rowSpan={2}>{d.label}</th>)}
+              {years.map(year => (
+                <YearHead key={year} colSpan={2}>{year === '미지정' ? '년도 미지정' : `${year}년`}</YearHead>
+              ))}
+              <TotalHead colSpan={2}>합계</TotalHead>
+            </tr>
+            <tr>
+              {years.map(year => (
+                <React.Fragment key={year}>
+                  <YearHead>계획</YearHead>
+                  <th>실적</th>
+                </React.Fragment>
+              ))}
+              <TotalHead>계획</TotalHead>
+              <TotalHead>실적</TotalHead>
+            </tr>
+          </thead>
+
+          <tbody>
+            {groups.map(group => (
+              <React.Fragment key={group.label}>
+                {group.leaves.map((leaf, i) => (
+                  <tr key={`${group.label}-${i}`}>
+                    {leaf.spans.map((span, depth) => (
+                      span.render ? (
+                        <td
+                          className={`dim${isPicked(leaf.path, depth + 1) ? ' picked' : ''}`}
+                          key={depth}
+                          rowSpan={span.rowSpan}
+                          onClick={(e) => pickScope(e, leaf.path, depth + 1)}
+                          title={`${leaf.path.slice(0, depth + 1).join(' ▸ ')} · Ctrl(⌘)+클릭이면 함께 봅니다`}
+                        >
+                          {leaf.path[depth] === UNSET
+                            ? <Unset>{UNSET}</Unset>
+                            : leaf.path[depth]}
+                        </td>
+                      ) : null
+                    ))}
+                    {renderAmountRow(leaf)}
+                  </tr>
+                ))}
+                <SubtotalRow
+                  $picked={isPicked([group.label], 1)}
+                  onClick={(e) => pickScope(e, [group.label], 1)}
+                  title={`${group.label} · Ctrl(⌘)+클릭이면 함께 봅니다`}
+                >
+                  <LabelCell colSpan={PIVOT_DIMENSIONS.length}>
+                    「{group.label}」 소계
+                  </LabelCell>
+                  {renderAmountRow(group.subtotal)}
+                </SubtotalRow>
               </React.Fragment>
             ))}
-            <TotalHead>계획</TotalHead>
-            <TotalHead>실적</TotalHead>
-          </tr>
-        </thead>
 
-        <tbody>
-          {groups.map(group => (
-            <React.Fragment key={group.label}>
-              {group.leaves.map((leaf, i) => (
-                <tr key={`${group.label}-${i}`}>
-                  {leaf.spans.map((span, depth) => (
-                    span.render ? (
-                      <td className="dim" key={depth} rowSpan={span.rowSpan}>
-                        {leaf.path[depth] === UNSET
-                          ? <Unset>{UNSET}</Unset>
-                          : leaf.path[depth]}
-                      </td>
-                    ) : null
-                  ))}
-                  {renderAmountRow(leaf)}
-                </tr>
-              ))}
-              <SubtotalRow>
-                <LabelCell colSpan={PIVOT_DIMENSIONS.length}>
-                  「{group.label}」 소계
-                </LabelCell>
-                {renderAmountRow(group.subtotal)}
-              </SubtotalRow>
-            </React.Fragment>
-          ))}
+            <GrandRow
+              style={{ cursor: 'pointer' }}
+              onClick={() => setScopes(NO_SCOPES)}
+              title="고른 영역을 모두 풀고 전체를 봅니다"
+            >
+              <LabelCell colSpan={PIVOT_DIMENSIONS.length}>총계 ({pivot.rowCount}건)</LabelCell>
+              {renderAmountRow(grandTotal)}
+            </GrandRow>
+          </tbody>
+        </Table>
+      </Wrapper>
 
-          <GrandRow>
-            <LabelCell colSpan={PIVOT_DIMENSIONS.length}>총계 ({pivot.rowCount}건)</LabelCell>
-            {renderAmountRow(grandTotal)}
-          </GrandRow>
-        </tbody>
-      </Table>
-    </Wrapper>
+      <PivotSummaryPanel
+        investments={investments}
+        scopes={scopes}
+        onRemoveScope={(scope) => setScopes(prev => removeScope(prev, scope))}
+        onClearScopes={() => setScopes(NO_SCOPES)}
+      />
+    </Layout>
   );
 };
 
