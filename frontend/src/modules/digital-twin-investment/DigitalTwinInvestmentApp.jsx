@@ -8,6 +8,7 @@ import BulkAddModal from './components/BulkAddModal';
 import SettingsModal from './components/SettingsModal';
 import InvestmentTable from './components/InvestmentTable';
 import PivotView from './components/PivotView';
+import ToggleFilter from './components/ToggleFilter';
 import api from './services/api';
 import { CATEGORY1_OPTIONS, DEFAULT_CATEGORY2_OPTIONS } from './constants';
 import { nextSort, sortInvestments } from './utils/sortInvestments';
@@ -81,6 +82,14 @@ const FilterSelect = styled.select`
   cursor: pointer;
 `;
 
+// 걸개 토글 줄. 갈래가 둘이라 사이를 넉넉히 벌려 서로 섞여 보이지 않게 한다.
+const FilterRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+`;
+
 const CountBadge = styled.span`
   margin-left: auto;
   font-size: 0.8rem;
@@ -131,8 +140,9 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
 
   const [search, setSearch] = useState('');
   const [filterYear, setFilterYear] = useState('');
-  const [filterDivision, setFilterDivision] = useState('');
-  const [filterCategory1, setFilterCategory1] = useState('');
+  // 사업부·투자 유형은 여러 개를 함께 걸 수 있다. 빈 배열이면 전체다.
+  const [filterDivisions, setFilterDivisions] = useState([]);
+  const [filterCategory1s, setFilterCategory1s] = useState([]);
 
   const [viewMode, setViewMode] = useState('table');   // 'table' | 'pivot'
   // 정렬 상태를 여기 둔다 — 표도 쓰고, 「로컬 저장」도 같은 차례로 내보내야 해서.
@@ -196,10 +206,10 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
         .some(v => v?.toLowerCase().includes(term));
       return matchesTerm
         && (!filterYear || String(r.year) === filterYear)
-        && (!filterDivision || r.division === filterDivision)
-        && (!filterCategory1 || r.category1 === filterCategory1);
+        && (filterDivisions.length === 0 || filterDivisions.includes(r.division))
+        && (filterCategory1s.length === 0 || filterCategory1s.includes(r.category1));
     });
-  }, [investments, search, filterYear, filterDivision, filterCategory1]);
+  }, [investments, search, filterYear, filterDivisions, filterCategory1s]);
 
   // 화면에 보이는 그대로의 차례. 표와 저장이 이 하나를 같이 본다.
   const visibleRows = useMemo(() => sortInvestments(filtered, sort), [filtered, sort]);
@@ -300,29 +310,34 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
               {years.map(y => <option key={y} value={String(y)}>{y}년</option>)}
             </FilterSelect>
 
-            <FilterSelect value={filterDivision} onChange={e => setFilterDivision(e.target.value)}>
-              <option value="">전체 사업부</option>
-              {options.divisions.map(d => <option key={d} value={d}>{d}</option>)}
-            </FilterSelect>
-
-            <FilterSelect value={filterCategory1} onChange={e => setFilterCategory1(e.target.value)}>
-              <option value="">전체 투자 유형</option>
-              {CATEGORY1_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-            </FilterSelect>
-
             <CountBadge>{filtered.length} / {investments.length}건</CountBadge>
 
-          <SaveButton
-            onClick={handleSaveLocally}
-            disabled={filtered.length === 0}
-            title={viewMode === 'pivot'
-              ? '지금 보이는 피벗을 CSV 로 저장합니다'
-              : '지금 보이는 목록을 CSV 로 저장합니다'}
-          >
-            <Download size={15} />
-            로컬 저장
-          </SaveButton>
+            <SaveButton
+              onClick={handleSaveLocally}
+              disabled={filtered.length === 0}
+              title={viewMode === 'pivot'
+                ? '지금 보이는 피벗을 CSV 로 저장합니다'
+                : '지금 보이는 목록을 CSV 로 저장합니다'}
+            >
+              <Download size={15} />
+              로컬 저장
+            </SaveButton>
           </Toolbar>
+
+          <FilterRow>
+            <ToggleFilter
+              label="사업부"
+              options={options.divisions}
+              selected={filterDivisions}
+              onChange={setFilterDivisions}
+            />
+            <ToggleFilter
+              label="투자 유형"
+              options={CATEGORY1_OPTIONS}
+              selected={filterCategory1s}
+              onChange={setFilterCategory1s}
+            />
+          </FilterRow>
 
           {loading && <Message>불러오는 중...</Message>}
           {!loading && viewMode === 'table' && (
