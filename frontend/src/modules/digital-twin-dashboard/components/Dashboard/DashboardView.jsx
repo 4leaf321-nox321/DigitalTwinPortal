@@ -25,7 +25,7 @@ import {
 } from '../../../../shared/utils/kpiAchievement';
 import { evalFactor } from '../../utils/evalFactor';
 // 수준값의 0 과 미입력은 다른 뜻이다. `parseFloat(v) || null` 은 0 을 null 로 접는다.
-import { levelNumber, percentText, deltaText } from '../../utils/levelValue';
+import { levelNumber, percentText, levelDelta } from '../../utils/levelValue';
 import { toLocalYmd, todayLocalYmd } from '../../../../shared/utils/localDate';
 import { LineChart, Line, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 
@@ -5738,27 +5738,52 @@ const DashboardView = ({
     return { value: parseFloat((numVal * factor).toFixed(4)), unit: conv.targetUnit };
   }, [execActiveConversions, execUnitConversions, currentYear]);
 
-  // KPI 카드 집계 + |현재-목표| / |실적-목표| 델타 산출
-  const aggregateCardValues = (card) => {
-    const keys = card.selectedPerfKeys || [];
-    if (keys.length === 0) return { 목표: null, 실적: null, unit: '' };
+  // 성과 → 그 성과에 연결된 과제 목록.
+  // 「모든 성과 항목」 카드 모달(KPIDashboard)과 **같은 규칙**으로 찾는다 —
+  // 과제의 성과목록에 담긴 참조가 문자열일 때도, 객체일 때도 있어서 키를 여러 개 본다.
+  const perfProjectMap = useMemo(() => {
+    const map = new Map();
+    (projects || []).forEach(proj => {
+      if (proj._deleted) return;
+      const perfList = proj.성과목록;
+      if (!perfList || perfList.length === 0) return;
+      const projectId = proj.id || proj.uuid;
+      perfList.forEach(perfRef => {
+        const perfKey = typeof perfRef === 'string'
+          ? perfRef
+          : (perfRef.성과항목UUID || perfRef.성과UUID || perfRef.성과항목ID || perfRef.성과항목 || perfRef.id);
+        if (!perfKey) return;
+        let arr = map.get(perfKey);
+        if (!arr) { arr = []; map.set(perfKey, arr); }
+        if (!arr.some(x => x.id === projectId)) {
+          arr.push({ id: projectId, uuid: proj.uuid, 과제명: proj.과제명 || '(이름 없음)' });
+        }
+      });
+    });
+    return map;
+  }, [projects]);
 
-    const filtered = globalPerformances.filter(
-      p => Number(p.성과년도) === currentYear && keys.includes(getPerfKey(p))
-    );
-    if (filtered.length === 0) return { 목표: null, 실적: null, unit: '' };
+  const getLinkedProjects = useCallback((perf) => {
+    const keys = [perf.uuid, perf.id, perf.성과항목UUID, perf.성과UUID, perf.성과항목ID, perf.성과항목];
+    for (const key of keys) {
+      if (key && perfProjectMap.has(key)) return perfProjectMap.get(key);
+    }
+    return [];
+  }, [perfProjectMap]);
 
+  // ── 성과 묶음 하나를 집계한다 (목표/실적 절감액 + 달성률 모수) ──────────
+  //
+  // 여기 오는 perfs 는 **환산 후 단위가 같은 것들끼리**여야 한다.
+  // 단위가 다른 값을 더하거나 평균 내면 나오는 수가 아무 뜻이 없다.
+  const summarizePerfs = (perfs, logic, division) => {
     const toNumZero = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
     const hasVal = (v) => v !== undefined && v !== null && v !== '' && !isNaN(parseFloat(v));
-    const aggregate = (vals, logic, total) => {
+    const aggregate = (vals, total) => {
       if (total === 0) return null;
       const sum = vals.reduce((a, b) => a + b, 0);
       return logic === '합계' ? sum : sum / total;
     };
-    const convertedNum = (raw, p) => {
-      const cv = applyExecConversion(raw, p.단위 || '', card.division);
-      return toNumZero(cv.value);
-    };
+    const convertedNum = (raw, p) => toNumZero(applyExecConversion(raw, p.단위 || '', division).value);
 
     // 유효성 판정: 값이 명시되어 있으면 인정 (0 포함). null/''/undefined 만 제외.
     const isValidVal = (raw) => hasVal(raw);
@@ -5767,7 +5792,7 @@ const DashboardView = ({
     const getActual = (p) => {
       if (p.월별실적여부 && Array.isArray(p.월별실적) && p.월별실적.length > 0) {
         const nums = p.월별실적
-          .map(v => applyExecConversion(v, p.단위 || '', card.division).value)
+          .map(v => applyExecConversion(v, p.단위 || '', division).value)
           .map(v => parseFloat(v))
           .filter(v => !isNaN(v));
         if (nums.length === 0) return null; // 월별 다 비어있음 → 미기록
@@ -5779,43 +5804,38 @@ const DashboardView = ({
       return null;
     };
 
+    // 한 묶음의 (기준값 − 현재) 절감액. rows 가 비면 null.
+    const savingOf = (rows, valueOf) => {
+      if (rows.length === 0) return null;
+      const vAgg = aggregate(rows.map(valueOf), rows.length);
+      const cAgg = aggregate(rows.map(p => convertedNum(p.현재수준, p)), rows.length);
+      return vAgg - cAgg;
+    };
+
     // ── 목표 절감액: 목표·현재 둘 다 유효한 짝 (목표 − 현재) ──
-    const tcPairs = filtered.filter(p => isValidVal(p.목표수준) && isValidVal(p.현재수준));
-    let targetSaving = null;
-    if (tcPairs.length > 0) {
-      const tAgg = aggregate(tcPairs.map(p => convertedNum(p.목표수준, p)), card.logic, tcPairs.length);
-      const cAgg = aggregate(tcPairs.map(p => convertedNum(p.현재수준, p)), card.logic, tcPairs.length);
-      targetSaving = tAgg - cAgg;
-    }
+    const tcPairs = perfs.filter(p => isValidVal(p.목표수준) && isValidVal(p.현재수준));
+    const targetSaving = savingOf(tcPairs, p => convertedNum(p.목표수준, p));
 
     // ── 실적 절감액: 실적·현재 둘 다 유효한 짝 (실적 − 현재) ──
-    const acPairs = filtered.filter(p => getActual(p) !== null && isValidVal(p.현재수준));
-    let actualSaving = null;
-    if (acPairs.length > 0) {
-      const aAgg = aggregate(acPairs.map(p => getActual(p)), card.logic, acPairs.length);
-      const cAgg = aggregate(acPairs.map(p => convertedNum(p.현재수준, p)), card.logic, acPairs.length);
-      actualSaving = aAgg - cAgg;
-    }
+    const acPairs = perfs.filter(p => getActual(p) !== null && isValidVal(p.현재수준));
+    const actualSaving = savingOf(acPairs, p => getActual(p));
 
-    // 환산 후 대표 단위
-    const unitCounts = {};
-    filtered.forEach(p => {
-      const u = applyExecConversion(null, p.단위 || '', card.division).unit || '';
-      if (u) unitCounts[u] = (unitCounts[u] || 0) + 1;
-    });
-    const dominantUnit = Object.entries(unitCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    // ── 달성률 모수: 목표·현재·실적이 **모두** 있는 성과만 ──
+    //
+    // 두 막대는 서로 다른 성과 집합을 쓴다(목표만 적힌 성과, 실적만 적힌 성과가
+    // 섞인다). 그 둘을 그냥 나누면 분모와 분자의 모수가 달라 달성률이 엉뚱해진다.
+    // 그래서 달성률은 **둘 다 적힌 성과**만으로 따로 낸다.
+    const ratePairs = perfs.filter(p =>
+      isValidVal(p.목표수준) && isValidVal(p.현재수준) && getActual(p) !== null);
+    const rateTargetSaving = savingOf(ratePairs, p => convertedNum(p.목표수준, p));
+    const rateActualSaving = savingOf(ratePairs, p => getActual(p));
 
-    const round = (n) => n === null ? null : Math.round(n * 100) / 100;
-
-    // 모달용 raw 데이터 (각 성과의 변환 후 값 + 포함 여부)
-    const sourceRows = filtered.map(p => {
-      const tConv = applyExecConversion(p.목표수준, p.단위 || '', card.division);
-      const cConv = applyExecConversion(p.현재수준, p.단위 || '', card.division);
+    // 검증 모달용 raw 데이터 (각 성과의 변환 후 값 + 포함 여부)
+    const sourceRows = perfs.map(p => {
+      const tConv = applyExecConversion(p.목표수준, p.단위 || '', division);
       const targetNum = isValidVal(p.목표수준) ? convertedNum(p.목표수준, p) : null;
       const currentNum = isValidVal(p.현재수준) ? convertedNum(p.현재수준, p) : null;
       const actualNum = getActual(p);
-      const usedInTarget = targetNum !== null && currentNum !== null;
-      const usedInActual = actualNum !== null && currentNum !== null;
       return {
         key: getPerfKey(p),
         name: (p.성과항목 || '').replace(/^\[.+?\]\s*/, ''),
@@ -5829,11 +5849,14 @@ const DashboardView = ({
         target: targetNum,
         current: currentNum,
         actual: actualNum,
-        usedInTarget,
-        usedInActual
+        usedInTarget: targetNum !== null && currentNum !== null,
+        usedInActual: actualNum !== null && currentNum !== null,
+        usedInRate: targetNum !== null && currentNum !== null && actualNum !== null,
+        projects: getLinkedProjects(p)
       };
     });
 
+    const round = (n) => n === null ? null : Math.round(n * 100) / 100;
     return {
       // 막대 표시값은 절대값(부호와 무관하게 높이로 표현)
       목표: targetSaving === null ? null : Math.round(Math.abs(targetSaving) * 100) / 100,
@@ -5841,14 +5864,59 @@ const DashboardView = ({
       // 툴팁 부호 표시용 (signed 절감액)
       targetSaving: round(targetSaving),
       actualSaving: round(actualSaving),
-      unit: dominantUnit,
-      // 검증 모달용
+      // 달성률용 (목표·실적 모두 적힌 성과만)
+      rateTargetSaving: round(rateTargetSaving),
+      rateActualSaving: round(rateActualSaving),
+      ratePairCount: ratePairs.length,
       sourceRows,
       tcPairCount: tcPairs.length,
       acPairCount: acPairs.length,
-      logic: card.logic || '평균'
+      logic
     };
   };
+
+  // 환산 후 단위. 환산을 켜면 hrs 와 억원이 똑같이 '억원' 이 되어 한 덩어리가 되고,
+  // 끄면 서로 다른 단위라 따로 선다.
+  const resolvedUnitOf = (p, division) =>
+    applyExecConversion(null, p.단위 || '', division).unit || p.단위 || '';
+
+  // 성과를 환산 후 단위별로 갈라 각각 집계한다. 단위가 하나뿐이면 묶음도 하나다.
+  const summarizeByUnit = (perfs, logic, division) => {
+    const byUnit = new Map();
+    perfs.forEach(p => {
+      const u = resolvedUnitOf(p, division);
+      if (!byUnit.has(u)) byUnit.set(u, []);
+      byUnit.get(u).push(p);
+    });
+    return [...byUnit.entries()]
+      .sort((a, b) => b[1].length - a[1].length)   // 성과가 많은 단위부터
+      .map(([unit, rows]) => ({ unit, ...summarizePerfs(rows, logic, division) }));
+  };
+
+  // 달성률 = |실적 절감액| / |목표 절감액|.
+  //
+  // 반드시 **같은 성과 집합**에서 나온 두 값(rate*)으로만 낸다. 막대에 쓰는
+  // targetSaving/actualSaving 을 그대로 나누면, 목표만 적힌 성과와 실적만 적힌
+  // 성과 때문에 분모·분자의 모수가 달라 몇십 배짜리 달성률이 나온다.
+  const execAchievementRate = (g) => {
+    if (!g || !g.ratePairCount) return null;
+    const t = g.rateTargetSaving;
+    const a = g.rateActualSaving;
+    if (t == null || a == null || Math.abs(t) <= 0.001) return null;
+    return (Math.abs(a) / Math.abs(t)) * 100;
+  };
+
+  // KPI 카드 집계 — 환산 후 단위별 묶음 배열을 돌려준다.
+  const aggregateCardValues = (card) => {
+    const keys = card.selectedPerfKeys || [];
+    if (keys.length === 0) return [];
+    const filtered = globalPerformances.filter(
+      p => Number(p.성과년도) === currentYear && keys.includes(getPerfKey(p))
+    );
+    if (filtered.length === 0) return [];
+    return summarizeByUnit(filtered, card.logic || '평균', card.division);
+  };
+
 
   // 5개 사업부 KPI 카드 (모달 선택용)
   const kpiCardsByDivision = useMemo(() => {
@@ -5869,57 +5937,6 @@ const DashboardView = ({
     })).filter(d => d.items.length > 0);
   }, [kpiDashboardCards]);
 
-  // 성과 항목 부분집합에 대한 절감액 계산 (aggregateCardValues 와 동일 로직)
-  const aggregatePerfsSubset = (perfs, logic, division) => {
-    const toNumZero = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
-    const hasVal = (v) => v !== undefined && v !== null && v !== '' && !isNaN(parseFloat(v));
-    const aggregate = (vals, log, total) => {
-      if (total === 0) return null;
-      const sum = vals.reduce((a, b) => a + b, 0);
-      return log === '합계' ? sum : sum / total;
-    };
-    const convertedNum = (raw, p) => {
-      const cv = applyExecConversion(raw, p.단위 || '', division);
-      return toNumZero(cv.value);
-    };
-    const isValidVal = (raw) => hasVal(raw);
-    const getActual = (p) => {
-      if (p.월별실적여부 && Array.isArray(p.월별실적) && p.월별실적.length > 0) {
-        const nums = p.월별실적
-          .map(v => applyExecConversion(v, p.단위 || '', division).value)
-          .map(v => parseFloat(v))
-          .filter(v => !isNaN(v));
-        if (nums.length === 0) return null;
-        return nums.reduce((a, b) => a + b, 0);
-      }
-      if (hasVal(p.실적수준)) return convertedNum(p.실적수준, p);
-      return null;
-    };
-
-    const tcPairs = perfs.filter(p => isValidVal(p.목표수준) && isValidVal(p.현재수준));
-    let targetSaving = null;
-    if (tcPairs.length > 0) {
-      const tAgg = aggregate(tcPairs.map(p => convertedNum(p.목표수준, p)), logic, tcPairs.length);
-      const cAgg = aggregate(tcPairs.map(p => convertedNum(p.현재수준, p)), logic, tcPairs.length);
-      targetSaving = tAgg - cAgg;
-    }
-
-    const acPairs = perfs.filter(p => getActual(p) !== null && isValidVal(p.현재수준));
-    let actualSaving = null;
-    if (acPairs.length > 0) {
-      const aAgg = aggregate(acPairs.map(p => getActual(p)), logic, acPairs.length);
-      const cAgg = aggregate(acPairs.map(p => convertedNum(p.현재수준, p)), logic, acPairs.length);
-      actualSaving = aAgg - cAgg;
-    }
-
-    return {
-      목표: targetSaving === null ? null : Math.round(Math.abs(targetSaving) * 100) / 100,
-      실적: actualSaving === null ? null : Math.round(Math.abs(actualSaving) * 100) / 100,
-      targetSaving: targetSaving === null ? null : Math.round(targetSaving * 100) / 100,
-      actualSaving: actualSaving === null ? null : Math.round(actualSaving * 100) / 100,
-      perfsUsed: perfs
-    };
-  };
 
   // 조직별 경영성과 데이터
   // - byDivision (items): 전체 모드용 카드 단위 집계 (X축=카드)
@@ -5935,28 +5952,44 @@ const DashboardView = ({
       return ia - ib;
     });
 
+    // 한 차트 안의 막대 최댓값으로 Y축을 잡는다. 단위마다 차트가 따로이므로
+    // Y축도 그 단위 것만 본다 — 억원 막대와 hrs 막대가 한 눈금을 쓰던 걸 끊는다.
+    const axisOf = (rows) => {
+      let max = 0;
+      rows.forEach(r => {
+        if (r.목표 != null && r.목표 > max) max = r.목표;
+        if (r.실적 != null && r.실적 > max) max = r.실적;
+      });
+      return niceAxis(max);
+    };
+
     const aggregated = []; // 전체 모드용
     const detailed = [];   // 사업부별 모드용
 
     PERF_TARGET_DIVS.forEach(divName => {
-      const divItems = [];
+      const itemsByUnit = new Map();   // 단위 → 카드 항목들
       const divCards = [];
 
       kpiDashboardCards.forEach(card => {
         if (card.division !== divName) return;
         if (!selectedKpiCards.has(card.id)) return;
 
-        // 1) 전체 모드용: 카드 단위 집계
-        const vals = aggregateCardValues(card);
         const fullName = card.name || '(이름 없음)';
-        divItems.push({
-          id: card.id,
-          name: fullName.length > 16 ? fullName.slice(0, 15) + '…' : fullName,
-          fullName,
-          ...vals
+
+        // 1) 전체 모드용: 카드 단위 집계 — 환산 후 단위마다 항목 하나
+        aggregateCardValues(card).forEach(group => {
+          if (!itemsByUnit.has(group.unit)) itemsByUnit.set(group.unit, []);
+          itemsByUnit.get(group.unit).push({
+            // 같은 카드가 단위마다 하나씩 서므로 id 도 단위까지 묶어 만든다
+            id: `${card.id}::${group.unit}`,
+            cardId: card.id,
+            name: fullName.length > 16 ? fullName.slice(0, 15) + '…' : fullName,
+            fullName,
+            ...group
+          });
         });
 
-        // 2) 사업부별 모드용: 소분류 분해
+        // 2) 사업부별 모드용: 소분류 분해 (여기서도 단위별로 나눈다)
         const keys = card.selectedPerfKeys || [];
         const cardPerfs = globalPerformances.filter(p =>
           Number(p.성과년도) === currentYear && keys.includes(getPerfKey(p))
@@ -5967,45 +6000,37 @@ const DashboardView = ({
           if (!bySubcat.has(sub)) bySubcat.set(sub, []);
           bySubcat.get(sub).push(p);
         });
-        const subcategories = [];
-        const unitCounts = {};
+
+        const subsByUnit = new Map();  // 단위 → 소분류 항목들
         bySubcat.forEach((perfs, subName) => {
-          const subVals = aggregatePerfsSubset(perfs, card.logic, card.division);
-          perfs.forEach(p => {
-            const u = applyExecConversion(null, p.단위 || '', card.division).unit || '';
-            if (u) unitCounts[u] = (unitCounts[u] || 0) + 1;
-          });
-          subcategories.push({
-            name: subName.length > 14 ? subName.slice(0, 13) + '…' : subName,
-            fullName: subName,
-            ...subVals
+          summarizeByUnit(perfs, card.logic || '평균', card.division).forEach(group => {
+            if (!subsByUnit.has(group.unit)) subsByUnit.set(group.unit, []);
+            subsByUnit.get(group.unit).push({
+              name: subName.length > 14 ? subName.slice(0, 13) + '…' : subName,
+              fullName: subName,
+              ...group
+            });
           });
         });
-        sortSubs(subcategories);
-        const dominantUnit = Object.entries(unitCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-        // 카드별 Y축: 해당 카드 소분류들의 목표/실적 최댓값 기준
-        let cardMax = 0;
-        subcategories.forEach(s => {
-          if (s.목표 != null && s.목표 > cardMax) cardMax = s.목표;
-          if (s.실적 != null && s.실적 > cardMax) cardMax = s.실적;
+        if (subsByUnit.size === 0) return;
+
+        const unitCharts = [...subsByUnit.entries()].map(([unit, subs]) => {
+          sortSubs(subs);
+          return { unit, subcategories: subs, axis: axisOf(subs) };
         });
         divCards.push({
           cardId: card.id,
-          cardName: card.name || '(이름 없음)',
-          unit: dominantUnit,
+          cardName: fullName,
           logic: card.logic || '평균',
-          subcategories,
-          axis: niceAxis(cardMax)
+          unitCharts
         });
       });
 
-      // 사업부별 Y축: 해당 사업부 카드들의 목표/실적 최댓값 기준
-      let divMax = 0;
-      divItems.forEach(it => {
-        if (it.목표 != null && it.목표 > divMax) divMax = it.목표;
-        if (it.실적 != null && it.실적 > divMax) divMax = it.실적;
-      });
-      aggregated.push({ division: divName, items: divItems, axis: niceAxis(divMax) });
+      const unitCharts = [...itemsByUnit.entries()].map(([unit, items]) => ({
+        unit, items, axis: axisOf(items)
+      }));
+      aggregated.push({ division: divName, unitCharts });
+
       // 사업부별 모드일 땐 선택된 사업부의 detailed만 포함
       if (divCards.length > 0
           && (executiveSelectedDivision === 'all' || executiveSelectedDivision === divName)) {
@@ -6013,18 +6038,8 @@ const DashboardView = ({
       }
     });
 
-    // 전체 모드용 yMax (모든 카드의 최댓값으로 Y축 통일)
-    let globalMax = 0;
-    aggregated.forEach(({ items }) => {
-      items.forEach(it => {
-        if (it.목표 != null && it.목표 > globalMax) globalMax = it.목표;
-        if (it.실적 != null && it.실적 > globalMax) globalMax = it.실적;
-      });
-    });
-    const yMax = globalMax > 0 ? Math.ceil(globalMax * 1.15) : null;
-
-    return { byDivision: aggregated, yMax, detailedByDivision: detailed };
-  }, [kpiDashboardCards, selectedKpiCards, globalPerformances, currentYear, execActiveConversions, execUnitConversions, settingsData, executiveSelectedDivision]);
+    return { byDivision: aggregated, detailedByDivision: detailed };
+  }, [kpiDashboardCards, selectedKpiCards, globalPerformances, currentYear, execActiveConversions, execUnitConversions, settingsData, executiveSelectedDivision, getLinkedProjects]);
 
   // 전체 선택/해제 헬퍼
   const selectAllKpiCardsInDivs = () => {
@@ -7802,23 +7817,43 @@ const DashboardView = ({
                   ) : executiveSelectedDivision === 'all' ? (
                     <ExecPanelBody style={{ padding: '0.5rem 1rem 1rem' }}>
                       <ExecPerfGrid>
-                        {executiveBusinessPerf.byDivision.map(({ division, items, axis }) => {
+                        {executiveBusinessPerf.byDivision.map(({ division, unitCharts }) => {
                           const color = EXEC_DIV_COLORS[division] || '#94a3b8';
+                          const cardCount = unitCharts.reduce((n, c) => n + c.items.length, 0);
+                          // 단위가 둘 이상이면 차트를 나눠 그린다. 하나면 지금까지와 똑같이 보인다.
+                          const showUnitCaption = unitCharts.length > 1;
                           return (
                             <ExecPerfCard key={division}>
                               <ExecPerfCardHeader $color={color}>
                                 {execDivDisplayName(division)}
                                 <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 500, marginLeft: 'auto' }}>
-                                  {items.length}개
+                                  {cardCount}개
                                 </span>
                               </ExecPerfCardHeader>
                               <ExecPerfCardBody>
-                                {items.length === 0 ? (
+                                {cardCount === 0 ? (
                                   <ExecPerfEmpty style={{ padding: '1.5rem 0.5rem' }}>
                                     선택된 항목 없음
                                   </ExecPerfEmpty>
-                                ) : (
-                                  <>
+                                ) : unitCharts.map(({ unit, items, axis }) => (
+                                  <div key={unit || '(단위없음)'}>
+                                    {showUnitCaption && (
+                                      <div style={{
+                                        display: 'flex', alignItems: 'center', gap: 6,
+                                        margin: '0.35rem 0 0.1rem', paddingLeft: 44,
+                                        fontSize: 11, fontWeight: 700, color: '#475569'
+                                      }}>
+                                        <span style={{
+                                          padding: '1px 7px', borderRadius: 999,
+                                          background: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe'
+                                        }}>
+                                          {unit || '단위 없음'}
+                                        </span>
+                                        <span style={{ fontWeight: 500, color: '#94a3b8' }}>
+                                          {items.length}개
+                                        </span>
+                                      </div>
+                                    )}
                                     <div style={{
                                       display: 'flex',
                                       paddingLeft: 44,
@@ -7827,16 +7862,23 @@ const DashboardView = ({
                                       fontSize: 12
                                     }}>
                                       {items.map(it => {
-                                        const hasBoth = it.targetSaving != null && it.actualSaving != null && Math.abs(it.targetSaving) > 0.001;
-                                        const rate = hasBoth ? (Math.abs(it.actualSaving) / Math.abs(it.targetSaving)) * 100 : null;
+                                        // 달성률은 목표·실적이 **모두 적힌** 성과만으로 낸다.
+                                        // 두 막대는 서로 다른 성과 집합을 쓰므로 그대로 나누면 모수가 어긋난다.
+                                        const rate = execAchievementRate(it);
                                         const rateColor = rate == null ? '#94a3b8'
                                                         : rate >= 100 ? '#10b981'
                                                         : rate >= 70 ? '#f59e0b' : '#ef4444';
+                                        const partial = rate != null
+                                          && (it.ratePairCount < it.tcPairCount || it.ratePairCount < it.acPairCount);
                                         return (
                                           <div key={it.id} style={{ flex: 1, textAlign: 'center', whiteSpace: 'nowrap' }}>
                                             <span style={{ color: '#64748b' }}>달성률</span>{' '}
-                                            <span style={{ fontWeight: 700, color: rateColor }}>
+                                            <span style={{ fontWeight: 700, color: rateColor }}
+                                              title={rate == null
+                                                ? '목표와 실적이 모두 적힌 성과가 없어 달성률을 낼 수 없습니다'
+                                                : `목표·실적이 모두 적힌 성과 ${it.ratePairCount}개 기준`}>
                                               {rate != null ? `${rate.toFixed(1)}%` : '–'}
+                                              {partial ? '*' : ''}
                                             </span>
                                           </div>
                                         );
@@ -7884,6 +7926,10 @@ const DashboardView = ({
                                                   <span style={{ color: '#64748b' }}>실적 절감액</span>
                                                   <span style={{ fontWeight: 700, color: '#1e293b' }}>{absFmt(it.actualSaving)}</span>
                                                 </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 3, paddingTop: 3, borderTop: '1px solid #f1f5f9', color: '#94a3b8' }}>
+                                                  <span>집계 대상</span>
+                                                  <span>목표 {it.tcPairCount} · 실적 {it.acPairCount} · 달성률 {it.ratePairCount}</span>
+                                                </div>
                                               </div>
                                             );
                                           }}
@@ -7893,13 +7939,11 @@ const DashboardView = ({
                                           <LabelList
                                             dataKey="목표"
                                             position="top"
-                                            content={({ x, y, width, value, index }) => {
+                                            content={({ x, y, width, value }) => {
                                               if (value == null) return null;
-                                              const it = items[index];
-                                              const u = it?.unit || '';
                                               return (
                                                 <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={11.5} fill="#1e293b" fontWeight={600}>
-                                                  {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{u ? ` ${u}` : ''}
+                                                  {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{unit ? ` ${unit}` : ''}
                                                 </text>
                                               );
                                             }}
@@ -7909,13 +7953,11 @@ const DashboardView = ({
                                           <LabelList
                                             dataKey="실적"
                                             position="top"
-                                            content={({ x, y, width, value, index }) => {
+                                            content={({ x, y, width, value }) => {
                                               if (value == null) return null;
-                                              const it = items[index];
-                                              const u = it?.unit || '';
                                               return (
                                                 <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={11.5} fill="#1e293b" fontWeight={600}>
-                                                  {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{u ? ` ${u}` : ''}
+                                                  {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{unit ? ` ${unit}` : ''}
                                                 </text>
                                               );
                                             }}
@@ -7923,8 +7965,8 @@ const DashboardView = ({
                                         </Bar>
                                       </BarChart>
                                     </ResponsiveContainer>
-                                  </>
-                                )}
+                                  </div>
+                                ))}
                               </ExecPerfCardBody>
                             </ExecPerfCard>
                           );
@@ -7949,11 +7991,15 @@ const DashboardView = ({
                               gap: '0.75rem'
                             }}>
                               {cards.map(card => {
-                                const hasData = card.subcategories.length > 0;
-                                // 카드 단위 합산 → 달성률 계산
-                                const sumT = card.subcategories.reduce((s, sub) => s + (sub.targetSaving != null ? Math.abs(sub.targetSaving) : 0), 0);
-                                const sumA = card.subcategories.reduce((s, sub) => s + (sub.actualSaving != null ? Math.abs(sub.actualSaving) : 0), 0);
-                                const cardRate = sumT > 0.001 ? (sumA / sumT) * 100 : null;
+                                // 단위가 둘 이상이면 차트를 나눠 그린다. 하나면 지금까지와 똑같이 보인다.
+                                const showUnitCaption = card.unitCharts.length > 1;
+                                // 카드 달성률: 소분류들의 '목표·실적 모두 적힌' 절감액만 합쳐서 낸다.
+                                const allSubs = card.unitCharts.flatMap(c => c.subcategories);
+                                const cardRate = execAchievementRate({
+                                  ratePairCount: allSubs.reduce((n, s) => n + (s.ratePairCount || 0), 0),
+                                  rateTargetSaving: allSubs.reduce((n, s) => n + Math.abs(s.rateTargetSaving || 0), 0),
+                                  rateActualSaving: allSubs.reduce((n, s) => n + Math.abs(s.rateActualSaving || 0), 0)
+                                });
                                 const rateColor = cardRate == null ? '#94a3b8'
                                                 : cardRate >= 100 ? '#10b981'
                                                 : cardRate >= 70 ? '#f59e0b' : '#ef4444';
@@ -7976,126 +8022,134 @@ const DashboardView = ({
                                         {card.cardName}
                                       </div>
                                       {cardRate != null && (
-                                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: rateColor }}>
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: rateColor }}
+                                          title="목표와 실적이 모두 적힌 성과만으로 낸 달성률입니다">
                                           달성률 {cardRate.toFixed(1)}%
                                         </span>
                                       )}
                                     </div>
                                     <div style={{ padding: '0.4rem 0.3rem' }}>
-                                      {!hasData ? (
+                                      {card.unitCharts.length === 0 ? (
                                         <ExecPerfEmpty style={{ padding: '1.5rem 0.5rem' }}>
                                           소분류 데이터 없음
                                         </ExecPerfEmpty>
-                                      ) : (
-                                        <ResponsiveContainer width="100%" height={210}>
-                                          <BarChart
-                                            data={card.subcategories}
-                                            margin={{ top: 24, right: 10, left: 0, bottom: 4 }}
-                                            barCategoryGap="22%"
-                                            style={{ cursor: 'pointer' }}
-                                            onClick={(e) => {
-                                              if (!e) return;
-                                              let sub = e?.activePayload?.[0]?.payload;
-                                              if (!sub && e?.activeLabel) {
-                                                sub = card.subcategories.find(s => s.name === e.activeLabel);
-                                              }
-                                              if (sub) setPerfDetailModal({ division, item: { ...sub, fullName: `${card.cardName} · ${sub.fullName}`, unit: card.unit, logic: card.logic, sourceRows: (sub.perfsUsed || []).map(p => ({
-                                                key: getPerfKey(p),
-                                                name: (p.성과항목 || '').replace(/^\[.+?\]\s*/, ''),
-                                                rawUnit: p.단위 || '',
-                                                convUnit: applyExecConversion(null, p.단위 || '', division).unit || p.단위 || '',
-                                                rawTarget: p.목표수준,
-                                                rawCurrent: p.현재수준,
-                                                rawActual: p.실적수준,
-                                                isMonthly: !!p.월별실적여부,
-                                                monthly: Array.isArray(p.월별실적) ? p.월별실적 : null,
-                                                // `parseFloat(...) || null` 이면 **0 이 null 로 접힌다** —
-                                                // 목표가 0 인 성과가 상세 표에서 미입력으로 보였다. levelNumber 는 0 을 0 으로 준다.
-                                                target: levelNumber(applyExecConversion(p.목표수준, p.단위 || '', division).value),
-                                                current: levelNumber(applyExecConversion(p.현재수준, p.단위 || '', division).value),
-                                                actual: levelNumber(applyExecConversion(p.실적수준, p.단위 || '', division).value),
-                                                usedInTarget: true,
-                                                usedInActual: true
-                                              })) }});
-                                            }}
-                                          >
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                                            <XAxis
-                                              dataKey="name"
-                                              tick={{ fontSize: 11, fill: '#64748b' }}
-                                              interval={0}
-                                            />
-                                            <YAxis
-                                              tick={{ fontSize: 11, fill: '#64748b' }}
-                                              width={44}
-                                              domain={card.axis ? [0, card.axis.max] : [0, 'auto']}
-                                              ticks={card.axis ? card.axis.ticks : undefined}
-                                              allowDataOverflow={false}
-                                            />
-                                            <RechartsTooltip
-                                              contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}
-                                              content={({ active, payload }) => {
-                                                if (!active || !payload || !payload.length) return null;
-                                                const sub = payload[0].payload;
-                                                const u = card.unit || '';
-                                                const absFmt = (n) => n == null ? '–' : `${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${u ? ' ' + u : ''}`;
-                                                return (
-                                                  <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px', fontSize: 12, minWidth: 200 }}>
-                                                    <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 13 }}>{sub.fullName}</div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                                      <span style={{ color: '#64748b' }}>목표 절감액</span>
-                                                      <span style={{ fontWeight: 700, color: '#1e293b' }}>{absFmt(sub.targetSaving)}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                                      <span style={{ color: '#64748b' }}>실적 절감액</span>
-                                                      <span style={{ fontWeight: 700, color: '#1e293b' }}>{absFmt(sub.actualSaving)}</span>
-                                                    </div>
-                                                  </div>
-                                                );
+                                      ) : card.unitCharts.map(({ unit, subcategories, axis }) => (
+                                        <div key={unit || '(단위없음)'}>
+                                          {showUnitCaption && (
+                                            <div style={{
+                                              margin: '0.2rem 0 0.1rem', paddingLeft: 40,
+                                              fontSize: 10.5, fontWeight: 700, color: '#475569'
+                                            }}>
+                                              <span style={{
+                                                padding: '1px 7px', borderRadius: 999,
+                                                background: '#eef2ff', color: '#3730a3', border: '1px solid #c7d2fe'
+                                              }}>
+                                                {unit || '단위 없음'}
+                                              </span>
+                                            </div>
+                                          )}
+                                          <ResponsiveContainer width="100%" height={210}>
+                                            <BarChart
+                                              data={subcategories}
+                                              margin={{ top: 24, right: 10, left: 0, bottom: 4 }}
+                                              barCategoryGap="22%"
+                                              style={{ cursor: 'pointer' }}
+                                              onClick={(e) => {
+                                                if (!e) return;
+                                                let sub = e?.activePayload?.[0]?.payload;
+                                                if (!sub && e?.activeLabel) {
+                                                  sub = subcategories.find(s => s.name === e.activeLabel);
+                                                }
+                                                // sourceRows 는 집계할 때 이미 만들어 두었다 —
+                                                // 여기서 다시 만들면 월별실적 같은 규칙이 갈린다.
+                                                if (sub) setPerfDetailModal({
+                                                  division,
+                                                  item: { ...sub, fullName: `${card.cardName} · ${sub.fullName}`, logic: card.logic }
+                                                });
                                               }}
-                                            />
-                                            <RechartsLegend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
-                                            <Bar
-                                              dataKey="목표"
-                                              name="목표 절감액"
-                                              fill="#94a3b8"
-                                              activeBar={false}
                                             >
-                                              <LabelList
+                                              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                                              <XAxis
+                                                dataKey="name"
+                                                tick={{ fontSize: 11, fill: '#64748b' }}
+                                                interval={0}
+                                              />
+                                              <YAxis
+                                                tick={{ fontSize: 11, fill: '#64748b' }}
+                                                width={44}
+                                                domain={axis ? [0, axis.max] : [0, 'auto']}
+                                                ticks={axis ? axis.ticks : undefined}
+                                                allowDataOverflow={false}
+                                              />
+                                              <RechartsTooltip
+                                                contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}
+                                                content={({ active, payload }) => {
+                                                  if (!active || !payload || !payload.length) return null;
+                                                  const sub = payload[0].payload;
+                                                  const u = unit || '';
+                                                  const absFmt = (n) => n == null ? '–' : `${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${u ? ' ' + u : ''}`;
+                                                  return (
+                                                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px', fontSize: 12, minWidth: 200 }}>
+                                                      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 13 }}>{sub.fullName}</div>
+                                                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                                        <span style={{ color: '#64748b' }}>목표 절감액</span>
+                                                        <span style={{ fontWeight: 700, color: '#1e293b' }}>{absFmt(sub.targetSaving)}</span>
+                                                      </div>
+                                                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                                        <span style={{ color: '#64748b' }}>실적 절감액</span>
+                                                        <span style={{ fontWeight: 700, color: '#1e293b' }}>{absFmt(sub.actualSaving)}</span>
+                                                      </div>
+                                                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 3, paddingTop: 3, borderTop: '1px solid #f1f5f9', color: '#94a3b8' }}>
+                                                        <span>집계 대상</span>
+                                                        <span>목표 {sub.tcPairCount} · 실적 {sub.acPairCount} · 달성률 {sub.ratePairCount}</span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                }}
+                                              />
+                                              <RechartsLegend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+                                              <Bar
                                                 dataKey="목표"
-                                                position="top"
-                                                content={({ x, y, width, value }) => {
-                                                  if (value == null) return null;
-                                                  return (
-                                                    <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={10.5} fill="#1e293b" fontWeight={600}>
-                                                      {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{card.unit ? ` ${card.unit}` : ''}
-                                                    </text>
-                                                  );
-                                                }}
-                                              />
-                                            </Bar>
-                                            <Bar
-                                              dataKey="실적"
-                                              name="실적 절감액"
-                                              fill={color}
-                                              activeBar={false}
-                                            >
-                                              <LabelList
+                                                name="목표 절감액"
+                                                fill="#94a3b8"
+                                                activeBar={false}
+                                              >
+                                                <LabelList
+                                                  dataKey="목표"
+                                                  position="top"
+                                                  content={({ x, y, width, value }) => {
+                                                    if (value == null) return null;
+                                                    return (
+                                                      <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={10.5} fill="#1e293b" fontWeight={600}>
+                                                        {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{unit ? ` ${unit}` : ''}
+                                                      </text>
+                                                    );
+                                                  }}
+                                                />
+                                              </Bar>
+                                              <Bar
                                                 dataKey="실적"
-                                                position="top"
-                                                content={({ x, y, width, value }) => {
-                                                  if (value == null) return null;
-                                                  return (
-                                                    <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={10.5} fill="#1e293b" fontWeight={600}>
-                                                      {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{card.unit ? ` ${card.unit}` : ''}
-                                                    </text>
-                                                  );
-                                                }}
-                                              />
-                                            </Bar>
-                                          </BarChart>
-                                        </ResponsiveContainer>
-                                      )}
+                                                name="실적 절감액"
+                                                fill={color}
+                                                activeBar={false}
+                                              >
+                                                <LabelList
+                                                  dataKey="실적"
+                                                  position="top"
+                                                  content={({ x, y, width, value }) => {
+                                                    if (value == null) return null;
+                                                    return (
+                                                      <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={10.5} fill="#1e293b" fontWeight={600}>
+                                                        {value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{unit ? ` ${unit}` : ''}
+                                                      </text>
+                                                    );
+                                                  }}
+                                                />
+                                              </Bar>
+                                            </BarChart>
+                                          </ResponsiveContainer>
+                                        </div>
+                                      ))}
                                     </div>
                                   </div>
                                 );
@@ -8812,6 +8866,24 @@ const DashboardView = ({
                 const u = item.unit || '';
                 const fmt = (n) => n == null ? '–' : `${n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${u ? ' ' + u : ''}`;
                 const sourceRows = item.sourceRows || [];
+
+                // 변화량도 목표·실적 칸과 같은 모양으로 적는다 (자릿수 + 단위, 아래에 raw).
+                // 부호를 붙여 방향이 보이게 한다 — 실적이 목표와 반대로 갈 수도 있다.
+                const signed = (d, unitText) => {
+                  if (d === null) return '–';
+                  const body = d.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                  return `${d > 0 ? '+' : ''}${body}${unitText ? ' ' + unitText : ''}`;
+                };
+                const fmtDelta = (to, from) => signed(levelDelta(to, from), u);
+                // 월별실적의 raw 실적은 12개월 합이다 (집계에서 쓰는 값과 같은 규칙).
+                const rawActualNumber = (row) => {
+                  if (row.isMonthly) {
+                    const nums = (row.monthly || []).map(v => levelNumber(v)).filter(v => v !== null);
+                    return nums.length === 0 ? null : nums.reduce((a, b) => a + b, 0);
+                  }
+                  return levelNumber(row.rawActual);
+                };
+                const rawDeltaText = (to, from, rawUnit) => signed(levelDelta(to, from), rawUnit);
                 return (
                   <div
                     onClick={() => setPerfDetailModal(null)}
@@ -8823,7 +8895,10 @@ const DashboardView = ({
                     <div
                       onClick={(e) => e.stopPropagation()}
                       style={{
-                        background: 'white', borderRadius: '0.75rem', maxWidth: 1000, width: '100%',
+                        // 열이 아홉이라(관련 과제 · 값 4칸 · 변화량 2칸 · 사용 여부 2칸)
+                        // 1000px 에서는 과제명과 성과명이 서로 자리를 뺏는다. 창을 넓게 쓰되
+                        // 좌우 여백(패딩 2rem)은 남긴다.
+                        background: 'white', borderRadius: '0.75rem', maxWidth: 1500, width: '100%',
                         maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)'
                       }}
                     >
@@ -8871,6 +8946,19 @@ const DashboardView = ({
                             모집단 {item.acPairCount}개 (실적·현재 모두 유효)
                           </div>
                         </div>
+                        {/* 위 두 값은 모집단이 서로 다를 수 있다. 달성률은 그래서
+                            목표·실적이 **모두 적힌** 성과만으로 따로 낸다. */}
+                        <div>
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>달성률</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: color }}>
+                            {execAchievementRate(item) == null
+                              ? '–'
+                              : `${execAchievementRate(item).toFixed(1)}%`}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
+                            모집단 {item.ratePairCount ?? 0}개 (목표·실적 모두 유효)
+                          </div>
+                        </div>
                       </div>
 
                       <div style={{ overflowY: 'auto', padding: '0.75rem 1.25rem 1rem' }}>
@@ -8882,6 +8970,7 @@ const DashboardView = ({
                           <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                             <tr>
                               <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>성과 항목</th>
+                              <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>관련 과제</th>
                               <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>현재</th>
                               <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>목표</th>
                               <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: 700 }} title="목표 − 현재 : 목표까지 만들어야 할 변화량">목표 변화량</th>
@@ -8901,6 +8990,23 @@ const DashboardView = ({
                                     {row.isMonthly ? ' · 월별실적' : ''}
                                   </div>
                                 </td>
+                                {/* 관련 과제 — 「모든 성과 항목」 카드 모달과 같이 눌러서 과제 상세로 간다 */}
+                                <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', maxWidth: 320 }}>
+                                  {(row.projects || []).length === 0
+                                    ? <span style={{ color: '#cbd5e1' }}>–</span>
+                                    : row.projects.map((proj, i) => (
+                                        <React.Fragment key={proj.id || proj.uuid || i}>
+                                          {i > 0 && <span style={{ color: '#cbd5e1' }}>, </span>}
+                                          <span
+                                            onClick={() => { setPerfDetailModal(null); openProjectDetail(proj); }}
+                                            title="클릭하면 과제 상세를 봅니다"
+                                            style={{ color: '#4f46e5', cursor: 'pointer', textDecoration: 'underline' }}
+                                          >
+                                            {proj.과제명}
+                                          </span>
+                                        </React.Fragment>
+                                      ))}
+                                </td>
                                 <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>
                                   <div>{fmt(row.current)}</div>
                                   <div style={{ fontSize: '0.66rem', color: '#cbd5e1' }}>raw: {row.rawCurrent ?? '–'}</div>
@@ -8909,9 +9015,13 @@ const DashboardView = ({
                                   <div>{fmt(row.target)}</div>
                                   <div style={{ fontSize: '0.66rem', color: '#cbd5e1' }}>raw: {row.rawTarget ?? '–'}</div>
                                 </td>
-                                {/* 변화량은 **환산 후 값**으로 뺀다 — 옆 칸에 보이는 숫자와 맞아야 한다 */}
+                                {/* 변화량은 **환산 후 값**으로 뺀다 — 옆 칸에 보이는 숫자와 맞아야 한다.
+                                    아래 raw 는 원단위끼리 뺀 값이라 위 숫자와 자리수가 다르다. */}
                                 <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', textAlign: 'right', fontWeight: 600 }}>
-                                  {deltaText(row.target, row.current, '–')}
+                                  <div>{fmtDelta(row.target, row.current)}</div>
+                                  <div style={{ fontSize: '0.66rem', color: '#cbd5e1', fontWeight: 400 }}>
+                                    raw: {rawDeltaText(levelNumber(row.rawTarget), levelNumber(row.rawCurrent), row.rawUnit)}
+                                  </div>
                                 </td>
                                 <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>
                                   <div>{fmt(row.actual)}</div>
@@ -8922,7 +9032,10 @@ const DashboardView = ({
                                   </div>
                                 </td>
                                 <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', textAlign: 'right', fontWeight: 600 }}>
-                                  {deltaText(row.actual, row.current, '–')}
+                                  <div>{fmtDelta(row.actual, row.current)}</div>
+                                  <div style={{ fontSize: '0.66rem', color: '#cbd5e1', fontWeight: 400 }}>
+                                    raw: {rawDeltaText(rawActualNumber(row), levelNumber(row.rawCurrent), row.rawUnit)}
+                                  </div>
                                 </td>
                                 <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', textAlign: 'center', color: row.usedInTarget ? '#10b981' : '#cbd5e1', fontWeight: 700 }}>
                                   {row.usedInTarget ? '✓' : '✗'}
