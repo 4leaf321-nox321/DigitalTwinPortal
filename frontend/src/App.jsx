@@ -29,6 +29,7 @@ import SPDMStatusApp from './modules/spdm-status/SPDMStatusApp';
 import DigitalTwinReferenceApp from './modules/digital-twin-reference/DigitalTwinReferenceApp';
 import DigitalTwinTaskManagementApp from './modules/digital-twin-task-management/DigitalTwinTaskManagementApp';
 import DigitalTwinSwResourceApp from './modules/digital-twin-sw-resource/DigitalTwinSwResourceApp';
+import DigitalTwinInvestmentApp from './modules/digital-twin-investment/DigitalTwinInvestmentApp';
 import AutoDocumentApp from './modules/auto-document/AutoDocumentApp';
 import AutoDocumentVerifyApp from './modules/auto-document-verify/AutoDocumentVerifyApp';
 import DxKpiManagementApp from './modules/dx-kpi-management/DxKpiManagementApp';
@@ -266,6 +267,16 @@ const AppWithNav = () => {
         element={
           <ProtectedRoute>
             <DigitalTwinSwResourceApp onGoHome={handleGoHome} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 디지털 트윈 투자 현황 모듈 (보호됨) */}
+      <Route
+        path="/digital-twin-investment"
+        element={
+          <ProtectedRoute>
+            <DigitalTwinInvestmentApp onGoHome={handleGoHome} />
           </ProtectedRoute>
         }
       />
