@@ -26,6 +26,10 @@ import {
 import { evalFactor } from '../../utils/evalFactor';
 // 수준값의 0 과 미입력은 다른 뜻이다. `parseFloat(v) || null` 은 0 을 null 로 접는다.
 import { levelNumber, percentText, levelDelta } from '../../utils/levelValue';
+import {
+  MONTHS as KPI_MONTHS, MONTH_TO_QUARTER as KPI_MONTH_TO_QUARTER,
+  monthLabelOf, weekLabelOf, weeksForYear, monthLabelForWeek,
+} from '../../../../shared/utils/kpiPeriod';
 import { toLocalYmd, todayLocalYmd } from '../../../../shared/utils/localDate';
 import { LineChart, Line, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 
@@ -2543,6 +2547,17 @@ const DashboardView = ({
   const [kpiSelectorTab, setKpiSelectorTab] = useState('kpi'); // 'kpi' | 'perf'
   // 성과 검증 모달 (막대 클릭 시)
   const [perfDetailModal, setPerfDetailModal] = useState(null); // { division, item }
+  /*
+    사업부별 KPI 그래프의 가로축. 운영에서는 KPI 실적이 **주 단위로 찍히는데**
+    화면이 달로 뭉쳐 그리고 있었다 — 한 달에 네다섯 번 찍힌 값이 마지막 하나만
+    남았다. 주로도 볼 수 있게 토글을 둔다.
+
+    주 번호는 **ISO 주**다(shared/utils/kpiPeriod). DX KPI 관리 화면과 같은 셈법이라
+    두 화면의 「N주」가 같은 주를 가리킨다.
+  */
+  // 운영 자료가 주 단위로 찍히므로 **주별**로 시작한다. 달로 뭉치면 한 달에
+  // 네다섯 번 찍힌 값이 마지막 하나만 남아 그 사이 움직임이 통째로 사라진다.
+  const [kpiTrendAxis, setKpiTrendAxis] = useState('week'); // 'month' | 'week'
   // 조직별 액션아이템 상태 모달 (막대 클릭 시)
   const [aiStatusModal, setAiStatusModal] = useState(null); // { division: divKey, focusCategory? }
   const [aiModalFilter, setAiModalFilter] = useState('all'); // 'all' | '완료' | '조기달성' | '계획' | '지연'
@@ -6263,27 +6278,17 @@ const DashboardView = ({
     return { divisions: result, labelsWithDelta, hasClampedDelta };
   }, [kpiDefinitions, kpiRecords, kpiTargets, executiveSelectedDivision, executiveRefDate, currentYear, excludedKpis]);
 
-  // 사업부별 모드: 선택된 사업부의 KPI별 월간 시계열 (실적 + 분기 목표 fallback)
+  // 사업부별 모드: 선택된 사업부의 KPI별 시계열 (실적 + 목표). 가로축은 월/주 토글.
   const executiveKpiTrend = useMemo(() => {
     if (executiveSelectedDivision === 'all') return null;
     const divEntry = executiveKpiByDivision.divisions.find(d => d.division === executiveSelectedDivision);
     if (!divEntry || divEntry.kpis.length === 0) return null;
 
-    const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
-    const MONTH_TO_QUARTER = {
-      '1월': 'Q1', '2월': 'Q1', '3월': 'Q1',
-      '4월': 'Q2', '5월': 'Q2', '6월': 'Q2',
-      '7월': 'Q3', '8월': 'Q3', '9월': 'Q3',
-      '10월': 'Q4', '11월': 'Q4', '12월': 'Q4'
-    };
     const yearStr = String(currentYear);
-
-    const getMonthLabel = (dateStr) => {
-      if (!dateStr) return null;
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return null;
-      return MONTHS[d.getMonth()];
-    };
+    const byWeek = kpiTrendAxis === 'week';
+    // 자료가 없는 기간도 가로축에 자리를 잡아야 선이 그 자리에서 끊긴다.
+    const periods = byWeek ? weeksForYear(currentYear) : KPI_MONTHS;
+    const periodOf = byWeek ? weekLabelOf : monthLabelOf;
 
     const targetVal = (entry) => {
       if (entry == null) return null;
@@ -6306,11 +6311,34 @@ const DashboardView = ({
         r.baseDate?.startsWith(yearStr)
       );
 
-      const monthData = MONTHS.map(month => {
-        // 실적: 그 월 안에서 가장 최근(baseDate가 늦은 → 같으면 id 큰) 레코드
+      /*
+        목표 찾는 차례는 DX KPI 관리와 **같다**.
+          월 축 : 그 달의 목표 → 없으면 그 달이 속한 분기 목표
+          주 축 : 그 주의 목표 → 없으면 그 주가 속한 달 → 없으면 그 달의 분기
+        목표는 대개 분기 단위로만 들어오므로, 주 축에서 목표선은 분기가 바뀔 때
+        한 번 턱이 지는 계단이 된다.
+      */
+      const targetOf = (period) => {
+        const key = (p) => `${executiveSelectedDivision}|${currentYear}|${kpi.label}|${p}`;
+        let v = targetVal(kpiTargets[key(period)]);
+        if (v !== null) return v;
+
+        const month = byWeek ? monthLabelForWeek(currentYear, period) : period;
+        if (!month) return null;
+        if (byWeek) {
+          v = targetVal(kpiTargets[key(month)]);
+          if (v !== null) return v;
+        }
+        const quarter = KPI_MONTH_TO_QUARTER[month];
+        return quarter ? targetVal(kpiTargets[key(quarter)]) : null;
+      };
+
+      const periodData = periods.map(period => {
+        // 실적: 그 기간 안에서 가장 최근(baseDate가 늦은 → 같으면 id 큰) 레코드.
+        // 없으면 null 이라 선이 그 자리에서 끊긴다 — 값이 안 바뀐 것과 안 찍힌 것은 다르다.
         let latest = null;
         for (const r of recs) {
-          if (getMonthLabel(r.baseDate) !== month) continue;
+          if (periodOf(r.baseDate) !== period) continue;
           if (!latest
             || r.baseDate > latest.baseDate
             || (r.baseDate === latest.baseDate && r.id > latest.id)) {
@@ -6319,19 +6347,10 @@ const DashboardView = ({
         }
         const actualVal = latest ? parseFloat(latest.value) : null;
 
-        // 목표: 월별 우선, 없으면 분기별 fallback
-        const monthKey = `${executiveSelectedDivision}|${currentYear}|${kpi.label}|${month}`;
-        let tEntry = kpiTargets[monthKey];
-        if (targetVal(tEntry) === null) {
-          const quarterKey = `${executiveSelectedDivision}|${currentYear}|${kpi.label}|${MONTH_TO_QUARTER[month]}`;
-          tEntry = kpiTargets[quarterKey];
-        }
-        const targetVal_ = targetVal(tEntry);
-
         return {
-          month,
+          period,
           actual: actualVal !== null && !isNaN(actualVal) ? actualVal : null,
-          target: targetVal_
+          target: targetOf(period),
         };
       });
 
@@ -6339,10 +6358,10 @@ const DashboardView = ({
         label: kpi.label,
         unit: kpi.unit,
         category: kpi.category,
-        monthData
+        periodData,
       };
     });
-  }, [executiveSelectedDivision, executiveKpiByDivision, kpiRecords, kpiTargets, currentYear]);
+  }, [executiveSelectedDivision, executiveKpiByDivision, kpiRecords, kpiTargets, currentYear, kpiTrendAxis]);
 
   // KPI 셀 클릭: 같은 label이면 추가/토글, 다른 label이면 교체
   const handleKpiCellClick = (label, division) => {
@@ -9096,6 +9115,32 @@ const DashboardView = ({
                     </ExecPanelSubtitle>
                   </ExecPanelHeader>
                   <ExecPanelBody style={{ padding: '0.75rem 0.75rem 0.75rem' }}>
+                    {/* 가로축 토글 — 사업부별(그래프) 모드에서만 뜻이 있다 */}
+                    {executiveSelectedDivision !== 'all' && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: 2, padding: 3, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                          {[['month', '월별'], ['week', '주별']].map(([key, label]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setKpiTrendAxis(key)}
+                              style={{
+                                padding: '3px 10px',
+                                border: 'none',
+                                borderRadius: 6,
+                                fontSize: '0.75rem',
+                                fontWeight: kpiTrendAxis === key ? 700 : 500,
+                                cursor: 'pointer',
+                                background: kpiTrendAxis === key ? '#6366f1' : 'transparent',
+                                color: kpiTrendAxis === key ? '#fff' : '#64748b',
+                              }}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {executiveSelectedDivision !== 'all' ? (
                       !executiveKpiTrend || executiveKpiTrend.length === 0 ? (
                         <ExecKpiPlaceholder>KPI 데이터가 없습니다.</ExecKpiPlaceholder>
@@ -9144,14 +9189,15 @@ const DashboardView = ({
                                 <div style={{ padding: '0.4rem 0.3rem' }}>
                                   <ResponsiveContainer width="100%" height={200}>
                                     <LineChart
-                                      data={kpi.monthData}
+                                      data={kpi.periodData}
                                       margin={{ top: 12, right: 12, left: 0, bottom: 4 }}
                                     >
                                       <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                                      {/* 주 축은 눈금이 53개라 다 적으면 뭉갠다 — 4주마다 하나만 */}
                                       <XAxis
-                                        dataKey="month"
+                                        dataKey="period"
                                         tick={{ fontSize: 11, fill: '#64748b' }}
-                                        interval={0}
+                                        interval={kpiTrendAxis === 'week' ? 3 : 0}
                                       />
                                       <YAxis
                                         tick={{ fontSize: 11, fill: '#64748b' }}
