@@ -5754,7 +5754,14 @@ const DashboardView = ({
         let arr = map.get(perfKey);
         if (!arr) { arr = []; map.set(perfKey, arr); }
         if (!arr.some(x => x.id === projectId)) {
-          arr.push({ id: projectId, uuid: proj.uuid, 과제명: proj.과제명 || '(이름 없음)' });
+          // 사업부를 같이 담는다 — 한 성과에 여러 사업부의 과제가 걸리는 일이 있어,
+          // 이름만 봐서는 어느 조직 것인지 알 수 없다.
+          arr.push({
+            id: projectId,
+            uuid: proj.uuid,
+            과제명: proj.과제명 || '(이름 없음)',
+            사업부: proj.사업부 || '',
+          });
         }
       });
     });
@@ -8979,18 +8986,42 @@ const DashboardView = ({
                                 <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', maxWidth: 320 }}>
                                   {(row.projects || []).length === 0
                                     ? <span style={{ color: '#cbd5e1' }}>–</span>
-                                    : row.projects.map((proj, i) => (
-                                        <React.Fragment key={proj.id || proj.uuid || i}>
-                                          {i > 0 && <span style={{ color: '#cbd5e1' }}>, </span>}
-                                          <span
-                                            onClick={() => { setPerfDetailModal(null); openProjectDetail(proj); }}
-                                            title="클릭하면 과제 상세를 봅니다"
-                                            style={{ color: '#4f46e5', cursor: 'pointer', textDecoration: 'underline' }}
-                                          >
-                                            {proj.과제명}
-                                          </span>
-                                        </React.Fragment>
-                                      ))}
+                                    : row.projects.map((proj, i) => {
+                                        // 사업부 배지는 전체 요약의 다른 화면과 같은 색을 쓴다.
+                                        // 목록에 없는 사업부(또는 빈 값)는 회색으로 떨어진다.
+                                        const divColor = EXEC_DIV_COLORS[proj.사업부] || '#94a3b8';
+                                        return (
+                                          <React.Fragment key={proj.id || proj.uuid || i}>
+                                            {i > 0 && <span style={{ color: '#cbd5e1' }}>, </span>}
+                                            {proj.사업부 && (
+                                              <span
+                                                style={{
+                                                  display: 'inline-block',
+                                                  marginRight: 4,
+                                                  padding: '1px 6px',
+                                                  borderRadius: 999,
+                                                  fontSize: '0.68rem',
+                                                  fontWeight: 700,
+                                                  lineHeight: 1.5,
+                                                  color: divColor,
+                                                  background: `${divColor}1a`,
+                                                  border: `1px solid ${divColor}55`,
+                                                  whiteSpace: 'nowrap',
+                                                }}
+                                              >
+                                                {execDivDisplayName(proj.사업부)}
+                                              </span>
+                                            )}
+                                            <span
+                                              onClick={() => { setPerfDetailModal(null); openProjectDetail(proj); }}
+                                              title="클릭하면 과제 상세를 봅니다"
+                                              style={{ color: '#4f46e5', cursor: 'pointer', textDecoration: 'underline' }}
+                                            >
+                                              {proj.과제명}
+                                            </span>
+                                          </React.Fragment>
+                                        );
+                                      })}
                                 </td>
                                 <td style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>
                                   <div>{fmt(row.current)}</div>
