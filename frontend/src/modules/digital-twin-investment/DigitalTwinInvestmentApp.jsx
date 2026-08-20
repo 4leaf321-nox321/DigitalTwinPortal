@@ -144,7 +144,8 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
   const [filterDivisions, setFilterDivisions] = useState([]);
   const [filterCategory1s, setFilterCategory1s] = useState([]);
 
-  const [viewMode, setViewMode] = useState('table');   // 'table' | 'pivot'
+  // 들어오면 피벗부터 본다 — 목록은 찾아 고칠 때 쓰고, 현황 파악은 피벗이 먼저다.
+  const [viewMode, setViewMode] = useState('pivot');   // 'table' | 'pivot'
   // 정렬 상태를 여기 둔다 — 표도 쓰고, 「로컬 저장」도 같은 차례로 내보내야 해서.
   const [sort, setSort] = useState({ key: null, dir: null });
 

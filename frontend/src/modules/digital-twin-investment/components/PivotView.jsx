@@ -41,24 +41,39 @@ const Table = styled.table`
 
   th, td {
     padding: 0.45rem 0.6rem;
-    border: 1px solid #f1f5f9;
+    border: 1px solid #e2e8f0;
     white-space: nowrap;
   }
 
+  /* 위쪽 머리 — 자료 칸과 확실히 갈라 놓는다 */
   th {
-    background: #f8fafc;
-    color: #475569;
-    font-weight: 600;
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
     font-size: 0.78rem;
     text-align: center;
+    border-color: #cbd5e1;
   }
 
-  /* 기준열은 세로로 합쳐지므로 글자를 위쪽에 붙여 둔다. */
+  thead tr:last-child th {
+    border-bottom: 2px solid #94a3b8;
+  }
+
+  /* 기준열은 세로로 합쳐지는 칸이다. 합쳐진 높이의 **가운데**에 글자를 두어야
+     그 칸이 어디까지 걸쳐 있는지 눈으로 잡힌다. */
   tbody td.dim {
-    vertical-align: top;
+    vertical-align: middle;
     color: #1e293b;
-    background: #fcfdff;
+    background: #f8fafc;
+    font-weight: 600;
+    border-color: #cbd5e1;
     cursor: pointer;
+  }
+
+  /* 왼쪽 머리(기준열)와 숫자 자리를 가르는 선 — 머리줄부터 아래까지 한 줄로 이어진다 */
+  thead th.dim-head-last,
+  tbody td.dim-last {
+    border-right: 2px solid #94a3b8;
   }
   tbody td.dim:hover { background: #eef2ff; }
   tbody td.dim.picked {
@@ -110,6 +125,8 @@ const GrandRow = styled.tr`
 
 const LabelCell = styled.td`
   text-align: right;
+  /* 기준열 네 칸을 합친 자리라 오른쪽 경계를 기준열과 똑같이 긋는다 */
+  border-right: 2px solid #94a3b8 !important;
 `;
 
 const Unset = styled.span`
@@ -179,7 +196,15 @@ const PivotView = ({ investments, orders }) => {
         <Table>
           <thead>
             <tr>
-              {PIVOT_DIMENSIONS.map(d => <th key={d.key} rowSpan={2}>{d.label}</th>)}
+              {PIVOT_DIMENSIONS.map((d, i) => (
+                <th
+                  key={d.key}
+                  rowSpan={2}
+                  className={i === PIVOT_DIMENSIONS.length - 1 ? 'dim-head-last' : undefined}
+                >
+                  {d.label}
+                </th>
+              ))}
               {years.map(year => (
                 <YearHead key={year} colSpan={2}>{year === '미지정' ? '년도 미지정' : `${year}년`}</YearHead>
               ))}
@@ -205,7 +230,11 @@ const PivotView = ({ investments, orders }) => {
                     {leaf.spans.map((span, depth) => (
                       span.render ? (
                         <td
-                          className={`dim${isPicked(leaf.path, depth + 1) ? ' picked' : ''}`}
+                          className={[
+                            'dim',
+                            depth === PIVOT_DIMENSIONS.length - 1 ? 'dim-last' : '',
+                            isPicked(leaf.path, depth + 1) ? 'picked' : '',
+                          ].filter(Boolean).join(' ')}
                           key={depth}
                           rowSpan={span.rowSpan}
                           onClick={(e) => pickScope(e, leaf.path, depth + 1)}
