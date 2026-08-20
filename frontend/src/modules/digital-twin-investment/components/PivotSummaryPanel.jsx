@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { X } from 'lucide-react';
 import {
-  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 
@@ -309,13 +309,18 @@ const PivotSummaryPanel = ({ investments, scopes = [], onRemoveScope, onClearSco
                 dataKey="actual"
                 fill={ACTUAL_COLOR}
                 radius={[0, 3, 3, 0]}
-                label={{
-                  position: 'right',
-                  fontSize: 10.5,
-                  fill: '#64748b',
-                  formatter: (_v, _n, props) => rateText(props?.payload?.rate),
-                }}
-              />
+              >
+                {/* label={{ formatter }} 는 그 칸의 **값 하나만** 넘겨 준다 —
+                    payload 를 뒤지면 undefined 라 늘 같은 수가 찍혔다.
+                    보여 줄 값을 dataKey 로 직접 가리킨다. */}
+                <LabelList
+                  dataKey="rate"
+                  position="right"
+                  fontSize={10.5}
+                  fill="#64748b"
+                  formatter={(v) => rateText(v)}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -375,13 +380,15 @@ const PivotSummaryPanel = ({ investments, scopes = [], onRemoveScope, onClearSco
               <Bar
                 dataKey="value"
                 radius={[0, 3, 3, 0]}
-                label={{
-                  position: 'right',
-                  fontSize: 10.5,
-                  fill: '#64748b',
-                  formatter: (v, _n, props) => `${props?.payload?.share ?? 0}%`,
-                }}
               >
+                {/* 비중은 막대 길이(value)와 다른 값이라 dataKey 로 따로 가리킨다 */}
+                <LabelList
+                  dataKey="share"
+                  position="right"
+                  fontSize={10.5}
+                  fill="#64748b"
+                  formatter={(v) => `${v}%`}
+                />
                 {breakdown.map((d, i) => (
                   <Cell key={d.name} fill={SHARE_COLORS[Math.min(i, SHARE_COLORS.length - 1)]} />
                 ))}
