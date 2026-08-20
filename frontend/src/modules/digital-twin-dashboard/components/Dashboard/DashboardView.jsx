@@ -4812,26 +4812,32 @@ const DashboardView = ({
     : executiveRefPreset === 'lastQuarter' ? '전 분기'
     : executiveRefDate;
 
-  // 기준일 시점 진행률 계산 (해당 시점 이전에 완료된 액션아이템만 카운트)
-  const calculateProgressAsOf = (project, asOfDate) => {
-    if (!project.액션아이템목록 || project.액션아이템목록.length === 0) return 0;
-    const actionItemCount = project.액션아이템목록.length;
-    const contributionPerActionItem = 100 / actionItemCount;
-    const wasCompletedByDate = (it) =>
-      it.완료여부 && it.완료일 && new Date(it.완료일) <= asOfDate;
-
-    let totalProgress = 0;
-    project.액션아이템목록.forEach(item => {
-      const details = item.세부항목목록 || [];
-      if (details.length > 0) {
-        const completed = details.filter(wasCompletedByDate).length;
-        totalProgress += (completed / details.length) * contributionPerActionItem;
-      } else if (wasCompletedByDate(item)) {
-        totalProgress += contributionPerActionItem;
-      }
-    });
-    return Math.round(totalProgress);
+  /**
+   * 액션아이템 개수 기준 진척률 — 상단 카드(「액션아이템 진척률」)와 **같은 셈법**이다.
+   *
+   * 과제별 진척률을 내서 평균내면 액션아이템이 3개인 과제와 14개인 과제가 같은 무게가
+   * 되어, 전사 값과 사업부 값이 서로 안 맞는다. 보고 자리에서 합계와 부분이 어긋나면
+   * 반드시 질문을 받는다. 그래서 액션아이템을 **한 통에 모아** 센다.
+   *
+   * 카드와 다른 점이 하나 있다: 시계열이라 완료 **시점**이 필요하다. 완료일이 비어
+   * 있는 건은 어느 주에 넣을지 알 수 없어 이 그래프에서는 미완료로 남는다
+   * (카드는 '지금' 하나만 보므로 완료여부만 본다).
+   *
+   * 액션아이템이 하나도 없으면 null 이다 — 0% 로 그리면 '진척 0' 처럼 보인다.
+   */
+  const aiCountProgressAsOf = (projects, asOfDate) => {
+    let total = 0;
+    let done = 0;
+    projects.forEach(p => (p.액션아이템목록 || []).forEach(item => {
+      total += 1;
+      if (item.완료여부 && item.완료일 && new Date(item.완료일) <= asOfDate) done += 1;
+    }));
+    return total === 0 ? null : Math.round((done / total) * 1000) / 10;
   };
+
+  // (과제별 진척률을 내서 평균내던 calculateProgressAsOf 는 걷어냈다 —
+  //  그것 때문에 상단 카드와 조직별 그래프가 서로 다른 수를 보였다.
+  //  진척률의 정의는 aiCountProgressAsOf 하나로 둔다.)
 
   // 재사용 가능한 메트릭 계산 (executiveMetrics + 사업부별 카드 공통)
   // allStateProjects: 취소 제외 모집단(삭제 포함) — 진척률/완료/AI 등 모든 집계는 이 기준
@@ -5399,9 +5405,7 @@ const DashboardView = ({
       if (endDate.getTime() > yearEnd) break;
       const row = { week: w, dateMs: endDate.getTime() };
       divisions.forEach(div => {
-        const projects = byDivision.get(div) || [];
-        const sum = projects.reduce((s, p) => s + calculateProgressAsOf(p, endDate), 0);
-        row[div] = Math.round((sum / projects.length) * 10) / 10;
+        row[div] = aiCountProgressAsOf(byDivision.get(div) || [], endDate);
       });
       data.push(row);
     }
@@ -5506,13 +5510,7 @@ const DashboardView = ({
       if (endDate.getTime() > yearEnd) break;
       const row = { week: w, dateMs: endDate.getTime() };
       processes.forEach(proc => {
-        const projects = byProcess.get(proc) || [];
-        if (projects.length === 0) {
-          row[proc] = null;
-        } else {
-          const sum = projects.reduce((s, p) => s + calculateProgressAsOf(p, endDate), 0);
-          row[proc] = Math.round((sum / projects.length) * 10) / 10;
-        }
+        row[proc] = aiCountProgressAsOf(byProcess.get(proc) || [], endDate);
       });
       data.push(row);
     }
@@ -7265,7 +7263,7 @@ const DashboardView = ({
                       📈 조직별 액션아이템 진척률
                     </ExecPanelTitle>
                     <ExecPanelSubtitle>
-                      {currentYear}년 · 주차별 평균 액션아이템 진척률
+                      {currentYear}년 · 주차별 액션아이템 진척률 (완료 ÷ 전체, 상단 카드와 같은 셈법)
                       {executiveSelectedDivision !== 'all' ? ` · ${execDivDisplayName(executiveSelectedDivision)} 프로세스별` : ''}
                     </ExecPanelSubtitle>
                   </ExecPanelHeader>
