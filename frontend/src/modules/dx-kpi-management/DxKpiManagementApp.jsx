@@ -14,6 +14,19 @@ import {
   achievement as calcAchievementRaw,
   achievementColor,
 } from '../../shared/utils/kpiAchievement';
+import {
+  MONTHS, MONTH_TO_QUARTER, monthLabelOf, weekLabelOf, weeksForYear, monthLabelForWeek,
+} from '../../shared/utils/kpiPeriod';
+
+/*
+  주·월·분기 라벨은 **공용 셈법 하나**를 쓴다(shared/utils/kpiPeriod).
+  대시보드의 사업부별 KPI 그래프도 같은 것을 쓰므로, 같은 날짜가 두 화면에서
+  다른 주로 잡히는 일이 없다. 예전에는 이 파일 안에 제 사본을 갖고 있었다.
+*/
+const getMonth = monthLabelOf;
+const getWeek = weekLabelOf;
+const getWeeksForYear = weeksForYear;
+const getMonthForWeek = monthLabelForWeek;
 
 const DIVISIONS = [
   { id: 'mx', name: 'MX' },
@@ -613,15 +626,6 @@ const DivisionHeader = styled.td`
 `;
 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
-const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-
-const MONTH_TO_QUARTER = {
-  '1월': 'Q1', '2월': 'Q1', '3월': 'Q1',
-  '4월': 'Q2', '5월': 'Q2', '6월': 'Q2',
-  '7월': 'Q3', '8월': 'Q3', '9월': 'Q3',
-  '10월': 'Q4', '11월': 'Q4', '12월': 'Q4',
-};
-
 function getQuarter(dateStr) {
   if (!dateStr) return null;
   const month = parseInt(dateStr.split('-')[1], 10);
@@ -630,42 +634,6 @@ function getQuarter(dateStr) {
   if (month >= 7 && month <= 9) return 'Q3';
   if (month >= 10 && month <= 12) return 'Q4';
   return null;
-}
-
-function getMonth(dateStr) {
-  if (!dateStr) return null;
-  const m = parseInt(dateStr.split('-')[1], 10);
-  return m >= 1 && m <= 12 ? `${m}월` : null;
-}
-
-function getISOWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-}
-
-function getWeek(dateStr) {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return null;
-  return `${getISOWeek(date)}주`;
-}
-
-function getWeeksForYear(year) {
-  const lastWeek = getISOWeek(new Date(year, 11, 28));
-  return Array.from({ length: lastWeek }, (_, i) => `${i + 1}주`);
-}
-
-function getMonthForWeek(year, weekLabel) {
-  const weekNum = parseInt(weekLabel, 10);
-  if (isNaN(weekNum)) return null;
-  const jan4 = new Date(year, 0, 4);
-  const jan4Day = jan4.getDay() || 7;
-  // ISO 주의 기준은 목요일(항상 해당 ISO 연도 내). 월요일을 쓰면 1주차 월요일이 전년 12월일 수 있어 잘못된 분기로 매핑됨.
-  const thursday = new Date(year, 0, 4 - jan4Day + 4 + (weekNum - 1) * 7);
-  return `${thursday.getMonth() + 1}월`;
 }
 
 const PeriodToggle = styled.div`
@@ -811,7 +779,9 @@ function formatFractionDisplay(value, unit, numerator, denominator) {
 }
 
 const DxKpiManagementApp = ({ onGoHome }) => {
-  const [viewMode, setViewMode] = useState('raw');
+  // 들어오면 「KPI 종합 데이터」의 그래프부터 본다 — 처음 보는 것은 대개 추세이고,
+  // Raw 데이터는 값을 넣거나 고칠 때 들어가는 화면이다.
+  const [viewMode, setViewMode] = useState('summary');
   const [records, setRecords] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -824,7 +794,7 @@ const DxKpiManagementApp = ({ onGoHome }) => {
   const [targets, setTargets] = useState({});
   const [criteria, setCriteria] = useState({});
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [summaryPeriod, setSummaryPeriod] = useState('quarter');
+  const [summaryPeriod, setSummaryPeriod] = useState('graph');
   const [summaryCompact, setSummaryCompact] = useState(false); // false: 펼치기(목표/실적/달성률), true: 접기(실적만)
   /*
     그래프에 그릴 KPI 들. **여러 개를 동시에 그린다.**
@@ -834,8 +804,15 @@ const DxKpiManagementApp = ({ onGoHome }) => {
        빈 배열이면 **고른 사업부의 KPI 전부**를 그린다.
   */
   const [graphKpis, setGraphKpis] = useState([]);
-  const [graphDivisions, setGraphDivisions] = useState([]);
-  const [graphAxis, setGraphAxis] = useState('month'); // 'week' | 'month'
+  /*
+    그래프에 그릴 사업부. **전부 골라 둔 채로 시작한다.**
+
+    빈 배열이면 그래프 자리에 「사업부를 1개 이상 선택하세요」만 뜬다. 들어오자마자
+    그래프를 보여 주기로 한 이상, 첫 화면이 안내문이면 뜻이 없다.
+    (2026년 자료 기준으로 11장이 그려진다 — 골라 둔 사업부의 KPI 전부다)
+  */
+  const [graphDivisions, setGraphDivisions] = useState(DIVISIONS.map(d => d.name));
+  const [graphAxis, setGraphAxis] = useState('week'); // 'week' | 'month'
   const [graphTargetDivision, setGraphTargetDivision] = useState('');
   const [entryMode, setEntryMode] = useState('single'); // 'single' | 'bulk'
   /*
