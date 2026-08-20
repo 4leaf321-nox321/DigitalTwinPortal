@@ -51,6 +51,24 @@ const Header = ({
   const settingsDropdownRef = useRef(null);
   const serverDataDropdownRef = useRef(null);
 
+  /*
+    로컬·서버 데이터 메뉴는 가로 스크롤되는 상자(.header-center-content) 안에 있다.
+    그 상자가 overflow 로 **아래를 잘라내서**, absolute 로 띄우면 메뉴가 헤더 밑으로
+    나가는 순간 잘려 보이지 않았다. (같은 헤더의 「설정」은 그 상자 **밖**이라 멀쩡했다 —
+    이 차이가 증상의 열쇠였다.)
+
+    가로 스크롤은 해상도가 낮을 때 버튼이 잘리는 걸 막으려고 일부러 넣은 것이라
+    걷어낼 수 없다. 그래서 메뉴만 **화면 기준(fixed)** 으로 띄운다. fixed 는 조상의
+    overflow 에 잘리지 않는다. 대신 자리를 스스로 알 수 없으니 열 때 버튼을 재 둔다.
+  */
+  const [localMenuPos, setLocalMenuPos] = useState(null);
+  const [serverMenuPos, setServerMenuPos] = useState(null);
+
+  const menuPosOf = (ref) => {
+    const r = ref.current?.getBoundingClientRect();
+    return r ? { top: r.bottom + 4, left: r.left } : null;
+  };
+
   // 통계 데이터 (현재 사용 안함)
   const statsData = [];
 
@@ -257,7 +275,9 @@ const Header = ({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setIsLocalDataDropdownOpen(!isLocalDataDropdownOpen);
+                  const next = !isLocalDataDropdownOpen;
+                  if (next) setLocalMenuPos(menuPosOf(localDataDropdownRef));
+                  setIsLocalDataDropdownOpen(next);
                 }}
                 title="로컬 데이터"
               >
@@ -266,7 +286,7 @@ const Header = ({
                 <ChevronDown size={14} className="dropdown-icon" />
               </button>
               {isLocalDataDropdownOpen && (
-                <div className="local-data-dropdown-menu">
+                <div className="local-data-dropdown-menu" style={localMenuPos || undefined}>
                   <div
                     className="dropdown-menu-item"
                     onClick={(e) => {
@@ -332,7 +352,9 @@ const Header = ({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setIsServerDataDropdownOpen(!isServerDataDropdownOpen);
+                  const next = !isServerDataDropdownOpen;
+                  if (next) setServerMenuPos(menuPosOf(serverDataDropdownRef));
+                  setIsServerDataDropdownOpen(next);
                 }}
                 title="서버 데이터"
               >
@@ -341,7 +363,7 @@ const Header = ({
                 <ChevronDown size={14} className="dropdown-icon" />
               </button>
               {isServerDataDropdownOpen && (
-                <div className="server-data-dropdown-menu">
+                <div className="server-data-dropdown-menu" style={serverMenuPos || undefined}>
                   {/*
                     2026-07-31 V2 컷오버 — '서버에 저장'(수동 서버 업로드) 메뉴를 내렸다.
 
@@ -905,9 +927,9 @@ const Header = ({
         }
 
         .local-data-dropdown-menu {
-          position: absolute;
-          top: calc(100% + 0.25rem);
-          left: 0;
+          /* 조상(.header-center-content)의 overflow 에 잘리지 않도록 화면 기준으로.
+             top/left 는 열 때 잰 값을 인라인으로 준다. */
+          position: fixed;
           background: white;
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
@@ -994,9 +1016,9 @@ const Header = ({
         }
 
         .server-data-dropdown-menu {
-          position: absolute;
-          top: calc(100% + 0.25rem);
-          left: 0;
+          /* 조상(.header-center-content)의 overflow 에 잘리지 않도록 화면 기준으로.
+             top/left 는 열 때 잰 값을 인라인으로 준다. */
+          position: fixed;
           background: white;
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
