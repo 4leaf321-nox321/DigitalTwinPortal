@@ -5398,14 +5398,25 @@ const DashboardView = ({
       ? koreaTime.getTime()
       : new Date(currentYear, 11, 31, 23, 59, 59).getTime();
 
-    // 데이터: yearEnd 이내 주차만 포함 → X축이 미래 영역으로 늘어나지 않음
+    /*
+      데이터: yearEnd(올해면 오늘) 까지의 주차.
+
+      🐞 예전에는 **주말(토)이 아직 안 왔다는 이유로 그 주를 통째로 버렸다.**
+         그래서 목요일에 보면 마지막 점이 지난 토요일이었고, 이번 주에 끝낸
+         액션아이템이 다음 토요일이 되어야 화면에 나타났다.
+
+         지나는 중인 주는 **오늘까지 잘라** 한 점을 찍는다. 주가 통째로 미래일
+         때만 멈춘다.
+    */
     const data = [];
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
     for (let w = 1; w <= 52; w++) {
-      const endDate = weekEndDate(w);
-      if (endDate.getTime() > yearEnd) break;
-      const row = { week: w, dateMs: endDate.getTime() };
+      const endMs = weekEndDate(w).getTime();
+      if (endMs - WEEK_MS >= yearEnd) break;      // 이 주가 통째로 미래
+      const asOf = new Date(Math.min(endMs, yearEnd));   // 진행 중인 주는 오늘까지
+      const row = { week: w, dateMs: asOf.getTime() };
       divisions.forEach(div => {
-        row[div] = aiCountProgressAsOf(byDivision.get(div) || [], endDate);
+        row[div] = aiCountProgressAsOf(byDivision.get(div) || [], asOf);
       });
       data.push(row);
     }
@@ -5504,13 +5515,16 @@ const DashboardView = ({
       ? koreaTime.getTime()
       : new Date(currentYear, 11, 31, 23, 59, 59).getTime();
 
+    // 사업부별 그래프와 같은 규칙 — 지나는 중인 주는 오늘까지 잘라 한 점 찍는다.
     const data = [];
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
     for (let w = 1; w <= 52; w++) {
-      const endDate = weekEndDate(w);
-      if (endDate.getTime() > yearEnd) break;
-      const row = { week: w, dateMs: endDate.getTime() };
+      const endMs = weekEndDate(w).getTime();
+      if (endMs - WEEK_MS >= yearEnd) break;
+      const asOf = new Date(Math.min(endMs, yearEnd));
+      const row = { week: w, dateMs: asOf.getTime() };
       processes.forEach(proc => {
-        row[proc] = aiCountProgressAsOf(byProcess.get(proc) || [], endDate);
+        row[proc] = aiCountProgressAsOf(byProcess.get(proc) || [], asOf);
       });
       data.push(row);
     }
@@ -7269,10 +7283,11 @@ const DashboardView = ({
                     <ExecPanelTitle>
                       📈 조직별 액션아이템 진척률
                     </ExecPanelTitle>
-                    <ExecPanelSubtitle>
-                      {currentYear}년 · 주차별 액션아이템 진척률 (완료 ÷ 전체, 상단 카드와 같은 셈법)
-                      {executiveSelectedDivision !== 'all' ? ` · ${execDivDisplayName(executiveSelectedDivision)} 프로세스별` : ''}
-                    </ExecPanelSubtitle>
+                    {executiveSelectedDivision !== 'all' && (
+                      <ExecPanelSubtitle>
+                        {execDivDisplayName(executiveSelectedDivision)} 프로세스별
+                      </ExecPanelSubtitle>
+                    )}
                   </ExecPanelHeader>
                   <ExecPanelBody style={{ padding: '0.85rem 1rem 1rem' }}>
                     {executiveSelectedDivision !== 'all' ? (
@@ -7796,12 +7811,12 @@ const DashboardView = ({
                 <ExecPanel>
                   <ExecPanelHeader>
                     <ExecPanelTitle>💼 조직별 경영성과</ExecPanelTitle>
-                    <ExecPanelSubtitle>
-                      {currentYear}년 · 목표 vs 현재 vs 실적 ·{' '}
-                      {selectedKpiCards.size === 0
-                        ? 'KPI 선택 모달의 「조직별 경영성과」 탭에서 카드를 선택하세요'
-                        : `선택 ${selectedKpiCards.size}개 카드`}
-                    </ExecPanelSubtitle>
+                    {/* 고를 것이 없을 때의 안내만 남긴다 — 나머지는 화면을 보면 아는 말이다 */}
+                    {selectedKpiCards.size === 0 && (
+                      <ExecPanelSubtitle>
+                        KPI 선택 모달의 「조직별 경영성과」 탭에서 카드를 선택하세요
+                      </ExecPanelSubtitle>
+                    )}
                   </ExecPanelHeader>
                   {selectedKpiCards.size === 0 ? (
                     <ExecPerfEmpty>
