@@ -28,7 +28,7 @@ from app.shared.timeutil import kst_date, today_kst
 from app.modules.digital_twin_dashboard import permissions as P
 from app.modules.digital_twin_dashboard.models import Division, KPIDashboardCard
 from app.modules.digital_twin_dashboard.models_v2 import (
-    Dt2Performance, Dt2PerformanceHistory, Dt2Project,
+    Dt2Performance, Dt2PerformanceHistory, Dt2Project, Dt2ProjectHistory,
 )
 
 # 이관이 지어낸 타임스탬프 표식 (`assemble._SYNTH_TS_KEY` 와 같은 문자열)
@@ -333,4 +333,89 @@ def performance_trend(actor, years=None, divisions=None):
         'note': ('값은 **환산 전 원본**입니다. 단위 환산과 합계·평균은 화면이 '
                  '기존 규칙(applyConversion)으로 계산합니다.'),
         'cardCount': len(result),
+    }
+
+
+def project_ai_history(actor, years=None, divisions=None):
+    """
+    과제별 **액션아이템 분모ㆍ분자의 시계열**. 그때 실제로 몇 개였고 몇 개가
+    끝나 있었나.
+
+    화면이 왜 이걸 필요로 하나
+        진척률의 과거 값을 **오늘 데이터로 되짚으면 틀린다.** 되짚기는 오늘
+        남아 있는 항목만 볼 수 있어서, 그동안 지워진 항목은 분모에도 분자에도
+        안 들어간다. 완료 체크를 되돌렸거나 완료일을 고친 것도 과거를 흔든다.
+        곧 되짚은 값은 '지금 기준으로 본 과거' 이지 '그때의 값' 이 아니다.
+        (Dt2ProjectHistory 의 주석이 같은 말을 한다 — 이 표는 그래서 있다.)
+
+        그래서 서버는 **그 시점의 분자ㆍ분모를 그대로** 돌려주고, 화면은
+        되짚기를 그만둔다.
+
+    ⚠️ **합계도 진척률도 여기서 내지 않는다.** 무엇을 모수로 삼을지(취소 포함
+       여부, 삭제 시점, 사업부 묶음)는 화면이 이미 정하고 있고, 여기서 다시
+       정하면 두 곳이 다른 숫자를 말하는 날이 온다. 이 파일의 다른 함수들과
+       같은 규칙이다.
+
+    ⚠️ 하루에 여러 번 바뀐 날은 **그날 마지막 값만** 남긴다. 화면이 날짜
+       단위로 '그 날짜 이전 마지막 값' 을 찾기 때문에 그 앞의 것은 쓰이지
+       않는다. 그대로 보내면 덩치만 커진다.
+
+    이력이 없는 과제는 `missing` 에 담아 함께 보낸다 — 화면이 그것만 예전
+    방식(되짚기)으로 떨어뜨릴 수 있어야 한다. 조용히 빼면 그 과제가 기준일
+    집합에서 통째로 사라져, 지금 고치려는 바로 그 병이 다시 생긴다.
+    """
+    q = Dt2Project.query
+    if years:
+        nums = [int(y) for y in years if str(y).isdigit()]
+        if nums:
+            q = q.filter(Dt2Project.year.in_(nums))
+    if divisions:
+        q = q.filter(Dt2Project.division.in_(divisions))
+    # 지워진 과제도 가져온다. 기준일에는 살아 있었을 수 있고, 그때 값이 필요하다.
+    projects = [p for p in q.all() if P.can_view_project(actor, p)]
+    if not projects:
+        return {'series': [], 'missing': [], 'projectCount': 0, 'rowCount': 0}
+
+    by_uuid = {p.uuid: p for p in projects}
+    rows = (Dt2ProjectHistory.query
+            .filter(Dt2ProjectHistory.project_uuid.in_(list(by_uuid.keys())))
+            .order_by(Dt2ProjectHistory.observed_at.asc(), Dt2ProjectHistory.id.asc())
+            .all())
+
+    # 과제 → 날짜 → 그날 마지막 값
+    per = defaultdict(dict)
+    for h in rows:
+        d = _d(h.observed_at)
+        if not d:
+            continue
+        per[h.project_uuid][d] = {
+            'date': d,
+            'total': int(h.action_total or 0),
+            'done': int(h.action_done or 0),
+            'status': h.status,
+            'progress': h.progress,
+        }
+
+    series, missing, row_count = [], [], 0
+    for uuid, p in by_uuid.items():
+        days = per.get(uuid)
+        if not days:
+            missing.append(uuid)
+            continue
+        ordered = [days[d] for d in sorted(days)]
+        row_count += len(ordered)
+        series.append({
+            'uuid': uuid,
+            'division': (p.division or '(미지정)').strip() or '(미지정)',
+            'year': p.year,
+            'rows': ordered,
+        })
+
+    return {
+        'series': series,
+        'missing': missing,
+        'projectCount': len(by_uuid),
+        'rowCount': row_count,
+        'note': ('그 시점에 저장된 액션아이템 분자ㆍ분모입니다. 되짚은 값이 아닙니다. '
+                 'missing 에 담긴 과제는 이력이 없으니 화면이 예전 방식으로 처리해야 합니다.'),
     }

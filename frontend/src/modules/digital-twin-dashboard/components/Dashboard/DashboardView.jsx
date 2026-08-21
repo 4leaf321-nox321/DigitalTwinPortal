@@ -31,6 +31,8 @@ import {
   monthLabelOf, weekLabelOf, weeksForYear, monthLabelForWeek,
 } from '../../../../shared/utils/kpiPeriod';
 import { toLocalYmd, todayLocalYmd } from '../../../../shared/utils/localDate';
+import { fetchProjectAiHistory } from '../../services/trendApi';
+import { buildAiHistoryIndex, emptyAiHistoryIndex, ymdOf } from '../../utils/aiHistory';
 import { LineChart, Line, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 
 const EXEC_DIV_COLORS = {
@@ -2401,6 +2403,17 @@ const DashboardView = ({
     return toLocalYmd(d);
   });
   const [executiveRefPreset, setExecutiveRefPreset] = useState('1week');
+
+  // 액션아이템 분모ㆍ분자의 **그때 값**. 되짚기를 그만두려고 서버에서 받아 둔다.
+  // 못 받아도 화면은 멀쩡히 돈다 — 예전 방식(되짚기)으로 떨어질 뿐이다.
+  const [aiHistory, setAiHistory] = useState(() => emptyAiHistoryIndex());
+  useEffect(() => {
+    let alive = true;
+    fetchProjectAiHistory({ years: [String(currentYear)] })
+      .then(data => { if (alive) setAiHistory(buildAiHistoryIndex(data)); })
+      .catch(() => { if (alive) setAiHistory(emptyAiHistoryIndex()); });
+    return () => { alive = false; };
+  }, [currentYear]);
   // 경영진 보고 - 과제 진행 현황 카테고리 필터
   const [executiveStatusFilter, setExecutiveStatusFilter] = useState('all'); // 'all' | 'completed' | 'delayed' | 'early'
   const [executiveShowAll, setExecutiveShowAll] = useState(false);
@@ -4855,16 +4868,37 @@ const DashboardView = ({
    *
    * 액션아이템이 하나도 없으면 null 이다 — 0% 로 그리면 '진척 0' 처럼 보인다.
    */
+  /**
+   * 한 과제의 **그 시점** 액션아이템 분모ㆍ분자.
+   *
+   * 서버 이력이 있으면 그것을 쓴다 — 그때 저장된 값이라 그동안 무엇이 지워졌든,
+   * 완료 체크를 되돌렸든 흔들리지 않는다.
+   *
+   * ⚠️ 이력이 없으면 **되짚기로 떨어진다.** 되짚기는 오늘 남아 있는 항목만 볼 수
+   *    있어 지워진 것을 못 세지만, 그 과제를 셈에서 아예 빼는 것보다는 낫다.
+   *    빼 버리면 기준일 값이 「그 과제를 뺀 나머지」가 되어 낙차에 한계가 없다.
+   */
+  const aiCountsAt = (project, at) => {
+    const snap = aiHistory.at(project?.uuid, ymdOf(at));
+    if (snap) return { total: snap.total, done: snap.done, fromHistory: true };
+
+    let total = 0, done = 0;
+    (project?.액션아이템목록 || []).forEach(item => {
+      if (!aiExistedAt(item, at)) return;
+      total += 1;
+      if (item.완료여부 && item.완료일 && new Date(item.완료일) <= at) done += 1;
+    });
+    return { total, done, fromHistory: false };
+  };
+
   const aiCountProgressAsOf = (projects, asOfDate) => {
     let total = 0;
     let done = 0;
-    projects.forEach(p => (p.액션아이템목록 || []).forEach(item => {
-      // 그 주에 없던 항목은 그 주의 셈에서 뺀다. 안 그러면 오늘 항목을 늘린 순간
-      // **지난 몇 달의 점이 통째로 내려앉는다** — 그때 실제로 보던 값이 아니다.
-      if (!aiExistedAt(item, asOfDate)) return;
-      total += 1;
-      if (item.완료여부 && item.완료일 && new Date(item.완료일) <= asOfDate) done += 1;
-    }));
+    projects.forEach(p => {
+      const c = aiCountsAt(p, asOfDate);
+      total += c.total;
+      done += c.done;
+    });
     return total === 0 ? null : Math.round((done / total) * 1000) / 10;
   };
 
@@ -4929,24 +4963,22 @@ const DashboardView = ({
         if (item.완료여부) currentCompletedAI++;
       });
     });
-    let refTotalAI = 0;
-    let refCompletedAI = 0;
-    refProjects.forEach(p => {
-      (p.액션아이템목록 || []).forEach(item => {
-        // 기준일 시점에 존재했던 AI만 카운트 (생성일 기준) → 기존 과제에 이후 추가된 AI는 제외
-        if (!aiExistedAtRef(item)) return;          // 분자ㆍ분모 같은 잣대
-        refTotalAI++;
-        if (item.완료여부 && item.완료일 && new Date(item.완료일) <= refDate) {
-          refCompletedAI++;
-        }
+    // 기준일 액션아이템 수는 **그때 저장된 값**을 쓴다(aiCountsAt). 되짚으면 그동안
+    // 지워진 항목을 못 세서, 지우고 다시 넣은 과제가 실제보다 적게 잡힌다.
+    const refAiOf = (projs) => {
+      let total = 0, done = 0, fromHistory = 0;
+      projs.forEach(p => {
+        const c = aiCountsAt(p, refDate);
+        total += c.total; done += c.done;
+        if (c.fromHistory) fromHistory += 1;
       });
-    });
+      return { total, done, pct: total === 0 ? 0 : (done / total) * 100, fromHistory };
+    };
+    const refAiAll = refAiOf(refProjects);
+    const refTotalAI = refAiAll.total;
+    const refCompletedAI = refAiAll.done;
     // 기준일 이후 취소된 과제가 기준일에 갖고 있던 AI도 "당시 존재" 카운트에 포함 (삭제와 동일 취급)
-    canceledExistedAtRefProjects.forEach(p => {
-      (p.액션아이템목록 || []).forEach(item => {
-        if (aiExistedAtRef(item)) refTotalAI++;
-      });
-    });
+    const refAiCanceled = refAiOf(canceledExistedAtRefProjects);
 
     // ── 액션아이템 달성률 (현시점: 진행률 현황의 actionItemAchievementRate와 동일 로직) ──
     // 분자: 완료된 액션아이템 / 분모: 시점까지 목표일이 도래한 액션아이템
@@ -5007,7 +5039,9 @@ const DashboardView = ({
       aiExistedAtRef(it) && it.완료여부 && it.완료일 && new Date(it.완료일) <= refDate;
 
     const currentAvgProgress = aiRatioProgress(currentProjects, curTotalFn, curDoneFn);
-    const refAvgProgress = aiRatioProgress(refProjects, refTotalFn, refDoneFn);
+    // ⚠️ 되짚기가 아니라 **이력**이다. 되짚으면 지워진 항목이 분모ㆍ분자에서
+    //    함께 빠져, 지우고 다시 넣은 과제의 기준일 값이 살아남은 것들만으로 잡힌다.
+    const refAvgProgress = refAiAll.pct;
 
     // 공통셋(동일 과제)의 현재/기준일 진척률 — 델타 분해용
     const interCurProgress = aiRatioProgress(intersection, curTotalFn, curDoneFn);
@@ -5043,14 +5077,35 @@ const DashboardView = ({
       if (aiExistedAtRef(it)) commonItemCount++; else addedItemCount++;
     }));
 
-    const newEffect = currentAvgProgress - interCurProgress;      // 신규 과제가 준 영향
-    const addedItemEffect = interCurProgress - commonCurProgress; // 기존 과제에 항목이 는 영향
-    const sameItemDelta = commonCurProgress - interRefProgress;   // 같은 항목이 실제로 나아간 몫
-    const removedEffect = interRefProgress - refAvgProgress;      // 기준일에만 있던(삭제) 과제
+    // 기준일 값은 이력에서 온다. 되짚은 값(interRefProgress)과의 **차이가 곧
+    // 그동안 지워진 액션아이템의 몫**이다 — 되짚기는 지워진 것을 볼 수 없으므로.
+    const refAiInter = refAiOf(intersection);
+    const interRefHistProgress = refAiInter.pct;
+
+    let deletedItemCount = 0;
+    intersection.forEach(p => {
+      const hist = aiCountsAt(p, refDate);
+      if (!hist.fromHistory) return;               // 되짚기면 지워진 것을 알 길이 없다
+      let survived = 0;
+      (p.액션아이템목록 || []).forEach(it => { if (aiExistedAtRef(it)) survived += 1; });
+      // 이력이 한 박자 늦으면 음수가 나올 수 있다. 없던 삭제를 지어내지 않는다.
+      deletedItemCount += Math.max(0, hist.total - survived);
+    });
+
+    // ⚠️ 이 몫은 **삭제만 담고 있지 않다.** 되짚기가 볼 수 없는 것 전부다 —
+    //    지워진 항목, 완료 체크를 되돌린 것, 완료일을 지우거나 고친 것. 그래서
+    //    개수가 0 이어도 값이 0 이 아닐 수 있고, 화면은 그때도 이 줄을 보여야
+    //    한다. 안 그러면 보이는 줄들의 합이 위 배지와 안 맞는다.
+
+    const newEffect = currentAvgProgress - interCurProgress;        // 신규 과제
+    const addedItemEffect = interCurProgress - commonCurProgress;   // 액션아이템이 는 몫
+    const sameItemDelta = commonCurProgress - interRefProgress;     // 같은 항목이 나아간 몫
+    const deletedItemEffect = interRefProgress - interRefHistProgress; // 지워진 액션아이템
+    const removedEffect = interRefHistProgress - refAvgProgress;    // 기준일에만 있던 과제
 
     // 예전 이름. 항목 추가분과 진척분을 합친 값이라 **둘을 못 가른다** —
     // 새로 쓰는 곳은 sameItemDelta 를 봐야 한다.
-    const sameCohortDelta = addedItemEffect + sameItemDelta;
+    const sameCohortDelta = addedItemEffect + sameItemDelta + deletedItemEffect;
 
     return {
       totalProjects,
@@ -5060,7 +5115,7 @@ const DashboardView = ({
       refCompletedProjects,
       deltaCompletedProjects: currentCompletedProjects - refCompletedProjects,
       totalAI,
-      refTotalAI,
+      refTotalAI: refTotalAI + refAiCanceled.total,
       currentCompletedAI,
       refCompletedAI,
       deltaCompletedAI: currentCompletedAI - refCompletedAI,
@@ -5071,8 +5126,11 @@ const DashboardView = ({
       newEffect,
       addedItemEffect,
       sameItemDelta,
+      deletedItemEffect,
       addedItemCount,
       commonItemCount,
+      deletedItemCount,
+      refFromHistory: refAiAll.fromHistory,
       sameCohortDelta,
       removedEffect,
       newProjectsCount: newProjects.length,
@@ -7305,7 +7363,7 @@ const DashboardView = ({
                         「진척」 줄에 얹혀 후퇴한 것처럼 읽힌다. */}
                     <KPIDecompRow>
                       <KPIDecompLabel>
-                        기존 항목 {executiveMetrics.commonItemCount}개 진척
+                        기존 액션아이템 {executiveMetrics.commonItemCount}개 진척
                       </KPIDecompLabel>
                       <KPIDecompValue $value={executiveMetrics.sameItemDelta}>
                         {executiveMetrics.sameItemDelta > 0 ? '+' : ''}{executiveMetrics.sameItemDelta.toFixed(1)}%p
@@ -7314,10 +7372,26 @@ const DashboardView = ({
                     {executiveMetrics.addedItemCount > 0 && (
                       <KPIDecompRow>
                         <KPIDecompLabel>
-                          항목 {executiveMetrics.addedItemCount}개 추가 영향
+                          액션아이템 {executiveMetrics.addedItemCount}개 추가 영향
                         </KPIDecompLabel>
                         <KPIDecompValue $value={executiveMetrics.addedItemEffect}>
                           {executiveMetrics.addedItemEffect > 0 ? '+' : ''}{executiveMetrics.addedItemEffect.toFixed(1)}%p
+                        </KPIDecompValue>
+                      </KPIDecompRow>
+                    )}
+                    {/* 지워진 액션아이템의 몫. 되짚기로는 보이지 않던 자리다 —
+                        지워진 항목은 오늘 목록에 없으니 분모에도 분자에도 안 들어간다.
+                        서버 이력이 그때 개수를 갖고 있어서 그 차이로 잡아낸다. */}
+                    {(executiveMetrics.deletedItemCount > 0
+                      || Math.abs(executiveMetrics.deletedItemEffect) >= 0.05) && (
+                      <KPIDecompRow>
+                        <KPIDecompLabel>
+                          {executiveMetrics.deletedItemCount > 0
+                            ? `액션아이템 ${executiveMetrics.deletedItemCount}개 삭제 영향`
+                            : '삭제ㆍ되돌림 영향'}
+                        </KPIDecompLabel>
+                        <KPIDecompValue $value={executiveMetrics.deletedItemEffect}>
+                          {executiveMetrics.deletedItemEffect > 0 ? '+' : ''}{executiveMetrics.deletedItemEffect.toFixed(1)}%p
                         </KPIDecompValue>
                       </KPIDecompRow>
                     )}

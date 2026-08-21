@@ -4729,6 +4729,20 @@ def trend_projects():
     ))
 
 
+@bp_v2.route('/trend/project-ai', methods=['GET'])
+@auth_required
+def trend_project_ai():
+    """과제별 액션아이템 분모ㆍ분자의 시계열. 되짚은 값이 아니라 그때 저장된 값이다."""
+    actor = _actor()
+    if actor is None:
+        return error_response('로그인이 필요합니다.', status_code=401)
+    return success_response(TV.project_ai_history(
+        actor,
+        years=GV._norm_list(request.args.get('years')),
+        divisions=GV._norm_list(request.args.get('divisions')),
+    ))
+
+
 @bp_v2.route('/trend/performances', methods=['GET'])
 @auth_required
 def trend_performances():

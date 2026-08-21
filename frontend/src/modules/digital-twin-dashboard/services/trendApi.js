@@ -4,6 +4,7 @@
  * 서버는 **원시 시계열만** 준다.
  *
  *     fetchProjectTrend     날짜별 사업부별 총 과제 수 (완료 포함, 취소 제외)
+ *     fetchProjectAiHistory 과제별 액션아이템 분모ㆍ분자 — **그때 저장된 값**
  *     fetchPerformanceTrend 성과 속성 카드별 값 — **환산 전 원본**
  *     fetchTrendNotes       날짜별 변동 사유 메모
  *     fetchDayChanges       그날 들어오고 나간 과제 (메모 쓰기 전 재료)
@@ -40,6 +41,22 @@ export const fetchProjectTrend = async (scope) => {
   const r = await fetch(`${API_BASE_URL}/dt-v2/trend/projects?${query(scope)}`,
     { headers: authHeaders() });
   return unwrap(r, '과제 추이 조회');
+};
+
+/**
+ * 과제별 **액션아이템 분모ㆍ분자의 시계열**. 그때 저장된 값이지 되짚은 값이 아니다.
+ *
+ * `{ series: [{ uuid, division, year, rows: [{date, total, done, status}] }],
+ *    missing: [uuid] }`
+ *
+ * `missing` 은 이력이 아예 없는 과제다 — 화면이 그것만 예전 방식(오늘 데이터로
+ * 되짚기)으로 떨어뜨려야 한다. 조용히 빼면 그 과제가 기준일 집합에서 통째로
+ * 사라져, 이 API 로 고치려던 바로 그 병이 다시 생긴다.
+ */
+export const fetchProjectAiHistory = async (scope) => {
+  const r = await fetch(`${API_BASE_URL}/dt-v2/trend/project-ai?${query(scope)}`,
+    { headers: authHeaders() });
+  return unwrap(r, '액션아이템 이력 조회');
 };
 
 export const fetchPerformanceTrend = async (scope) => {
