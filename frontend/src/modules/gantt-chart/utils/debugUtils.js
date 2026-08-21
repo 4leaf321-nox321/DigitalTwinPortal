@@ -4,6 +4,8 @@
 //    (yearlyPositionDebug.js 와 같은 이유 — 2026-08-02 일괄 정리에서 제외).
 //    화면·데이터에 쓰는 날짜는 shared/utils/localDate.js 를 쓸 것.
 
+import { groupByYears, groupByMonths } from './dateUtils';
+
 /**
  * groupByYears 함수 디버깅
  */

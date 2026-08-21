@@ -93,6 +93,30 @@ jobs:
       # 이 잡은 **Windows 에서만 확인할 수 있는 것**에 집중한다: 의존성 설치,
       # 프론트 빌드, wheel 묶음 만들기.
 
+      # 빌드는 이 부류를 **못 잡는다.** 정의되지 않은 이름은 빌드 오류가 아니라
+      # 실행 오류이고(0.4.2 — KPI 화면이 진입 즉시 죽은 채로 세 릴리스가 나갔다),
+      # useMemo 의존성 누락은 문법이 멀쩡한 채 **틀린 값만 조용히** 낸다
+      # (0.5.0 — 전체 카드가 낡은 값을 붙들고 있었다).
+      #
+      # ESLint 와 플러그인은 처음부터 devDependencies 에 있었는데 설정 파일이
+      # 없어서 한 번도 안 돌았다. 그 빈자리로 같은 사고가 세 번 났다.
+      #
+      # ⚠️ `--max-warnings` 는 **래칫**이다. exhaustive-deps 경고가 지금 121건
+      #    있는데, 한꺼번에 고치면 손댈 파일이 59개라 사고가 더 난다. 그래서
+      #    지금 수를 천장으로 박아 **늘어나는 것만 막는다.** 줄이면 그때 이 수도
+      #    같이 내릴 것. 절대 올리지 말 것 — 올리는 순간 검사는 있으나 마나가 된다.
+      - name: "Frontend: lint"
+        shell: pwsh
+        run: |
+          if (Test-Path frontend\package.json) {
+            Push-Location frontend
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
+            npm run lint
+            if ($LASTEXITCODE -ne 0) { throw "lint failed (exit $LASTEXITCODE)" }
+            Pop-Location
+          }
+
       - name: "Frontend: install and build"
         id: frontend-build
         shell: pwsh

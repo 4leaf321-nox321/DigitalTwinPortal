@@ -91,7 +91,11 @@ const ProcessCell = ({
   const [connectionDeleteConfirmOpen, setConnectionDeleteConfirmOpen] = useState(false);
   const [connectionToDelete, setConnectionToDelete] = useState(null);
   
-  const cellRef = containerRef || useRef(null);
+  // ⚠️ `containerRef || useRef(null)` 이었다. 단락 평가라 containerRef 가 있으면
+  //    useRef 가 **안 불린다.** 그 prop 이 있다 없다 하면 훅 순서가 렌더마다
+  //    달라져 다른 훅의 상태가 뒤섞인다. 훅은 늘 부르고, 고르는 것은 그다음이다.
+  const ownCellRef = useRef(null);
+  const cellRef = containerRef || ownCellRef;
   const animationFrameRef = useRef(null);
   const pendingUpdateRef = useRef(null);
 

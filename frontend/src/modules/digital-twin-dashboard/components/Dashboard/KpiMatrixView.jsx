@@ -1877,7 +1877,7 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [currentYear, period, reloadSignal]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(load, [currentYear, period, reloadSignal]);
 
   const model = useMemo(() => {
     if (!data) return null;
