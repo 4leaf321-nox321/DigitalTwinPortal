@@ -1,5 +1,5 @@
 /**
- * 사업부 표시 순서 — **설정이 정본이다.** (2026-08-07)
+ * 사업부 표시 순서 — **설정이 정본이다.** (2026-08-07, 2026-08-21 정리)
  *
  * 왜 만들었나
  *     화면마다 `const divisionOrder = ['MX','VD','DA',...]` 를 각자 박아 두고 있었고,
@@ -23,10 +23,28 @@
 /** 설정에 없는 사업부(비활성·오타)는 뒤로. 자기들끼리는 이름순이라 순서가 안 흔들린다. */
 const UNKNOWN = 9999;
 
-/** 사업부 이름 → 정렬 순위. `settingsData` 가 없으면 전부 UNKNOWN(=이름순) 이 된다. */
+/**
+ * 설정이 아직 안 왔을 때 쓸 차례. **정식 순서**다. (2026-08-21 결정)
+ *
+ * ⚠️ 이것은 **설정을 대신하는 것이지 이기는 것이 아니다.** 설정이 있으면 늘
+ *    설정이 먼저다. 조직이 바뀌면 설정에서 고치는 것이 맞고, 여기 손대는 것은
+ *    설정을 아직 못 받은 첫 그림에만 영향을 준다.
+ *
+ * 그래도 두는 이유: 이게 없으면 설정이 오기 전 한 번은 **이름순**(CS·DA·GTR·MX…)
+ * 으로 그려졌다가 설정이 온 뒤 다시 그려진다. 목록이 눈앞에서 뒤바뀐다.
+ */
+export const DIVISION_ORDER_FALLBACK = ['MX', 'VD', 'DA', 'NW', '의료기기', 'SR', 'GTR', 'CS'];
+
+/**
+ * 사업부 이름 → 정렬 순위.
+ *
+ * 설정 순서가 정본이고, 설정을 아직 못 받았으면 DIVISION_ORDER_FALLBACK 을 쓴다.
+ */
 export const divisionRank = (settingsData) => {
-  const order = new Map(
-    ((settingsData || {}).divisions || []).map((d, i) => [d?.name, i]));
+  const names = ((settingsData || {}).divisions || [])
+    .map(d => d?.name).filter(Boolean);
+  const source = names.length ? names : DIVISION_ORDER_FALLBACK;
+  const order = new Map(source.map((name, i) => [name, i]));
   return (name) => (order.has(name) ? order.get(name) : UNKNOWN);
 };
 

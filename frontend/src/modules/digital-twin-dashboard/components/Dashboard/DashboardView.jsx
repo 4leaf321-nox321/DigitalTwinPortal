@@ -24,6 +24,7 @@ import {
   changeColor,
 } from '../../../../shared/utils/kpiAchievement';
 import { evalFactor } from '../../utils/evalFactor';
+import { sortDivisionNames, DIVISION_ORDER_FALLBACK } from '../../utils/divisionOrder';
 // 수준값의 0 과 미입력은 다른 뜻이다. `parseFloat(v) || null` 은 0 을 null 로 접는다.
 import { levelNumber, percentText, levelDelta } from '../../utils/levelValue';
 import {
@@ -45,7 +46,8 @@ const EXEC_DIV_COLORS = {
   'GTR': '#0ea5e9',
   'SR': '#ec4899'
 };
-const EXEC_DIV_ORDER = ['MX', 'VD', 'DA', 'NW', '의료기기', 'CS', 'GTR', 'SR'];
+// (사업부 목록ㆍ차례는 설정에서 뽑는다 — 아래 execDivOrder. 이름을 여기 박으면
+//  조직이 바뀔 때 화면이 조용히 틀어진다.)
 const EXEC_DIV_LABEL = { '의료기기': '의료' };
 const execDivDisplayName = (div) => EXEC_DIV_LABEL[div] || div;
 
@@ -2832,24 +2834,15 @@ const DashboardView = ({
 
   // 사업부 목록 추출 (진행률 현황용)
   const trendDivisions = useMemo(() => {
-    const divisionOrder = ['MX', 'VD', 'DA', 'NW', '의료기기', 'GTR', 'SR'];
     const divisionSet = new Set();
     projects.forEach(project => {
       if (project.사업부 && project.과제년도 === currentYear && !project._deleted) {
         divisionSet.add(project.사업부);
       }
     });
-    const divisions = Array.from(divisionSet);
-    // 지정된 순서대로 정렬, 목록에 없는 사업부는 마지막에 알파벳순으로
-    return divisions.sort((a, b) => {
-      const indexA = divisionOrder.indexOf(a);
-      const indexB = divisionOrder.indexOf(b);
-      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
-  }, [projects, currentYear]);
+    // 사업부 차례는 **설정이 정본**이다(utils/divisionOrder).
+    return sortDivisionNames(Array.from(divisionSet), settingsData);
+  }, [projects, currentYear, settingsData]);
 
   // 진행률 현황용 프로젝트 수 계산
   const getTrendDivisionCount = (division) => {
@@ -4795,14 +4788,30 @@ const DashboardView = ({
     );
   }, [projects, currentYear, executiveSelectedDivision]);
 
-  // 사업부 목록 (취소 제외 기준) — EXEC_DIV_ORDER 와 순서 통일
+  /**
+   * 전체 요약이 다루는 사업부 목록과 차례. **설정이 정본**이다.
+   *
+   * 예전에는 모듈 상수(execDivOrder)로 박혀 있었는데, 같은 대시보드 안의 다른
+   * 화면들과 꼬리 세 개(SRㆍGTRㆍCS)의 차례가 서로 달랐다. 조직이 바뀌면 여섯
+   * 군데를 다 고쳐야 하는데 그럴 리가 없다.
+   *
+   * ⚠️ 이건 **차례이자 대상 목록**이다 — 카드도 그래프도 이 배열을 돌며 만든다.
+   *    설정이 아직 안 왔으면 DIVISION_ORDER_FALLBACK 으로 떨어진다. 빈 배열로
+   *    떨어뜨리면 첫 그림에 카드가 하나도 안 나온다.
+   */
+  const execDivOrder = useMemo(() => {
+    const names = (settingsData?.divisions || []).map(d => d?.name).filter(Boolean);
+    return names.length ? sortDivisionNames(names, settingsData) : DIVISION_ORDER_FALLBACK;
+  }, [settingsData]);
+
+  // 사업부 목록 (취소 제외 기준) — execDivOrder 와 순서 통일
   const executiveDivisions = useMemo(() => {
     const set = new Set(executiveBaseProjects.map(p => p.사업부).filter(Boolean));
-    // EXEC_DIV_ORDER에 있는 것 우선, 그 외는 뒤에 알파벳순
-    const ordered = EXEC_DIV_ORDER.filter(d => set.has(d));
-    const unknowns = [...set].filter(d => !EXEC_DIV_ORDER.includes(d)).sort((a, b) => a.localeCompare(b));
+    // execDivOrder에 있는 것 우선, 그 외는 뒤에 알파벳순
+    const ordered = execDivOrder.filter(d => set.has(d));
+    const unknowns = [...set].filter(d => !execDivOrder.includes(d)).sort((a, b) => a.localeCompare(b));
     return [...ordered, ...unknowns];
-  }, [executiveBaseProjects]);
+  }, [executiveBaseProjects, execDivOrder]);
 
   // 취소 과제 (현재 사업부 필터 범위) — '총 과제' 카운트에서 삭제처럼 반영하기 위한 보조 모집단
   const executiveCanceledProjects = useMemo(() => {
@@ -5107,6 +5116,55 @@ const DashboardView = ({
     // 새로 쓰는 곳은 sameItemDelta 를 봐야 한다.
     const sameCohortDelta = addedItemEffect + sameItemDelta + deletedItemEffect;
 
+    // ── 달성률 분해 ────────────────────────────────────────────────────────
+    //
+    // 달성률은 분모가 **「목표일이 도래한 액션아이템」** 이라 진척률에 없는 성질이
+    // 하나 더 있다 — **아무 일도 안 해도 기한이 닥치면 내려간다.** 그것을 「달성이
+    // 나빠졌다」로 읽으면 안 되므로 따로 뗀다.
+    //
+    // 다섯 몫으로 가른다. 텔레스코핑이라 합은 전체 변화량과 같다.
+    //
+    //     지금 전체 ─신규 과제─ 교집합(전부) ─항목 추가─ 교집합(공통, 오늘 기준)
+    //       └─완료─ (완료는 기준일 값, 분모는 오늘) ─기한 도래─ 교집합(공통, 기준일)
+    //       └─삭제 과제─ 기준일 전체
+    //
+    // ⚠️ 분자와 분모의 **잣대가 다르다**(분자는 완료 전부, 분모는 목표일 도래분).
+    //    그래서 달성률은 100% 를 넘을 수 있다 — 원래 그런 지표다. 여기서 고치지
+    //    않는다. 고치면 진행률 현황의 같은 이름 카드와 숫자가 갈린다.
+    const achOf = (projs, inSet, dueCutoff, doneAt) => {
+      let due = 0, done = 0;
+      projs.forEach(p => (p.액션아이템목록 || []).forEach(it => {
+        if (!inSet(it)) return;
+        if (it.목표일 && new Date(it.목표일) <= dueCutoff) due += 1;
+        if (doneAt === null
+          ? !!it.완료여부
+          : (it.완료여부 && it.완료일 && new Date(it.완료일) <= doneAt)) done += 1;
+      }));
+      return due === 0 ? 0 : (done / due) * 100;
+    };
+    const allItems = () => true;
+    const commonItems = (it) => aiExistedAtRef(it);
+
+    const achNowInterAll = achOf(intersection, allItems, today, null);
+    const achNowCommon = achOf(intersection, commonItems, today, null);
+    // 완료는 기준일 그대로 두고 분모만 오늘로 — 「기한만 닥친」 상태
+    const achMid = achOf(intersection, commonItems, today, refDate);
+    const achRefCommon = achOf(intersection, commonItems, refDate, refDate);
+
+    const achNewProjectEffect = currentAchievementRate - achNowInterAll;
+    const achAddedItemEffect = achNowInterAll - achNowCommon;
+    const achCompletedEffect = achNowCommon - achMid;      // 일이 끝나서 오른 몫
+    const achDueEffect = achMid - achRefCommon;            // 기한이 닥쳐서 내린 몫
+    const achRemovedEffect = achRefCommon - refAchievementRate;
+
+    // 기준일 뒤에 목표일이 도래한 건수 — 「기한 도래 N건」 이라고 적으려고 센다
+    let newlyDueCount = 0;
+    intersection.forEach(p => (p.액션아이템목록 || []).forEach(it => {
+      if (!commonItems(it) || !it.목표일) return;
+      const d = new Date(it.목표일);
+      if (d > refDate && d <= today) newlyDueCount += 1;
+    }));
+
     return {
       totalProjects,
       refTotalProjects,
@@ -5143,7 +5201,13 @@ const DashboardView = ({
       refAchievementRate,
       refAchieved,
       refPlannedByRef,
-      deltaAchievementRate: currentAchievementRate - refAchievementRate
+      deltaAchievementRate: currentAchievementRate - refAchievementRate,
+      achNewProjectEffect,
+      achAddedItemEffect,
+      achCompletedEffect,
+      achDueEffect,
+      achRemovedEffect,
+      newlyDueCount
     };
   };
 
@@ -5170,13 +5234,13 @@ const DashboardView = ({
     const canceledYearProjects = projects.filter(p =>
       p.과제년도 === currentYear && p.진행상태 === '취소'
     );
-    return EXEC_DIV_ORDER.map(div => {
+    return execDivOrder.map(div => {
       const divProjects = allYearProjects.filter(p => p.사업부 === div);
       const divCanceled = canceledYearProjects.filter(p => p.사업부 === div);
       const m = computeExecMetrics(divProjects, executiveRefDate, divCanceled);
       return { division: div, ...m };
     }).filter(d => d.totalProjects > 0 || d.refTotalProjects > 0);
-  }, [projects, currentYear, executiveRefDate, executiveSelectedDivision, aiHistory]);
+  }, [projects, currentYear, executiveRefDate, executiveSelectedDivision, aiHistory, execDivOrder]);
 
   // 사업부 카드 클릭 시 상세: 과제 변경 현황 + 액션아이템 변경 현황 + 전체현황
   const divisionDetailData = useMemo(() => {
@@ -5508,8 +5572,8 @@ const DashboardView = ({
 
     // 표시 후보 사업부: 고정 순서 × 필터 적용 × 과제가 있는 사업부만
     const candidates = executiveSelectedDivision === 'all'
-      ? EXEC_DIV_ORDER
-      : EXEC_DIV_ORDER.filter(d => d === executiveSelectedDivision);
+      ? execDivOrder
+      : execDivOrder.filter(d => d === executiveSelectedDivision);
 
     const byDivision = new Map();
     candidates.forEach(div => {
@@ -5563,7 +5627,7 @@ const DashboardView = ({
       .filter(ts => ts >= yearStart && ts <= yearEnd);
 
     return { data, divisions, yearStart, yearEnd, monthTicks };
-  }, [executiveBaseProjects, executiveSelectedDivision, currentYear, aiHistory]);
+  }, [executiveBaseProjects, executiveSelectedDivision, currentYear, aiHistory, execDivOrder]);
 
   // 조직별 액션아이템 상태 (조기달성/완료/계획/지연 — 상호 배타)
   const executiveDivisionAIStatus = useMemo(() => {
@@ -5571,8 +5635,8 @@ const DashboardView = ({
     today.setHours(23, 59, 59, 999);
 
     const targetDivisions = executiveSelectedDivision === 'all'
-      ? EXEC_DIV_ORDER
-      : EXEC_DIV_ORDER.filter(d => d === executiveSelectedDivision);
+      ? execDivOrder
+      : execDivOrder.filter(d => d === executiveSelectedDivision);
 
     const counts = new Map();
     targetDivisions.forEach(div => {
@@ -5601,7 +5665,7 @@ const DashboardView = ({
         ...counts.get(div)
       }))
       .filter(d => d.조기달성 + d.완료 + d.계획 + d.지연 > 0);
-  }, [executiveBaseProjects, executiveSelectedDivision]);
+  }, [executiveBaseProjects, executiveSelectedDivision, execDivOrder]);
 
   // ===== 사업부별 모드 (specific division) 전용 데이터 =====
   // 프로세스 순서 (settingsData에서, 없으면 데이터에서 추출 후 알파벳순)
@@ -6283,8 +6347,8 @@ const DashboardView = ({
     const refDate = executiveRefDate;
 
     const activeDivisions = executiveSelectedDivision === 'all'
-      ? EXEC_DIV_ORDER
-      : EXEC_DIV_ORDER.filter(d => d === executiveSelectedDivision);
+      ? execDivOrder
+      : execDivOrder.filter(d => d === executiveSelectedDivision);
 
     const pickLatest = (records, upToDate) => {
       let latest = null;
@@ -6398,7 +6462,7 @@ const DashboardView = ({
     });
 
     return { divisions: result, labelsWithDelta, hasClampedDelta };
-  }, [kpiDefinitions, kpiRecords, kpiTargets, executiveSelectedDivision, executiveRefDate, currentYear, excludedKpis]);
+  }, [kpiDefinitions, kpiRecords, kpiTargets, executiveSelectedDivision, executiveRefDate, currentYear, excludedKpis, execDivOrder]);
 
   // 사업부별 모드: 선택된 사업부의 KPI별 시계열 (실적 + 목표). 가로축은 월/주 토글.
   const executiveKpiTrend = useMemo(() => {
@@ -6601,10 +6665,10 @@ const DashboardView = ({
         });
       });
 
-    // 정렬: EXEC_DIV_ORDER 우선, 그 외 이름순
+    // 정렬: execDivOrder 우선, 그 외 이름순
     const divs = [...map.keys()];
-    const ordered = EXEC_DIV_ORDER.filter(d => map.has(d));
-    const rest = divs.filter(d => !EXEC_DIV_ORDER.includes(d)).sort((a, b) => a.localeCompare(b));
+    const ordered = execDivOrder.filter(d => map.has(d));
+    const rest = divs.filter(d => !execDivOrder.includes(d)).sort((a, b) => a.localeCompare(b));
     const orderedDivs = [...ordered, ...rest];
 
     // 사업부 내 이슈 정렬: 미해결 먼저, 그다음 등록일 내림차순
@@ -6619,7 +6683,7 @@ const DashboardView = ({
     const unresolvedCount = orderedDivs.reduce((s, d) => s + map.get(d).filter(x => !x.issue.해결여부).length, 0);
 
     return { map, orderedDivs, totalIssues, unresolvedCount };
-  }, [projects, currentYear, issueRange, issueStatusFilter]);
+  }, [projects, currentYear, issueRange, issueStatusFilter, execDivOrder]);
 
   // 사업부의 사무국 코멘트 목록 조회 (현재 연도 기준, 레거시 문자열 호환)
   const getSecretariatComments = (division) => {
@@ -7443,6 +7507,58 @@ const DashboardView = ({
                   <KPICardSubText>
                     완료 {executiveMetrics.currentAchieved}개 / 목표일 도래 {executiveMetrics.currentPlannedByToday}개
                   </KPICardSubText>
+                  {/* 달성률은 분모가 「목표일 도래분」이라 **아무 일도 안 해도 기한이
+                      닥치면 내려간다.** 그것을 「달성이 나빠졌다」로 읽으면 안 되므로
+                      따로 뗀다. 다섯 몫의 합은 위 배지와 같다. */}
+                  <KPIDecompBlock>
+                    <KPIDecompRow>
+                      <KPIDecompLabel>완료한 몫</KPIDecompLabel>
+                      <KPIDecompValue $value={executiveMetrics.achCompletedEffect}>
+                        {executiveMetrics.achCompletedEffect > 0 ? '+' : ''}{executiveMetrics.achCompletedEffect.toFixed(1)}%p
+                      </KPIDecompValue>
+                    </KPIDecompRow>
+                    {(executiveMetrics.newlyDueCount > 0
+                      || Math.abs(executiveMetrics.achDueEffect) >= 0.05) && (
+                      <KPIDecompRow>
+                        <KPIDecompLabel>
+                          기한 도래 {executiveMetrics.newlyDueCount}건 영향
+                        </KPIDecompLabel>
+                        <KPIDecompValue $value={executiveMetrics.achDueEffect}>
+                          {executiveMetrics.achDueEffect > 0 ? '+' : ''}{executiveMetrics.achDueEffect.toFixed(1)}%p
+                        </KPIDecompValue>
+                      </KPIDecompRow>
+                    )}
+                    {Math.abs(executiveMetrics.achAddedItemEffect) >= 0.05 && (
+                      <KPIDecompRow>
+                        <KPIDecompLabel>
+                          액션아이템 {executiveMetrics.addedItemCount}개 추가 영향
+                        </KPIDecompLabel>
+                        <KPIDecompValue $value={executiveMetrics.achAddedItemEffect}>
+                          {executiveMetrics.achAddedItemEffect > 0 ? '+' : ''}{executiveMetrics.achAddedItemEffect.toFixed(1)}%p
+                        </KPIDecompValue>
+                      </KPIDecompRow>
+                    )}
+                    {Math.abs(executiveMetrics.achNewProjectEffect) >= 0.05 && (
+                      <KPIDecompRow>
+                        <KPIDecompLabel>
+                          신규 과제 {executiveMetrics.newProjectsCount}개 영향
+                        </KPIDecompLabel>
+                        <KPIDecompValue $value={executiveMetrics.achNewProjectEffect}>
+                          {executiveMetrics.achNewProjectEffect > 0 ? '+' : ''}{executiveMetrics.achNewProjectEffect.toFixed(1)}%p
+                        </KPIDecompValue>
+                      </KPIDecompRow>
+                    )}
+                    {Math.abs(executiveMetrics.achRemovedEffect) >= 0.05 && (
+                      <KPIDecompRow>
+                        <KPIDecompLabel>
+                          삭제 과제 {executiveMetrics.removedProjectsCount}개 영향
+                        </KPIDecompLabel>
+                        <KPIDecompValue $value={executiveMetrics.achRemovedEffect}>
+                          {executiveMetrics.achRemovedEffect > 0 ? '+' : ''}{executiveMetrics.achRemovedEffect.toFixed(1)}%p
+                        </KPIDecompValue>
+                      </KPIDecompRow>
+                    )}
+                  </KPIDecompBlock>
                 </KPICard>
               </KPICardGrid>
               )}
@@ -7571,7 +7687,7 @@ const DashboardView = ({
                                   return `${d.getMonth() + 1}/${d.getDate()}`;
                                 }}
                                 itemSorter={(item) => {
-                                  const idx = EXEC_DIV_ORDER.indexOf(item.dataKey);
+                                  const idx = execDivOrder.indexOf(item.dataKey);
                                   return idx === -1 ? 999 : idx;
                                 }}
                               />

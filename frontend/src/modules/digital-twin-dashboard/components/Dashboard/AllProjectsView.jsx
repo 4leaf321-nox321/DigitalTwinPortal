@@ -3158,16 +3158,9 @@ const AllProjectsView = ({
                 projectsByDivision[division].push(project);
               });
 
-              // 사업부 순서 정렬
-              const divisionOrder = ['MX', 'VD', 'DA', 'NW', '의료기기', 'SR', 'GTR', 'CS'];
-              const divisions = Object.keys(projectsByDivision).sort((a, b) => {
-                const indexA = divisionOrder.indexOf(a);
-                const indexB = divisionOrder.indexOf(b);
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                if (indexA !== -1) return -1;
-                if (indexB !== -1) return 1;
-                return a.localeCompare(b);
-              });
+              // 사업부 차례는 **설정이 정본**이다(utils/divisionOrder).
+              const divisions = sortDivisionNames(
+                Object.keys(projectsByDivision), settingsData);
 
               // 필터링된 사업부 목록
               const displayDivisions = perfViewDivisionFilter === 'all'

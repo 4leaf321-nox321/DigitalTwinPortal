@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { evalFactor } from '../../utils/evalFactor';
+import { sortDivisionNames } from '../../utils/divisionOrder';
 // 수준값의 0 과 미입력은 다른 뜻이다. 판정은 한 곳(levelValue)으로 모은다.
 import { hasLevel, levelText } from '../../utils/levelValue';
 import styled from 'styled-components';
@@ -1764,36 +1765,13 @@ const AllPerformancesView = ({
 
   // 테이블 뷰용 사업부 목록
   const divisionsForTable = useMemo(() => {
-    const divisionOrder = ['MX', 'VD', 'DA', 'NW', '의료기기', 'SR', 'GTR', 'CS'];
-    return Object.keys(groupedPerformancesForTable).sort((a, b) => {
-      const indexA = divisionOrder.indexOf(a);
-      const indexB = divisionOrder.indexOf(b);
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      return a.localeCompare(b);
-    });
-  }, [groupedPerformancesForTable]);
+    return sortDivisionNames(Object.keys(groupedPerformancesForTable), settingsData);
+  }, [groupedPerformancesForTable, settingsData]);
 
-  // 사업부 목록 (고정 순서: MX, VD, DA, NW, 의료기기, SR, GTR, CS)
-  const divisions = useMemo(() => {
-    const divisionOrder = ['MX', 'VD', 'DA', 'NW', '의료기기', 'SR', 'GTR', 'CS'];
-    return Object.keys(groupedPerformances).sort((a, b) => {
-      const indexA = divisionOrder.indexOf(a);
-      const indexB = divisionOrder.indexOf(b);
-
-      // 둘 다 목록에 있으면 순서대로
-      if (indexA !== -1 && indexB !== -1) {
-        return indexA - indexB;
-      }
-      // a만 목록에 있으면 a가 앞으로
-      if (indexA !== -1) return -1;
-      // b만 목록에 있으면 b가 앞으로
-      if (indexB !== -1) return 1;
-      // 둘 다 목록에 없으면 알파벳 순서
-      return a.localeCompare(b);
-    });
-  }, [groupedPerformances]);
+  // 사업부 차례는 **설정이 정본**이다(utils/divisionOrder).
+  const divisions = useMemo(
+    () => sortDivisionNames(Object.keys(groupedPerformances), settingsData),
+    [groupedPerformances, settingsData]);
 
   // 조치사항이 있는 성과 (수정 필요한 것)
   const performancesWithAction = useMemo(() => {
