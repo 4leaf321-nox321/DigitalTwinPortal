@@ -63,6 +63,21 @@ const REMOVED_LONG_AGO = '1970-01-01T00:00:00.000Z';
  * (`trend_view._project_span` 이 서버에서 쓰는 규칙과 같다 — 곡선과 목록이
  *  같은 날을 가리켜야 한다)
  */
+/**
+ * 그 시점에 이 액션아이템이 있었나. 생성 시각을 모르면 **있었던 것으로** 본다 —
+ * 예전 데이터에는 생성 시각이 없어서, 없다고 보면 과거가 통째로 비어 버린다.
+ *
+ * ⚠️ **분자와 분모에 똑같이 대야 한다.** 한쪽에만 대면, 중간에 액션아이템을
+ *    쪼개서 한꺼번에 넣었을 때 「그때 없던 항목의 완료」가 분자에만 들어간다.
+ *    기준일 진척률이 100% 를 넘고, 변화량이 **일어나지 않은 폭락**으로 보인다.
+ *    (2026-08-21 신고: 한 사업부가 액션아이템을 2배로 늘렸더니 지금 진척률은
+ *     그대로인데 변화량만 -50%p 로 떨어졌다.)
+ */
+const aiExistedAt = (item, at) => {
+  const c = getActionItemCreatedAt(item);
+  return !c || new Date(c) <= at;
+};
+
 const projectRemoval = (p) => {
   const cancel = p.진행상태 === '취소'
     ? { at: p._canceledAt || REMOVED_LONG_AGO, reason: '취소' }
@@ -4844,6 +4859,9 @@ const DashboardView = ({
     let total = 0;
     let done = 0;
     projects.forEach(p => (p.액션아이템목록 || []).forEach(item => {
+      // 그 주에 없던 항목은 그 주의 셈에서 뺀다. 안 그러면 오늘 항목을 늘린 순간
+      // **지난 몇 달의 점이 통째로 내려앉는다** — 그때 실제로 보던 값이 아니다.
+      if (!aiExistedAt(item, asOfDate)) return;
       total += 1;
       if (item.완료여부 && item.완료일 && new Date(item.완료일) <= asOfDate) done += 1;
     }));
@@ -4871,10 +4889,7 @@ const DashboardView = ({
     const refProjects = allStateProjects.filter(existedAtRef);
 
     // 액션아이템 생성 시점 기준 "기준일에 존재했던 AI"인지 (생성일 미상이면 존재로 간주)
-    const aiExistedAtRef = (item) => {
-      const c = getActionItemCreatedAt(item);
-      return !c || new Date(c) <= refDate;
-    };
+    const aiExistedAtRef = (item) => aiExistedAt(item, refDate);
 
     // 취소 과제 중 "기준일엔 존재(활성)했고 그 이후 취소된" 건 — 총 과제/총 AI 카운트에서 삭제처럼 반영
     // 빠진 시점은 `projectRemoval` 이 정한다 (취소·삭제 중 **먼저 일어난 것**)
@@ -4894,7 +4909,9 @@ const DashboardView = ({
     const currentCompletedProjects = currentProjects.filter(p => p.진행상태 === '완료').length;
     const refCompletedProjects = refProjects.filter(p => {
       if (p.진행상태 !== '완료') return false;
-      const items = p.액션아이템목록 || [];
+      // 기준일에 있던 항목만 본다. 나중에 늘린 항목까지 세면, 그때 분명히
+      // 끝나 있던 과제가 기준일에 미완료였던 것으로 뒤바뀐다.
+      const items = (p.액션아이템목록 || []).filter(aiExistedAtRef);
       if (items.length === 0) {
         return p.종료 ? new Date(p.종료) <= refDate : false;
       }
@@ -4917,7 +4934,8 @@ const DashboardView = ({
     refProjects.forEach(p => {
       (p.액션아이템목록 || []).forEach(item => {
         // 기준일 시점에 존재했던 AI만 카운트 (생성일 기준) → 기존 과제에 이후 추가된 AI는 제외
-        if (aiExistedAtRef(item)) refTotalAI++;
+        if (!aiExistedAtRef(item)) return;          // 분자ㆍ분모 같은 잣대
+        refTotalAI++;
         if (item.완료여부 && item.완료일 && new Date(item.완료일) <= refDate) {
           refCompletedAI++;
         }
@@ -4951,6 +4969,7 @@ const DashboardView = ({
     let refAchieved = 0;
     refProjects.forEach(p => {
       (p.액션아이템목록 || []).forEach(item => {
+        if (!aiExistedAtRef(item)) return;          // 분자ㆍ분모 같은 잣대
         if (item.목표일 && new Date(item.목표일) <= refDate) refPlannedByRef++;
         if (item.완료여부 && item.완료일 && new Date(item.완료일) <= refDate) refAchieved++;
       });
@@ -4982,7 +5001,10 @@ const DashboardView = ({
     const curTotalFn = () => true;
     const curDoneFn = (it) => !!it.완료여부;
     const refTotalFn = (it) => aiExistedAtRef(it);
-    const refDoneFn = (it) => it.완료여부 && it.완료일 && new Date(it.완료일) <= refDate;
+    // ⚠️ refTotalFn 과 **같은 잣대**여야 한다. 분자에만 빠지면 기준일 진척률이
+    //    100% 를 넘고 변화량이 없던 폭락으로 나온다.
+    const refDoneFn = (it) =>
+      aiExistedAtRef(it) && it.완료여부 && it.완료일 && new Date(it.완료일) <= refDate;
 
     const currentAvgProgress = aiRatioProgress(currentProjects, curTotalFn, curDoneFn);
     const refAvgProgress = aiRatioProgress(refProjects, refTotalFn, refDoneFn);
