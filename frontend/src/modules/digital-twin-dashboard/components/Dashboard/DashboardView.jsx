@@ -5150,7 +5150,11 @@ const DashboardView = ({
   // 현재 필터 적용된 KPI 지표 (단일 사업부 모드의 6 카드용)
   const executiveMetrics = useMemo(
     () => computeExecMetrics(executiveProjectsAllStates, executiveRefDate, executiveCanceledProjects),
-    [executiveProjectsAllStates, executiveRefDate, executiveCanceledProjects]
+    // ⚠️ aiHistory 가 빠지면 이력이 도착해도 다시 계산되지 않는다. 화면은
+    //    되짚기로 계산된 첫 값을 그대로 붙들고 있다 — 사업부 카드는 탭을
+    //    옮길 때 우연히 다시 계산되는데 전체 카드는 안 되어서, 둘이 다른
+    //    수를 말한다. (2026-08-21 신고)
+    [executiveProjectsAllStates, executiveRefDate, executiveCanceledProjects, aiHistory]
   );
 
   // 델타 표기 포맷 (전체 요약 줄 + 카드 공통 패턴)
@@ -5172,7 +5176,7 @@ const DashboardView = ({
       const m = computeExecMetrics(divProjects, executiveRefDate, divCanceled);
       return { division: div, ...m };
     }).filter(d => d.totalProjects > 0 || d.refTotalProjects > 0);
-  }, [projects, currentYear, executiveRefDate, executiveSelectedDivision]);
+  }, [projects, currentYear, executiveRefDate, executiveSelectedDivision, aiHistory]);
 
   // 사업부 카드 클릭 시 상세: 과제 변경 현황 + 액션아이템 변경 현황 + 전체현황
   const divisionDetailData = useMemo(() => {
@@ -5310,7 +5314,7 @@ const DashboardView = ({
     };
 
     return { division: div, metrics, addedProjects, removedProjects, completedAll, completedInPeriod, aiChanges, aiStats };
-  }, [divisionDetailModal, projects, currentYear, executiveRefDate]);
+  }, [divisionDetailModal, projects, currentYear, executiveRefDate, aiHistory]);
 
   // 상단 요약 카드 클릭 상세: 델타 목록(변동) + 전체 목록
   const metricDetailData = useMemo(() => {
@@ -5559,7 +5563,7 @@ const DashboardView = ({
       .filter(ts => ts >= yearStart && ts <= yearEnd);
 
     return { data, divisions, yearStart, yearEnd, monthTicks };
-  }, [executiveBaseProjects, executiveSelectedDivision, currentYear]);
+  }, [executiveBaseProjects, executiveSelectedDivision, currentYear, aiHistory]);
 
   // 조직별 액션아이템 상태 (조기달성/완료/계획/지연 — 상호 배타)
   const executiveDivisionAIStatus = useMemo(() => {
@@ -5666,7 +5670,7 @@ const DashboardView = ({
       .filter(ts => ts >= yearStart && ts <= yearEnd);
 
     return { processes, data, yearStart, yearEnd, monthTicks };
-  }, [executiveBaseProjects, executiveSelectedDivision, currentYear, settingsData]);
+  }, [executiveBaseProjects, executiveSelectedDivision, currentYear, settingsData, aiHistory]);
 
   // 프로세스별 액션아이템 상태 (선택된 사업부 안에서)
   const executiveProcessAIStatus = useMemo(() => {
