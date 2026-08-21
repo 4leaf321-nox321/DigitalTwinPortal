@@ -1,8 +1,23 @@
+import { readFileSync } from 'node:fs'
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+/*
+  화면이 자기 버전을 알게 한다. **정본은 package.json 하나다** — 릴리스 자동화
+  (auto-tag)가 그 값으로 태그를 만들므로, 다른 데 또 적으면 반드시 갈린다.
+
+  ⚠️ `import pkg from './package.json'` 로 안 읽는다. 그러면 package.json 이
+     번들에 통째로 딸려 들어간다(의존성 목록까지). 값 하나만 꺼내 심는다.
+*/
+const APP_VERSION = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf-8')).version
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   plugins: [react()],
   server: {
     port: 5173,

@@ -43,6 +43,7 @@ import {
   ClipboardList,
   Coins
 } from 'lucide-react';
+import { APP_VERSION, versionState, versionText } from '../shared/utils/appVersion';
 // AiChatSidebar 는 2026-08-01 에 화면에서 내렸다(아래 mount 자리 주석 참고).
 // import AiChatSidebar from '../components/AiChatSidebar';
 
@@ -808,6 +809,13 @@ const Toast = styled(motion.div)`
   font-size: 0.875rem;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   z-index: 50;
+`;
+
+/* 평소엔 눈에 안 띄고, **어긋났을 때만** 눈에 든다. 버전은 찾을 때만 보는 값이다. */
+const VersionTag = styled.span`
+  font-weight: ${p => (p.$state === 'mismatch' ? 700 : 400)};
+  color: ${p => (p.$state === 'mismatch' ? '#b91c1c' : 'inherit')};
+  cursor: help;
 `;
 
 const Footer = styled.footer`
@@ -1582,6 +1590,34 @@ const MainPage = () => {
   const [statusById, setStatusById] = useState(DEFAULT_STATUS_BY_ID);
   // 모듈 차례. 빈 배열이면 코드에 적힌 원래 차례를 그대로 쓴다.
   const [moduleOrder, setModuleOrder] = useState([]);
+  /*
+    지금 도는 것이 어느 릴리스인가. **화면과 서버를 함께** 본다 —
+    반출 체크리스트가 「백엔드ㆍ프론트를 함께 올린다. 구 프론트 + 신 백엔드는
+    저장이 400 이 된다」고 적어 두었는데, 어긋났는지를 볼 길이 없으면 그 400 의
+    원인을 한참 찾게 된다.
+
+    ⚠️ 못 받아도 화면은 그대로 돈다. 옛 서버에는 이 엔드포인트가 없고, 그때는
+       **어긋남이 아니라 「모름」**이다 — 거짓 경고를 한 번 보면 그다음부터는
+       진짜 경고도 안 본다.
+  */
+  const [serverVersion, setServerVersion] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/version')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive) setServerVersion(d?.data?.version ?? null); })
+      .catch(() => { if (alive) setServerVersion(null); });
+    return () => { alive = false; };
+  }, []);
+
+  const versionLabel = versionText(APP_VERSION, serverVersion);
+  const versionInfo = {
+    state: versionState(APP_VERSION, serverVersion),
+    title: (versionState(APP_VERSION, serverVersion) === 'mismatch'
+      ? '화면과 서버의 버전이 다릅니다. 둘을 함께 올려야 합니다 — 구 프론트 + 신 백엔드는 저장이 실패합니다.'
+      : `포털 버전 v${APP_VERSION}`),
+  };
+
   const [showModuleSettings, setShowModuleSettings] = useState(false);
   const [canEditModules, setCanEditModules] = useState(false);
 
@@ -2108,6 +2144,15 @@ const MainPage = () => {
 
       <Footer>
         © 2025 디지털 트윈 포털
+        {versionLabel && (
+          <>
+            {' · '}
+            <VersionTag $state={versionInfo.state} title={versionInfo.title}>
+              {versionInfo.state === 'mismatch' && '⚠ '}
+              {versionLabel}
+            </VersionTag>
+          </>
+        )}
       </Footer>
 
       {/* 2026-08-01 AiChatSidebar 를 내렸다 — DT 대시보드의 AI 에이전트로 창구를 하나로

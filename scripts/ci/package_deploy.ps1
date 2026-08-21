@@ -50,6 +50,17 @@ if (Test-Path .\\frontend\\package.json) {
   New-Item -ItemType Directory -Force -Path .\\deploy\\frontend | Out-Null
   Copy-Item -Recurse -Force .\\frontend\\dist .\\deploy\\frontend\\dist
   Write-Host 'Frontend packaged'
+
+  # 버전을 파일로 떠서 함께 넣는다. 정본은 frontend/package.json 하나이고
+  # (auto-tag 가 그 값으로 태그를 만든다) 배포 묶음에는 그 파일이 안 들어가므로,
+  # 서버가 자기 버전을 말하려면 이렇게 떠 두어야 한다. backend/app/version.py 가 읽는다.
+  #
+  # ⚠️ 여기서 값을 새로 정하지 않는다. package.json 에서 **읽어서** 적는다 —
+  #    두 곳에 적으면 반드시 갈리고, 갈린 순간 화면이 「서버와 다르다」고 잘못 운다.
+  $pkgVersion = (Get-Content .\\frontend\\package.json -Raw | ConvertFrom-Json).version
+  if (-not $pkgVersion) { Write-Error 'package.json에 version이 없습니다'; exit 1 }
+  Set-Content -Path .\\deploy\\backend\\VERSION -Value $pkgVersion -Encoding utf8 -NoNewline
+  Write-Host "Version stamped: $pkgVersion"
 } else {
   Write-Host 'No frontend/package.json; skipping frontend build.'
 }

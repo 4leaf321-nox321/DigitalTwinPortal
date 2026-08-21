@@ -38,3 +38,7 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# 배포 묶음을 만들 때 구워 넣는 파일이다(scripts/ci/package_deploy.ps1).
+# 정본은 frontend/package.json 이므로 저장소에 두면 두 곳이 갈린다.
+VERSION

@@ -29,6 +29,12 @@ module.exports = {
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },
+  // 빌드가 심는 전역(vite.config.js 의 define). lint 는 빌드를 안 보므로
+  // 여기 적어 두지 않으면 no-undef 가 운다.
+  //
+  // ⚠️ vite.config.js 의 define 을 늘리면 **여기도 함께** 늘릴 것. 안 그러면
+  //    쓰는 순간 CI 가 막힌다.
+  globals: { __APP_VERSION__: 'readonly' },
   settings: { react: { version: 'detect' } },
   plugins: ['react-hooks'],
   // 손으로 남긴 사본들. 열어 보면 파싱부터 안 되는 것도 있어(파일 첫 줄이 깨졌다)

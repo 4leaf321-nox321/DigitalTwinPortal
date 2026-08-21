@@ -415,6 +415,18 @@ def register_blueprints(app):
     # 기동 시 프론트엔드 빌드 완전성 확인 (불완전하면 로그로 경고)
     check_frontend_build(app)
 
+    # 지금 도는 서버가 어느 릴리스인가. 화면 푸터가 이것을 자기 값과 견준다 —
+    # 백엔드ㆍ프론트가 어긋나면 저장이 400 이 되는데, 그 원인을 한 줄로 알려면
+    # 두 값이 나란히 보여야 한다.
+    #
+    # ⚠️ 로그인 없이 연다. 배포가 제대로 됐는지는 **못 들어가는 상태에서도**
+    #    확인할 수 있어야 한다. 버전 문자열 하나뿐이라 새는 것이 없다.
+    @app.route('/api/version')
+    def api_version():
+        from flask import jsonify
+        from app.version import app_version
+        return jsonify({'success': True, 'data': {'version': app_version()}})
+
     # Serve React SPA for non-API routes
     @app.route('/')
     def serve_index():
