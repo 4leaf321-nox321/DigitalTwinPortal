@@ -5013,10 +5013,44 @@ const DashboardView = ({
     const interCurProgress = aiRatioProgress(intersection, curTotalFn, curDoneFn);
     const interRefProgress = aiRatioProgress(intersection, refTotalFn, refDoneFn);
 
-    // 분해: 전체Δ = 신규영향 + 동일과제진척 + 삭제영향 (텔레스코핑으로 합이 델타와 일치)
-    const newEffect = currentAvgProgress - interCurProgress;    // 신규 과제가 전체 비율에 준 영향
-    const sameCohortDelta = interCurProgress - interRefProgress; // 동일 과제의 진척
-    const removedEffect = interRefProgress - refAvgProgress;    // 기준일에만 있던(삭제) 과제의 영향
+    // ── 분해 ──────────────────────────────────────────────────────────────
+    //
+    // 이 지표는 **액션아이템 개수** 로 센다. 그런데 분해가 과제 단위뿐이면, 기존
+    // 과제에 항목을 **늘린 효과가 갈 곳이 없어** 「기존 과제 진척」 줄에 얹힌다.
+    //
+    // ⚠️ 항목 10개(5개 완료)를 20개로 쪼개 넣고 그중 2개만 완료면, 기존 항목은
+    //    하나도 안 물러섰는데 화면은 「기존 과제 진척 -15.0%p」 라고 적는다.
+    //    진척이 후퇴한 것처럼 읽히지만 실제로는 **할 일이 드러난 것**이다.
+    //    (2026-08-21 신고)
+    //
+    // 그래서 항목 단위로 한 칸 더 쪼갠다. 네 몫의 합은 여전히 전체Δ 와 같다
+    // (텔레스코핑 — 중간 항이 서로 지워진다).
+    //
+    //    전체 지금  ─신규 과제─  교집합 지금(전부)  ─항목 추가─  교집합 지금(공통)
+    //      └─ 같은 항목 진척 ─  교집합 기준일  ─삭제 과제─  전체 기준일
+    //
+    // 「공통 항목」은 refTotalFn 이 고르는 것과 같은 집합이다 — 양 시점에 다 있던
+    // 항목. 지금 값을 그 집합에만 물어보면 **모수를 고정한 채** 진척만 남는다.
+    // ⚠️ 분자에도 **같은 잣대**를 대야 한다. curDoneFn 을 그대로 쓰면 나중에
+    //    추가된 항목의 완료가 분자에만 들어가, 「기존 항목 진척」이 실제로는
+    //    0%p 인데 +20%p 로 부푼다(합은 맞아서 눈에 안 띈다).
+    const commonCurDoneFn = (it) => aiExistedAtRef(it) && !!it.완료여부;
+    const commonCurProgress = aiRatioProgress(intersection, refTotalFn, commonCurDoneFn);
+
+    let addedItemCount = 0;   // 기존 과제에 기준일 뒤 추가된 항목 수
+    let commonItemCount = 0;  // 양 시점에 다 있던 항목 수
+    intersection.forEach(p => (p.액션아이템목록 || []).forEach(it => {
+      if (aiExistedAtRef(it)) commonItemCount++; else addedItemCount++;
+    }));
+
+    const newEffect = currentAvgProgress - interCurProgress;      // 신규 과제가 준 영향
+    const addedItemEffect = interCurProgress - commonCurProgress; // 기존 과제에 항목이 는 영향
+    const sameItemDelta = commonCurProgress - interRefProgress;   // 같은 항목이 실제로 나아간 몫
+    const removedEffect = interRefProgress - refAvgProgress;      // 기준일에만 있던(삭제) 과제
+
+    // 예전 이름. 항목 추가분과 진척분을 합친 값이라 **둘을 못 가른다** —
+    // 새로 쓰는 곳은 sameItemDelta 를 봐야 한다.
+    const sameCohortDelta = addedItemEffect + sameItemDelta;
 
     return {
       totalProjects,
@@ -5035,6 +5069,10 @@ const DashboardView = ({
       deltaAvgProgress: currentAvgProgress - refAvgProgress,
       // 평균 진행률 분해
       newEffect,
+      addedItemEffect,
+      sameItemDelta,
+      addedItemCount,
+      commonItemCount,
       sameCohortDelta,
       removedEffect,
       newProjectsCount: newProjects.length,
@@ -7262,18 +7300,31 @@ const DashboardView = ({
                     </KPICardRefHint>
                   </KPICardValueRow>
                   <KPIDecompBlock>
+                    {/* 액션아이템 개수로 세는 지표라 분해도 **항목 단위**다.
+                        과제 단위로만 쪼개면 기존 과제에 항목을 늘린 몫이
+                        「진척」 줄에 얹혀 후퇴한 것처럼 읽힌다. */}
                     <KPIDecompRow>
                       <KPIDecompLabel>
-                        기존 {executiveMetrics.sameCohortCount}개 과제 진척
+                        기존 항목 {executiveMetrics.commonItemCount}개 진척
                       </KPIDecompLabel>
-                      <KPIDecompValue $value={executiveMetrics.sameCohortDelta}>
-                        {executiveMetrics.sameCohortDelta > 0 ? '+' : ''}{executiveMetrics.sameCohortDelta.toFixed(1)}%p
+                      <KPIDecompValue $value={executiveMetrics.sameItemDelta}>
+                        {executiveMetrics.sameItemDelta > 0 ? '+' : ''}{executiveMetrics.sameItemDelta.toFixed(1)}%p
                       </KPIDecompValue>
                     </KPIDecompRow>
+                    {executiveMetrics.addedItemCount > 0 && (
+                      <KPIDecompRow>
+                        <KPIDecompLabel>
+                          항목 {executiveMetrics.addedItemCount}개 추가 영향
+                        </KPIDecompLabel>
+                        <KPIDecompValue $value={executiveMetrics.addedItemEffect}>
+                          {executiveMetrics.addedItemEffect > 0 ? '+' : ''}{executiveMetrics.addedItemEffect.toFixed(1)}%p
+                        </KPIDecompValue>
+                      </KPIDecompRow>
+                    )}
                     {executiveMetrics.newProjectsCount > 0 && (
                       <KPIDecompRow>
                         <KPIDecompLabel>
-                          신규 {executiveMetrics.newProjectsCount}개 추가 영향
+                          신규 과제 {executiveMetrics.newProjectsCount}개 영향
                         </KPIDecompLabel>
                         <KPIDecompValue $value={executiveMetrics.newEffect}>
                           {executiveMetrics.newEffect > 0 ? '+' : ''}{executiveMetrics.newEffect.toFixed(1)}%p
@@ -7283,7 +7334,7 @@ const DashboardView = ({
                     {executiveMetrics.removedProjectsCount > 0 && (
                       <KPIDecompRow>
                         <KPIDecompLabel>
-                          삭제 {executiveMetrics.removedProjectsCount}개 영향
+                          삭제 과제 {executiveMetrics.removedProjectsCount}개 영향
                         </KPIDecompLabel>
                         <KPIDecompValue $value={executiveMetrics.removedEffect}>
                           {executiveMetrics.removedEffect > 0 ? '+' : ''}{executiveMetrics.removedEffect.toFixed(1)}%p
