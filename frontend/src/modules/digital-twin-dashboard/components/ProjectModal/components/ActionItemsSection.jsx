@@ -23,15 +23,10 @@ import AiActionItemsModal from './AiActionItemsModal';
   ⚠️ `id` 는 그대로 둔다 — React key 와 기존 목록 조작이 전부 그것을 쓴다.
 */
 
-// 액션아이템 생성 시각 조회 (레거시 데이터는 id가 Date.now() 밀리초였으므로 역산)
-export const getActionItemCreatedAt = (item) => {
-  if (!item) return null;
-  if (item.createdAt) return item.createdAt;
-  if (typeof item.id === 'number' && item.id > 1e12) {
-    return new Date(item.id).toISOString();
-  }
-  return null;
-};
+// 액션아이템 생성 시각 조회. 정의는 utils/actionItemTime 에 있다 —
+// 화면 없이 불러와야 하는 숫자 계산(execMetrics)이 그것을 쓰기 때문이다.
+// 여기서 다시 내보내므로 기존 import 경로는 그대로 쓸 수 있다.
+export { getActionItemCreatedAt } from '../../../utils/actionItemTime';
 
 const ActionItemsContainer = styled.div`
   display: flex;
