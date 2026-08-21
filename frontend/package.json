@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --import ./test/hook.mjs --test src",
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 121",
     "preview": "vite preview"
   },

@@ -68,7 +68,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: '18'
+          # ⚠️ 20 이어야 한다. `node --test` 가 18 에서는 실험 단계다.
+          node-version: '20'
           # 러너마다 node_modules 를 처음부터 받으면 1분 넘게 쓴다.
           cache: npm
           cache-dependency-path: frontend/package-lock.json
@@ -130,6 +131,21 @@ jobs:
             Push-Location frontend
             npm run lint
             if ($LASTEXITCODE -ne 0) { throw "lint failed (exit $LASTEXITCODE)" }
+            Pop-Location
+          }
+
+      # 빌드도 lint 도 **계산이 틀리는 것**은 못 잡는다. 문법이 멀쩡하고 이름도
+      # 다 있는데 숫자만 조용히 다르다 — 0.4.3ㆍ0.5.0 이 그랬다. 그건 시험만 잡는다.
+      #
+      # 새 패키지를 안 쓴다. node 에 들어 있는 시험 얼개(node:test)를 쓰고,
+      # 확장자 없는 import 만 test/resolver.mjs 가 풀어 준다.
+      - name: "Frontend: test"
+        shell: pwsh
+        run: |
+          if (Test-Path frontend\package.json) {
+            Push-Location frontend
+            npm test
+            if ($LASTEXITCODE -ne 0) { throw "tests failed (exit $LASTEXITCODE)" }
             Pop-Location
           }
 
