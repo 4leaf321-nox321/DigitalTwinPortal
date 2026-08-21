@@ -6,6 +6,7 @@ import Header from './components/Layout/Header';
 import InvestmentModal from './components/InvestmentModal';
 import BulkAddModal from './components/BulkAddModal';
 import SettingsModal from './components/SettingsModal';
+import HistoryModal from './components/HistoryModal';
 import InvestmentTable from './components/InvestmentTable';
 import PivotView from './components/PivotView';
 import ToggleFilter from './components/ToggleFilter';
@@ -152,6 +153,19 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
   const [showFormModal, setShowFormModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  /*
+    변경 이력 창. 두 가지로 연다.
+      건별  — 표의 「이력」 버튼. 그 건이 어떻게 바뀌어 왔는지.
+      전체  — 헤더의 「변경 이력」. **지워진 건까지** 들어 있다. 지워진 건은
+             목록에 없으니 이 길이 아니면 볼 방법이 없다.
+  */
+  const [historyModal, setHistoryModal] = useState(null); // { title, showName }
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [restoringId, setRestoringId] = useState(null);
+  // 이력 창을 무엇으로 열었는지 — 되살린 뒤 같은 목록을 다시 불러오려고 들고 있다.
+  const [historyLoader, setHistoryLoader] = useState(null);
   const [editing, setEditing] = useState(null);
 
   const loadInvestments = async () => {
@@ -278,6 +292,43 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
     }
   };
 
+  const openHistory = async (title, showName, load) => {
+    setHistoryModal({ title, showName });
+    setHistoryLoader(() => load);
+    setHistoryLoading(true);
+    setHistoryError('');
+    setHistoryRows([]);
+    try {
+      setHistoryRows(await load());
+    } catch (e) {
+      setHistoryError(e.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  /*
+    삭제 이력 되살리기. 물리 삭제라 원래 행은 없고, 스냅샷으로 **새 건을 등록**한다.
+    되살린 뒤에는 목록과 이력을 둘 다 다시 불러온다 — 이력에도 「등록」이 한 줄 는다.
+  */
+  const handleRestore = async (row) => {
+    if (!window.confirm(
+      `「${row.investmentName || '이 건'}」 을 되살립니다.
+`
+      + '지우기 직전 값으로 **새 건이 등록**됩니다 (원래 번호는 돌아오지 않습니다).')) return;
+    setRestoringId(row.id);
+    setHistoryError('');
+    try {
+      await api.restoreFromHistory(row.id);
+      await loadInvestments();
+      if (historyLoader) setHistoryRows(await historyLoader());
+    } catch (e) {
+      setHistoryError(e.message);
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
   const openAdd = () => { setEditing(null); setShowFormModal(true); };
   const openEdit = (row) => { setEditing(row); setShowFormModal(true); };
 
@@ -288,6 +339,8 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
         onAdd={openAdd}
         onBulkAdd={() => setShowBulkModal(true)}
         onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenHistory={() => openHistory('전체 변경 이력 (지워진 건 포함)', true,
+          () => api.getAllHistory())}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
@@ -348,6 +401,8 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
               onToggleSort={key => setSort(prev => nextSort(prev, key))}
               onEdit={openEdit}
               onDelete={handleDelete}
+              onHistory={(row) => openHistory(`「${row.name}」 변경 이력`, false,
+                () => api.getInvestmentHistory(row.id))}
             />
           )}
           {!loading && viewMode === 'pivot' && (
@@ -377,6 +432,18 @@ const DigitalTwinInvestmentApp = ({ onGoHome }) => {
         departments={options.departments}
         departmentsByDivision={options.departmentsByDivision}
         category2Options={category2Options}
+      />
+
+      <HistoryModal
+        isOpen={!!historyModal}
+        onClose={() => setHistoryModal(null)}
+        title={historyModal?.title || '변경 이력'}
+        showName={!!historyModal?.showName}
+        rows={historyRows}
+        loading={historyLoading}
+        error={historyError}
+        onRestore={handleRestore}
+        restoringId={restoringId}
       />
 
       <SettingsModal

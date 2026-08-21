@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Edit2, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Edit2, History, Trash2 } from 'lucide-react';
 import { AMOUNT_UNIT, COLUMNS, formatAmount } from '../constants';
 
 const Wrapper = styled.div`
@@ -127,7 +127,7 @@ const SortIcon = ({ active, dir }) => {
 
 // 정렬 상태는 위(App)가 쥐고 있다. 「로컬 저장」이 화면과 같은 차례로 내보내려면
 // 정렬된 배열이 바깥에도 있어야 하기 때문이다. 여기 오는 investments 는 이미 정렬된 것.
-const InvestmentTable = ({ investments, sort, onToggleSort, onEdit, onDelete }) => {
+const InvestmentTable = ({ investments, sort, onToggleSort, onEdit, onDelete, onHistory }) => {
   if (investments.length === 0) {
     return (
       <Wrapper>
@@ -180,7 +180,7 @@ const InvestmentTable = ({ investments, sort, onToggleSort, onEdit, onDelete }) 
         <thead>
           <tr>
             {COLUMNS.map(renderHead)}
-            <th style={{ width: 80 }} />
+            <th style={{ width: 110 }} />
           </tr>
         </thead>
         <tbody>
@@ -192,6 +192,9 @@ const InvestmentTable = ({ investments, sort, onToggleSort, onEdit, onDelete }) 
                 return <td key={col.key}>{renderCell(row, col)}</td>;
               })}
               <Actions>
+                <IconButton onClick={() => onHistory(row)} title="변경 이력">
+                  <History size={14} />
+                </IconButton>
                 <IconButton onClick={() => onEdit(row)} title="수정">
                   <Edit2 size={14} />
                 </IconButton>

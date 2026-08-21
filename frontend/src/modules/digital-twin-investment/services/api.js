@@ -67,6 +67,31 @@ class DtInvestmentApi {
     );
   }
 
+  // ============== 변경 이력 ==============
+
+  /** 투자 건 하나의 변경 이력. */
+  async getInvestmentHistory(id) {
+    return (await this.request(
+      `${this.baseUrl}/investments/${id}/history`, {}, '변경 이력 조회 실패')) || [];
+  }
+
+  /**
+   * 전체 변경 이력. **지워진 건까지 포함한다** —
+   * 목록에 없는 건의 이력을 볼 수 있는 유일한 길이다.
+   */
+  async getAllHistory(limit = 200) {
+    return (await this.request(
+      `${this.baseUrl}/history?limit=${limit}`, {}, '변경 이력 조회 실패')) || [];
+  }
+
+  /** 삭제 이력을 되살린다. 새 건으로 등록된다. */
+  async restoreFromHistory(changeId) {
+    return this.request(
+      `${this.baseUrl}/history/${changeId}/restore`,
+      { method: 'POST' },
+      '되살리기 실패');
+  }
+
   // ============== 설정 ==============
 
   async getSettings() {

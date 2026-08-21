@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Coins, Plus, FileSpreadsheet, Settings, Table2, LayoutGrid } from 'lucide-react';
+import { Coins, Plus, FileSpreadsheet, History, Settings, Table2, LayoutGrid } from 'lucide-react';
 import { CommonHeader } from '../../../../shared/components/Header';
 
 const ButtonGroup = styled.div`
@@ -92,7 +92,7 @@ const SettingsButton = styled.button`
   &:hover { border-color: #4f46e5; color: #4338ca; background: #eef2ff; }
 `;
 
-const Header = ({ onGoHome, onAdd, onBulkAdd, onOpenSettings, viewMode, onViewModeChange }) => {
+const Header = ({ onGoHome, onAdd, onBulkAdd, onOpenSettings, onOpenHistory, viewMode, onViewModeChange }) => {
   return (
     <CommonHeader
       logo={<Coins size={24} strokeWidth={2} />}
@@ -133,6 +133,11 @@ const Header = ({ onGoHome, onAdd, onBulkAdd, onOpenSettings, viewMode, onViewMo
               피벗
             </ToggleButton>
           </ViewToggle>
+
+          <SettingsButton onClick={onOpenHistory} title="지워진 건까지 포함한 전체 변경 이력">
+            <History size={16} />
+            변경 이력
+          </SettingsButton>
 
           <SettingsButton onClick={onOpenSettings} title="디지털 트윈 영역 목록 관리">
             <Settings size={16} />
