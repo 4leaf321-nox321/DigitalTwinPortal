@@ -6,7 +6,7 @@ import { useAuth } from '../../../../contexts/AuthContext';
 import { todayLocalYmd } from '../../../../shared/utils/localDate';
 // 수준값의 0 과 미입력은 다른 뜻이다. `|| ''` 로 다루면 0 이 사라진다.
 import { levelText } from '../../utils/levelValue';
-import { compareProjects } from '../../utils/divisionOrder';
+import { compareProjects, sortDivisionNames } from '../../utils/divisionOrder';
 // 상세 과제 정보·마일스톤 — '결과 보고서' 와 **같은 컴포넌트**를 쓴다.
 // 같은 내용을 두 양식으로 보여주면 사람이 다른 것으로 읽는다(2026-08-08 통합).
 import ProjectDetailModal from './ProjectDetailModal';
@@ -1558,6 +1558,82 @@ const SCHEDULE_RISK_LABEL = {
   backloaded: '막판 몰림',
 };
 
+// 「목표일 대비」 뒤처졌다고 볼 격차. 오늘까지 끝났어야 할 비율과 실제 진척의 차.
+const BEHIND_PLAN_GAP = 0.2;
+
+// ── 「막판 몰림」 = 계획이 뒤로 몰렸나 ───────────────────────────────────────
+//
+// 재는 것은 **계획의 모양**이지 오늘의 진척이 아니다. 그래서 이 판정에는
+// **오늘 날짜가 들어가지 않는다.**
+//
+// ⚠️ 예전에는 「오늘까지가 목표일인 액션아이템이 10% 이하」였다. 그건 계획의
+//    모양이 아니라 **오늘 날짜에서 파생된 나머지 통**이라, 똑같은 계획이 3월에는
+//    걸리고 11월에는 안 걸렸다. 계획이 뒤로 몰린 것은 **연초에 알아야** 고칠 수
+//    있는데, 그 셈법으로는 늦어서야 드러난다.
+//
+// 재는 법: 목표일의 **중앙값**이 과제 기간의 어디에 놓이나. 곧 「계획상 절반을
+// 끝내는 시점」이다. 0 이면 시작, 1 이면 종료.
+//
+// ⚠️ 「마지막 달에 절반 이상」 하나만 보면 **놓친다.** 3~12월 과제에 목표일이
+//    10ㆍ11ㆍ12월이면 누가 봐도 뒤로 몰렸는데 종료월에는 1개(33%)뿐이다. 중앙값
+//    위치는 이것을 90% 로 잡는다. 그러면서 「절반이 마지막 달」인 계획도 반드시
+//    걸린다 — 그 경우 중앙값 위치가 100% 이기 때문이다. 더 넓은 기준이다.
+//
+// ⚠️ **이 값은 실측이 아니라 어림이다.** 개발 DB 로는 잴 수 없다 — seeding 이라
+//    2026년 101건 중 97건이 액션아이템 3개를 균등하게 깔아 둔 같은 모양이고,
+//    중앙값 위치가 70~79% 한 덩어리에 몰려 있다(2026-08-21).
+//        0.75 → 42건(42%)   0.8 → 7건(7%)   0.85 → 1건
+//    **운영 DB 에서 다시 재고 이 값부터 만져야 한다.** 너무 많이 잡히면 올린다.
+const BACKLOADED_MEDIAN_POS = 0.8;
+
+// 목표일이 이보다 적게 적혀 있으면 계획의 **모양을 말할 수 없다.** 하나만 적어
+// 둔 과제를 「계획이 뒤로 몰렸다」고 부르면, 실은 안 적은 것을 나무라는 셈이다.
+const BACKLOADED_MIN_DUES = 3;
+
+// ── 툴팁에 적을 판단 기준 ────────────────────────────────────────────────────
+//
+// ⚠️ **문구에 숫자를 손으로 적지 않는다.** 위 상수를 고쳤을 때 문구가 따라오지
+//    않으면 화면이 실제 판정과 **다른 기준**을 안내한다. 화면 설명이 틀린 것은
+//    기준이 틀린 것보다 나쁘다 — 아무도 의심하지 않기 때문이다.
+const pct = (v) => Math.round(v * 100);
+
+const SCHEDULE_RISK_BASE =
+  '[공통]' + '\n'
+  + '  · 진행 중인 과제 (완료·취소·미착수 제외)' + '\n'
+  + '  · 액션아이템이 하나라도 있음 (안 적은 것은 늦은 것이 아님)' + '\n'
+  + '  · 과제 기간이 3개월 이상';
+
+// 「기한 지남」ㆍ「일정 뒤처짐」 만 걸리는 문턱. 「막판 몰림」은 계획의 모양이라
+// 진척과 무관하게 잡히므로 이 문턱을 지나지 않는다.
+const SCHEDULE_RISK_LAG =
+  '  · 기간 경과율 − 진척률 ≥ ' + pct(SCHEDULE_RISK_GAP) + '%p';
+
+const SCHEDULE_RISK_CRITERIA = {
+  overdue:
+    '종료월이 이미 지났는데 아직 진행 중입니다.'
+    + '\n' + '\n' + SCHEDULE_RISK_BASE + '\n' + SCHEDULE_RISK_LAG,
+  behind:
+    '목표일을 적은 액션아이템 가운데 목표일이 「오늘까지」인 비율보다' + '\n'
+    + '실제 진척이 ' + pct(BEHIND_PLAN_GAP) + '%p 이상 낮습니다.' + '\n'
+    + '(목표일을 적은 것이 하나도 없으면 기간 경과율과 견줍니다)'
+    + '\n' + '\n' + SCHEDULE_RISK_BASE + '\n' + SCHEDULE_RISK_LAG,
+  backloaded:
+    '계획상 절반을 끝내는 시점(액션아이템 목표일의 중앙값)이' + '\n'
+    + '과제 기간의 ' + pct(BACKLOADED_MEDIAN_POS) + '% 지점을 넘습니다.' + '\n'
+    + '진척이 늦은 게 아니라 「계획 자체가 뒤로 몰려」 있습니다.' + '\n'
+    + '\n'
+    + '오늘 날짜와 무관합니다 — 연초에도 잡힙니다.'
+    + '\n' + '\n' + SCHEDULE_RISK_BASE + '\n'
+    + '  · 목표일이 ' + BACKLOADED_MIN_DUES + '개 이상 적혀 있음'
+    + ' (모자라면 계획의 모양을 말할 수 없음)' + '\n'
+    + '  · 아직 안 끝난 액션아이템이 있음',
+};
+
+/** 유형 칩 툴팁. 「무엇인가 → 왜 걸렸나 → 누르면 무엇이 되나」 차례로 읽힌다. */
+const scheduleRiskTip = (kind, total) =>
+  '[' + SCHEDULE_RISK_LABEL[kind] + '] ' + SCHEDULE_RISK_CRITERIA[kind]
+  + '\n' + '\n' + '누르면 이 유형 ' + total + '건만 봅니다.';
+
 const AllProjectsView = ({
   projects,
   globalPerformances = [],
@@ -1595,6 +1671,9 @@ const AllProjectsView = ({
   const [pivotDivisionFilter, setPivotDivisionFilter] = useState(''); // 피봇 보기 사업부 필터
   const [perfViewDivisionFilter, setPerfViewDivisionFilter] = useState('all'); // 성과 보기 사업부 필터
   const [recencyFilter, setRecencyFilter] = useState(''); // '' | 'week' | 'month' | 'none'
+  // 사업부 필터. 이 화면의 다른 필터(최근 업데이트·과제 상태)와 같이 **칩을 눌러**
+  // 여러 개를 함께 건다. 빈 집합이면 전체다.
+  const [selectedDivisions, setSelectedDivisions] = useState(new Set());
   const [riskFilter, setRiskFilter] = useState(false);    // 일정 위험만 보기
   const [riskKind, setRiskKind] = useState('');           // '' | overdue | behind | backloaded
 
@@ -1720,7 +1799,38 @@ const AllProjectsView = ({
       ((thisMonth - start) + thisMonthProgress) / span));
     const actual = calculateProgress(project) / 100;
     const gap = elapsed - actual;
-    if (gap < SCHEDULE_RISK_GAP) return null;
+
+    // ── 계획이 뒤로 몰렸나. **오늘은 안 본다.** ──
+    //
+    // 목표일의 중앙값이 기간의 어디에 놓이나 = 「계획상 절반을 끝내는 시점」.
+    // ⚠️ 종료월을 넘겨 적힌 목표일이 실제로 있다(3~11월 과제에 12월 목표일).
+    //    1 을 넘지 않게 눌러 둔다 — 안 그러면 위치가 100% 를 넘는다.
+    const dueMonths = [];
+    items.forEach(it => {
+      const raw = String(it.목표일 || '').trim();
+      if (raw.length < 7) return;
+      const m = Number(raw.slice(5, 7));
+      if (m >= 1 && m <= 12) dueMonths.push(m);
+    });
+    let medianPos = null;
+    if (dueMonths.length >= BACKLOADED_MIN_DUES) {
+      const sorted = [...dueMonths].sort((a, b) => a - b);
+      const mid = sorted.length >> 1;
+      const med = sorted.length % 2 === 1
+        ? sorted[mid]
+        : (sorted[mid - 1] + sorted[mid]) / 2;
+      medianPos = Math.min(1, Math.max(0, (med - start + 1) / span));
+    }
+    // 다 끝낸 과제는 몰릴 일이 남아 있지 않다. 계획이 뒤로 몰렸다는 말은
+    // **앞으로 닥칠 일**에 대한 경고라, 남은 일이 없으면 할 말이 아니다.
+    const backloaded = medianPos !== null && medianPos >= BACKLOADED_MEDIAN_POS
+      && actual < 1;
+
+    // 두 신호는 **성질이 다르다.** 하나는 오늘까지의 진척, 하나는 계획의 모양이다.
+    // 둘 중 하나만 걸려도 일정 위험이다. 계획이 뒤로 몰린 과제는 아직 뒤처지지
+    // 않았어도 위험한데, 그것이 **연초에 알아야 하는** 바로 그 경우다.
+    const lagging = gap >= SCHEDULE_RISK_GAP;
+    if (!lagging && !backloaded) return null;
 
     // ── 여기부터는 「왜」다. 판정은 위에서 끝났다. ──
     let due = 0, dueTotal = 0;
@@ -1736,23 +1846,25 @@ const AllProjectsView = ({
     // ⚠️ 「기한 지남」은 **종료월이 실제로 지났을 때만**이다. 경과율로 판정하면
     //    종료월 말일에 반올림 언저리에서 갈리는데, 마감 당일은 아직 지난 것이
     //    아니다. 달 비교는 그런 흔들림이 없다.
-    if (thisMonth > end) {
+    if (lagging && thisMonth > end) {
       kind = 'overdue';
       why = `과제 기한(${start}~${end}월)이 지났는데 진척이 ${Math.round(actual * 100)}% 입니다.`;
-    } else if (plannedRate !== null && plannedRate - actual >= 0.2) {
-      kind = 'behind';
-      why = `이번 달까지 ${Math.round(plannedRate * 100)}% 가 끝났어야 하는데 `
-          + `${Math.round(actual * 100)}% 입니다.`;
-    } else if (plannedRate !== null && plannedRate <= 0.1) {
+    // 「막판 몰림」이 「일정 뒤처짐」보다 앞선다. 계획이 뒤로 몰린 과제는 진척이
+    // 처지는 것이 **당연한 결과**라, 그걸 「뒤처졌다」고 부르면 원인이 가려진다.
+    } else if (backloaded) {
       kind = 'backloaded';
-      why = `기간의 ${Math.round(elapsed * 100)}% 가 지났는데 이번 달까지 목표일인 `
-          + `액션아이템이 없습니다. 남은 일이 뒤에 몰려 있습니다.`;
+      why = `계획상 절반을 끝내는 시점이 기간의 ${Math.round(medianPos * 100)}% 지점입니다. `
+          + `진척이 늦은 게 아니라 계획 자체가 뒤로 몰려 있습니다.`;
+    } else if (plannedRate !== null && plannedRate - actual >= BEHIND_PLAN_GAP) {
+      kind = 'behind';
+      why = `오늘까지가 목표일인 액션아이템이 ${Math.round(plannedRate * 100)}% 인데 `
+          + `진척은 ${Math.round(actual * 100)}% 입니다.`;
     } else {
       kind = 'behind';
       why = `기간의 ${Math.round(elapsed * 100)}% 가 지났는데 진척은 `
           + `${Math.round(actual * 100)}% 입니다.`;
     }
-    return { kind, gap, elapsed, actual, why, label: SCHEDULE_RISK_LABEL[kind] };
+    return { kind, gap, elapsed, actual, medianPos, why, label: SCHEDULE_RISK_LABEL[kind] };
   };
 
   // 최근 업데이트 여부 확인: 'week' | 'month' | null
@@ -1786,6 +1898,18 @@ const AllProjectsView = ({
   }, [availableProjectStatuses, statusInitialized]);
 
   // 과제 상태 토글 핸들러
+  // 사업부 색도 설정이 정본이다. 없으면 회색으로 떨어진다.
+  const divisionColorOf = (name) =>
+    (settingsData?.divisions || []).find(d => d?.name === name)?.color || '#64748b';
+
+  const handleDivisionToggle = (name) => {
+    setSelectedDivisions(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  };
+
   const handleProjectStatusToggle = (statusName) => {
     setSelectedProjectStatuses(prev => {
       const next = new Set(prev);
@@ -1845,6 +1969,9 @@ const AllProjectsView = ({
         }
       }
 
+      // 사업부 필터 — 고른 것 중 하나라도 맞으면 통과(같은 갈래 안에서는 OR)
+      if (selectedDivisions.size > 0 && !selectedDivisions.has(project.사업부)) return false;
+
       // 과제 상태(진행상태) 필터
       if (!showTrash && selectedProjectStatuses.size > 0) {
         if (!selectedProjectStatuses.has(project.진행상태)) return false;
@@ -1861,7 +1988,7 @@ const AllProjectsView = ({
       return true;
     });
   }, [projects, currentYear, searchTerm, showTrash, recencyFilter, selectedProjectStatuses,
-      riskFilter, riskKind, scheduleRiskApplies, thisMonth, thisMonthProgress]);
+      selectedDivisions, riskFilter, riskKind, scheduleRiskApplies, thisMonth, thisMonthProgress]);
 
   /** 유형 × 사업부. 「따로 얘기한다」면 **어느 조직 문제인지**가 먼저 나와야 한다.
    *
@@ -1895,12 +2022,14 @@ const AllProjectsView = ({
     const order = ['overdue', 'behind', 'backloaded'];
     return {
       total,
-      divisions: [...divisions].sort(),
+      // 사업부 순서는 **설정이 정본**이다(divisionOrder). 이름순으로 세우면
+      // 같은 조직이 화면마다 다른 자리에 와 「내가 어디쯤 있나」를 잃는다.
+      divisions: sortDivisionNames([...divisions], settingsData),
       kinds: order.filter(k => byKind[k]).map(k => ({
         kind: k, label: SCHEDULE_RISK_LABEL[k], ...byKind[k],
       })),
     };
-  }, [projects, currentYear, scheduleRiskApplies, thisMonth, thisMonthProgress]);
+  }, [projects, currentYear, scheduleRiskApplies, thisMonth, thisMonthProgress, settingsData]);
 
   /** 칩에 붙일 수. 눌러보기 전에 **몇 건인지 먼저 보여야** 누를 마음이 생긴다. */
   const scheduleRiskCount = scheduleRiskSummary.total;
@@ -1917,16 +2046,21 @@ const AllProjectsView = ({
     () => [...filteredProjects].sort(compareProjects(settingsData)),
     [filteredProjects, settingsData]);
 
-  // 사용 가능한 사업부 목록 추출
+  /*
+    사업부 칩·필터의 후보 목록. 순서는 설정을 따른다.
+
+    ⚠️ 모수는 **사업부 필터를 거치지 않은** 그 해 과제다. 걸러진 목록에서 뽑으면
+       MX 를 고르는 순간 다른 칩이 전부 사라져, 필터가 자기 자신을 지운다
+       (같은 함정을 scheduleRiskSummary 주석도 경고한다).
+  */
   const availableDivisions = useMemo(() => {
     const divisions = new Set();
-    sortedProjects.forEach(project => {
-      if (project.사업부) {
-        divisions.add(project.사업부);
-      }
+    projects.forEach(project => {
+      if (project._deleted || projectYearOf(project) !== Number(currentYear)) return;
+      if (project.사업부) divisions.add(project.사업부);
     });
-    return [...divisions].sort();
-  }, [sortedProjects]);
+    return sortDivisionNames([...divisions], settingsData);
+  }, [projects, currentYear, settingsData]);
 
   // 그룹별 보기용 데이터 구조: 과제구분별 그룹 (사업부 필터 적용)
   const groupedData = useMemo(() => {
@@ -2636,7 +2770,8 @@ const AllProjectsView = ({
                 /* 끌 때 유형 선택도 같이 푼다 — 안 그러면 다시 켰을 때 왜
                    3건뿐인지 모른 채 목록을 본다. */
                 onClick={() => { setRiskFilter(!riskFilter); setRiskKind(''); }}
-                title="기간이 지난 만큼 진척이 안 따라온 과제만 봅니다"
+                title={'기간이 지난 만큼 진척이 안 따라온 과제만 봅니다.'
+                       + '\n\n' + SCHEDULE_RISK_BASE}
               >
                 <AlertTriangle size={12} />
                 일정 위험 {scheduleRiskCount}
@@ -2685,6 +2820,40 @@ const AllProjectsView = ({
                 )}
               </>
             )}
+            {/* 사업부 필터 — 차례는 설정을 따른다(availableDivisions). 과제 상태 필터와
+                같은 칩이라 이 줄에서 조작 방법이 달라지지 않는다. */}
+            {availableDivisions.length > 0 && (
+              <>
+                <span style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '0.75rem', marginLeft: '0.25rem', fontSize: '0.8rem', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap' }}>사업부:</span>
+                {availableDivisions.map(div => {
+                  const isActive = selectedDivisions.has(div);
+                  const color = divisionColorOf(div);
+                  return (
+                    <LegendFilterButton
+                      key={`dv-${div}`}
+                      $borderColor={color}
+                      $textColor={color}
+                      $active={isActive}
+                      onClick={() => handleDivisionToggle(div)}
+                      style={isActive ? { background: color, color: 'white', fontWeight: 600 } : {}}
+                      title={`${div} 과제만 필터`}
+                    >
+                      {div}
+                    </LegendFilterButton>
+                  );
+                })}
+                {selectedDivisions.size > 0 && (
+                  <LegendFilterButton
+                    $borderColor="#94a3b8"
+                    onClick={() => setSelectedDivisions(new Set())}
+                    title="사업부 필터 초기화"
+                  >
+                    <X size={12} />
+                    초기화
+                  </LegendFilterButton>
+                )}
+              </>
+            )}
           </LegendNote>
         ) : null}
 
@@ -2711,7 +2880,7 @@ const AllProjectsView = ({
                   <RiskKindCell
                     $on={riskKind === k.kind}
                     onClick={() => setRiskKind(riskKind === k.kind ? '' : k.kind)}
-                    title={`「${k.label}」 ${k.total}건만 봅니다`}
+                    title={scheduleRiskTip(k.kind, k.total)}
                   >
                     ⚠ {k.label}
                   </RiskKindCell>
@@ -3234,7 +3403,10 @@ const AllProjectsView = ({
                     const risk = getScheduleRisk(project);
                     if (!risk) return null;
                     return (
-                      <MetaBadge $bg="#fef2f2" $color="#dc2626" title={risk.why}>
+                      <MetaBadge
+                        $bg="#fef2f2" $color="#dc2626"
+                        title={risk.why + '\n\n' + SCHEDULE_RISK_BASE}
+                      >
                         ⚠ {risk.label}
                       </MetaBadge>
                     );
