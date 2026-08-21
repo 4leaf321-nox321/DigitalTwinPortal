@@ -25,7 +25,7 @@ import {
 
 import { fetchGraph, fetchGraphOptions } from '../../services/graphViewApi';
 import {
-  fetchDivisions, fetchGaps, fetchHidden, fetchIssues, fetchKeyProjects,
+  fetchBrief, fetchDivisions, fetchGaps, fetchHidden, fetchIssues, fetchKeyProjects,
   fetchKpiBriefing, fetchReadiness, fetchRisky, fetchSchedule, fetchStalled, narrate,
 } from '../../services/graphAgentApi';
 import ProjectDetailModal from '../Dashboard/ProjectDetailModal';
@@ -265,9 +265,9 @@ const GraphView = ({
    *    고르기 전까지는 아무 분석도 없었다. 안 눌러 본 사람에게는 이 도구가
    *    **없는 것과 같았다**(2026-08-21 신고).
    *
-   * 무엇을 띄우나 — 「데이터 공백 리포트」다. 메뉴에도 **「먼저 볼 것 — 위 분석들의
-   * 신뢰도를 정합니다」** 라고 적어 둔 그것이고, 다른 분석의 신뢰도를 정하므로
-   * 처음 보는 사람에게 순서가 맞다.
+   * 무엇을 띄우나 — 「지금 급한 것」이다. 여섯 분석을 한 번에 돌려 **겹쳐 걸리는
+   * 것**부터 세운다. 한 번에 하나씩만 보면 교차를 사람 머릿속에서 해야 하는데,
+   * 진짜 위험한 것은 두 갈래에 동시에 걸리는 것이라 그건 아무도 못 보고 있었다.
    *
    * ⚠️ **딱 한 번만 돈다.** 「범례로 돌아가기」를 누르면 analysis 가 비는데, 그때
    *    다시 돌면 범례를 영영 볼 수 없다. 그래서 상태가 아니라 ref 로 기억한다 —
@@ -289,8 +289,8 @@ const GraphView = ({
     if (autoRanRef.current) return;
     if (loading || error || !data) return;
     autoRanRef.current = true;
-    runAnalysis(() => fetchGaps(scope));
-  }, [loading, error, data, scope, runAnalysis]);
+    runAnalysis(() => fetchBrief(scope, currentYear));
+  }, [loading, error, data, scope, runAnalysis, currentYear]);
 
   /**
    * 필터가 바뀌면 **떠 있는 분석을 닫고 새 범위로 다시 연다.**
@@ -358,6 +358,11 @@ const GraphView = ({
           </PrimaryBtn>
           {agentMenuOpen && (
             <AgentMenu>
+              {/* 묶음 없이 맨 위. 이것 하나가 아래 여섯을 한 번에 본다. */}
+              <AgentMenuItem onClick={() => runAnalysis(() => fetchBrief(scope, currentYear))}>
+                지금 급한 것
+                <em>아래 분석들을 한 번에 보고 겹쳐 걸리는 것부터</em>
+              </AgentMenuItem>
               <AgentMenuGroup>지금 무엇이 막혔나</AgentMenuGroup>
               <AgentMenuItem onClick={() => runAnalysis(() => fetchStalled(scope))}>
                 멈춘 과제

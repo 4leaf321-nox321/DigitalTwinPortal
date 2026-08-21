@@ -90,7 +90,18 @@ def _slim(p: dict) -> dict:
             'notes': (p.get('coverage') or {}).get('notes') or [],
         },
     }
-    if kind == 'gaps':
+    if kind == 'brief':
+        # 목록을 통째로 보내면 LLM 이 그것을 되읊는다. **겹친 것 앞 다섯 개**와
+        # 갈래 이름만 보낸다 — 고르는 데 필요한 것은 그뿐이다.
+        out['multiCount'] = p.get('multiCount')
+        out['flaggedCount'] = p.get('flaggedCount')
+        out['ran'] = p.get('ran')
+        out['top'] = [{'code': r.get('code'), 'title': r.get('title'),
+                       'division': r.get('division'), 'sources': r.get('sources'),
+                       'reasons': (r.get('reasons') or [])[:3]}
+                      for r in (p.get('rows') or [])[:5]]
+        out['others'] = [o.get('text') for o in (p.get('others') or [])]
+    elif kind == 'gaps':
         out['gaps'] = [{'title': g['title'], 'count': g['count'], 'why': g['why']}
                        for g in (p.get('gaps') or []) if g['count']]
     elif kind == 'kpi':

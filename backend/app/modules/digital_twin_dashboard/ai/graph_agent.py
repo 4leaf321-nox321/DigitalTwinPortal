@@ -1151,3 +1151,147 @@ def hidden_links(scope: Scope, limit=HIDDEN_LIMIT) -> dict:
                  f'셈에서 뺐습니다 — 거의 모든 과제를 이어서 뜻이 없습니다.'),
         'coverage': coverage(scope),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 지금 급한 것 — 열 가지를 한 번에 보고 **겹쳐 걸리는 것**부터
+# ─────────────────────────────────────────────────────────────────────────────
+
+def priority_brief(scope: Scope, year=None, limit=12) -> dict:
+    """
+    분석들을 한 번에 돌려 **같은 과제에 몇 갈래가 걸렸는지**로 줄 세운다.
+
+    왜 필요한가
+        지금까지는 한 번에 하나씩만 봤다. 멈춘 과제를 보고, 뒤로 가서, 일정
+        쏠림을 보고 — **교차는 사람 머릿속에서** 해야 했다. 그런데 진짜 위험한
+        것은 **두 갈래에 동시에 걸리는 것**이고, 그건 아무도 못 보고 있었다.
+
+    순위는 **걸린 갈래 수**다. 그것뿐이다.
+
+        ⚠️ 갈래마다 무게를 다르게 주면 「왜 이게 1등이냐」에 답을 못 한다.
+           이 저장소는 임계값을 정할 때마다 왜 그 값인지를 주석에 적어 왔는데,
+           무게 여섯 개는 그렇게 적을 수가 없다. 갈래 수는 적을 것이 없다.
+           동점은 **멈춤 일수 → 과제코드**로 가른다(뻔한 것으로만).
+
+    ⚠️ **과제 단위가 아닌 분석은 섞지 않는다.** 위험 지표는 지표 단위, 숨은
+       연결은 과제 **쌍** 단위, 사업부 채움은 사업부 단위다. 한 목록에 넣으면
+       「1위가 과제인데 2위는 지표」인 표가 되어 아무 뜻이 없다. 따로 `others`
+       로 낸다.
+    """
+    # 과제 단위로 겹칠 수 있는 여섯 가지.
+    gaps = data_gaps(scope)
+    stalled = stalled_projects(scope)
+    schedule = schedule_crowding(scope)
+    issues = issue_backlog(scope)
+    keyproj = key_project_gap(scope)
+    readiness = report_readiness(scope)
+
+    by_ref = {}
+
+    def _hit(rows, source, detail=None):
+        """`rows` 의 과제에 **`source` 갈래**를 하나 얹는다.
+
+        ⚠️ 갈래는 **분석 하나가 하나**다. 사유 문장 수가 아니다 — 데이터 공백은
+           묶음이 여럿이라 혼자서 사유를 다섯 개씩 만든다. 그걸 세면 「데이터를
+           덜 채운 과제」가 「멈춘 데다 이슈까지 쌓인 과제」를 이긴다. 무게를 안
+           주기로 해 놓고 사실상 데이터 공백에 5배를 주는 셈이 된다.
+        """
+        for r in rows or []:
+            ref = r.get('ref')
+            if not ref:
+                continue
+            slot = by_ref.setdefault(ref, {
+                'ref': ref, 'code': r.get('code'), 'title': r.get('title'),
+                'division': r.get('division'), 'status': r.get('status'),
+                'progress': r.get('progress'),
+                'sources': [], 'reasons': [], 'idleDays': 0,
+            })
+            # 뒤에 온 줄이 이름을 갖고 있으면 채운다 — 분석마다 담는 칸이 조금씩 다르다.
+            for k in ('code', 'title', 'division', 'status', 'progress'):
+                if slot.get(k) in (None, '') and r.get(k) not in (None, ''):
+                    slot[k] = r.get(k)
+            slot['idleDays'] = max(slot['idleDays'], r.get('idleDays') or 0)
+            if source not in slot['sources']:
+                slot['sources'].append(source)
+            why = detail(r) if detail else source
+            if why not in slot['reasons']:
+                slot['reasons'].append(why)
+
+    _hit(stalled.get('stalled'), '멈춤',
+         lambda r: f"멈춤 — {r.get('idleDays')}일째 진행률 그대로")
+    _hit(schedule.get('items'), '일정 쏠림',
+         lambda r: f"일정 쏠림 — 미완료의 {r.get('share')}% 가 {r.get('peakMonth')} 에 몰림")
+    _hit(issues.get('stale'), '이슈',
+         lambda r: f"이슈 — 미해결 {r.get('openIssues')}건 (가장 오래된 {r.get('oldest')})")
+    _hit(issues.get('noAction'), '이슈', lambda r: '이슈 — 대응 액션이 없음')
+    _hit(keyproj.get('items'), '중점과제',
+         lambda r: '중점과제인데 연결ㆍ진행이 따라오지 않음')
+
+    # 공백ㆍ보고 준비도는 **묶음 안에 과제 줄**이 들어 있다. 묶음이 몇 개든
+    # 갈래는 하나로 센다.
+    for block in (gaps.get('gaps') or []):
+        _hit(block.get('items'), '데이터 공백',
+             (lambda t: (lambda r: f'데이터 공백 — {t}'))(block.get('title')))
+    for block in (readiness.get('gaps') or []):
+        _hit(block.get('items'), '보고 준비',
+             (lambda t: (lambda r: f'보고 전 채울 곳 — {t}'))(block.get('title')))
+
+    rows = sorted(by_ref.values(),
+                  key=lambda x: (-len(x['sources']), -x['idleDays'], x.get('code') or ''))
+    multi = [x for x in rows if len(x['sources']) >= 2]
+
+    # 과제 단위가 아닌 것들. 목록에 섞지 않고 한 줄씩 곁들인다.
+    others = []
+    risky = risky_kpis(scope, year) if year else None
+    if risky:
+        orphan = [i for i in (risky.get('items') or []) if i.get('noProjects')]
+        if orphan:
+            others.append({'kind': 'risky',
+                           'text': f'위험 지표 {len(orphan)}개는 미는 과제가 하나도 없습니다.',
+                           'refs': []})
+    hidden = hidden_links(scope)
+    cross = [i for i in (hidden.get('items') or []) if i.get('crossDivision')]
+    if cross:
+        others.append({'kind': 'hidden',
+                       'text': f'사업부가 다른 과제 쌍이 {len(cross)}개 있어 협업 여지가 있습니다.',
+                       'refs': [r for i in cross for r in (i.get('refs') or [])]})
+    divs = division_compare(scope)
+    drows = divs.get('rows') or []
+    if drows:
+        w = drows[0]
+        others.append({'kind': 'divisions',
+                       'text': (f"데이터 채움이 가장 낮은 곳은 {w.get('division')} "
+                                f"({w.get('fillRate')}%) 입니다."),
+                       'refs': []})
+
+    if multi:
+        # ⚠️ 헤드라인은 **글자 그대로** 나온다(AgentPanel 이 Markdown 을 안 태운다).
+        #    별표를 넣으면 별표가 그대로 보인다. 강조는 `hint` 로 보낸다.
+        headline = (f'{len(multi)}개 과제가 두 갈래 이상에 동시에 걸립니다. '
+                    f'(살펴본 과제 {len(scope.projects)}개)')
+    elif rows:
+        headline = (f'두 갈래 이상 겹치는 과제는 없습니다. 한 갈래만 걸린 과제가 '
+                    f'{len(rows)}개입니다.')
+    else:
+        headline = f'살펴본 과제 {len(scope.projects)}개에서 걸리는 것이 없습니다.'
+
+    return {
+        'kind': 'brief',
+        'title': '지금 급한 것',
+        'headline': headline,
+        'rows': rows[:limit],
+        'multiCount': len(multi),
+        'flaggedCount': len(rows),
+        # 무엇을 돌렸는지 밝힌다 — 「이게 전부인가」를 사람이 알아야 한다.
+        # 갈래 이름은 `sources` 에 들어가는 것과 **같은 문자열**이어야 한다 —
+        # 화면이 "무엇을 돌렸나" 와 "무엇에 걸렸나" 를 같은 말로 보여준다.
+        'ran': ['멈춤', '일정 쏠림', '이슈', '중점과제', '데이터 공백', '보고 준비'],
+        'others': others,
+        'note': ('순위는 걸린 갈래 수입니다 — 분석 하나가 갈래 하나입니다. '
+                 '갈래마다 무게를 다르게 주지 않습니다. 그러면 순위의 근거를 '
+                 '설명할 수 없습니다.'),
+        # `hint` 만 마크다운으로 그려진다. 강조는 여기서 한다.
+        'hint': ('진짜 위험한 것은 **두 갈래에 동시에 걸리는 것**입니다 — '
+                 '한 갈래만 걸린 것은 대개 그 갈래 안에서 풀립니다.'),
+        'coverage': coverage(scope),
+    }

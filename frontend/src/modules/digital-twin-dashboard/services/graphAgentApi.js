@@ -52,6 +52,14 @@ const getAnalysis = async (path, scope, what, extra = {}) => {
 };
 
 /** 0단계 — 데이터 공백 리포트. */
+/**
+ * 지금 급한 것 — 여섯 분석을 한 번에 돌려 겹쳐 걸리는 것부터.
+ *
+ * `year` 는 위험 지표를 곁들일 때만 쓴다. 없으면 그 한 줄만 빠진다.
+ */
+export const fetchBrief = (scope, year) =>
+  getAnalysis('brief', scope, '지금 급한 것 조회', { year });
+
 export const fetchGaps = (scope) => getAnalysis('gaps', scope, '데이터 공백 조회');
 
 /** 1단계 — KPI 한 장 브리핑. */

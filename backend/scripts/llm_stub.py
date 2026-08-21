@@ -231,7 +231,17 @@ def _graph_narrate_text(user_text: str) -> str:
     if head:
         parts.append(head)
 
-    if kind == 'gaps':
+    if kind == 'brief':
+        top = d.get('top') or []
+        if top:
+            t = top[0]
+            parts.append(f"가장 여러 갈래에 걸린 것은 {t.get('code') or t.get('title')} "
+                         f"입니다 ({' + '.join(t.get('sources') or [])}).")
+        if d.get('multiCount'):
+            parts.append(f"두 갈래 이상 겹치는 과제가 {d['multiCount']}개입니다.")
+        for o in (d.get('others') or [])[:1]:
+            parts.append(str(o))
+    elif kind == 'gaps':
         gaps = d.get('gaps') or []
         if gaps:
             top = max(gaps, key=lambda g: g.get('count') or 0)

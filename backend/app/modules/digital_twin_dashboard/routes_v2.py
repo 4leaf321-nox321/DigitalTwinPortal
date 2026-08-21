@@ -4821,6 +4821,22 @@ def trend_notes_delete(note_id):
     return success_response({'deleted': ok})
 
 
+@bp_v2.route('/graph/agent/brief', methods=['GET'])
+@auth_required
+def graph_agent_brief():
+    """
+    지금 급한 것 — 여섯 분석을 한 번에 돌려 **겹쳐 걸리는 것**부터 세운다.
+
+    ⚠️ 한 요청에 분석 아홉 개가 돈다. 개발 DB(과제 105개)에서 130ms 남짓이라
+       괜찮지만, 과제가 크게 늘면 여기부터 느려진다. LLM 은 안 부른다.
+    """
+    scope, err = _agent_scope()
+    if err:
+        return err
+    year = request.args.get('year', type=int)
+    return success_response(GA.priority_brief(scope, year=year))
+
+
 @bp_v2.route('/graph/agent/gaps', methods=['GET'])
 @auth_required
 def graph_agent_gaps():

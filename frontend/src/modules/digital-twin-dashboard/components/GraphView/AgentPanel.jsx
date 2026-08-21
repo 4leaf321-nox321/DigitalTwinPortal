@@ -85,6 +85,54 @@ const AgentPanel = ({
           )}
 
 
+          {/* ── 지금 급한 것 — 겹쳐 걸린 것부터 ── */}
+          {analysis.kind === 'brief' && (
+            <>
+              {analysis.rows?.length > 0 ? (
+                <Block>
+                  <BlockTitle>겹쳐 걸린 순서</BlockTitle>
+                  {analysis.rows.map(r => (
+                    <Row key={r.ref} onClick={() => onPickRefs(`b:${r.ref}`, [r.ref])}>
+                      <RowMain>
+                        <Marks $n={r.sources.length}>{r.sources.length}</Marks>
+                        {r.code ? `${r.code} ` : ''}{r.title}
+                      </RowMain>
+                      {/* 갈래 이름을 먼저, 자세한 사유는 그 아래. 「무엇에 걸렸나」가
+                          「얼마나 걸렸나」보다 먼저 읽혀야 한다. */}
+                      <SourceRow>
+                        {r.sources.map(src => <SourceTag key={src}>{src}</SourceTag>)}
+                      </SourceRow>
+                      <RowSub>{r.reasons.join(' · ')}</RowSub>
+                    </Row>
+                  ))}
+                </Block>
+              ) : null}
+
+              {analysis.others?.length > 0 && (
+                <Block>
+                  {/* 과제 단위가 아닌 것들. **목록에 섞지 않는다** — 지표ㆍ과제 쌍ㆍ
+                      사업부는 과제와 나란히 줄 세울 수 있는 것이 아니다. */}
+                  <BlockTitle>그 밖에</BlockTitle>
+                  {analysis.others.map((o, i) => (
+                    o.refs?.length ? (
+                      <Row key={i} onClick={() => onPickRefs(`o:${o.kind}`, o.refs)}>
+                        <RowMain>{o.text}</RowMain>
+                      </Row>
+                    ) : (
+                      <OtherLine key={i}>{o.text}</OtherLine>
+                    )
+                  ))}
+                </Block>
+              )}
+
+              {analysis.ran?.length > 0 && (
+                <RanLine>
+                  돌린 분석 {analysis.ran.length}가지 — {analysis.ran.join(' · ')}
+                </RanLine>
+              )}
+            </>
+          )}
+
           {/* ── 1단계: KPI 브리핑의 단계들 ── */}
           {analysis.kind === 'kpi' && (
             <>
@@ -744,6 +792,51 @@ const BarNum = styled.span`
   ⚠️ 다른 분석에 붙일 때는 방향을 다시 볼 것. 「완료」처럼 느는 것이 좋은
      수치에 그대로 쓰면 색이 거꾸로 된다.
 */
+/* 겹친 갈래 수. 많을수록 짙다 — 두 갈래부터가 「겹쳤다」이다. */
+const Marks = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  margin-right: 0.35rem;
+  border-radius: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: white;
+  background: ${p => (p.$n >= 3 ? '#b91c1c' : p.$n === 2 ? '#ea580c' : '#94a3b8')};
+`;
+
+const SourceRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-top: 0.2rem;
+`;
+
+const SourceTag = styled.span`
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.66rem;
+  font-weight: 600;
+`;
+
+const OtherLine = styled.div`
+  padding: 0.3rem 0.1rem;
+  font-size: 0.73rem;
+  color: #475569;
+  line-height: 1.5;
+`;
+
+/* 무엇을 돌렸는지. **「이게 전부인가」를 사람이 알아야 한다.** */
+const RanLine = styled.div`
+  font-size: 0.66rem;
+  color: #94a3b8;
+  line-height: 1.5;
+`;
+
 const TrendRow = styled.div`
   display: flex;
   align-items: center;
