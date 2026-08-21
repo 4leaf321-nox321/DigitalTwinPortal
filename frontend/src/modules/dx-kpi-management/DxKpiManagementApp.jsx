@@ -15,7 +15,7 @@ import {
   achievementColor,
 } from '../../shared/utils/kpiAchievement';
 import {
-  MONTHS, MONTH_TO_QUARTER, monthLabelOf, weekLabelOf, weeksForYear, monthLabelForWeek,
+  MONTHS, MONTH_TO_QUARTER, getISOWeek, monthLabelOf, weekLabelOf, weeksForYear, monthLabelForWeek,
 } from '../../shared/utils/kpiPeriod';
 
 /*
