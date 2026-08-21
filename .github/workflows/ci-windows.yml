@@ -69,6 +69,9 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '18'
+          # 러너마다 node_modules 를 처음부터 받으면 1분 넘게 쓴다.
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: "Backend: create venv and install deps"
         shell: pwsh
@@ -105,19 +108,32 @@ jobs:
       #    있는데, 한꺼번에 고치면 손댈 파일이 59개라 사고가 더 난다. 그래서
       #    지금 수를 천장으로 박아 **늘어나는 것만 막는다.** 줄이면 그때 이 수도
       #    같이 내릴 것. 절대 올리지 말 것 — 올리는 순간 검사는 있으나 마나가 된다.
+      - name: "Frontend: install"
+        shell: pwsh
+        run: |
+          if (Test-Path frontend\package.json) {
+            Push-Location frontend
+            # pwsh does not halt on native command failure; check explicitly so
+            # the real error surfaces instead of a misleading downstream one.
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
+            Pop-Location
+          }
+
+      # ⚠️ lint 를 build **앞에** 둔다. 빌드는 2분 걸리는데 lint 는 몇 초다.
+      #    없는 이름을 부른 것은 어차피 빌드를 통과하므로, 먼저 걸러 내는 편이
+      #    실패를 빨리 알려 준다.
       - name: "Frontend: lint"
         shell: pwsh
         run: |
           if (Test-Path frontend\package.json) {
             Push-Location frontend
-            npm ci
-            if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
             npm run lint
             if ($LASTEXITCODE -ne 0) { throw "lint failed (exit $LASTEXITCODE)" }
             Pop-Location
           }
 
-      - name: "Frontend: install and build"
+      - name: "Frontend: build"
         id: frontend-build
         shell: pwsh
         env:
@@ -127,10 +143,6 @@ jobs:
         run: |
           if (Test-Path frontend\package.json) {
             Push-Location frontend
-            # pwsh does not halt on native command failure; check explicitly so
-            # the real error surfaces instead of a misleading downstream one.
-            npm ci
-            if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
             npm run build
             if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
             Pop-Location
