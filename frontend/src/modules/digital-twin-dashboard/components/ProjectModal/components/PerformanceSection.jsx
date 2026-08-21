@@ -5,6 +5,7 @@ import { PERFORMANCE_CATEGORIES } from '../constants/formConstants';
 import { validatePerformanceInput, validateNumericInput, validateContributionInput } from '../utils/formUtils';
 // 수준값의 0 과 미입력은 다른 뜻이다. `|| ''` 로 다루면 0 이 사라진다.
 import { hasLevel, levelText } from '../../../utils/levelValue';
+import { sortDivisionNames } from '../../../utils/divisionOrder';
 
 /**
  * 연결 행(`성과목록` 원소)이 이 성과 정의를 가리키는가.
@@ -713,6 +714,11 @@ const PerformanceSection = ({
   }, [isPerformanceItemDropdownOpen]);
 
   // 사업부 목록 추출 (성과항목명에서 [사업부] 추출 + "전체" 옵션)
+  //
+  // 차례는 **설정이 정본**이다(utils/divisionOrder). 예전에는 `.sort()` 라
+  // 이름순(CSㆍDAㆍGTRㆍMX…)이었는데, 다른 화면은 전부 설정 순서
+  // (MXㆍVDㆍDAㆍNWㆍ의료기기ㆍSRㆍGTRㆍCS)로 보여 준다. 같은 사람이 화면을
+  // 옮길 때마다 목록이 뒤바뀌면 "내가 어디쯤 있나" 를 잃는다.
   const divisionOptions = React.useMemo(() => {
     const divisions = new Set();
     globalPerformances.forEach(perf => {
@@ -721,8 +727,8 @@ const PerformanceSection = ({
         divisions.add(match[1]);
       }
     });
-    return ['전체', ...Array.from(divisions).sort()];
-  }, [globalPerformances]);
+    return ['전체', ...sortDivisionNames(Array.from(divisions), settingsData)];
+  }, [globalPerformances, settingsData]);
 
   // 년도 목록 추출 (globalPerformances에서 성과년도 추출 + "전체" 옵션)
   const yearOptions = React.useMemo(() => {
