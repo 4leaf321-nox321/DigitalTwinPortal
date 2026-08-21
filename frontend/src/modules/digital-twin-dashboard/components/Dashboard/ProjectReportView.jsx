@@ -1296,6 +1296,7 @@ const ProjectReportView = ({ projects = [], globalPerformances = [], currentYear
     if (selectedStatus !== 'all') list = list.filter(p => (p.진행상태 || '미착수') === selectedStatus);
     if (selectedReportStatus === '사무국 확인') list = list.filter(p => getReportConfirm(p)?.status === 'confirmed');
     else if (selectedReportStatus === '반려') list = list.filter(p => getReportConfirm(p)?.status === 'rejected');
+    else if (selectedReportStatus === '재확인 대기') list = list.filter(p => getReportConfirm(p)?.status === 'resubmitted');
     else if (selectedReportStatus !== 'all') list = list.filter(p => getReportStatus(p) === selectedReportStatus);
     const term = searchTerm.trim().toLowerCase();
     if (term) {
@@ -1487,6 +1488,14 @@ const ProjectReportView = ({ projects = [], globalPerformances = [], currentYear
                 >
                   재검토 요청
                 </Chip>
+                {/* 보완했다고 알려 온 것. 사무국이 여기서 다시 확인한다. */}
+                <Chip
+                  $active={selectedReportStatus === '재확인 대기'}
+                  $color="#b45309"
+                  onClick={() => setSelectedReportStatus('재확인 대기')}
+                >
+                  재확인 대기
+                </Chip>
               </ChipRow>
             </SidebarHeader>
             <ProjectList>
@@ -1529,6 +1538,14 @@ const ProjectReportView = ({ projects = [], globalPerformances = [], currentYear
                               sc.comment ? `메모: ${sc.comment}` : ''
                             ].filter(Boolean).join('\n');
                             return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', fontSize: '0.66rem', fontWeight: 700, color: '#4338ca', background: '#eef2ff', padding: '0.05rem 0.35rem', borderRadius: '0.3rem' }} title={tip}>🔖 확인{changed ? ' ⚠️' : ''}{sc.comment ? ' 💬' : ''}</span>;
+                          }
+                          /* 받은 사람이 「보완했습니다」를 누른 상태. 사무국이
+                             재확인해야 끝난다 — 이 표가 없으면 사무국은 보완된
+                             줄을 모르고, 사람은 알렸는데 아무 일도 안 일어난다. */
+                          if (sc?.status === 'resubmitted') {
+                            const who = [sc.resubmittedByName, String(sc.resubmittedAt || '').slice(0, 10)]
+                              .filter(Boolean).join(' · ');
+                            return <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '0.05rem 0.35rem', borderRadius: '0.3rem' }} title={['보완했다고 알려 왔습니다 — 재확인이 필요합니다', who, sc.comment ? `요청 사유: ${sc.comment}` : ''].filter(Boolean).join('\n')}>🔁 재확인 대기</span>;
                           }
                           if (sc?.status === 'rejected') {
                             return <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#b91c1c', background: '#fee2e2', padding: '0.05rem 0.35rem', borderRadius: '0.3rem' }} title={sc.comment || ''}>⛔ 재검토</span>;
@@ -1696,7 +1713,9 @@ const ProjectReportView = ({ projects = [], globalPerformances = [], currentYear
             {/* 재검토 요청 사유 콜아웃 (요청자 미표시) */}
             {(() => {
               const seal = getReportConfirm(selectedProject);
-              if (seal?.status !== 'rejected') return null;
+              // ⚠️ 보완한 뒤(`resubmitted`)에도 사유를 계속 보여준다. 사무국이
+              //    재확인할 때 **무엇을 지적했는지**를 다시 읽어야 하기 때문이다.
+              if (seal?.status !== 'rejected' && seal?.status !== 'resubmitted') return null;
               return (
                 <div style={{
                   display: 'flex', alignItems: 'flex-start', gap: '0.5rem',

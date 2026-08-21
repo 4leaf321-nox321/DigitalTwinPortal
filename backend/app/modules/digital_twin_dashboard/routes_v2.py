@@ -7282,6 +7282,36 @@ def my_worklist():
     ))
 
 
+@bp_v2.route('/me/worklist/report-resubmitted', methods=['POST'])
+@auth_required
+def my_worklist_report_resubmitted():
+    """
+    재검토 요청을 받은 사람이 **「보완했습니다」**를 누른다.
+    본문 `{"projectUuid": "..."}`.
+
+    ⚠️ **끝내는 것이 아니라 넘기는 것이다.** 도장이 `rejected` → `resubmitted`
+       가 되어 내 카드에서는 빠지고 **사무국의 「재확인 대기」**로 뜬다. 최종
+       확인은 여전히 사무국이 한다.
+
+    ⚠️ 누를 수 있는 사람은 **수신자이거나 그 과제가 내 것**인 경우뿐이다.
+       판정은 `worklist.mark_resubmitted` 안에 있고, 카드를 보여 주는 규칙과
+       **같은 잣대**를 쓴다 — 두 곳이 갈리면 안 보이는데 누를 수 있게 된다.
+    """
+    actor = _actor()
+    if actor is None:
+        return error_response('로그인이 필요합니다.', status_code=401)
+
+    body = request.get_json(silent=True) or {}
+    uuid_ = str(body.get('projectUuid') or '').strip()
+    if not uuid_:
+        return error_response('projectUuid 가 필요합니다.', status_code=400)
+
+    seal, err = WL.mark_resubmitted(actor, uuid_)
+    if err:
+        return error_response(err, status_code=403)
+    return success_response({'projectUuid': uuid_, 'status': seal.get('status')})
+
+
 @bp_v2.route('/me/worklist/snooze', methods=['POST'])
 @auth_required
 def my_worklist_snooze():

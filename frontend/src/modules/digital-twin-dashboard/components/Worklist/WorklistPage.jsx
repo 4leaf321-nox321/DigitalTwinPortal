@@ -34,7 +34,8 @@ import {
   RefreshCw, Square, TrendingUp, X,
 } from 'lucide-react';
 import {
-  approveProposal, fetchWorklist, rejectProposal, snoozeWorklistItem,
+  approveProposal, fetchWorklist, markReportResubmitted, rejectProposal,
+  snoozeWorklistItem,
 } from '../../services/worklistApi';
 import { patchProjectV2, patchPerformanceV2, projectRowVersion, rememberProjectRowVersion }
   from '../../services/settingsApi';
@@ -377,6 +378,26 @@ const WorklistPage = ({
     } finally { mark(it.key, false); }
   };
 
+  /**
+   * 「보완했습니다」. 도장이 `rejected` → `resubmitted` 가 된다.
+   *
+   * ⚠️ 여기서 **끝나는 것이 아니라 사무국으로 넘어간다.** 그래서 안내 문구가
+   *    「완료」가 아니라 「사무국에 알렸습니다」다 — 끝난 줄 알면 재확인을
+   *    안 기다리고 넘어가 버린다.
+   */
+  const resubmitReport = async (it) => {
+    const uuid = String(it.ref || '').replace(/^project:/, '') || it.projectUuid;
+    if (!uuid) { fail(it.key, '과제를 찾지 못했습니다.'); return; }
+    mark(it.key, true); clear(it.key);
+    try {
+      await markReportResubmitted(uuid);
+      showSuccess?.('사무국에 알렸습니다. 재확인 목록으로 넘어갔습니다.');
+      load(data?.lens);
+    } catch (e) {
+      fail(it.key, e.message || '알리지 못했습니다.');
+    } finally { mark(it.key, false); }
+  };
+
   const doSnooze = async (it, cardKey) => {
     mark(it.key, true);
     try { await snoozeWorklistItem(it.key, cardKey); load(data?.lens); }
@@ -616,6 +637,18 @@ const WorklistPage = ({
                             <Mini onClick={() => openProject(it, c.key)}>열기</Mini>
                           )}
                           {c.key === 'reportReject' && (
+                            <>
+                              <Mini onClick={() => onGoToReport?.()}>보고서로</Mini>
+                              {/* 받은 사람이 **끝낼 수 있는 길**. 이게 없으면
+                                  보고서를 고쳐도 카드가 안 없어졌다. */}
+                              <Mini $tone="ok" disabled={isBusy}
+                                onClick={() => resubmitReport(it)}
+                                title="보완을 마쳤다고 사무국에 알립니다. 사무국의 재확인 목록으로 넘어갑니다.">
+                                <Check size={12} />보완했습니다
+                              </Mini>
+                            </>
+                          )}
+                          {c.key === 'reportRecheck' && (
                             <Mini onClick={() => onGoToReport?.()}>보고서로</Mini>
                           )}
                           {c.snoozable && (

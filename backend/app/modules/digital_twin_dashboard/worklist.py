@@ -33,6 +33,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from sqlalchemy.orm.attributes import flag_modified
+
 from app.extensions import db
 from app.modules.auth.models import User, UserRole
 from app.modules.digital_twin_dashboard import permissions as P
@@ -60,11 +62,11 @@ INLINE_CARDS = ('actions', 'openIssues', 'proposals', 'perfActuals')
 #    통째로 세면 숫자가 늘 커서 아무 뜻이 없어진다. 그래서 그 카드는 **기한이 지난
 #    것만** 급한 것으로 센다(`_card_actions` 가 `urgent` 를 직접 넣는다).
 #    아래 목록은 "카드 건수 = 급한 건수" 인 것들이다.
-URGENT_CARDS = ('proposals', 'reportReject')
+URGENT_CARDS = ('proposals', 'reportReject', 'reportRecheck')
 
 # `summary`(배지용)에서 만드는 카드. **이력을 안 읽는 가벼운 것만.**
 # 「멈춘 과제」는 진척 이력을 통째로 읽어서 첫 화면 로딩에 얹히면 안 된다.
-SUMMARY_CARDS = ('actions', 'proposals', 'reportReject')
+SUMMARY_CARDS = ('actions', 'proposals', 'reportReject', 'reportRecheck')
 
 # 렌즈별 카드 구성. 순서가 곧 화면 순서다(고정 — 매번 자리가 바뀌면 못 찾는다).
 LENS_CARDS = {
@@ -73,7 +75,8 @@ LENS_CARDS = {
     'mine':     ('actions', 'openIssues', 'proposals', 'perfActuals',
                  'reportDue', 'reportReject', 'stalled', 'gaps', 'readiness'),
     'division': ('reportDue', 'schedule', 'issues', 'keyGap', 'stalled', 'gaps'),
-    'office':   ('reportDue', 'gaps', 'proposals', 'readiness', 'divisions'),
+    'office':   ('reportRecheck', 'reportDue', 'gaps', 'proposals',
+                 'readiness', 'divisions'),
 }
 
 # 관계가 강한 순으로 항목을 앞에 둔다 (permissions.RELATION_STRENGTH).
@@ -474,6 +477,105 @@ def _card_proposals(actor, dismissed, stale_days=None):
                  kept, hidden=hidden, action='project')
 
 
+def _card_report_recheck(scope, dismissed):
+    """
+    **재확인 대기** — 받은 사람이 보완했다고 알려 온 보고서.
+
+    이 카드가 「보완했습니다」의 **받는 쪽**이다. 이게 없으면 공이 넘어가도
+    아무도 안 받는다 — 사람은 자기 목록에서 없어졌으니 끝난 줄 알고, 사무국은
+    보완된 줄을 모른다.
+
+    ⚠️ 사무국 렌즈에만 둔다. 재확인은 사무국이 하는 일이고, 여기 걸린 것은
+       **남이 기다리는 것**이라 배지에도 센다(URGENT_CARDS).
+    """
+    row = ModuleSettings.query.filter_by(
+        module_name='digital_twin_dashboard', settings_key='reportConfirmations').first()
+    seals = (row.settings_data or {}) if row else {}
+    if not seals:
+        return _card('reportRecheck', '재확인 대기',
+                     '보완했다고 알려 온 보고서가 없습니다.', [], action='report')
+
+    rows = []
+    for p in _sorted_by_relation(scope, scope.projects):
+        seal = seals.get(p.uuid) or seals.get(getattr(p, 'code', None) or '')
+        if not isinstance(seal, dict) or seal.get('status') != 'resubmitted':
+            continue
+        rows.append({
+            **_brief(scope, p, scope.relation_of.get(p.uuid)),
+            'key': f"reportRecheck:{p.uuid}:{seal.get('resubmittedAt') or ''}",
+            'reason': seal.get('comment') or '',
+            'resubmittedAt': str(seal.get('resubmittedAt') or '')[:10],
+            'resubmittedByName': seal.get('resubmittedByName') or '',
+        })
+    kept, hidden = _filter_snoozed(rows, dismissed)
+    return _card('reportRecheck', '재확인 대기',
+                 '보완했다고 알려 왔습니다. 보고서를 다시 보고 확인하거나 '
+                 '다시 요청해 주세요.',
+                 kept, hidden=hidden, action='report')
+
+
+def mark_resubmitted(actor, project_uuid: str):
+    """
+    재검토 요청을 받은 사람이 **「보완했습니다」**를 누른다.
+
+    왜 필요한가
+        예전에는 이 카드를 받은 사람이 **없앨 방법이 없었다.** 보고서를 고쳐도
+        도장은 `rejected` 그대로였고, 사무국이 다시 열어 「사무국 확인」을 눌러
+        주기 전까지 배지 숫자가 안 줄었다. 이 화면의 원칙이 「끝낼 수 없는 것은
+        넣지 않는다」인데, 받은 사람 입장에서 끝낼 수 없는 카드였다.
+        (2026-08-22 신고)
+
+    무엇이 바뀌나
+        도장의 `status` 가 `rejected` → `resubmitted` 가 된다. **지우지 않는다** —
+        사유와 수신자를 남겨 둬야 사무국이 「무엇을 지적했더라」를 다시 읽는다.
+
+    ⚠️ **공이 넘어가는 것이지 끝나는 것이 아니다.** 내 카드에서는 빠지고
+       사무국의 「재확인 대기」로 뜬다. 최종 확인은 여전히 사무국이 한다.
+
+    ⚠️ 누를 수 있는 사람 — **수신자이거나, 그 과제가 내 것**이어야 한다.
+       카드를 보여 주는 규칙(`_card_report_reject`)과 **같은 잣대**다. 여기가
+       느슨하면 남의 재검토 요청을 남이 닫아 줄 수 있다.
+    """
+    row = ModuleSettings.query.filter_by(
+        module_name='digital_twin_dashboard', settings_key='reportConfirmations').first()
+    seals = dict((row.settings_data or {}) if row else {})
+    seal = seals.get(project_uuid)
+    if not isinstance(seal, dict) or seal.get('status') != 'rejected':
+        return None, '재검토 요청 상태가 아닙니다.'
+
+    if not _may_resubmit(actor, project_uuid, seal):
+        return None, '이 보고서의 재검토 요청 대상이 아닙니다.'
+
+    seals[project_uuid] = {
+        **seal,
+        'status': 'resubmitted',
+        'resubmittedAt': datetime.utcnow().isoformat(),
+        'resubmittedBy': actor.id,
+        'resubmittedByName': getattr(actor, 'name', None) or getattr(actor, 'email', ''),
+    }
+    if row is None:
+        row = ModuleSettings(module_name='digital_twin_dashboard',
+                             settings_key='reportConfirmations', settings_data={})
+        db.session.add(row)
+    row.settings_data = seals
+    # JSON 칼럼은 통째로 갈아 끼워야 SQLAlchemy 가 바뀐 줄 안다.
+    flag_modified(row, 'settings_data')
+    db.session.commit()
+    return seals[project_uuid], None
+
+
+def _may_resubmit(actor, project_uuid, seal):
+    """수신자이거나, 그 과제가 내 것이거나."""
+    recips = seal.get('recipients') or []
+    if any((r.get('id') is not None and r.get('id') == actor.id)
+           or (r.get('email') and r.get('email') == actor.email)
+           for r in recips if isinstance(r, dict)):
+        return True
+    # 수신자가 비어 있는 옛 도장 — 카드도 그때는 「내 과제면 보여준다」로 판정한다.
+    mine = GA.Scope(actor, relation='mine')
+    return any(p.uuid == project_uuid for p in mine.projects)
+
+
 def _card_report_reject(scope, actor, dismissed):
     """
     재검토 요청. **기존 로그인 팝업을 흡수한다.**
@@ -516,7 +618,8 @@ def _card_report_reject(scope, actor, dismissed):
         })
     kept, hidden = _filter_snoozed(rows, dismissed)
     return _card('reportReject', '재검토 요청',
-                 '담당하신 보고서에 재검토 요청이 있습니다. 사유를 확인하고 보완해 주세요.',
+                 '사유를 확인하고 보완한 뒤 「보완했습니다」를 누르세요. '
+                 '사무국의 재확인 목록으로 넘어갑니다.',
                  kept, hidden=hidden, action='report')
 
 
@@ -672,6 +775,7 @@ def _card_divisions(scope, dismissed):
 
 _BUILDERS = {
     'actions': _card_actions, 'openIssues': _card_open_issues,
+    'reportRecheck': _card_report_recheck,
     'perfActuals': _card_perf_actuals, 'reportDue': _card_report_due,
     'stalled': _card_stalled, 'gaps': _card_gaps, 'readiness': _card_readiness,
     'issues': _card_issues, 'schedule': _card_schedule, 'keyGap': _card_key_gap,

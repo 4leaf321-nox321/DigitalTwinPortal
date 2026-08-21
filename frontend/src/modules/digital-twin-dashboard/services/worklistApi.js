@@ -36,6 +36,20 @@ export const fetchWorklist = async ({ lens, year, summary = false } = {}) => {
 };
 
 /** 항목 하나를 30일 미룬다. 기간은 서버가 정한다(화면이 고르지 않는다). */
+/**
+ * 재검토 요청에 **「보완했습니다」**를 누른다.
+ *
+ * ⚠️ 끝내는 것이 아니라 **넘기는 것**이다 — 내 카드에서는 빠지고 사무국의
+ *    「재확인 대기」로 뜬다. 최종 확인은 여전히 사무국이 한다.
+ */
+export const markReportResubmitted = async (projectUuid) => {
+  const r = await fetch(`${API_BASE_URL}/dt-v2/me/worklist/report-resubmitted`, {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ projectUuid }),
+  });
+  return unwrap(r, '보완 알림');
+};
+
 export const snoozeWorklistItem = async (itemKey, card) => {
   const r = await fetch(`${API_BASE_URL}/dt-v2/me/worklist/snooze`, {
     method: 'POST', headers: authHeaders(),
