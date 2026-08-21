@@ -258,6 +258,63 @@ const GraphView = ({
 
   const scope = useMemo(() => ({ years, divisions }), [years, divisions]);
 
+  /**
+   * 열면 **한 장이 이미 떠 있다.**
+   *
+   * ⚠️ 예전에는 들어와도 우측이 「범례」였고, 「AI 분석 ▾」을 눌러 목록에서 하나를
+   *    고르기 전까지는 아무 분석도 없었다. 안 눌러 본 사람에게는 이 도구가
+   *    **없는 것과 같았다**(2026-08-21 신고).
+   *
+   * 무엇을 띄우나 — 「데이터 공백 리포트」다. 메뉴에도 **「먼저 볼 것 — 위 분석들의
+   * 신뢰도를 정합니다」** 라고 적어 둔 그것이고, 다른 분석의 신뢰도를 정하므로
+   * 처음 보는 사람에게 순서가 맞다.
+   *
+   * ⚠️ **딱 한 번만 돈다.** 「범례로 돌아가기」를 누르면 analysis 가 비는데, 그때
+   *    다시 돌면 범례를 영영 볼 수 없다. 그래서 상태가 아니라 ref 로 기억한다 —
+   *    다시 그려도 값이 안 풀린다.
+   *
+   * ⚠️ 그래프가 온 **뒤에** 돈다. 먼저 돌면 사람이 아직 아무것도 못 본 상태에서
+   *    분석부터 뜬다.
+   */
+  const closeAgent = useCallback(() => {
+    setAnalysis(null);
+    setAgentError(null);
+    setNarrative(null);
+    setActiveStep(null);
+    setHighlightRefs(null);
+  }, []);
+
+  const autoRanRef = useRef(false);
+  useEffect(() => {
+    if (autoRanRef.current) return;
+    if (loading || error || !data) return;
+    autoRanRef.current = true;
+    runAnalysis(() => fetchGaps(scope));
+  }, [loading, error, data, scope, runAnalysis]);
+
+  /**
+   * 필터가 바뀌면 **떠 있는 분석을 닫고 새 범위로 다시 연다.**
+   *
+   * ⚠️ 분석은 연도ㆍ사업부 범위에 매여 있다. 필터만 바꾸고 패널을 그대로 두면
+   *    **2025년을 골라 놓고 2026년 분석을 읽게 된다.** 예전에도 그랬지만 그때는
+   *    직접 고른 사람만 봤다 — 이제 늘 떠 있으니 반드시 맞춰야 한다.
+   *
+   * ⚠️ 사람이 골라 둔 분석도 함께 닫힌다. 아쉽지만 **범위가 어긋난 숫자를 그대로
+   *    두는 것보다 낫다.** (고른 것을 새 범위로 다시 돌리려면 runAnalysis 가
+   *    무엇을 돌렸는지 기억해야 한다 — 그건 따로 할 일이다.)
+   *
+   * 첫 그림에서는 아무것도 안 한다. 그때는 닫을 것도 없고, 위 훅이 알아서 연다.
+   */
+  const scopeKeyRef = useRef(null);
+  useEffect(() => {
+    const key = JSON.stringify(scope);
+    if (scopeKeyRef.current === null) { scopeKeyRef.current = key; return; }
+    if (scopeKeyRef.current === key) return;
+    scopeKeyRef.current = key;
+    closeAgent();
+    autoRanRef.current = false;
+  }, [scope, closeAgent]);
+
   const openKpiBriefing = useCallback((kpiId) => {
     runAnalysis(() => fetchKpiBriefing(kpiId, scope));
   }, [runAnalysis, scope]);
@@ -269,14 +326,6 @@ const GraphView = ({
       ? null
       : new Set((refs || []).filter(Boolean))));
   }, [activeStep]);
-
-  const closeAgent = useCallback(() => {
-    setAnalysis(null);
-    setAgentError(null);
-    setNarrative(null);
-    setActiveStep(null);
-    setHighlightRefs(null);
-  }, []);
 
   const handleNodeActivate = useCallback((node) => {
     if (!node || node.type !== 'project') return;

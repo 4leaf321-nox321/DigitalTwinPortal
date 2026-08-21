@@ -56,6 +56,35 @@ const AgentPanel = ({
           {analysis.subtitle && <Sub>{analysis.subtitle}</Sub>}
           <Headline>{analysis.headline}</Headline>
 
+          {/*
+            서술을 **헤드라인 바로 아래**에 둔다.
+
+            ⚠️ 예전에는 목록ㆍ단계를 전부 지나 맨 아래에 있었다. 가장 작은 글씨로
+               가장 밑에 있으니 아무도 거기까지 안 내려갔다 — AI 가 「무엇이
+               걸리는가」를 이미 쓰고 있는데 읽히지 않았다(2026-08-21 신고).
+
+            ⚠️ 그린다고 **숫자보다 먼저 오는 것은 아니다.** 분석 GET 은 LLM 을 안
+               타서 빨리 오고, 서술은 그 뒤에 따로 온다. 자리만 위일 뿐 여전히
+               「숫자 먼저, 문장 나중」이고, 서술이 죽어도 아래 숫자는 그대로다.
+
+            자리를 미리 잡아 둔다(비어 있어도 칸을 남긴다) — 늦게 온 문장이
+            아래 목록을 밀어 내리면 읽던 자리를 잃는다.
+          */}
+          {(narrating || narrative?.narrative || narrative?.error) && (
+            <Narrative>
+              {narrating && <Muted><Loader2 size={12} className="spin" />읽어 보는 중…</Muted>}
+              {!narrating && narrative?.narrative && <Markdown text={narrative.narrative} />}
+              {!narrating && !narrative?.narrative && narrative?.error && (
+                <Muted>
+                  <Info size={12} />
+                  서술은 못 만들었습니다 — 아래 숫자는 서버가 계산한 값 그대로입니다.
+                  <em>{narrative.error}</em>
+                </Muted>
+              )}
+            </Narrative>
+          )}
+
+
           {/* ── 1단계: KPI 브리핑의 단계들 ── */}
           {analysis.kind === 'kpi' && (
             <>
@@ -132,6 +161,32 @@ const AgentPanel = ({
                 </Step>
               ))}
             </Steps>
+          )}
+
+          {/*
+            지난주 대비. **견줄 수 없으면 숫자를 안 낸다** — 그때 이력이 없었으면
+            「0건이었다」가 아니라 모르는 것이다. 0 으로 적으면 없던 증가가 생긴다.
+          */}
+          {analysis.trend && (
+            analysis.trend.unavailable ? (
+              <TrendNote>
+                지난 {analysis.trend.days}일 전과는 견줄 수 없습니다 — {analysis.trend.unavailable}
+              </TrendNote>
+            ) : (
+              <TrendRow>
+                <TrendLabel>지난주 대비</TrendLabel>
+                <TrendItem $delta={analysis.trend.deltaStalled}>
+                  멈춤 {analysis.trend.prevStalled} → {analysis.trend.prevStalled + analysis.trend.deltaStalled}
+                  <b>{analysis.trend.deltaStalled > 0 ? `+${analysis.trend.deltaStalled}`
+                     : analysis.trend.deltaStalled < 0 ? analysis.trend.deltaStalled : '변화 없음'}</b>
+                </TrendItem>
+                <TrendItem $delta={analysis.trend.deltaRegressed}>
+                  내려감 {analysis.trend.prevRegressed} → {analysis.trend.prevRegressed + analysis.trend.deltaRegressed}
+                  <b>{analysis.trend.deltaRegressed > 0 ? `+${analysis.trend.deltaRegressed}`
+                     : analysis.trend.deltaRegressed < 0 ? analysis.trend.deltaRegressed : '변화 없음'}</b>
+                </TrendItem>
+              </TrendRow>
+            )
           )}
 
           {analysis.kind === 'stalled' && analysis.stalled?.length > 0 && (
@@ -361,19 +416,6 @@ const AgentPanel = ({
           {analysis.hint && (
             <Note><Info size={12} /><Markdown text={analysis.hint} /></Note>
           )}
-
-          {/* ── 서술: 숫자 뒤에 붙는다. 없어도 위가 성립한다 ── */}
-          <Narrative>
-            {narrating && <Muted><Loader2 size={12} className="spin" />서술을 만드는 중…</Muted>}
-            {!narrating && narrative?.narrative && <Markdown text={narrative.narrative} />}
-            {!narrating && !narrative?.narrative && narrative?.error && (
-              <Muted>
-                <Info size={12} />
-                서술은 못 만들었습니다 — 위 숫자는 서버가 계산한 값 그대로입니다.
-                <em>{narrative.error}</em>
-              </Muted>
-            )}
-          </Narrative>
 
           {/* ── 신뢰도: 답보다 먼저 말해야 하는 것 ── */}
           {cov && (
@@ -695,15 +737,57 @@ const BarNum = styled.span`
   font-variant-numeric: tabular-nums;
 `;
 
+/*
+  지난주 대비. **늘어난 것이 붉고 줄어든 것이 푸르다** — 여기서는 「멈춘 과제」와
+  「진행률이 내려간 과제」라, 느는 것이 나쁜 쪽이다.
+
+  ⚠️ 다른 분석에 붙일 때는 방향을 다시 볼 것. 「완료」처럼 느는 것이 좋은
+     수치에 그대로 쓰면 색이 거꾸로 된다.
+*/
+const TrendRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+`;
+
+const TrendLabel = styled.span`
+  color: #94a3b8;
+  font-weight: 600;
+`;
+
+const TrendItem = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: ${p => (p.$delta > 0 ? '#fef2f2' : p.$delta < 0 ? '#ecfdf5' : '#f1f5f9')};
+  color: ${p => (p.$delta > 0 ? '#b91c1c' : p.$delta < 0 ? '#047857' : '#64748b')};
+
+  b { font-weight: 700; }
+`;
+
+const TrendNote = styled.div`
+  font-size: 0.7rem;
+  color: #94a3b8;
+  line-height: 1.5;
+`;
+
 const Narrative = styled.div`
-  padding: 0.5rem 0.625rem;
-  background: #f8fafc;
-  border-radius: 0.5rem;
-  font-size: 0.75rem;
-  color: #334155;
-  line-height: 1.65;
+  padding: 0.5rem 0.7rem;
+  background: #f5f3ff;
+  border-left: 3px solid #8b5cf6;
+  border-radius: 0 0.5rem 0.5rem 0;
+  /* 헤드라인과 같은 크기다. 아래 목록보다 작으면 또 안 읽힌다. */
+  font-size: 0.8125rem;
+  color: #312e81;
+  line-height: 1.7;
+  min-height: 1.7em;
 
   p { margin: 0; }
+  strong { color: #5b21b6; }
 `;
 
 const Coverage = styled.div`

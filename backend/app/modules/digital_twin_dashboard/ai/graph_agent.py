@@ -55,6 +55,9 @@ HIDDEN_LIMIT = 12
 # 어제 만든 과제를 "3일째 그대로" 라고 하면 안 된다.
 STALLED_MIN_DAYS = 14
 
+# 「지난주 대비」의 지난주. 7일이면 같은 요일이라 주간 회의 주기와 맞는다.
+STALLED_COMPARE_DAYS = 7
+
 # 「일정 쏠림」 — 남은 미완료 액션의 이 비율 넘게 한 달에 몰려 있으면 짚는다.
 CROWDED_RATIO = 0.6
 
@@ -495,48 +498,67 @@ def stalled_projects(scope: Scope, min_days=STALLED_MIN_DAYS) -> dict:
         series[r.project_uuid].append(r)
 
     now = datetime.utcnow()
-    stalled, regressed = [], []
-    too_short = 0
 
-    for p in scope.projects:
-        hist = series.get(p.uuid) or []
-        if len(hist) < 2:
-            too_short += 1
-            continue
-        first, last = hist[0], hist[-1]
-        span = (last.observed_at - first.observed_at).days
-        if span < min_days:
-            too_short += 1
-            continue
+    def _judge(as_of):
+        """
+        `as_of` 시점에서 본 판정. **그때 이미 있던 기록만** 본다.
 
-        # 진행 중이라고 말하는 과제만 본다. 완료·취소·미착수는 안 움직이는 게 정상이다.
-        moving_claim = (p.status or '') in ('정상진행', '지연')
+        ⚠️ 오늘 것을 그대로 두고 날짜만 바꾸면 안 된다. 지난주에는 아직 없던
+           기록까지 세면 "지난주에도 이랬다" 가 되어 **움직임이 통째로 사라진다.**
+        """
+        st, rg, short = [], [], 0
+        for p in scope.projects:
+            hist = [h for h in (series.get(p.uuid) or []) if h.observed_at <= as_of]
+            if len(hist) < 2:
+                short += 1
+                continue
+            first, last = hist[0], hist[-1]
+            span = (last.observed_at - first.observed_at).days
+            if span < min_days:
+                short += 1
+                continue
 
-        # 마지막으로 **값이 실제로 달라진** 시점. `changed_fields` 가 있으므로
-        # 그것을 보면 "저장만 하고 값은 그대로" 인 기록에 속지 않는다.
-        last_move = None
-        prev = None
-        for h in hist:
-            if prev is not None and h.progress != prev.progress:
-                last_move = h.observed_at
-            prev = h
-        idle_days = (now - (last_move or first.observed_at)).days
+            # 진행 중이라고 말하는 과제만 본다. 완료·취소·미착수는 안 움직이는 게 정상이다.
+            moving_claim = (p.status or '') in ('정상진행', '지연')
 
-        row = {**scope.project_brief(p),
-               'progress': last.progress,
-               'idleDays': idle_days,
-               'spanDays': span,
-               'firstProgress': first.progress,
-               'points': len(hist)}
+            # 마지막으로 **값이 실제로 달라진** 시점. `changed_fields` 가 있으므로
+            # 그것을 보면 "저장만 하고 값은 그대로" 인 기록에 속지 않는다.
+            last_move = None
+            prev = None
+            for h in hist:
+                if prev is not None and h.progress != prev.progress:
+                    last_move = h.observed_at
+                prev = h
+            idle_days = (as_of - (last_move or first.observed_at)).days
 
-        if moving_claim and idle_days >= min_days:
-            stalled.append(row)
-        if (last.progress or 0) < (first.progress or 0):
-            regressed.append({**row,
-                              'drop': (first.progress or 0) - (last.progress or 0)})
+            row = {**scope.project_brief(p),
+                   'progress': last.progress,
+                   'idleDays': idle_days,
+                   'spanDays': span,
+                   'firstProgress': first.progress,
+                   'points': len(hist)}
 
-    stalled.sort(key=lambda x: -x['idleDays'])
-    regressed.sort(key=lambda x: -x['drop'])
+            if moving_claim and idle_days >= min_days:
+                st.append(row)
+            if (last.progress or 0) < (first.progress or 0):
+                rg.append({**row,
+                                  'drop': (first.progress or 0) - (last.progress or 0)})
+        st.sort(key=lambda x: -x['idleDays'])
+        rg.sort(key=lambda x: -x['drop'])
+        return st, rg, short
+
+    stalled, regressed, too_short = _judge(now)
+
+    # 지난주 같은 자리에서 본 값. **움직임이 있어야 사람이 본다** — 숫자가 가만히
+    # 있으면 두 번째부터는 안 읽는다.
+    #
+    # ⚠️ 견줄 수 없는 경우가 있다. 이력이 그때 아직 없었으면 "0건이었다" 가
+    #    아니라 **모른다** 다. 0 으로 적으면 없던 증가가 생긴다.
+    prev_at = now - timedelta(days=STALLED_COMPARE_DAYS)
+    prev_stalled, prev_regressed, prev_short = _judge(prev_at)
+    prev_judged = len(scope.projects) - prev_short
+    comparable = prev_judged > 0
+
 
     # 🐞 **"없습니다" 와 "모릅니다" 는 다르다.**
     #    이력이 짧아 한 건도 판단 못 했는데 "멈춘 과제가 없습니다" 라고 하면,
@@ -547,8 +569,14 @@ def stalled_projects(scope: Scope, min_days=STALLED_MIN_DAYS) -> dict:
         headline = (f'아직 판단할 수 없습니다 — 진척 이력이 {min_days}일치 쌓인 과제가 '
                     f'없습니다(이력은 계속 쌓이는 중입니다).')
     elif stalled:
+        # 움직임을 헤드라인에 붙인다. 같은 수를 매주 보면 세 번째부터는 안 읽는다.
+        move = ''
+        if comparable:
+            d = len(stalled) - len(prev_stalled)
+            move = (f' 지난주보다 {abs(d)}개 {"늘었습니다" if d > 0 else "줄었습니다"}.'
+                    if d else ' 지난주와 같습니다.')
         headline = (f'진행 중이라고 되어 있는데 {min_days}일 넘게 진행률이 그대로인 '
-                    f'과제가 {len(stalled)}개입니다. (판단한 과제 {judged}개)')
+                    f'과제가 {len(stalled)}개입니다.{move} (판단한 과제 {judged}개)')
     else:
         headline = f'판단한 과제 {judged}개 중 오래 멈춰 있는 것은 없습니다.'
 
@@ -564,6 +592,19 @@ def stalled_projects(scope: Scope, min_days=STALLED_MIN_DAYS) -> dict:
         ],
         'stalled': stalled[:20],
         'regressed': regressed[:20],
+        # 지난주 같은 자리에서 본 값. 견줄 수 없으면 **숫자를 안 낸다** —
+        # 모르는 것을 0 으로 적으면 없던 증가가 생긴다.
+        'trend': ({
+            'days': STALLED_COMPARE_DAYS,
+            'prevStalled': len(prev_stalled),
+            'deltaStalled': len(stalled) - len(prev_stalled),
+            'prevRegressed': len(prev_regressed),
+            'deltaRegressed': len(regressed) - len(prev_regressed),
+            'prevJudged': prev_judged,
+        } if comparable else {
+            'days': STALLED_COMPARE_DAYS,
+            'unavailable': '그 시점에는 판단할 이력이 없었습니다.',
+        }),
         # 판단할 수 없는 것을 조용히 빼면 "문제 없음" 으로 읽힌다. 세어서 말한다.
         'note': (f'이력이 {min_days}일치 못 미쳐 판단하지 않은 과제가 {too_short}개 '
                  f'있습니다.' if too_short else None),

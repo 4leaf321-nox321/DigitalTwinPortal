@@ -312,6 +312,18 @@ def _graph_narrate_text(user_text: str) -> str:
     for n in (cov.get('notes') or [])[:1]:
         parts.append(str(n))
 
+    # 서술 규칙 3번: **첫 문장에 가장 급한 것 하나**를 굵게. 스텁도 그 모양을 낸다 —
+    # 개발에서 화면이 실제로 어떻게 보이는지 확인할 수 있어야 한다.
+    #
+    # ⚠️ 진짜 LLM 은 무엇이 급한지 **고른다.** 스텁은 못 고르므로 두 번째 문장을
+    #    그 자리로 올릴 뿐이다. 스텁 서술이 밋밋한 것은 스텁의 한계이지 규칙의
+    #    한계가 아니다.
+    if len(parts) >= 2:
+        lead = parts[1]
+        rest = [parts[0]] + parts[2:]
+        parts = [f'**{lead}**'] + rest
+
+    # 규칙 4번: 마지막은 사람이 내일 할 수 있는 한 가지.
     parts.append('(스텁이 만든 서술입니다 — 숫자는 서버 계산 결과 그대로입니다.)')
     return ' '.join(parts)
 
