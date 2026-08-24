@@ -552,7 +552,7 @@ def get_dashboard_stats():
         print(f"[Stats Error] Get stats failed: {str(e)}")
         import traceback
         traceback.print_exc()
-        return error_response(f'통계 조회 실패: {str(e)}', 500)
+        return error_response(f'통계 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/module-updates', methods=['GET'])
@@ -612,7 +612,7 @@ def get_module_updates():
         print(f"[Module Updates Error] Get module updates failed: {str(e)}")
         import traceback
         traceback.print_exc()
-        return error_response(f'모듈 업데이트 조회 실패: {str(e)}', 500)
+        return error_response(f'모듈 업데이트 조회 실패: {str(e)}', status_code=500)
 
 
 # ============== Notice Routes ==============
@@ -629,7 +629,7 @@ def get_notices():
         return success_response([n.to_dict(include_content=False) for n in notices])
     except Exception as e:
         print(f"[Notice Error] Get notices failed: {str(e)}")
-        return error_response(f'공지사항 조회 실패: {str(e)}', 500)
+        return error_response(f'공지사항 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/notices/<int:notice_id>', methods=['GET'])
@@ -638,11 +638,11 @@ def get_notice(notice_id):
     try:
         notice = Notice.query.get(notice_id)
         if not notice:
-            return error_response('공지사항을 찾을 수 없습니다.', 404)
+            return error_response('공지사항을 찾을 수 없습니다.', status_code=404)
         return success_response(notice.to_dict())
     except Exception as e:
         print(f"[Notice Error] Get notice failed: {str(e)}")
-        return error_response(f'공지사항 조회 실패: {str(e)}', 500)
+        return error_response(f'공지사항 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/notices/all', methods=['GET'])
@@ -654,13 +654,13 @@ def get_all_notices():
         current_user = UserService.get_by_id(user_id)
 
         if not current_user or not current_user.is_admin_user():
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         notices = Notice.query.order_by(Notice.priority.desc(), Notice.created_at.desc()).all()
         return success_response([n.to_dict() for n in notices])
     except Exception as e:
         print(f"[Notice Error] Get all notices failed: {str(e)}")
-        return error_response(f'공지사항 조회 실패: {str(e)}', 500)
+        return error_response(f'공지사항 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/notices', methods=['POST'])
@@ -672,7 +672,7 @@ def create_notice():
         current_user = UserService.get_by_id(user_id)
 
         if not current_user or not current_user.is_admin_user():
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         data = get_request_json()
         is_valid, missing = validate_required_fields(data, ['title', 'content'])
@@ -693,7 +693,7 @@ def create_notice():
     except Exception as e:
         db.session.rollback()
         print(f"[Notice Error] Create notice failed: {str(e)}")
-        return error_response(f'공지사항 등록 실패: {str(e)}', 500)
+        return error_response(f'공지사항 등록 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/notices/<int:notice_id>', methods=['PUT'])
@@ -705,11 +705,11 @@ def update_notice(notice_id):
         current_user = UserService.get_by_id(user_id)
 
         if not current_user or not current_user.is_admin_user():
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         notice = Notice.query.get(notice_id)
         if not notice:
-            return error_response('공지사항을 찾을 수 없습니다.', 404)
+            return error_response('공지사항을 찾을 수 없습니다.', status_code=404)
 
         data = get_request_json()
 
@@ -728,7 +728,7 @@ def update_notice(notice_id):
     except Exception as e:
         db.session.rollback()
         print(f"[Notice Error] Update notice failed: {str(e)}")
-        return error_response(f'공지사항 수정 실패: {str(e)}', 500)
+        return error_response(f'공지사항 수정 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/notices/<int:notice_id>', methods=['DELETE'])
@@ -740,11 +740,11 @@ def delete_notice(notice_id):
         current_user = UserService.get_by_id(user_id)
 
         if not current_user or not current_user.is_admin_user():
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         notice = Notice.query.get(notice_id)
         if not notice:
-            return error_response('공지사항을 찾을 수 없습니다.', 404)
+            return error_response('공지사항을 찾을 수 없습니다.', status_code=404)
 
         db.session.delete(notice)
         db.session.commit()
@@ -753,7 +753,7 @@ def delete_notice(notice_id):
     except Exception as e:
         db.session.rollback()
         print(f"[Notice Error] Delete notice failed: {str(e)}")
-        return error_response(f'공지사항 삭제 실패: {str(e)}', 500)
+        return error_response(f'공지사항 삭제 실패: {str(e)}', status_code=500)
 
 
 # ============== Access Logs ==============
@@ -795,7 +795,7 @@ def get_access_logs():
         })
     except Exception as e:
         print(f"[AccessLog Error] {e}")
-        return error_response(f'접속 이력 조회 실패: {str(e)}', 500)
+        return error_response(f'접속 이력 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/access-logs', methods=['POST'])
@@ -825,7 +825,7 @@ def create_access_log():
         return success_response(log.to_dict())
     except Exception as e:
         print(f"[AccessLog Error] {e}")
-        return error_response(f'접속 이력 기록 실패: {str(e)}', 500)
+        return error_response(f'접속 이력 기록 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/access-logs', methods=['DELETE'])
@@ -844,7 +844,7 @@ def clear_access_logs():
         return success_response(message=f'{count}건의 접속 이력이 삭제되었습니다.')
     except Exception as e:
         db.session.rollback()
-        return error_response(f'접속 이력 삭제 실패: {str(e)}', 500)
+        return error_response(f'접속 이력 삭제 실패: {str(e)}', status_code=500)
 
 
 # ============== Role Module Permissions ==============
@@ -863,7 +863,7 @@ def get_role_permissions():
         return success_response(data)
     except Exception as e:
         print(f"[RolePermissions Error] {e}")
-        return error_response(f'권한 조회 실패: {str(e)}', 500)
+        return error_response(f'권한 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/role-permissions', methods=['PUT'])
@@ -903,7 +903,7 @@ def update_role_permissions():
     except Exception as e:
         db.session.rollback()
         print(f"[RolePermissions Error] {e}")
-        return error_response(f'권한 저장 실패: {str(e)}', 500)
+        return error_response(f'권한 저장 실패: {str(e)}', status_code=500)
 
 
 # ============== Health Check ==============

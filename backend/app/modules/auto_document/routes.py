@@ -206,7 +206,7 @@ def get_templates():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         templates = []
 
@@ -230,7 +230,7 @@ def get_templates():
 
         return success_response(templates)
     except Exception as e:
-        return error_response(f'템플릿 목록 조회 실패: {str(e)}', 500)
+        return error_response(f'템플릿 목록 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/templates/placeholders', methods=['POST'])
@@ -240,31 +240,31 @@ def get_template_placeholders():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         data = request.get_json()
         filename = data.get('template') if data else None
         if not filename:
-            return error_response('템플릿 파일명이 필요합니다.', 400)
+            return error_response('템플릿 파일명이 필요합니다.', status_code=400)
 
         safe_name = os.path.basename(filename)
 
         if safe_name.endswith('.pptx'):
             template_path = os.path.join(TEMPLATE_DIR, safe_name)
             if not os.path.exists(template_path):
-                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', 404)
+                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', status_code=404)
             placeholders = _scan_placeholders(template_path)
         elif safe_name.endswith('.docx'):
             template_path = os.path.join(TEMPLATE_DIR_WORD, safe_name)
             if not os.path.exists(template_path):
-                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', 404)
+                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', status_code=404)
             placeholders = _scan_placeholders_docx(template_path)
         else:
-            return error_response('유효하지 않은 파일 형식입니다. (.pptx 또는 .docx)', 400)
+            return error_response('유효하지 않은 파일 형식입니다. (.pptx 또는 .docx)', status_code=400)
 
         return success_response(placeholders)
     except Exception as e:
-        return error_response(f'플레이스홀더 스캔 실패: {str(e)}', 500)
+        return error_response(f'플레이스홀더 스캔 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/datasources', methods=['GET'])
@@ -274,7 +274,7 @@ def get_datasources():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         from app.modules.digital_twin_dashboard.models import DashboardData
 
@@ -534,7 +534,7 @@ def get_datasources():
 
         return success_response(sources)
     except Exception as e:
-        return error_response(f'데이터 소스 조회 실패: {str(e)}', 500)
+        return error_response(f'데이터 소스 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/generate', methods=['POST'])
@@ -544,17 +544,17 @@ def generate_document():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         data = request.get_json()
         if not data:
-            return error_response('요청 데이터가 없습니다.', 400)
+            return error_response('요청 데이터가 없습니다.', status_code=400)
 
         template_filename = data.get('template')
         mappings = data.get('mappings', {})
 
         if not template_filename:
-            return error_response('템플릿 파일명이 필요합니다.', 400)
+            return error_response('템플릿 파일명이 필요합니다.', status_code=400)
 
         safe_name = os.path.basename(template_filename)
 
@@ -567,7 +567,7 @@ def generate_document():
         if safe_name.endswith('.pptx'):
             template_path = os.path.join(TEMPLATE_DIR, safe_name)
             if not os.path.exists(template_path):
-                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', 404)
+                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', status_code=404)
 
             prs = Presentation(template_path)
             for slide in prs.slides:
@@ -602,7 +602,7 @@ def generate_document():
         elif safe_name.endswith('.docx'):
             template_path = os.path.join(TEMPLATE_DIR_WORD, safe_name)
             if not os.path.exists(template_path):
-                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', 404)
+                return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', status_code=404)
 
             doc = DocxDocument(template_path)
             _replace_all_placeholders_docx(doc, placeholders)
@@ -623,11 +623,11 @@ def generate_document():
             )
 
         else:
-            return error_response('유효하지 않은 파일 형식입니다.', 400)
+            return error_response('유효하지 않은 파일 형식입니다.', status_code=400)
 
     except Exception as e:
         print(f"[AutoDocument Error] Document generation failed: {str(e)}")
-        return error_response(f'문서 생성 실패: {str(e)}', 500)
+        return error_response(f'문서 생성 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/generate-batch', methods=['POST'])
@@ -637,19 +637,19 @@ def generate_batch_document():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         data = request.get_json()
         if not data:
-            return error_response('요청 데이터가 없습니다.', 400)
+            return error_response('요청 데이터가 없습니다.', status_code=400)
 
         template_filename = data.get('template')
         batch = data.get('batch', [])
 
         if not template_filename:
-            return error_response('템플릿 파일명이 필요합니다.', 400)
+            return error_response('템플릿 파일명이 필요합니다.', status_code=400)
         if not batch:
-            return error_response('생성할 항목이 없습니다.', 400)
+            return error_response('생성할 항목이 없습니다.', status_code=400)
 
         safe_name = os.path.basename(template_filename)
 
@@ -658,20 +658,20 @@ def generate_batch_document():
         elif safe_name.endswith('.pptx'):
             return _generate_batch_pptx(safe_name, batch)
         else:
-            return error_response('유효하지 않은 파일 형식입니다.', 400)
+            return error_response('유효하지 않은 파일 형식입니다.', status_code=400)
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         print(f"[AutoDocument Error] Batch generation failed: {str(e)}")
-        return error_response(f'일괄 문서 생성 실패: {str(e)}', 500)
+        return error_response(f'일괄 문서 생성 실패: {str(e)}', status_code=500)
 
 
 def _generate_batch_pptx(safe_name, batch):
     """PPT 일괄 생성 (항목별 슬라이드 묶음)"""
     template_path = os.path.join(TEMPLATE_DIR, safe_name)
     if not os.path.exists(template_path):
-        return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', 404)
+        return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', status_code=404)
 
     # 첫 번째 항목으로 기본 프레젠테이션 생성
     first_mappings = batch[0].get('mappings', {})
@@ -758,7 +758,7 @@ def _generate_batch_docx(safe_name, batch):
     """Word 일괄 생성 (각 항목을 페이지 구분으로 병합)"""
     template_path = os.path.join(TEMPLATE_DIR_WORD, safe_name)
     if not os.path.exists(template_path):
-        return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', 404)
+        return error_response(f'템플릿을 찾을 수 없습니다: {safe_name}', status_code=404)
 
     from docx.oxml.ns import qn
     from copy import deepcopy
@@ -843,7 +843,7 @@ def get_presets():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         presets = _load_presets()
         mode = request.args.get('mode')
@@ -851,7 +851,7 @@ def get_presets():
             presets = [p for p in presets if p.get('mode') == mode]
         return success_response(presets)
     except Exception as e:
-        return error_response(f'프리셋 조회 실패: {str(e)}', 500)
+        return error_response(f'프리셋 조회 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/presets', methods=['POST'])
@@ -861,11 +861,11 @@ def save_preset():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         data = request.get_json()
         if not data or not data.get('name'):
-            return error_response('프리셋 이름이 필요합니다.', 400)
+            return error_response('프리셋 이름이 필요합니다.', status_code=400)
 
         presets = _load_presets()
         preset = {
@@ -889,7 +889,7 @@ def save_preset():
 
         return success_response(preset, '프리셋이 저장되었습니다.')
     except Exception as e:
-        return error_response(f'프리셋 저장 실패: {str(e)}', 500)
+        return error_response(f'프리셋 저장 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/presets/<preset_id>', methods=['DELETE'])
@@ -899,19 +899,19 @@ def delete_preset(preset_id):
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         presets = _load_presets()
         original_len = len(presets)
         presets = [p for p in presets if p.get('id') != preset_id]
 
         if len(presets) == original_len:
-            return error_response('프리셋을 찾을 수 없습니다.', 404)
+            return error_response('프리셋을 찾을 수 없습니다.', status_code=404)
 
         _save_presets(presets)
         return success_response(None, '프리셋이 삭제되었습니다.')
     except Exception as e:
-        return error_response(f'프리셋 삭제 실패: {str(e)}', 500)
+        return error_response(f'프리셋 삭제 실패: {str(e)}', status_code=500)
 
 
 @bp.route('/stats', methods=['GET'])
@@ -921,7 +921,7 @@ def get_statistics():
     try:
         user = User.query.get(get_jwt_identity())
         if not _check_admin(user):
-            return error_response('관리자 권한이 필요합니다.', 403)
+            return error_response('관리자 권한이 필요합니다.', status_code=403)
 
         from app.modules.digital_twin_dashboard.models import DashboardData
 
@@ -1183,4 +1183,4 @@ def get_statistics():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return error_response(f'통계 데이터 조회 실패: {str(e)}', 500)
+        return error_response(f'통계 데이터 조회 실패: {str(e)}', status_code=500)

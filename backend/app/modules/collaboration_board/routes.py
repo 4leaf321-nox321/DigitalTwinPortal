@@ -47,7 +47,7 @@ def create_category():
     user = UserService.get_by_id(user_id)
 
     if not user or not user.is_admin_user():
-        return error_response('관리자 권한이 필요합니다.', 403)
+        return error_response('관리자 권한이 필요합니다.', status_code=403)
 
     data = get_request_json()
     is_valid, missing = validate_required_fields(data, ['name', 'slug'])
@@ -69,7 +69,7 @@ def update_category(category_id):
     user = UserService.get_by_id(user_id)
 
     if not user or not user.is_admin_user():
-        return error_response('관리자 권한이 필요합니다.', 403)
+        return error_response('관리자 권한이 필요합니다.', status_code=403)
 
     data = get_request_json()
     category = CategoryService.update(category_id, data)
@@ -88,7 +88,7 @@ def delete_category(category_id):
     user = UserService.get_by_id(user_id)
 
     if not user or not user.is_admin_user():
-        return error_response('관리자 권한이 필요합니다.', 403)
+        return error_response('관리자 권한이 필요합니다.', status_code=403)
 
     if CategoryService.delete(category_id):
         return success_response(message='카테고리가 삭제되었습니다.')
@@ -168,7 +168,7 @@ def update_post(post_id):
 
     # 작성자 본인 또는 관리자만 수정 가능
     if post.author_id != user_id and not user.is_admin_user():
-        return error_response('수정 권한이 없습니다.', 403)
+        return error_response('수정 권한이 없습니다.', status_code=403)
 
     data = get_request_json()
     updated_post = PostService.update(post_id, data, user_id)
@@ -189,7 +189,7 @@ def delete_post(post_id):
 
     # 작성자 본인 또는 관리자만 삭제 가능
     if post.author_id != user_id and not user.is_admin_user():
-        return error_response('삭제 권한이 없습니다.', 403)
+        return error_response('삭제 권한이 없습니다.', status_code=403)
 
     if PostService.delete(post_id):
         return success_response(message='게시글이 삭제되었습니다.')
@@ -236,7 +236,7 @@ def update_comment(comment_id):
         return not_found_response('Comment not found')
 
     if comment.author_id != user_id and not user.is_admin_user():
-        return error_response('수정 권한이 없습니다.', 403)
+        return error_response('수정 권한이 없습니다.', status_code=403)
 
     data = get_request_json()
     updated_comment = CommentService.update(comment_id, data)
@@ -256,7 +256,7 @@ def delete_comment(comment_id):
         return not_found_response('Comment not found')
 
     if comment.author_id != user_id and not user.is_admin_user():
-        return error_response('삭제 권한이 없습니다.', 403)
+        return error_response('삭제 권한이 없습니다.', status_code=403)
 
     if CommentService.delete(comment_id):
         return success_response(message='댓글이 삭제되었습니다.')
@@ -335,7 +335,7 @@ def delete_attachment(attachment_id):
 
     post = PostService.get_by_id(attachment.post_id)
     if post and post.author_id != user_id and not user.is_admin_user():
-        return error_response('삭제 권한이 없습니다.', 403)
+        return error_response('삭제 권한이 없습니다.', status_code=403)
 
     if AttachmentService.delete(attachment_id):
         return success_response(message='첨부파일이 삭제되었습니다.')

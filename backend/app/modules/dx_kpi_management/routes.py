@@ -829,7 +829,7 @@ def import_suggest_names():
     data = request.get_json() or {}
     names = data.get('names') or []
     if not isinstance(names, list):
-        return error_response('names 는 목록이어야 합니다.', 400)
+        return error_response('names 는 목록이어야 합니다.', status_code=400)
 
     _, defs = _import_context()
     return success_response(name_ai.suggest(names, defs))

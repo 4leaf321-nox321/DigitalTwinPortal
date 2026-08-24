@@ -119,7 +119,7 @@ def upsert_task_data():
 
         req_data = request.get_json()
         if not req_data:
-            return error_response('요청 데이터가 없습니다.', 400)
+            return error_response('요청 데이터가 없습니다.', status_code=400)
 
         new_tasks = req_data.get('tasks', [])
         metadata = req_data.get('metadata', {})
@@ -223,7 +223,7 @@ def soft_delete_task(task_uuid):
 
         server_data = TaskManagementData.query.first()
         if not server_data or not server_data.tasks:
-            return error_response('서버에 데이터가 없습니다.', 404)
+            return error_response('서버에 데이터가 없습니다.', status_code=404)
 
         tasks = list(server_data.tasks)
         found = False
@@ -239,7 +239,7 @@ def soft_delete_task(task_uuid):
                 break
 
         if not found:
-            return error_response('해당 과제를 찾을 수 없습니다.', 404)
+            return error_response('해당 과제를 찾을 수 없습니다.', status_code=404)
 
         server_data.tasks = tasks
         server_data.version = server_data.version + 1
