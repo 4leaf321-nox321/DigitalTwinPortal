@@ -115,10 +115,21 @@ def make_user(db):
 
 @pytest.fixture()
 def auth(app):
-    """사용자의 Authorization 헤더를 만든다."""
+    """사용자의 Authorization 헤더를 만든다.
+
+    ⚠️ `X-DT2-Allow-Write` 를 **같이 붙인다.** 안 붙이면 dt-v2 의 모든 쓰기 요청이
+       권한 검사에 닿기도 전에 **503** 으로 끝난다(`_block_writes_before_cutover`).
+       개발 PC 는 `.env` 가 V2 쓰기를 켜 둬서 없어도 통과하지만 **CI 는 아니라서**,
+       빠뜨리면 로컬만 초록이고 CI 에서 죽는다 (2026-08-24 에 실제로 그랬다).
+
+       이 헤더는 `DT2_ALLOW_TEST_WRITE_HEADER` 가 True 일 때만 먹고, 그 값은
+       Testing·Development 설정에만 있다. **운영은 False 고정이고 환경변수로도
+       못 켠다** — 열려 있으면 토큰만 있으면 누구나 dt2 에 직접 쓸 수 있다.
+    """
     from flask_jwt_extended import create_access_token
 
     def factory(user):
         token = create_access_token(identity=str(user.id))
-        return {'Authorization': f'Bearer {token}'}
+        return {'Authorization': f'Bearer {token}',
+                'X-DT2-Allow-Write': 'test'}
     return factory
