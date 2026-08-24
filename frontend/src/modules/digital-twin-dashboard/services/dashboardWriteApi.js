@@ -277,15 +277,40 @@ const createProjectFlowV2 = async ({ project, performances, activityLogs }) => {
     }
   }
 
+  // DX KPI 연결. **맨 뒤에 둔다** — 앞의 둘이 실패하면 여기까지 오지 않는다.
+  // ⚠️ 앞 단계들이 row_version 을 올렸다. `projectRowVersion` 으로 최신 값을 다시
+  //    읽지 않으면 **자기 자신 때문에 409** 가 난다(성과·선행이 겪은 그 사고다).
+  const kpiItems = project?.[KPI_FIELD];
+  if (Array.isArray(kpiItems) && kpiItems.length) {
+    try {
+      const kpi = await putProjectKpiLinksV2(
+        result.uuid, kpiItems, { expectedVersion: projectRowVersion(result.uuid) });
+      rememberProjectRowVersion(result.uuid, kpi?.rowVersion);
+      console.info(`[DT] V2 신규 과제 DX KPI 연결 — ${(kpi?.items || []).length}건`);
+      extra.kpiLinks = kpi;
+    } catch (err) {
+      console.error('[DT] 과제는 생성됐지만 DX KPI 연결에 실패했습니다.', err);
+      throw new Error(
+        `과제는 만들어졌지만 DX KPI 연결에 실패했습니다 (${err.message}). `
+        + '편집창 ▸ DX KPI 연결 탭에서 다시 연결해 주세요.');
+    }
+  }
+
   await sendActivityLogs(activityLogs);
   return { ...result, ...extra };
 };
 
 /**
- * 과제 1건 신규 등록.
+ * 과제 1건 신규 등록. **V2 전용이다** (2026-08-25).
  *
- * V1 — 전체 배열 upsert
- * V2 — `POST /projects` (토글이 켜졌을 때)
+ * V2 — `POST /projects` → 성과 연결 → 선행 과제 → DX KPI 연결
+ *
+ * ⚠️ **V1 로 물러서는 길을 전부 닫았다.** 예전에는 스위치가 꺼졌거나 지원 안 되는
+ *    필드가 있으면 V1 전체 배열 upsert 로 갔는데, 2026-07-31 컷오버로 `dt2_*` 가
+ *    정본이 되면서 **V1 은 얼어붙었다.** 그리로 쓰면 화면엔 '저장됨' 이 뜨는데
+ *    목록엔 없는 과제가 생긴다 — **조용히 잃는 것보다 못 만드는 편이 낫다.**
+ *    막을 때는 **어느 스위치인지**까지 말한다(브라우저 / 서버). 안 그러면
+ *    "나만 저장이 안 된다" 가 되고 원인이 자기 브라우저에 있어 못 찾는다.
  *
  * 수정과 달리 **전체 필드를 보낸다.** 그래서 권한 분류표에 없는 필드가 있으면
  * 그 값이 통째로 빠진다 — 2026-07-30 에 분류 안 된 컬럼 17개를 채운 이유다.
@@ -293,26 +318,60 @@ const createProjectFlowV2 = async ({ project, performances, activityLogs }) => {
  * 성과 연결·선행 과제가 딸려 있으면 생성 **뒤에** 연결 API 를 부른다 — 수정과 달리
  * 순서를 뒤집을 수 없다(과제가 있어야 연결을 건다). 이미지는 생성 본문에 함께 간다.
  */
-export const saveNewProject = ({ projects, performances, metadata, activityLogs, project }) => {
-  const toV1 = () => upsertTracked({ projects, performances, metadata, activityLogs });
+export const saveNewProject = ({ performances, activityLogs, project }) => {
+  /*
+    ⚠️ **V2 가 꺼져 있으면 만들지 않는다** (2026-08-24 결정). 예전에는 V1 로 물러섰다.
 
-  if (!isV2WriteEnabled()) return toV1();
+    물러설 곳이 없어졌다 — 2026-07-31 컷오버로 `dt2_*` 가 정본이 되고 V1 은 얼어붙었다.
+    V1 로 쓰면 **화면엔 '저장됨' 이 뜨는데 아무 데도 안 보이는 과제**가 생긴다.
+    DX KPI 연결은 dt2 전용 테이블이라 더더욱 담기지 않는다.
 
+    ⚠️ 「꺼짐」이 두 종류라 **메시지가 어느 쪽인지 말해야 한다.** 아래는 브라우저
+       스위치(localStorage `dtV2Write`)다 — `?dtV2Write=0` 으로도 꺼지고 **끈 채로
+       눌어붙는다.** 사람마다 다르기 때문에, 안 알려 주면 "나만 저장이 안 된다" 가
+       되고 원인이 자기 브라우저에 있어 영영 못 찾는다.
+  */
+  if (!isV2WriteEnabled()) {
+    return Promise.reject(new Error(
+      '이 브라우저의 V2 쓰기 스위치가 꺼져 있어 과제를 만들 수 없습니다. '
+      + '주소 끝에 ?dtV2Write=1 을 붙여 한 번 열면 켜집니다. '
+      + '(예전에는 옛 방식으로 저장했지만, 그렇게 저장한 과제는 목록에 나타나지 않습니다)'));
+  }
+
+  /*
+    ⚠️ **여기서도 V1 로 물러서지 않는다** (2026-08-25). 위와 같은 이유다 — V1 은
+       컷오버로 얼어붙었고, 그리로 쓰면 화면엔 '저장됨' 이 뜨는데 **아무 데도 안
+       보이는 과제**가 생긴다. 조용히 잃는 것보다 못 만드는 편이 낫다.
+
+       이건 스위치가 아니라 **부르는 쪽의 잘못**이라 사용자가 고칠 것이 없다.
+       그래서 「다시 해 보라」고 하지 않고 **무엇이 잘못됐는지**를 남긴다.
+  */
   if (!project) {
-    console.warn('[DT] 새 과제 객체를 못 받아 V1 로 저장합니다.');
-    return toV1();
+    console.error('[DT] 새 과제 객체를 못 받았습니다 — saveNewProject 를 부르는 쪽 문제입니다.');
+    return Promise.reject(new Error(
+      '과제 정보를 만들지 못해 저장을 중단했습니다. 창을 닫았다 다시 열어 주세요 '
+      + '(계속 그러면 관리자에게 알려 주세요).'));
   }
 
   const withRelations = RELATION_FIELDS_WITHOUT_API.filter(field => !isEmptyish(project[field]));
   if (withRelations.length) {
-    console.info(`[DT] ${withRelations.join(', ')} 이(가) 딸린 신규 과제라 V1 로 보냅니다 (해당 API 미연결).`);
-    return toV1();
+    /*
+      ⚠️ 지금 `RELATION_FIELDS_WITHOUT_API` 는 **비어 있어** 여기 오지 않는다.
+         나중에 API 가 없는 관계 필드를 다시 넣게 되면, 그때는 **V1 로 새지 않고**
+         여기서 멈춘다는 뜻이다. 그 필드를 지원하는 API 를 먼저 만들어야 한다.
+    */
+    console.error(`[DT] ${withRelations.join(', ')} 은 아직 V2 API 가 없습니다.`);
+    return Promise.reject(new Error(
+      `${withRelations.join(', ')} 이(가) 딸린 과제는 아직 만들 수 없습니다. `
+      + '그 항목을 비우고 만든 뒤 편집창에서 채워 주세요.'));
   }
 
   return createProjectFlowV2({ project, performances, activityLogs }).catch(err => {
+    // 서버 쪽 스위치(`DT2_WRITE_ENABLED`). 위와 같은 이유로 **물러서지 않는다.**
     if (err?.v2Disabled) {
-      console.warn('[DT] 서버의 V2 쓰기가 꺼져 있어(503) V1 로 저장합니다.');
-      return toV1();
+      throw new Error(
+        '서버의 V2 쓰기가 꺼져 있어 과제를 만들 수 없습니다 '
+        + '(backend/.env 의 DT2_WRITE_ENABLED). 관리자에게 알려 주세요.');
     }
     throw err;
   });
@@ -332,6 +391,15 @@ const LINK_FIELD = '성과목록';
 const DEP_FIELD = '선행과제목록';
 
 /**
+ * DX KPI 연결. `PUT /projects/<uuid>/kpi-links` 로 간다 (2026-08-24 부터).
+ *
+ * **신규 추가창에서만** 이 키로 실린다. 편집은 `saveProjectEdit` 이 `kpiLinks`
+ * 인자로 따로 받는다 — 그쪽은 저장 **전에** 보내야 하고(실패하면 아무것도 안 바뀌게),
+ * 신규는 과제가 있어야 걸 수 있어 **뒤에** 보낸다. 순서가 반대라 자리도 나눴다.
+ */
+const KPI_FIELD = 'DX_KPI연결';
+
+/**
  * 과제 컬럼이 아니라 **다른 테이블/다른 API 로 가는 키들** (서버의 PROJECT_RELATION_KEYS).
  *
  * 이 목록이 서버와 갈려도 조용히 틀어지지는 않는다 — 빠뜨린 키는 서버 응답의
@@ -349,6 +417,7 @@ const IMAGE_SLOTS = [
 const RELATION_FIELDS = [
   LINK_FIELD,          // → PUT /projects/<uuid>/performances
   DEP_FIELD,           // → PUT /projects/<uuid>/dependencies
+  KPI_FIELD,           // → PUT /projects/<uuid>/kpi-links
   ...IMAGE_SLOTS,      // → image_refs_json (아래에서 하나로 합쳐 보낸다)
 ];
 

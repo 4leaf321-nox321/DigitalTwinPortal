@@ -1,6 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { ClipboardList, BarChart3, CheckSquare, MoreHorizontal } from 'lucide-react';
+import { ClipboardList, BarChart3, CheckSquare, MoreHorizontal, Link2 } from 'lucide-react';
 import { useAuth } from '../../../../contexts/AuthContext';
 
 import { settingsData } from '../../data/sampleData';
@@ -16,6 +16,7 @@ import PerformanceSection from './components/PerformanceSection';
 import RemarksSection from './components/RemarksSection';
 import AttachmentSection from './components/AttachmentSection';
 import ActionItemsSection from './components/ActionItemsSection';
+import KpiLinkSection from './components/KpiLinkSection';
 import AlertDialog from '../common/AlertDialog';
 import AddPerformanceModal from '../PerformanceModal/AddPerformanceModal';
 import { authApi } from '../../../auth/services/authApi';
@@ -47,6 +48,42 @@ const AddProjectModal = ({ isOpen, onClose, onSubmit, onSubmitAndUpload, current
 
   // 탭 (편집창과 동일한 구조)
   const [activeTab, setActiveTab] = useState('basic');
+
+  // ── DX KPI 연결 (2026-08-24) ──────────────────────────────────────────────
+  // 편집창과 **같은 컴포넌트**를 쓰지만 uuid 가 없다 — 사업부를 넘겨 후보만 받는다.
+  // `null` = 아직 안 불러옴. KpiLinkSection 이 `onLoaded` 로 채운다.
+  const [kpiLinks, setKpiLinks] = useState(null);
+  // 사업부가 바뀌었는지 보려고 직전 값을 들고 있다.
+  const prevDivisionRef = useRef(null);
+
+  /*
+    사업부가 바뀌면 **고른 지표를 버린다.**
+
+    ⚠️ 지표는 (지표 × 대상 사업부) 로 걸린다. 사업부가 바뀌면 기능조직 여부가
+       뒤집히고(GTR→MX 면 대상이 자기 사업부로 고정된다) 고른 대상이 통째로 무효가
+       된다. 남겨 두면 **엉뚱한 사업부 칸에 기여가 찍힌다.**
+
+    ⚠️ **버렸으면 말해야 한다.** 사업부는 기본정보 탭이고 지표는 다른 탭이라,
+       조용히 비우면 저장을 누르고 나서야 없어진 것을 안다. 다만 고른 것이 없을
+       때는 알리지 않는다 — 잃은 것이 없는데 창을 띄우면 그다음부터 안 읽는다.
+  */
+  useEffect(() => {
+    const now = formData.사업부 || '';
+    const before = prevDivisionRef.current;
+    prevDivisionRef.current = now;
+    if (before === null || before === now) return;      // 첫 렌더이거나 안 바뀐 것
+    const had = Array.isArray(kpiLinks) ? kpiLinks.length : 0;
+    setKpiLinks(null);                                  // 섹션이 다시 불러 채운다
+    if (had > 0) {
+      setAlertDialog({
+        isOpen: true,
+        variant: 'warning',
+        message: `사업부가 「${before || '미지정'}」에서 「${now || '미지정'}」(으)로 바뀌어 `
+               + `골라 둔 DX KPI ${had}건을 비웠습니다. 지표는 사업부별로 따로 측정되므로 `
+               + `[DX KPI 연결] 탭에서 다시 골라 주세요.`,
+      });
+    }
+  }, [formData.사업부]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /** 검증 실패 시 오류가 있는 첫 탭으로 이동 */
   const focusFirstErrorTab = (validationErrors) => {
@@ -298,6 +335,16 @@ const AddProjectModal = ({ isOpen, onClose, onSubmit, onSubmitAndUpload, current
     // 대기 중인 파일 정보를 프로젝트에 포함
     newProject.pendingFiles = pendingFiles;
 
+    /*
+      DX KPI 연결. 과제가 만들어진 **뒤에** 별도 API 로 걸린다
+      (`createProjectFlowV2` — 과제가 있어야 연결을 건다).
+      ⚠️ 빈 배열도 보내지 않는다. 아무것도 안 골랐으면 키 자체를 안 만들어
+         쓸데없는 왕복과 row_version 증가를 없앤다.
+    */
+    if (Array.isArray(kpiLinks) && kpiLinks.length > 0) {
+      newProject.DX_KPI연결 = kpiLinks;
+    }
+
     console.log('New project data (with server upload):', newProject);
 
     if (onSubmitAndUpload) {
@@ -317,12 +364,17 @@ const AddProjectModal = ({ isOpen, onClose, onSubmit, onSubmitAndUpload, current
     resetFormData(setFormData, setPerformanceInput, setErrors);
     setPersonnelInput(INITIAL_PERSONNEL_INPUT);
     setPendingFiles([]);
+    // 다음에 열 때 지난 선택이 남아 있으면 안 된다. 사업부 비교 기준도 같이 지운다.
+    setKpiLinks(null);
+    prevDivisionRef.current = null;
+    setActiveTab('basic');
     onClose();
   };
 
   const showError = (message) => {
     setAlertDialog({
       isOpen: true,
+      variant: 'error',
       message: message
     });
   };
@@ -511,6 +563,33 @@ const AddProjectModal = ({ isOpen, onClose, onSubmit, onSubmitAndUpload, current
             ),
           },
           {
+            key: 'kpi',
+            label: 'DX KPI 연결',
+            icon: <Link2 size={15} />,
+            // 편집창과 달리 **늘 0 에서 시작한다.** 그래서 이 배지는 "몇 개 걸려
+            // 있나" 가 아니라 "지금 몇 개 골랐나" 를 알린다.
+            count: Array.isArray(kpiLinks) ? kpiLinks.length : 0,
+            content: (
+              /*
+                ⚠️ 편집창과 **같은 컴포넌트**다. 다른 것은 uuid 대신 사업부를 넘긴다는
+                   것뿐 — 규칙(대상 사업부·기능조직 판정)이 두 벌이 되면 "추가창에서
+                   고를 수 있던 것이 편집창에선 없다" 가 난다.
+                ⚠️ 사업부를 **폼에서** 읽는다. 아직 저장된 과제가 없으니 서버는 모른다.
+              */
+              <KpiLinkSection
+                division={formData.사업부 || null}
+                settingsData={settingsData}
+                value={kpiLinks}
+                // ★ 기준선은 서버 응답만 정한다(편집창과 같은 규칙). 신규창에서는
+                //   그 응답이 늘 빈 배열이라, 사용자의 클릭을 덮어쓰지 않게만 한다.
+                onLoaded={(serverItems) => {
+                  setKpiLinks((cur) => (cur == null ? serverItems : cur));
+                }}
+                onChange={setKpiLinks}
+              />
+            ),
+          },
+          {
             key: 'performance',
             label: '과제 성과',
             icon: <BarChart3 size={15} />,
@@ -578,7 +657,7 @@ const AddProjectModal = ({ isOpen, onClose, onSubmit, onSubmitAndUpload, current
           onClose={() => setAlertDialog({ isOpen: false, message: '' })}
           title="알림"
           message={alertDialog.message}
-          variant="error"
+          variant={alertDialog.variant || 'error'}
         />
       )}
 

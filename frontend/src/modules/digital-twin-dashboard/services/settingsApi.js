@@ -948,6 +948,36 @@ export const fetchProjectKpiLinksV2 = async (projectUuid) => {
 };
 
 /**
+ * **아직 만들어지지 않은 과제**를 위한 DX KPI 후보 (V2).
+ *
+ * 왜 따로 있나
+ *     신규 추가창은 uuid 가 없다. `fetchProjectKpiLinksV2` 는 과제가 없으면 404 라
+ *     그대로 쓰면 추가창의 KPI 탭이 **빈 화면**이 된다.
+ *
+ * ⚠️ `division` 은 **폼에서 읽는다.** 편집창은 저장된 값으로 서버가 정하지만,
+ *    추가창은 사용자가 고르는 중이라 서버가 알 방법이 없다.
+ *
+ * ⚠️ 사업부가 비어도 200 이다 — 추가창은 사업부를 고르기 전에도 열린다.
+ *    그때는 후보 지표만 오고 `defaultTargets` 는 빈 배열이다.
+ *
+ * 응답: { available[], divisions[], projectDivision, isFunctionalOrg, defaultTargets[] }
+ *       (`items`·`rowVersion`·`canEdit` 는 **없다** — 걸 과제가 아직 없다)
+ */
+export const fetchKpiLinkOptions = async (division) => {
+  const token = localStorage.getItem('accessToken');
+  const qs = division ? `?division=${encodeURIComponent(division)}` : '';
+  const response = await fetch(`${API_BASE_URL}/dt-v2/kpi-links/options${qs}`,
+                               { headers: { 'Authorization': `Bearer ${token}` } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'KPI 후보 조회 실패');
+    error.status = response.status;
+    throw error;
+  }
+  return data.data;
+};
+
+/**
  * 과제의 DX KPI 연결을 **통째로 교체**한다 (V2).
  *
  * `items` 는 `[{ kpiDefinitionId, note? }]`. **가중치도 순서도 없다** —

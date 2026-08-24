@@ -24,6 +24,15 @@
  *     스스로 저장하지 않는다. 선택 상태를 부모에게 올려주고 부모의 '저장' 한 번에
  *     다른 변경과 같이 나간다.
  *
+ * 두 가지 모드 (2026-08-24)
+ *     `projectUuid` 있음   편집창. 연결된 목록까지 서버에서 받는다.
+ *     `division` 만 있음   **신규 추가창.** 아직 uuid 가 없으므로 후보만 받고
+ *                          연결 목록은 빈 배열에서 시작한다.
+ *     ⚠️ 신규창은 사업부를 **폼에서** 읽어 넘긴다. 편집창은 저장된 값으로 서버가
+ *        정하지만 추가창은 사용자가 고르는 중이라 서버가 알 방법이 없다.
+ *     ⚠️ 사업부가 바뀌면 **고른 것을 버리는 것은 부모(AddProjectModal)의 일**이다.
+ *        여기서 비우면 편집창에서도 발동해 **이미 저장된 연결이 날아간다.**
+ *
  * 사업부 코드 매핑을 여기 두지 않는다
  *     서버가 `divisions[].code` 로 내려준다(`field_maps.DIVISION_KPI_CODE` 가 단일 출처).
  *     화면이 자기 표를 들면 반드시 갈리고, 그러면 "의료기기 과제가 medical 지표에
@@ -35,7 +44,8 @@ import { Target, AlertCircle, Loader2, ChevronRight, ChevronDown, Building2, Spa
 
 import AiKpiSuggestModal from './AiKpiSuggestModal';
 
-import { fetchProjectKpiLinksV2, saveSystemSettings } from '../../../services/settingsApi';
+import { fetchProjectKpiLinksV2, fetchKpiLinkOptions, saveSystemSettings }
+  from '../../../services/settingsApi';
 
 /* 분류 정렬 — 매트릭스(KpiMatrixView)와 **같은 순서**를 쓴다.
    두 화면에서 같은 것이 다른 자리에 있으면 같은 것으로 안 보인다.
@@ -583,8 +593,8 @@ const MethodPicker = ({ value, options, onChange, onDefine, disabled, placeholde
   );
 };
 
-const KpiLinkSection = ({ projectUuid, value, onLoaded, onChange, readOnly = false,
-                         settingsData = {} }) => {
+const KpiLinkSection = ({ projectUuid, division = null, value, onLoaded, onChange,
+                         readOnly = false, settingsData = {} }) => {
   const [available, setAvailable] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [projectDivision, setProjectDivision] = useState(null);
@@ -641,20 +651,26 @@ const KpiLinkSection = ({ projectUuid, value, onLoaded, onChange, readOnly = fal
   const hasProject = Boolean(projectUuid);
 
   useEffect(() => {
-    if (!hasProject) return undefined;
+    // 편집창은 uuid 로, 신규창은 사업부로 불러온다. 신규창은 사업부를 아직 안 골랐어도
+    // 후보 지표는 보여 준다 — 탭이 빈 화면이면 무엇을 하는 자리인지 알 수 없다.
     let alive = true;
     setLoading(true);
     setError(null);
     setShowOthers(false);
     loadedRef.current = null;
 
-    fetchProjectKpiLinksV2(projectUuid)
+    const req = hasProject
+      ? fetchProjectKpiLinksV2(projectUuid)
+      : fetchKpiLinkOptions(division);
+
+    req
       .then((data) => {
         if (!alive) return;
         setAvailable(data.available || []);
         setDivisions(data.divisions || []);
         setProjectDivision(data.projectDivision || null);
         setIsFunctional(Boolean(data.isFunctionalOrg));
+        // 신규창에는 `items` 가 없다(걸 과제가 아직 없다) — 빈 배열에서 시작한다.
         const items = (data.items || []).map((it) => ({
           kpiDefinitionId: it.kpiDefinitionId,
           targetDivision: it.targetDivision || '',
@@ -684,7 +700,9 @@ const KpiLinkSection = ({ projectUuid, value, onLoaded, onChange, readOnly = fal
       .finally(() => { if (alive) setLoading(false); });
 
     return () => { alive = false; };
-  }, [projectUuid, hasProject]); // eslint-disable-line react-hooks/exhaustive-deps
+    // ⚠️ `division` 이 의존성에 있어야 신규창에서 사업부를 바꿀 때 다시 부른다.
+    //    편집창은 이 prop 을 안 넘기므로(null 고정) 동작이 그대로다.
+  }, [projectUuid, hasProject, division]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 부모가 값을 비웠는데 uuid 는 그대로면 위 이펙트는 다시 돌지 않는다.
   // 그대로 두면 체크가 사라진 채 **빈 목록으로 저장**된다.

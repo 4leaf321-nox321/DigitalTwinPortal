@@ -672,11 +672,13 @@ const DigitalTwinDashboardApp = () => {
 
       // 서버에 업로드 — 활동 로그(과제 생성 + 액션아이템) 포함.
       // 버전 송수신은 어댑터가 맡는다.
-      // project 는 V2 분기(POST /projects)가 쓴다. V1 경로에서는 쓰이지 않는다.
+      //
+      // ⚠️ **V2 전용이다** (2026-08-25). 예전에는 전체 배열(`projects`·`metadata`)을
+      //    함께 넘겨 V1 upsert 로 물러설 수 있게 했는데, 컷오버로 V1 이 얼어붙어
+      //    그 길을 닫았다 — 그리로 쓰면 목록에 안 보이는 과제가 생긴다.
+      //    `performances` 는 성과 연결이, `activityLogs` 는 활동 로그가 쓴다.
       await saveNewProject({
-        projects: updatedProjects,
         performances: globalPerformances,
-        metadata: updatedMetadata,
         activityLogs: recentActivityLogs(1 + actionItemLogCount),
         project: addedProject
       });

@@ -5598,42 +5598,29 @@ def _kpi_owner_divisions():
     } for d in rows]
 
 
-@bp_v2.route('/projects/<uuid>/kpi-links', methods=['GET'])
-@auth_required
-def list_project_kpi_links(uuid):
+def _kpi_link_options(division):
     """
-    이 과제가 연결된 DX KPI 목록.
+    **사업부 이름 하나로** 정해지는 것들 — 후보 지표, 대상 후보, 기능조직 여부.
 
-    후보 목록(`available`)을 같이 준다 — 화면이 dx-kpi-management API 를 따로 부르지
-    않아도 되고, 무엇보다 **정렬·사업부 판정 규칙이 서버 한 곳에만 있게 된다.**
+    과제가 있어야 하는 것(연결된 목록ㆍ`rowVersion`ㆍ`canEdit`)은 여기 없다.
+    그래서 **아직 만들어지지 않은 과제**(신규 추가창)도 이 함수만으로 화면을 채운다.
+
+    ⚠️ 이 판정을 화면이 하면 안 된다. 기능조직 여부는 `isKpiOwner` 를 봐야 알고,
+       그 값은 설정에서 바뀐다 — 화면이 이름을 박아 두면 조직이 바뀔 때 조용히 틀어진다.
     """
     from app.modules.dx_kpi_management.models import KpiDefinition
 
-    actor = _actor()
-    if actor is None:
-        return error_response('로그인이 필요합니다.', status_code=401)
-    p = Dt2Project.query.filter_by(uuid=uuid).first()
-    if p is None:
-        return error_response('과제를 찾을 수 없습니다.', status_code=404)
-    if not P.can_view_project(actor, p):
-        return error_response('이 과제를 볼 권한이 없습니다.', status_code=403)
-
-    rows = _kpi_links_of(uuid)
     defs = (KpiDefinition.query
             .order_by(KpiDefinition.sort_order.asc(), KpiDefinition.id.asc())
             .all())
-
     divisions = _kpi_owner_divisions()
-    own = next((d for d in divisions if d['name'] == (p.division or '')), None)
+    div = (division or '').strip()
+    own = next((d for d in divisions if d['name'] == div), None)
     # 자기 사업부가 KPI 를 관리하지 않으면(GTR·SR·CS) **기능조직**이다.
     # 이 과제는 지원할 사업부를 직접 골라야 한다 — 자기 사업부엔 지표가 없다.
     is_functional = own is not None and not own['isKpiOwner']
 
-    return success_response({
-        'projectUuid': uuid,
-        'rowVersion': p.row_version,
-        'canEdit': P.can_edit_project(actor, p),
-        'items': [_kpi_link_dict(ln, kdef) for ln, kdef in rows],
+    return {
         'available': [{
             'kpiDefinitionId': d.id,
             'label': d.label,
@@ -5644,13 +5631,66 @@ def list_project_kpi_links(uuid):
             # 화면이 둘을 다른 자리에 보여준다 — 고르는 이유가 다르기 때문이다.
             'kind': d.kind or 'metric',
         } for d in defs],
-        'projectDivision': p.division,
+        'projectDivision': div or None,
         'divisions': divisions,
         'isFunctionalOrg': is_functional,
         # 기능조직이면 비어 있다 — 화면이 고르게 해야 한다.
         # 아니면 자기 사업부 하나. (2026-08-01 결정: 사업부 과제가 남의 지표를 미는
-        # 경우는 없다. 서버도 그 규칙을 강제한다 — 아래 PUT 참조)
-        'defaultTargets': [] if is_functional else ([p.division] if own else []),
+        # 경우는 없다. 서버도 그 규칙을 강제한다 — PUT 참조)
+        'defaultTargets': [] if is_functional else ([div] if own else []),
+    }
+
+
+@bp_v2.route('/kpi-links/options', methods=['GET'])
+@auth_required
+def kpi_link_options():
+    """
+    **아직 없는 과제**를 위한 후보 목록. 질의 `division=<사업부명>`.
+
+    왜 따로 있나
+        신규 과제 추가창은 uuid 가 없다. `/projects/<uuid>/kpi-links` 는 과제가 없으면
+        404 라, 그대로 쓰면 추가창의 KPI 탭이 **빈 화면**이 된다.
+
+    ⚠️ 읽기 전용이고 **누가 봐도 같은 값**이다 — 지표 정의와 사업부 목록은 과제별
+       비밀이 아니다. 그래서 과제 권한 검사가 없다(볼 과제가 아직 없다). 로그인만 본다.
+
+    ⚠️ `division` 이 비어도 200 이다. 추가창은 사업부를 **고르기 전에도** 열리므로,
+       그때는 후보 지표만 주고 대상은 비워 둔다. 400 을 내면 화면이 오류로 보인다.
+    """
+    actor = _actor()
+    if actor is None:
+        return error_response('로그인이 필요합니다.', status_code=401)
+    return success_response(_kpi_link_options(request.args.get('division')))
+
+
+@bp_v2.route('/projects/<uuid>/kpi-links', methods=['GET'])
+@auth_required
+def list_project_kpi_links(uuid):
+    """
+    이 과제가 연결된 DX KPI 목록.
+
+    후보 목록(`available`)을 같이 준다 — 화면이 dx-kpi-management API 를 따로 부르지
+    않아도 되고, 무엇보다 **정렬·사업부 판정 규칙이 서버 한 곳에만 있게 된다.**
+    """
+    actor = _actor()
+    if actor is None:
+        return error_response('로그인이 필요합니다.', status_code=401)
+    p = Dt2Project.query.filter_by(uuid=uuid).first()
+    if p is None:
+        return error_response('과제를 찾을 수 없습니다.', status_code=404)
+    if not P.can_view_project(actor, p):
+        return error_response('이 과제를 볼 권한이 없습니다.', status_code=403)
+
+    rows = _kpi_links_of(uuid)
+
+    # 사업부로 정해지는 것들은 **신규 추가창과 같은 함수**에서 온다.
+    # 규칙이 두 벌이 되면 "추가창에서 고를 수 있던 것이 편집창에선 없다" 가 난다.
+    return success_response({
+        'projectUuid': uuid,
+        'rowVersion': p.row_version,
+        'canEdit': P.can_edit_project(actor, p),
+        'items': [_kpi_link_dict(ln, kdef) for ln, kdef in rows],
+        **_kpi_link_options(p.division),
     })
 
 
