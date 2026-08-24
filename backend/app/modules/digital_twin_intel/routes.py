@@ -14,7 +14,7 @@ from app.modules.digital_twin_intel import bp
 from app.modules.digital_twin_intel import permissions as P
 from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
-    CPT_GROUPS, DEFAULT_SECTORS, STAGES, IntelEvidence, IntelNews, IntelTech,
+    CPT_GROUPS, DEFAULT_SECTORS, ORIGINS, STAGES, IntelEvidence, IntelNews, IntelTech,
 )
 from app.shared.responses import (
     created_response, error_response, not_found_response, success_response,
@@ -30,6 +30,22 @@ DEFAULT_SETTINGS = {
     # 레이더의 부채꼴. 뜻과 「시각화를 왜 뺐는지」는 `models.DEFAULT_SECTORS` 참고.
     'techCategories': list(DEFAULT_SECTORS),
 }
+
+
+def _origin_of(data):
+    """어디로 들어왔는지. **부르는 쪽이 밝힌다.**
+
+    ⚠️ MCP 도 사람도 **같은 REST 길**로 들어온다. 그래서 서버는 둘을 구분할 방법이
+       없다 — 라우트에 `'ui'` 를 박아 두면 바깥 AI 가 밀어 넣은 것까지 「사람이 적음」
+       으로 남는다(2026-08-25 실측). 그러면 나중에 「이거 누가 확인한 거야?」에
+       답할 수 없고, `origin` 을 만든 이유가 통째로 무너진다.
+
+    ⚠️ 이건 **권한이 아니라 출처 표시**라 부르는 쪽을 믿는다 — `patch_project` 의
+       `actor_mode='ai'` 와 같은 방식이다. 거짓으로 적어도 얻는 것이 없다.
+       다만 아는 값만 받는다(모르면 'ui').
+    """
+    v = (data or {}).get('origin')
+    return v if v in ORIGINS else 'ui'
 
 
 def _actor():
@@ -139,7 +155,9 @@ def create_news():
         return denied
 
     data = get_request_json() or {}
-    news, err = S.create_news(actor_id=actor.id, origin='ui',
+    origin = _origin_of(data)
+    data.pop('origin', None)
+    news, err = S.create_news(actor_id=actor.id, origin=origin,
                               technologies=data.pop('technologies', None), **data)
     if err:
         return error_response(err, status_code=400)
@@ -241,8 +259,10 @@ def create_tech():
     if denied is not None:
         return denied
 
-    tech, err = S.create_tech(actor_id=actor.id, origin='ui',
-                              **(get_request_json() or {}))
+    data = get_request_json() or {}
+    origin = _origin_of(data)
+    data.pop('origin', None)
+    tech, err = S.create_tech(actor_id=actor.id, origin=origin, **data)
     if err:
         return error_response(err, status_code=400)
     return created_response(tech.to_dict())
@@ -351,7 +371,7 @@ def add_evidence():
         return not_found_response('기술을 찾을 수 없습니다.')
 
     S.link_evidence(news_uuid, tech_uuid, note=data.get('note'),
-                    actor_id=actor.id, source='ui')
+                    actor_id=actor.id, source=_origin_of(data))
     db.session.commit()
     return created_response({'newsUuid': news_uuid, 'techUuid': tech_uuid})
 

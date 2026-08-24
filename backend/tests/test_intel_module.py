@@ -328,6 +328,33 @@ def test_발표일을_모르면_비워_둔다(db, client, auth, plain):
     assert n.published_at is None
 
 
+def test_MCP_로_넣으면_그렇게_남는다(db, client, auth, plain):
+    """
+    ⚠️⚠️ MCP 도 사람도 **같은 REST 길**로 들어온다. 라우트에 `'ui'` 를 박아 두면
+       바깥 AI 가 밀어 넣은 것까지 「사람이 적음」으로 남는다 — 2026-08-25 에 실제로
+       그랬다. 그러면 나중에 「이거 누가 확인한 거야?」에 답할 수 없고, `origin` 을
+       만든 이유가 통째로 무너진다.
+
+    ⚠️ 출처는 **권한이 아니라 표시**라 부르는 쪽을 믿는다(`actor_mode='ai'` 와 같은
+       방식). 다만 아는 값만 받는다.
+    """
+    r = _news(client, auth, plain, url='https://example.test/from-mcp', origin='mcp')
+    assert r.status_code == 201, f'{r.status_code} · {r.get_json()}'
+    assert IntelNews.query.filter_by(url='https://example.test/from-mcp').first().origin == 'mcp'
+
+    # 기술도 마찬가지
+    r2 = client.post(f'{BASE}/tech', json={'name': '밖에서 온 기술', 'origin': 'mcp'},
+                     headers=auth(plain))
+    assert r2.status_code == 201, f'{r2.status_code} · {r2.get_json()}'
+    assert IntelTech.query.filter_by(name='밖에서 온 기술').first().origin == 'mcp'
+
+
+def test_모르는_출처는_사람이_적은_것으로_본다(db, client, auth, plain):
+    """오타나 새 경로 이름. 400 으로 막으면 이 칸 하나 때문에 소식을 통째로 잃는다."""
+    _news(client, auth, plain, url='https://example.test/weird', origin='텔레파시')
+    assert IntelNews.query.filter_by(url='https://example.test/weird').first().origin == 'ui'
+
+
 def test_어디로_들어왔는지_남는다(db, client, auth, plain):
     """
     ⚠️ 넷으로 들어온다(손·MCP·파일·LLM). 섞이면 나중에 「이거 누가 확인한 거야?」에

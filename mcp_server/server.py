@@ -33,6 +33,8 @@ from mcp.server.fastmcp import Context, FastMCP
 #    브라우저가 보는 `/api` 는 Vite 가 5174 로 프록시한 것이다. 여기선 직접 붙는다.
 API_BASE = os.environ.get("DT_API_BASE", "http://localhost:5174").rstrip("/")
 API_PREFIX = "/api/dt-v2"
+# 기술정보 모듈은 블루프린트가 달라 접두사도 다르다.
+INTEL_PREFIX = "/api/digital-twin-intel"
 
 # 기본은 SSE(streamable-http). 중간에 SSE 를 버퍼링하는 프록시·VPN·보안장비가 끼면
 # initialize 응답의 첫 바이트가 클라이언트에 닿지 못해 "무응답 → 타임아웃" 이 난다.
@@ -87,12 +89,19 @@ def _unwrap(r: httpx.Response):
     return body.get("data") if isinstance(body, dict) and "data" in body else body
 
 
-async def _request(ctx, method, path, *, params=None, json_body=None):
+async def _request(ctx, method, path, *, params=None, json_body=None,
+                   prefix=API_PREFIX):
     async with httpx.AsyncClient(timeout=60) as c:
-        r = await c.request(method, f"{API_BASE}{API_PREFIX}{path}",
+        r = await c.request(method, f"{API_BASE}{prefix}{path}",
                             headers=_forward_headers(ctx),
                             params=params, json=json_body)
     return _unwrap(r)
+
+
+async def _intel(ctx, method, path, *, params=None, json_body=None):
+    """기술정보 모듈로 보낸다. 인증 헤더는 똑같이 그대로 넘어간다."""
+    return await _request(ctx, method, path, params=params, json_body=json_body,
+                          prefix=INTEL_PREFIX)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -924,6 +933,267 @@ async def get_trend(
     if date:
         params["date"] = date
     return await _request(ctx, "GET", path, params=params or None)
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 디지털 트윈 기술정보 — 바깥 소식과 기술 레이더
+#
+# ⚠️⚠️ **이 도구들이 이 모듈의 주 입구다.** 포털 서버는 인터넷에 못 나간다(바깥
+#    호출이 사내 LLM 하나뿐이다). 그래서 소식을 **긁어오지 못한다.** 웹을 읽을 수
+#    있는 것은 바깥에서 도는 AI(=너)뿐이고, 조사한 결과를 여기로 밀어 넣어야 쌓인다.
+#
+# ⚠️ 이 자리는 세 번 시도됐다가 세 번 다 죽었다. **기술 목록이 아무의 일도 아니어서**
+#    다. 그래서 `add_intel_news` 는 `technologies` 를 함께 받아 **소식을 넣는 김에
+#    레이더가 채워지게** 되어 있다. 소식만 넣고 기술을 비우면 그 장치가 안 돈다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+async def describe_intel(ctx: Context) -> dict:
+    """기술정보에서 **무엇을 고를 수 있는지** — 소식 분류ㆍ레이더 부채꼴ㆍ단계ㆍCPT.
+
+    **소식이나 기술을 넣기 전에 먼저 부른다.** 분류와 부채꼴은 설정에서 늘어나는
+    값이라 지어내면 안 된다. 여기 없는 값을 보내면 그대로 저장되어 **레이더에 빈
+    부채꼴이 하나 생긴다.**
+
+    돌려주는 것
+        newsCategories  소식 분류 (기술 발표ㆍ시장ㆍ경쟁사ㆍ규제·표준ㆍ사례ㆍ연구)
+        techCategories  레이더 부채꼴 — **기술 하나는 여기서 딱 하나**를 고른다
+        stages          도입 / 시험 / 관찰 / 보류
+        cptGroups       DTC Capabilities Periodic Table v1.1 여섯 묶음.
+                        **여러 개 붙일 수 있는 태그**이고 값이 고정이다
+    """
+    return await _intel(ctx, "GET", "/settings")
+
+
+@mcp.tool()
+async def list_intel_news(
+    ctx: Context,
+    q: str = "",
+    category: str = "",
+    tech_uuid: str = "",
+) -> list:
+    """모여 있는 소식 목록. **새 것을 넣기 전에 이미 있는지 본다.**
+
+    ⚠️ 같은 원문 주소는 서버가 알아서 막지만, 주소가 다른 같은 사건(보도자료와
+       기사)은 못 막는다. `q` 로 먼저 찾아볼 것.
+
+    ⚠️ 응답에 **본문은 없다**(기사 전문이 수백 건이면 응답이 메가바이트가 된다).
+       `hasBody`ㆍ`bodyLength` 로 보관 여부만 온다. 본문을 읽으려면
+       `get_intel_news` 를 쓴다.
+
+    tech_uuid 를 주면 **그 기술의 근거가 된 소식만** 나온다.
+    """
+    params = {}
+    if q:
+        params["q"] = q
+    if category:
+        params["category"] = category
+    if tech_uuid:
+        params["techUuid"] = tech_uuid
+    return await _intel(ctx, "GET", "/news", params=params or None)
+
+
+@mcp.tool()
+async def get_intel_news(uuid: str, ctx: Context) -> dict:
+    """소식 하나 — **보관된 원문까지** 준다."""
+    return await _intel(ctx, "GET", f"/news/{uuid}")
+
+
+@mcp.tool()
+async def add_intel_news(
+    ctx: Context,
+    title: str,
+    summary: str = "",
+    source: str = "",
+    url: str = "",
+    published_at: str = "",
+    category: str = "",
+    body: str = "",
+    tags: list | None = None,
+    divisions: list | None = None,
+    technologies: list | None = None,
+) -> dict:
+    """조사한 소식을 포털에 넣는다. **이 모듈의 주 입구다.**
+
+    ⚠️⚠️ **`technologies` 를 반드시 채운다.** 그 소식이 말하는 기술 이름을 함께
+       보내면 레이더에 자동으로 올라가고(처음 보는 것은 「관찰」), 이미 있으면
+       **별칭까지 맞춰 같은 줄에 이어 붙는다.** 이게 레이더를 살리는 장치라,
+       비우면 소식만 쌓이고 레이더는 빈 채로 남는다 — 앞선 세 번이 그렇게 죽었다.
+
+           technologies=[{"name": "NVIDIA Omniverse",
+                          "note": "실시간 물리 해석이 붙었다"}]
+
+       `note` 는 **그 소식이 그 기술에 대해 무엇을 말하는지** 한 줄이다. 제목만으론
+       6개월 뒤 왜 걸었는지 알 수 없다.
+
+    ⚠️ `published_at` 은 **기사가 나온 날**(`YYYY-MM-DD`)이다. 모르면 **비워 둘 것** —
+       오늘 날짜로 채우지 말 것. 목록이 발표일 순이라, 오래된 글이 맨 위에 선다.
+
+    ⚠️ **`body` 에 원문을 담아라.** 링크는 썩는다 — 회사가 글을 내리거나 주소를
+       바꾸면 6개월 뒤엔 제목만 남는다. 너는 페이지를 읽을 수 있으니, 읽은 본문을
+       그대로 넣어 두면 원문이 사라져도 조직이 읽을 수 있다.
+
+    ⚠️ `category` 는 `describe_intel` 의 `newsCategories` 에서 고른다. 지어내지 말 것.
+
+    같은 `url` 이 이미 있으면 **새로 만들지 않고 그것을 돌려준다**(중복 안전).
+    """
+    # ⚠️ **출처를 밝힌다.** 안 밝히면 서버가 「사람이 손으로 적음」으로 남기고,
+    #    나중에 사람이 확인한 것과 AI 가 조사한 것을 못 가른다.
+    body_json = {"title": title, "origin": "mcp"}
+    for k, v in (("summary", summary), ("source", source), ("url", url),
+                 ("publishedAt", published_at), ("category", category),
+                 ("body", body)):
+        if v:
+            body_json[k] = v
+    if tags:
+        body_json["tags"] = tags
+    if divisions:
+        body_json["divisions"] = divisions
+    if technologies:
+        body_json["technologies"] = technologies
+    return await _intel(ctx, "POST", "/news", json_body=body_json)
+
+
+@mcp.tool()
+async def list_intel_tech(
+    ctx: Context,
+    q: str = "",
+    category: str = "",
+    stage: str = "",
+) -> list:
+    """기술 레이더 목록. **기술을 새로 만들기 전에 반드시 본다.**
+
+    ⚠️ 같은 기술이 여러 줄이 되는 순간 레이더는 목록이 아니라 잡동사니가 된다.
+       `q` 로 먼저 찾아보고, 있으면 새로 만들지 말고 그 uuid 를 쓸 것.
+
+    ⚠️ 검색은 **태그와 CPT 까지** 닿는다 — 「표준화」로 찾으면 부채꼴이 데이터·연결인
+       OPC UA 도 나온다(표준화가 태그로 걸려 있다).
+
+    응답에 함께 오는 것
+        evidenceCount  이 기술을 떠받치는 소식 수
+        isStale        근거가 오래 없어 **낡았다**는 표시. 단계마다 기준이 다르다
+                       (관찰 180일 · 도입 540일). true 면 새 근거가 필요하다는 뜻
+    """
+    params = {}
+    if q:
+        params["q"] = q
+    if category:
+        params["category"] = category
+    if stage:
+        params["stage"] = stage
+    return await _intel(ctx, "GET", "/tech", params=params or None)
+
+
+@mcp.tool()
+async def get_intel_tech_evidence(uuid: str, ctx: Context) -> list:
+    """그 기술을 떠받치는 소식들. **왜 지금 단계인지**가 여기서 읽힌다."""
+    return await _intel(ctx, "GET", f"/tech/{uuid}/evidence")
+
+
+@mcp.tool()
+async def add_intel_tech(
+    ctx: Context,
+    name: str,
+    summary: str = "",
+    vendor: str = "",
+    category: str = "",
+    url: str = "",
+    description: str = "",
+    aliases: list | None = None,
+    tags: list | None = None,
+    cpt: list | None = None,
+) -> dict:
+    """기술을 레이더에 올린다. **소식 없이 기술만 따로 넣을 때** 쓴다.
+
+    ⚠️ 보통은 이걸 직접 부르지 말고 `add_intel_news` 의 `technologies` 로 넣는다 —
+       그래야 근거가 함께 남는다. 근거 없는 줄은 「누가 왜 올렸는지 모르는 줄」이 되고,
+       그런 줄이 쌓이면 아무도 레이더를 안 본다.
+
+    ⚠️ **먼저 `list_intel_tech` 로 찾아본다.** 이미 있으면 서버가 그것을 돌려주지만
+       (별칭까지 맞춘다), 표기가 많이 다르면 못 잡아 두 줄이 된다.
+
+    ⚠️ 단계는 여기서 못 정한다 — 새 기술은 **늘 「관찰」로 시작**한다. 단계를 옮기는
+       것은 조직의 판단이라 관리자·사무국만 할 수 있다(화면에서 한다).
+
+    각 칸이 왜 있나
+        summary  **이게 뭐냐.** 한 문장. 목록에서 이것만 읽는다 — 비우면 6개월 뒤
+                 「이게 뭐였지」가 되고 그 줄은 죽는다. **반드시 채울 것**
+        url      공식 문서·제품 주소. 없으면 더 알아보려고 검색을 다시 해야 한다
+        aliases  기사마다 다른 이름으로 나온다(Omniverse / NVIDIA Omniverse / OV).
+                 적어 두면 다음 소식이 **같은 줄에 이어 붙는다**
+        category `describe_intel` 의 `techCategories` 에서 **하나만**. 레이더에서
+                 어느 부채꼴에 놓을지를 정한다
+        tags     부채꼴이 하나뿐이라 **걸치는 갈래는 여기 남긴다**
+                 (OPC UA → category=데이터·연결, tags=["표준화"])
+        cpt      DTC CPT v1.1 여섯 중 해당하는 것들. `describe_intel` 참고.
+                 값이 고정이라 모르는 값은 **조용히 버려진다**
+    """
+    body_json = {"name": name, "origin": "mcp"}
+    for k, v in (("summary", summary), ("vendor", vendor), ("category", category),
+                 ("url", url), ("description", description)):
+        if v:
+            body_json[k] = v
+    if aliases:
+        body_json["aliases"] = aliases
+    if tags:
+        body_json["tags"] = tags
+    if cpt:
+        body_json["cpt"] = cpt
+    return await _intel(ctx, "POST", "/tech", json_body=body_json)
+
+
+@mcp.tool()
+async def update_intel_tech(
+    uuid: str,
+    ctx: Context,
+    summary: str = "",
+    vendor: str = "",
+    category: str = "",
+    url: str = "",
+    description: str = "",
+    aliases: list | None = None,
+    tags: list | None = None,
+    cpt: list | None = None,
+) -> dict:
+    """레이더의 빈 칸을 채운다. **비운 인자는 안 건드린다.**
+
+    ⚠️ 소식에서 저절로 만들어진 기술은 **이름밖에 없다.** `list_intel_tech` 로
+       `summary` 가 빈 줄을 찾아 채우는 것이 이 도구의 주 용도다 — 그런 줄을 두면
+       레이더가 「이름만 적힌 목록」이 되고, 그러면 아무도 안 본다.
+
+    ⚠️ **단계(stage)는 여기서 못 바꾼다.** 조직의 판단이라 권한이 다르고, 전용
+       경로가 따로 있다(화면에서 관리자·사무국이 한다). 보내도 400 이 난다.
+    """
+    body_json = {}
+    for k, v in (("summary", summary), ("vendor", vendor), ("category", category),
+                 ("url", url), ("description", description)):
+        if v:
+            body_json[k] = v
+    for k, v in (("aliases", aliases), ("tags", tags), ("cpt", cpt)):
+        if v is not None:
+            body_json[k] = v
+    if not body_json:
+        return {"status": "error", "message": "고칠 값이 하나도 없습니다."}
+    return await _intel(ctx, "PATCH", f"/tech/{uuid}", json_body=body_json)
+
+
+@mcp.tool()
+async def link_intel_evidence(
+    news_uuid: str,
+    tech_uuid: str,
+    ctx: Context,
+    note: str = "",
+) -> dict:
+    """이미 있는 소식과 기술을 잇는다.
+
+    ⚠️ 넣을 때 놓친 연결을 나중에 붙이는 자리다. **`note` 를 채울 것** — 그 소식이
+       그 기술에 대해 무엇을 말하는지가 없으면, 나중에 왜 걸었는지 알 수 없다.
+    """
+    return await _intel(ctx, "POST", "/evidence",
+                        json_body={"newsUuid": news_uuid, "techUuid": tech_uuid,
+                                   "note": note or None, "origin": "mcp"})
+
 
 
 if __name__ == "__main__":
