@@ -18,7 +18,17 @@
  *    넓혀서 찾은 것은 배지로 표시해 사람이 한 번 더 보게 한다.
  *
  * ⚠️ 후보가 하나도 없으면 **아직 가입 전**일 수 있다. knoxId 를 미리 넣어 두면 가입하는
- *    순간 권한이 생긴다(서버가 요청마다 대조한다) — 그건 편집창에서 직접 넣는다.
+ *    순간 권한이 생긴다(서버가 요청마다 대조한다).
+ *
+ * 2026-08-24 — **직접 입력을 열었다.** 그전에는 후보가 없으면 「편집창에서 넣으세요」로
+ *    끝났다. 그런데 이 화면이 잡아 오는 사람이 바로 **가입 전이라 후보가 없는 사람들**
+ *    이라, 목록에는 뜨는데 **여기서 할 수 있는 일이 없는 줄**이 쌓였다. 과제를 하나씩
+ *    열어 넣으라는 뜻이 되는데, 그러면 이 화면을 만든 이유(사람 단위 일괄)가 사라진다.
+ *    · 서버는 **원래부터** 임의의 knoxId 를 받는다(`patch_owner_links` 는 계정이 있는지
+ *      묻지 않는다). 막고 있던 것은 화면뿐이었다.
+ *    · 옆 화면 「참여인력 계정 점검」은 **처음부터 직접 입력이 있었다**(`MemberAuditModal`).
+ *      참여인력도 knoxId 로 편집 권한을 얻으므로(`can_edit_project`) 위험은 같은데
+ *      한쪽만 막혀 있었다 — 안전 설계가 아니라 **빠뜨린 것**이다.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
@@ -26,9 +36,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Loader2, Search, AlertTriangle, ChevronRight, ChevronDown, UserCheck, ShieldAlert,
 } from 'lucide-react';
-import { fetchOwnerLinkAudit, patchOwnerLinks } from '../../services/settingsApi';
+import { fetchOwnerLinkAudit, patchOwnerLinks, searchUsers } from '../../services/settingsApi';
 
 const keyOf = (row) => `${row.kind}|${row.name}`;
+
+/** knoxId 는 사내 이메일의 @ 앞부분이다. 통째로 붙여넣는 실수를 잡는다. */
+const badKnox = (v) => !!v && /[@\s]/.test(v);
 
 const OwnerLinkAuditModal = ({ isOpen, onClose, onApplied, showSuccess, showError }) => {
   const [rows, setRows] = useState([]);
@@ -39,6 +52,7 @@ const OwnerLinkAuditModal = ({ isOpen, onClose, onApplied, showSuccess, showErro
   const [openKey, setOpenKey] = useState(null);
   const [draft, setDraft] = useState({});        // key → { knoxId, excluded:Set(uuid) }
   const [applying, setApplying] = useState(null);
+  const [suggest, setSuggest] = useState([]);    // 직접 입력 옆 「사용자 검색」 결과
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -54,6 +68,16 @@ const OwnerLinkAuditModal = ({ isOpen, onClose, onApplied, showSuccess, showErro
   }, []);
 
   useEffect(() => { if (isOpen) load(); }, [isOpen, load]);
+
+  const runSearch = async (text) => {
+    const q = (text || '').trim();
+    if (!q) { setSuggest([]); return; }
+    try {
+      setSuggest(await searchUsers(q));
+    } catch {
+      setSuggest([]);   // 검색이 죽어도 **직접 입력 경로는 살아 있어야** 한다
+    }
+  };
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -172,7 +196,7 @@ const OwnerLinkAuditModal = ({ isOpen, onClose, onApplied, showSuccess, showErro
 
               return (
                 <Card key={key} $open={open}>
-                  <CardHead onClick={() => setOpenKey(open ? null : key)}>
+                  <CardHead onClick={() => { setOpenKey(open ? null : key); setSuggest([]); }}>
                     {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     <KindTag $pl={row.kind === 'pl'}>{row.kindLabel}</KindTag>
                     <Name>{row.name}</Name>
@@ -195,9 +219,10 @@ const OwnerLinkAuditModal = ({ isOpen, onClose, onApplied, showSuccess, showErro
 
                       {(row.candidates || []).length === 0 ? (
                         <Empty>
-                          이 이름으로 가입한 계정이 없습니다. 아직 가입 전이거나 표기가 다를 수
-                          있습니다 — knoxId 를 미리 넣어 두려면 <strong>편집창</strong>에서 넣으세요
-                          (가입하는 순간 권한이 생깁니다).
+                          이 이름으로 <strong>가입한 계정이 없습니다.</strong> 아직 가입 전이거나
+                          표기가 다를 수 있습니다 — 아래에 knoxId 를 직접 넣어 두면
+                          <strong> 그 사람이 가입하는 순간 권한이 생깁니다</strong>
+                          (서버가 요청마다 다시 대조합니다).
                         </Empty>
                       ) : (
                         <>
@@ -220,6 +245,73 @@ const OwnerLinkAuditModal = ({ isOpen, onClose, onApplied, showSuccess, showErro
                         </>
                       )}
 
+                      {/*
+                        직접 입력. **후보가 없을 때만 쓰는 샛길이 아니다** — 표기가 달라
+                        엉뚱한 후보가 잡혔을 때도 여기로 넣는다. 후보 칩을 고르면 이 칸에
+                        그 값이 들어오므로 **무엇을 넣고 있는지 한 자리에서 보인다.**
+                      */}
+                      <SubLabel>
+                        knoxId <em>(사내 이메일의 @ 앞부분)</em>
+                      </SubLabel>
+                      <ManualRow>
+                        <ManualInput
+                          value={cur.knoxId}
+                          placeholder="가입자는 이름으로 검색, 미가입자는 직접 입력"
+                          onChange={(e) => setKnox(row, e.target.value.trim())}
+                        />
+                        <SmallBtn type="button" onClick={() => runSearch(cur.knoxId || row.name)}>
+                          <Search size={13} /> 사용자 검색
+                        </SmallBtn>
+                      </ManualRow>
+
+                      {badKnox(cur.knoxId) && (
+                        <Note $bad>
+                          <AlertTriangle size={13} />
+                          <span>
+                            knoxId 에는 <strong>@ 나 공백이 들어가지 않습니다.</strong>{' '}
+                            이메일을 통째로 붙여넣었다면 앞부분만 남기세요.
+                          </span>
+                        </Note>
+                      )}
+
+                      {/*
+                        ⚠️ 오타를 잡을 마지막 자리다. 과제PL 의 knoxId 는 곧 편집 권한이라
+                           한 글자만 틀려도 **엉뚱한 사람이 남의 과제를 고치게 된다.**
+                           다만 미가입자를 미리 넣는 것은 **정상 경로**라 막지 않는다 —
+                           알리기만 한다.
+                      */}
+                      {!!cur.knoxId && !badKnox(cur.knoxId)
+                        && !(row.candidates || []).some((c) => c.knoxId === cur.knoxId) && (
+                        <Note>
+                          <AlertTriangle size={13} />
+                          <span>
+                            「{row.name}」 이름으로 가입한 계정 중에는{' '}
+                            <strong>{cur.knoxId}</strong> 가 없습니다. 아직 가입 전이면
+                            정상입니다 — <strong>오타가 아닌지</strong> 한 번 더 보세요.
+                          </span>
+                        </Note>
+                      )}
+
+                      {suggest.length > 0 && (
+                        <Suggest>
+                          {suggest.map((u) => (
+                            <li key={u.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setKnox(row, (u.email || '').split('@')[0]);
+                                  setSuggest([]);
+                                }}
+                              >
+                                <b>{u.name}</b>
+                                <Muted>{u.email}</Muted>
+                                {u.department && <Muted>· {u.department}</Muted>}
+                              </button>
+                            </li>
+                          ))}
+                        </Suggest>
+                      )}
+
                       <SubLabel>
                         대상 과제 <em>({targetCount}/{row.projectCount}개 — 체크를 풀면 제외)</em>
                       </SubLabel>
@@ -240,14 +332,16 @@ const OwnerLinkAuditModal = ({ isOpen, onClose, onApplied, showSuccess, showErro
                       <Actions>
                         <ApplyBtn
                           type="button"
-                          disabled={!cur.knoxId || targetCount === 0 || applying === key}
+                          disabled={!cur.knoxId || badKnox(cur.knoxId) || targetCount === 0 || applying === key}
                           onClick={() => apply(row)}
                         >
                           {applying === key
                             ? <><Loader2 size={14} /> 연결하는 중…</>
                             : <>{targetCount}개 과제에 연결</>}
                         </ApplyBtn>
-                        {!cur.knoxId && <Hint>계정을 먼저 고르세요.</Hint>}
+                        {!cur.knoxId && <Hint>계정을 고르거나 knoxId 를 넣으세요.</Hint>}
+                        {badKnox(cur.knoxId)
+                          && <Hint>knoxId 를 고치면 연결할 수 있습니다.</Hint>}
                       </Actions>
                     </CardBody>
                   )}
@@ -531,6 +625,84 @@ const Cand = styled.button`
   b { font-size: 0.75rem; }
   span { font-size: 0.6875rem; opacity: 0.85; }
   &:disabled { opacity: 0.45; cursor: not-allowed; }
+`;
+
+const Note = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  padding: 0.4375rem 0.5625rem;
+  border-radius: 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  background: ${(p) => (p.$bad ? '#fef2f2' : '#fffbeb')};
+  border: 1px solid ${(p) => (p.$bad ? '#fecaca' : '#fde68a')};
+  color: ${(p) => (p.$bad ? '#991b1b' : '#92400e')};
+
+  svg { flex-shrink: 0; margin-top: 0.125rem; }
+`;
+
+const ManualRow = styled.div`
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+`;
+
+const ManualInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  color: #334155;
+
+  &:focus { outline: none; border-color: #0f766e; }
+`;
+
+const SmallBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 0.375rem;
+  font-size: 0.6875rem;
+  color: #475569;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover { background: #f8fafc; }
+`;
+
+const Suggest = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  max-height: 9rem;
+  overflow-y: auto;
+
+  li + li { border-top: 1px solid #f1f5f9; }
+
+  button {
+    display: flex;
+    align-items: baseline;
+    gap: 0.375rem;
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.75rem;
+
+    &:hover { background: #f0fdfa; }
+  }
+
+  b { color: #0f172a; }
 `;
 
 const Projects = styled.div`
