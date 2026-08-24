@@ -108,6 +108,10 @@ def register_all_blueprints(app):
     from app.modules.digital_twin_investment import bp as digital_twin_investment_bp
     app.register_blueprint(digital_twin_investment_bp, url_prefix='/api/digital-twin-investment')
 
+    # Digital Twin Intel (디지털 트윈 기술정보 — 바깥 소식 + 기술 레이더)
+    from app.modules.digital_twin_intel import bp as digital_twin_intel_bp
+    app.register_blueprint(digital_twin_intel_bp, url_prefix='/api/digital-twin-intel')
+
     # AI Context
     from app.modules.ai_context import bp as ai_context_bp
     app.register_blueprint(ai_context_bp, url_prefix='/api/ai')

@@ -41,7 +41,8 @@ import {
   ShieldCheck,
   TrendingUp,
   ClipboardList,
-  Coins
+  Coins,
+  Radar
 } from 'lucide-react';
 import { APP_VERSION, versionState, versionText } from '../shared/utils/appVersion';
 // AiChatSidebar 는 2026-08-01 에 화면에서 내렸다(아래 mount 자리 주석 참고).
@@ -1260,6 +1261,16 @@ const SIMULATION_FEATURES = [
     gridRow: "span 1",
     icon: Coins,
     route: "/digital-twin-investment"
+  },
+  {
+    id: "digital-twin-intel",
+    name: "디지털 트윈 기술정보",
+    desc: "업계 소식과 기술 레이더",
+    color: 4,
+    gridColumn: "span 1",
+    gridRow: "span 1",
+    icon: Radar,
+    route: "/digital-twin-intel"
   },
   {
     id: "element-tech",

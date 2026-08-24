@@ -30,6 +30,7 @@ import DigitalTwinReferenceApp from './modules/digital-twin-reference/DigitalTwi
 import DigitalTwinTaskManagementApp from './modules/digital-twin-task-management/DigitalTwinTaskManagementApp';
 import DigitalTwinSwResourceApp from './modules/digital-twin-sw-resource/DigitalTwinSwResourceApp';
 import DigitalTwinInvestmentApp from './modules/digital-twin-investment/DigitalTwinInvestmentApp';
+import DigitalTwinIntelApp from './modules/digital-twin-intel/DigitalTwinIntelApp';
 import AutoDocumentApp from './modules/auto-document/AutoDocumentApp';
 import AutoDocumentVerifyApp from './modules/auto-document-verify/AutoDocumentVerifyApp';
 import DxKpiManagementApp from './modules/dx-kpi-management/DxKpiManagementApp';
@@ -277,6 +278,16 @@ const AppWithNav = () => {
         element={
           <ProtectedRoute>
             <DigitalTwinInvestmentApp onGoHome={handleGoHome} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 디지털 트윈 기술정보 모듈 (보호됨) — 바깥 소식 + 기술 레이더 */}
+      <Route
+        path="/digital-twin-intel"
+        element={
+          <ProtectedRoute>
+            <DigitalTwinIntelApp onGoHome={handleGoHome} />
           </ProtectedRoute>
         }
       />
