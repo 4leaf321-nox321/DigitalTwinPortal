@@ -11,8 +11,8 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.modules.digital_twin_intel.models import (
-    CPT_KEYS, ORIGINS, STAGES, TECH_KINDS, IntelChange, IntelEvidence, IntelLink,
-    IntelNews, IntelTech,
+    CPT_KEYS, ORIGINS, STAGES, TECH_KINDS, IntelChange, IntelDivisionStage,
+    IntelEvidence, IntelLink, IntelNews, IntelTech,
 )
 
 
@@ -52,7 +52,7 @@ def _clean_list(v):
 
 
 def log_change(kind, uuid, name, field, before, after, *,
-               reason=None, actor=None, source='ui'):
+               reason=None, actor=None, source='ui', scope=None):
     """무엇이 언제 왜 바뀌었나. **커밋은 부르는 쪽이 한다**(같은 트랜잭션이어야 한다).
 
     ⚠️ 값이 안 바뀌었으면 안 남긴다. 안 그러면 저장 누를 때마다 이력이 한 줄씩 늘어
@@ -66,6 +66,9 @@ def log_change(kind, uuid, name, field, before, after, *,
         before_value=(str(before)[:200] if before is not None else None),
         after_value=(str(after)[:200] if after is not None else None),
         reason=reason,
+        # ⚠️ 비어 있으면 **전사**의 판단이다. 안 실으면 이력에서 전사와 사업부가
+        #    뒤섞이고, 레이더의 이동 화살표가 거짓말을 한다.
+        scope=scope,
         actor_user_id=getattr(actor, 'id', None),
         actor_name=getattr(actor, 'name', None),
         source=source if source in ORIGINS else 'ui')
@@ -73,7 +76,7 @@ def log_change(kind, uuid, name, field, before, after, *,
     return row
 
 
-def recent_moves(tech_uuids, days=90):
+def recent_moves(tech_uuids, days=90, scope=None):
     """기술마다 **최근에 어느 단계에서 왔는지**. `{uuid: (before, when)}`.
 
     ⚠️ 지금까지는 「움직였다」만 테두리로 표시했다. 그런데 레이더의 값은 **어디서
@@ -83,6 +86,11 @@ def recent_moves(tech_uuids, days=90):
     ⚠️ 같은 기술이 여러 번 움직였으면 **가장 오래된 출발점**을 쓴다. 관찰→시험→도입 을
        두 화살표로 그리면 어지럽고, 사람이 알고 싶은 것은 「그 사이에 어디서
        여기까지 왔나」다.
+
+    ⚠️⚠️ **사업부 눈으로 볼 때는 그 사업부의 이력만 본다**(`scope`). 안 나누면
+       화면은 「MX 기준」이라고 써 놓고 화살표는 전사 이동을 그리게 된다 — 테와
+       화살표가 같은 값을 보게 맞춰 놓은 것과 같은 이유다. 거짓말하는 화살표는
+       없는 화살표보다 나쁘다.
     """
     if not tech_uuids:
         return {}
@@ -90,6 +98,7 @@ def recent_moves(tech_uuids, days=90):
     rows = (IntelChange.query
             .filter(IntelChange.subject_kind == 'tech',
                     IntelChange.field == 'stage',
+                    IntelChange.scope == scope,
                     IntelChange.subject_uuid.in_(list(tech_uuids)),
                     IntelChange.created_at >= since)
             .order_by(IntelChange.id.asc()).all())
@@ -338,6 +347,114 @@ def evidence_stats(tech_uuids, rollup=True):
                 last = kl
         out[uuid] = (cnt, last)
     return out
+
+
+def division_stages(tech_uuids, division):
+    """그 사업부에 **따로 정해 둔** 단계들. `{tech_uuid: row}`.
+
+    ⚠️ 없는 것이 정상이다 — 전사 값이 정본이고 여기 있는 것은 예외뿐이다.
+    """
+    if not tech_uuids or not division:
+        return {}
+    rows = (IntelDivisionStage.query
+            .filter(IntelDivisionStage.division == division,
+                    IntelDivisionStage.tech_uuid.in_(list(tech_uuids))).all())
+    return {r.tech_uuid: r for r in rows}
+
+
+def stages_by_division(tech_uuid):
+    """한 기술을 사업부별로 죽 편다. 상세 화면의 표가 이걸 그린다."""
+    rows = (IntelDivisionStage.query
+            .filter_by(tech_uuid=tech_uuid)
+            .order_by(IntelDivisionStage.division.asc()).all())
+    return {r.division: r for r in rows}
+
+
+def known_divisions():
+    """포털의 사업부 표. ⚠️ 이름을 여기 박지 않는다 — 조직이 바뀌면 조용히 틀어진다."""
+    try:
+        from app.modules.digital_twin_dashboard.models import Division
+        return [d.name for d in Division.query
+                .filter(Division.is_active.is_(True))
+                .order_by(Division.order.asc(), Division.id.asc()).all()]
+    except Exception:
+        return []
+
+
+def set_division_stage(tech_uuid, division, stage, reason=None, actor=None,
+                       source='ui'):
+    """한 사업부만 전사와 다르게 본다고 적는다.
+
+    ⚠️⚠️ **전사와 같은 값으로 맞추면 예외를 지운다.** 「전사와 같다」와 「아직 안
+       정했다」는 화면에서 구별할 수 없고, 구별할 필요도 없다. 같은 값을 굳이
+       한 줄로 남겨 두면 나중에 전사가 움직였을 때 **이 사업부만 옛 값에 붙박여**
+       따라가지 않는다 — 그게 표를 못 믿게 만드는 방식이다.
+
+    ⚠️ '보류' 는 여기서도 이유가 있어야 한다. 오히려 전사와 **다르게** 접는
+       판단이라 이유가 더 중요하다.
+    """
+    if stage not in STAGES:
+        return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
+    division = (division or '').strip()
+    if not division:
+        return None, '사업부를 골라야 합니다.'
+    known = known_divisions()
+    if known and division not in known:
+        # ⚠️ 지어낸 이름을 받으면 아무 데도 안 보이는 줄이 조용히 쌓인다.
+        return None, f'모르는 사업부입니다: {division}'
+
+    t = IntelTech.query.filter_by(uuid=tech_uuid).first()
+    if t is None:
+        return None, '기술을 찾을 수 없습니다.'
+
+    reason = (reason or '').strip()
+    if stage == '보류' and not reason:
+        return None, "'보류' 로 옮길 때는 이유를 적어야 합니다."
+
+    row = IntelDivisionStage.query.filter_by(
+        tech_uuid=tech_uuid, division=division).first()
+    before = row.stage if row else t.stage
+
+    if stage == t.stage:
+        # 전사와 같아졌다 → 예외를 지우고 전사를 따라가게 둔다.
+        if row is not None:
+            log_change('tech', t.uuid, t.name, 'stage', before, stage,
+                       reason=reason or '전사 값과 같아져 사업부 예외를 지웠습니다.',
+                       actor=actor, source=source, scope=division)
+            db.session.delete(row)
+            db.session.commit()
+        return None, None
+
+    if row is None:
+        row = IntelDivisionStage(tech_uuid=tech_uuid, division=division,
+                                 stage=stage)
+        db.session.add(row)
+    if before != stage:
+        log_change('tech', t.uuid, t.name, 'stage', before, stage,
+                   reason=reason, actor=actor, source=source, scope=division)
+        row.changed_at = datetime.utcnow()
+    row.stage = stage
+    if reason:
+        row.reason = reason
+    row.changed_by = getattr(actor, 'id', None)
+    db.session.commit()
+    return row, None
+
+
+def clear_division_stage(tech_uuid, division, actor=None, source='ui'):
+    """사업부 예외를 지우고 **전사 값을 따라가게** 되돌린다."""
+    row = IntelDivisionStage.query.filter_by(
+        tech_uuid=tech_uuid, division=division).first()
+    if row is None:
+        return None, None
+    t = IntelTech.query.filter_by(uuid=tech_uuid).first()
+    log_change('tech', tech_uuid, t.name if t else None, 'stage',
+               row.stage, t.stage if t else None,
+               reason='사업부 예외를 지우고 전사 값을 따릅니다.',
+               actor=actor, source=source, scope=division)
+    db.session.delete(row)
+    db.session.commit()
+    return True, None
 
 
 def names_of(uuids):

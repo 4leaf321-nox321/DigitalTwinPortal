@@ -200,6 +200,39 @@ const MergeBar = styled.div`
   }
 `;
 
+/*
+  사업부 눈으로 보는 중이라는 띠. ⚠️ **경고가 아니라 안내**라 색을 다르게 뒀다 —
+  합치기 띠(노랑)와 같은 색이면 「무언가 잘못됐나」로 읽힌다.
+*/
+const LensBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  color: #3730a3;
+  line-height: 1.6;
+
+  b { font-weight: 700; }
+  em { font-style: normal; font-weight: 700; }
+
+  button {
+    margin-left: auto;
+    flex-shrink: 0;
+    border: 1px solid #a5b4fc;
+    background: #fff;
+    color: #3730a3;
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.6875rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+`;
+
 const Toast = styled.div`
   position: fixed;
   left: 50%;
@@ -238,7 +271,16 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   // ⚠️ 낡음 판정은 **서버가 준다**(단계마다 기준 일수가 다르다). 여기서는 그 표시를
   //    걸러 보기만 한다 — 판정 규칙을 화면에 복제하면 반드시 서버와 갈린다.
   const [staleOnly, setStaleOnly] = useState(false);
-  // 사업부별로 도입 정도가 다르다. 우선 **걸러 보기**부터.
+  /*
+    사업부. ⚠️⚠️ **탭마다 뜻이 다르다.**
+
+      소식 탭 — 그 사업부 이야기만 **걸러 본다**(소식에 붙은 사업부 표).
+      기술 탭 — 그 사업부 **눈으로 다시 그린다.** 거르는 것이 아니다.
+
+    ⚠️ 기술에서 「관련된 것만」으로 거르지 않는 이유 — 묻고 싶은 것은 「우리 사업부는
+       어디까지 왔나」이지 「우리와 관련된 것만」이 아니다. 관련 없는 것은 전사 값
+       그대로 서면 되고, 그게 더 정확하다.
+  */
   const [division, setDivision] = useState('');
 
   const [techView, setTechView] = useState('radar');   // radar | board
@@ -270,8 +312,15 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     setLoading(true);
     setError(null);
     try {
+      /*
+        ⚠️⚠️ **사업부 눈으로 푸는 일은 서버가 한다.** 화면이 전사 값과 사업부 값 중
+           무엇을 그릴지 고르게 하면 레이더ㆍ목록ㆍ상세가 서로 다른 것을 그리게
+           되고, 낡음 기준(단계마다 다르다)과 이동 화살표까지 갈린다. 낡음 판정을
+           서버에 둔 것과 **같은 이유**다 — 고르는 일은 한 곳에서 한 번만.
+      */
       const [n, t, s, o] = await Promise.all([
-        api.listNews(), api.listTech(), api.getSettings(), api.overview(),
+        api.listNews(), api.listTech(division ? { division } : {}),
+        api.getSettings(), api.overview(),
       ]);
       setNews(n || []);
       setTech(t || []);
@@ -282,7 +331,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [division]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -314,7 +363,11 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       */
       if (radar && t.kind !== 'capability' && t.parentUuid) return false;
       if (!radar && kind && t.kind !== kind) return false;
-      if (division && !(t.divisions || []).includes(division)) return false;
+      /*
+        ⚠️ 여기서 사업부로 **거르지 않는다.** 서버가 이미 그 사업부 눈으로 풀어
+           보냈고, 「관련된 것만」으로 좁히면 「우리 사업부는 어디까지 왔나」에
+           답할 수 없다 — 안 걸린 것이 전사 값으로 서는 것도 답의 일부다.
+      */
       if (focus === 'stale' && !t.isStale) return false;
       if (focus === 'moved' && !t.movedFrom) return false;
       if (staleOnly && !t.isStale) return false;
@@ -332,7 +385,11 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
               ...(t.children || []).map((c) => c.name)]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [tech, q, category, stage, staleOnly, focus, division, kind, techView]);
+  }, [tech, q, category, stage, staleOnly, focus, kind, techView]);
+
+  // 전사와 다르게 정한 것이 몇 개인가. **이 숫자가 사업부별 보기의 답이다.**
+  const overrideCount = useMemo(
+    () => shownTech.filter((t) => t.isDivisionOverride).length, [shownTech]);
 
   // 도구를 매달 곳. 이름 차례는 서버가 준 그대로다.
   const capabilities = useMemo(
@@ -484,14 +541,28 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const fixed = tab === 'tech' && techView === 'radar' && !loading && !error;
   const Shell = fixed ? WideContent : Content;
 
-  // 자료에 실제로 적힌 사업부만. 순서는 설정 차례를 따르되, 설정에 없는 것도 뒤에 붙인다.
+  /*
+    고를 수 있는 사업부.
+
+    ⚠️⚠️ **기술 탭에서는 포털의 사업부 전부**를 준다. 「자료에 적힌 것만」은
+       **거르기**의 규칙이지 **눈으로 보기**의 규칙이 아니다 — MX 로 표시된 기술이
+       하나도 없어도 MX 는 자기 눈으로 볼 수 있어야 하고, 오히려 그때가 가장
+       먼저 봐야 하는 화면이다.
+
+    ⚠️ 소식 탭에서는 옛 규칙 그대로 — 거기서는 진짜로 거르는 것이라, 골라도 빈
+       화면이 되는 칸을 만들면 안 된다.
+    ⚠️ 설정 차례를 따르되 설정에 없는 이름도 뒤에 붙인다(중복은 뺀다 — 사업부 표에
+       같은 이름이 여러 줄일 수 있다).
+  */
   const divisionOptions = useMemo(() => {
+    const all = [...new Set(settings.divisions || [])];
+    if (tab === 'tech') return all;
     const used = new Set();
     [...news, ...tech].forEach((r) => (r.divisions || []).forEach((d) => used.add(d)));
-    const ordered = (settings.divisions || []).filter((d) => used.has(d));
+    const ordered = all.filter((d) => used.has(d));
     used.forEach((d) => { if (!ordered.includes(d)) ordered.push(d); });
     return ordered;
-  }, [news, tech, settings.divisions]);
+  }, [news, tech, settings.divisions, tab]);
 
   const categoryOptions = tab === 'news'
     ? (settings.newsCategories || [])
@@ -535,14 +606,21 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
             </Select>
 
             {/*
-              ⚠️ 사업부 목록은 **자료에 실제로 적힌 것**으로 만든다. 설정의 전체
-                 사업부를 쓰면 하나도 안 걸리는 항목이 목록에 서고, 골라도 빈 화면이
-                 된다 — 116개 중 사업부가 적힌 것이 13개뿐이다(2026-08-25).
+              ⚠️⚠️ **탭마다 고를 수 있는 사업부가 다르다.**
+
+                 소식 — **자료에 실제로 적힌 것**만. 설정의 전체 사업부를 쓰면
+                        골라도 빈 화면이 되는 칸이 생긴다.
+                 기술 — **포털의 사업부 전부.** 여기서는 「그 사업부와 관련 있다고
+                        적힌 것」을 거르는 게 아니라 **그 사업부 눈으로 다시
+                        그리는** 것이라, 아직 아무것도 안 걸린 사업부도 골라야 한다
+                        — 오히려 그 사업부가 가장 먼저 봐야 하는 화면이다.
             */}
             {divisionOptions.length > 0 && (
               <Select value={division} onChange={(e) => setDivision(e.target.value)}
-                      title="그 사업부와 관련 있다고 적힌 것만 봅니다">
-                <option value="">사업부 전체</option>
+                      title={tab === 'tech'
+                        ? '그 사업부 눈으로 다시 그립니다 (거르지 않습니다)'
+                        : '그 사업부와 관련 있다고 적힌 것만 봅니다'}>
+                <option value="">{tab === 'tech' ? '전사 기준' : '사업부 전체'}</option>
                 {divisionOptions.map((d) => <option key={d} value={d}>{d}</option>)}
               </Select>
             )}
@@ -594,6 +672,25 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
             )}
           </Toolbar>
 
+          {/*
+            ⚠️ **고르기의 뜻이 바뀌었다는 것을 말해 준다.** 안 말하면 「걸러진 줄
+               알았는데 전부 그대로 있네」로 읽히고, 그러면 이 기능을 안 쓴다.
+            ⚠️ 전사와 다른 것이 **몇 개인지**가 이 화면의 답이다 — 그 숫자가 곧
+               「우리 사업부가 전사와 얼마나 다른가」다.
+          */}
+          {tab === 'tech' && division && !loading && !error && (
+            <LensBar>
+              <span>
+                <b>{division}</b> 눈으로 봅니다 — 단계ㆍ낡음ㆍ이동 화살표가 모두 이
+                사업부 기준입니다. 전사와 다르게 정한 것은 <em>◆</em> 로 표시됩니다
+                {overrideCount > 0
+                  ? ` (${overrideCount}개).`
+                  : '. 아직 하나도 없어 전부 전사 값 그대로입니다.'}
+              </span>
+              <button type="button" onClick={() => setDivision('')}>전사로</button>
+            </LensBar>
+          )}
+
           {merging && (
             <MergeBar>
               <span>
@@ -635,6 +732,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                  categories={settings.newsCategories} saving={saving} />
 
       <TechModal tech={selected} onClose={() => setSelected(null)}
+                 division={division} divisions={settings.divisions || []}
+                 onDivisionChanged={async () => { await load(); say('사업부 단계를 바꿨습니다.'); }}
                  onChanged={async () => { setSelected(null); await load(); say('단계를 바꿨습니다.'); }}
                  onDelete={removeTech}
                  onEdit={(t) => { setSelected(null); setTechForm(t); }}

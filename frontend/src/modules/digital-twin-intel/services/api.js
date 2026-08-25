@@ -105,6 +105,35 @@ class DtIntelApi {
                         '기술을 지우지 못했습니다.');
   }
 
+  /** 이 기술을 **사업부별로 죽 편 것.** 예외가 걸린 사업부만 온다. */
+  divisionStages(uuid) {
+    return this.request(`${this.baseUrl}/tech/${uuid}/division-stages`, {},
+                        '사업부별 단계를 불러오지 못했습니다.');
+  }
+
+  /**
+   * 한 사업부만 전사와 다르게 본다고 적는다.
+   *
+   * ⚠️ **단계 변경과 같은 권한이다**(관리자ㆍ사무국). 여기서 403 이 나는 것은 정상.
+   * ⚠️ 전사와 **같은 값**을 보내면 예외가 지워진다 — 「전사와 같다」와 「아직 안
+   *    정했다」는 같은 뜻이고, 굳이 남겨 두면 전사가 움직였을 때 이 사업부만
+   *    옛 값에 붙박인다.
+   */
+  setDivisionStage(uuid, division, stage, reason) {
+    return this.request(
+      `${this.baseUrl}/tech/${uuid}/division-stage`,
+      { method: 'PUT', body: JSON.stringify({ division, stage, reason }) },
+      '사업부 단계를 바꾸지 못했습니다.');
+  }
+
+  /** 사업부 예외를 지우고 **전사 값을 따라가게** 되돌린다. */
+  clearDivisionStage(uuid, division) {
+    const qs = new URLSearchParams({ division }).toString();
+    return this.request(
+      `${this.baseUrl}/tech/${uuid}/division-stage?${qs}`, { method: 'DELETE' },
+      '사업부 예외를 지우지 못했습니다.');
+  }
+
   /**
    * 도구를 역량 밑에 매단다. `parentUuid` 를 비우면 떼어 낸다.
    *

@@ -221,10 +221,14 @@ class IntelTech(BaseModel):
 
     created_by = db.Column(db.Integer, index=True)
 
-    def stale_after_days(self):
-        return STALE_DAYS.get(self.stage, STALE_DAYS_DEFAULT)
+    def stale_after_days(self, stage=None):
+        """⚠️ **어느 단계로 보느냐에 따라 기준 일수가 다르다.** 사업부별 단계가
+           걸린 줄은 그 사업부의 단계로 재야 한다 — 전사가 「도입」(540일)인데
+           우리 사업부는 「관찰」(180일)이면, 우리한테는 벌써 낡은 것이다.
+        """
+        return STALE_DAYS.get(stage or self.stage, STALE_DAYS_DEFAULT)
 
-    def is_stale(self, last_evidence_at=None, now=None):
+    def is_stale(self, last_evidence_at=None, now=None, stage=None):
         """근거가 오래 없으면 낡은 것으로 본다.
 
         ⚠️ **이 판정이 이 모듈의 자정 장치다.** 앞선 세 번의 시도는 낡아도 낡은 줄
@@ -237,10 +241,11 @@ class IntelTech(BaseModel):
         base = last_evidence_at or self.stage_changed_at or self.created_at
         if base is None:
             return False
-        return (now - base) > timedelta(days=self.stale_after_days())
+        return (now - base) > timedelta(days=self.stale_after_days(stage))
 
     def to_dict(self, last_evidence_at=None, evidence_count=None, now=None,
-                children=None, parent_name=None):
+                children=None, parent_name=None, division=None,
+                division_stage=None):
         d = super().to_dict()
         d['uuid'] = self.uuid
         # ⚠️ 상위는 **이름까지** 함께 준다. uuid 만 주면 화면이 「어느 역량인가」를
@@ -251,8 +256,25 @@ class IntelTech(BaseModel):
             d['parentName'] = parent_name
         if children is not None:
             d['children'] = children
-        d['staleAfterDays'] = self.stale_after_days()
-        d['isStale'] = self.is_stale(last_evidence_at, now=now)
+        """
+        ⚠️⚠️ **사업부 눈으로 볼 때는 `stage` 를 그 사업부 값으로 바꿔 내보낸다.**
+           화면이 두 값(전사ㆍ사업부) 중 무엇을 그릴지 고르게 하면 레이더ㆍ목록ㆍ
+           상세가 서로 다른 것을 그리게 된다 — 낡음 판정을 서버가 하는 것과 같은
+           이유다. **고르는 일은 서버에서 한 번만 한다.**
+        """
+        d['companyStage'] = self.stage
+        if division:
+            d['division'] = division
+            d['isDivisionOverride'] = bool(division_stage)
+            if division_stage:
+                d['stage'] = division_stage.stage
+                d['divisionStageReason'] = division_stage.reason
+                d['divisionStageAt'] = (
+                    division_stage.changed_at.isoformat()
+                    if division_stage.changed_at else None)
+        eff = d['stage']
+        d['staleAfterDays'] = self.stale_after_days(eff)
+        d['isStale'] = self.is_stale(last_evidence_at, now=now, stage=eff)
         if last_evidence_at is not None:
             d['lastEvidenceAt'] = last_evidence_at.isoformat()
         if evidence_count is not None:
@@ -311,6 +333,10 @@ class IntelChange(BaseModel):
     subject_name = db.Column(db.String(300))
 
     field = db.Column(db.String(30), nullable=False)      # stage · status …
+    # ⚠️ **어느 사업부의 판단인가.** 비어 있으면 전사다. `field` 에 사업부 이름을
+    #    이어 붙이는 것(`stage:MX`)도 생각했지만, 그러면 「단계 이력」을 뽑는 모든
+    #    질의가 문자열을 쪼개야 하고 한 번만 빠뜨려도 전사와 사업부가 뒤섞인다.
+    scope = db.Column(db.String(100), index=True)
     before_value = db.Column(db.String(200))
     after_value = db.Column(db.String(200))
     reason = db.Column(db.Text)
@@ -326,6 +352,52 @@ class IntelChange(BaseModel):
     def __repr__(self):
         return (f'<IntelChange {self.subject_kind}:{self.subject_uuid[:8]} '
                 f'{self.field} {self.before_value}→{self.after_value}>')
+
+
+class IntelDivisionStage(BaseModel):
+    """**사업부별 단계 — 전사와 다를 때만** 한 줄 남긴다.
+
+    ⚠️⚠️ **전사 값이 정본이고, 여기 있는 것은 예외뿐이다.** 사업부 8개 × 역량 39개
+       = 312칸을 채우게 하면 아무도 안 채우고, 채운 것도 곧 낡아 **표 전체를 못
+       믿게 된다.** 없으면 전사 값을 쓴다 — 그래서 「아직 안 정함」과 「전사와 같음」이
+       같은 뜻이 되고, 그게 맞다.
+
+    ⚠️ 이 표가 있어야 사업부 비교가 성립한다. 도구 단위로는 원리적으로 불가능하다 —
+       MX 가 LS-DYNA 도입, VD 가 RADIOSS 도입이면 둘 다 「도입」인데 서로 다른
+       줄이라 누가 앞섰는지 읽을 수 없다. **같은 역량 한 줄에 사업부별 값**이
+       붙어야 비로소 견줄 수 있다.
+
+    ⚠️ 역량뿐 아니라 도구에도 걸 수 있다. 역량에 걸면 「우리 사업부는 어디까지
+       왔나」, 도구에 걸면 「어느 사업부가 무엇을 쓰나」 — 묻는 것이 다르지만
+       **장치는 하나면 된다.**
+
+    ⚠️ FK 를 안 건다. 사업부 이름은 포털의 사업부 표를 **값으로** 들고 있는다 —
+       기술이 지워져도 「그때 이 사업부는 이랬다」는 판단 기록이 남아야 한다
+       (`dt_intel_changes` 와 같은 판단).
+    """
+    __tablename__ = 'dt_intel_division_stage'
+    __table_args__ = (
+        db.UniqueConstraint('tech_uuid', 'division',
+                            name='uq_intel_division_stage'),
+    )
+
+    tech_uuid = db.Column(db.String(36), nullable=False, index=True)
+    division = db.Column(db.String(100), nullable=False, index=True)
+    stage = db.Column(db.String(10), nullable=False)
+    # ⚠️ 전사와 **다르게** 정한 것이라 이유가 더 중요하다.
+    reason = db.Column(db.Text)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_by = db.Column(db.Integer)
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['changed_at'] = self.changed_at.isoformat() if self.changed_at else None
+        d['changedAt'] = d['changed_at']
+        return d
+
+    def __repr__(self):
+        return (f'<IntelDivisionStage {self.division} '
+                f'{self.tech_uuid[:8]} {self.stage}>')
 
 
 class IntelLink(BaseModel):

@@ -1078,6 +1078,7 @@ async def list_intel_tech(
     category: str = "",
     stage: str = "",
     kind: str = "",
+    division: str = "",
 ) -> list:
     """기술 레이더 목록. **기술을 새로 만들기 전에 반드시 본다.**
 
@@ -1086,6 +1087,14 @@ async def list_intel_tech(
 
     ⚠️ 검색은 **태그와 CPT 까지** 닿는다 — 「표준화」로 찾으면 부채꼴이 데이터·연결인
        OPC UA 도 나온다(표준화가 태그로 걸려 있다).
+
+    ⚠️⚠️ `division="MX"` 로 주면 **그 사업부 눈으로 다시 그려서** 준다 — 거르는 것이
+       아니다. 단계ㆍ낡음ㆍ이동이 모두 그 사업부 기준이 되고, 전사와 다르게 정한
+       줄에는 `isDivisionOverride: true` 와 `companyStage`(전사 값)가 함께 온다.
+       「MX 는 이 기술 어디까지 왔나」를 물으면 이걸 쓴다.
+
+    ⚠️ 사업부 단계를 **정하는** 도구는 없다. 조직의 판단이라 화면에서 관리자ㆍ
+       사무국만 한다 — 네가 조사해 온 것으로 사업부의 판단을 대신 쓸 수는 없다.
 
     ⚠️ `kind="capability"` 로 **역량만** 본다. 도구를 넣고 어디에 매달지 고를 때
        이걸 먼저 부른다 — 목록 전체에서 눈으로 고르면 도구를 도구 밑에 매달려고
@@ -1096,6 +1105,8 @@ async def list_intel_tech(
         parentUuid     이 도구가 매달린 역량. 비어 있으면 **아직 안 매달렸다**
         parentName     그 역량 이름
         children       역량 밑에 매달린 도구들 (역량일 때만)
+        companyStage   전사 단계. `division` 을 줬을 때 `stage` 와 다를 수 있다
+        isDivisionOverride  그 사업부가 전사와 **다르게** 보고 있다는 표시
         evidenceCount  이 기술을 떠받치는 소식 수 — 역량은 **자식 것까지 함께** 센다
         isStale        근거가 오래 없어 **낡았다**는 표시. 단계마다 기준이 다르다
                        (관찰 180일 · 도입 540일). true 면 새 근거가 필요하다는 뜻
@@ -1109,6 +1120,8 @@ async def list_intel_tech(
         params["stage"] = stage
     if kind:
         params["kind"] = kind
+    if division:
+        params["division"] = division
     return await _intel(ctx, "GET", "/tech", params=params or None)
 
 

@@ -126,6 +126,15 @@ const Kind = styled.span`
   color: ${(p) => (p.$cap ? '#4338ca' : '#64748b')};
 `;
 
+/* ⚠️ 전사와 다르게 본 줄. 레이더의 ◆ 와 **같은 표시**여야 한다 — 두 화면이
+      다른 기호를 쓰면 같은 것인지 알 수 없다. */
+const Diff = styled.span`
+  flex-shrink: 0;
+  color: #4f46e5;
+  font-size: 0.6875rem;
+  font-weight: 700;
+`;
+
 const Empty = styled.div`
   font-size: 0.75rem;
   color: #94a3b8;
@@ -152,6 +161,9 @@ const RadarBoard = ({ rows, onSelect }) => (
                 <Kind $cap={t.kind === 'capability'}>
                   {t.kind === 'capability' ? '역량' : '도구'}
                 </Kind>
+                {t.isDivisionOverride && (
+                  <Diff title={`전사는 「${t.companyStage}」 입니다`}>◆</Diff>
+                )}
                 {t.isStale && (
                   <Stale title={`근거가 ${t.staleAfterDays}일 넘게 없습니다. 아직 유효한지 확인이 필요합니다`}>
                     <AlertTriangle size={11} /> 낡음

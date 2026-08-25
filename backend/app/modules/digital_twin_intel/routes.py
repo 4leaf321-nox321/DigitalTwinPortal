@@ -259,8 +259,15 @@ def list_tech():
     if denied is not None:
         return denied
 
+    # ⚠️⚠️ 사업부를 고르면 **그 사업부 눈으로 다시 그린다**(거르는 것이 아니다).
+    #    「우리 사업부와 관련된 것만」이 아니라 「우리 사업부는 어디까지 왔나」가
+    #    묻고 싶은 것이다 — 관련 없는 것은 전사 값 그대로 서면 되고 그게 정확하다.
+    division = (request.args.get('division') or '').strip()
+
     q = IntelTech.query
-    if request.args.get('stage'):
+    # ⚠️ 사업부 눈일 때는 단계 거르기를 SQL 에서 하면 안 된다 — 컬럼 값과 화면에
+    #    그려지는 값이 다르다. 아래에서 **푼 값**으로 거른다.
+    if request.args.get('stage') and not division:
         q = q.filter(IntelTech.stage == request.args['stage'])
     if request.args.get('category'):
         q = q.filter(IntelTech.category == request.args['category'])
@@ -293,17 +300,25 @@ def list_tech():
     kids = S.children_of([r.uuid for r in rows if r.kind == 'capability'])
     # ⚠️ 「움직였다」만이 아니라 **어디서 왔는지**를 함께 준다. 레이더의 값은
     #    「무엇이 안쪽으로 들어왔나」에 있다.
-    moves = S.recent_moves(uuids, days=MOVED_WINDOW_DAYS)
+    # ⚠️ 이동 화살표도 **그 사업부의 이력**만 본다. 안 나누면 화면은 「MX 기준」이라
+    #    써 놓고 화살표는 전사 이동을 그린다 — 거짓말하는 화살표는 없느니만 못하다.
+    moves = S.recent_moves(uuids, days=MOVED_WINDOW_DAYS, scope=division or None)
     # 상위 이름. ⚠️ 걸러 본 목록에는 그 역량이 없을 수 있으므로 따로 물어 온다.
     parents = S.names_of([r.parent_uuid for r in rows if r.parent_uuid])
+    dstages = S.division_stages(uuids, division) if division else {}
     out = []
     for r in rows:
         cnt, last = stats.get(r.uuid, (0, None))
         d = r.to_dict(last_evidence_at=last, evidence_count=cnt,
                       parent_name=parents.get(r.parent_uuid),
+                      division=division or None,
+                      division_stage=dstages.get(r.uuid),
                       children=kids.get(r.uuid, []) if r.kind == 'capability' else None)
         mv = moves.get(r.uuid)
-        if mv and mv[0] and mv[0] != r.stage:
+        # ⚠️ **푼 값과 견준다.** 컬럼 값과 견주면 사업부 눈에서 화살표가 사라진다 —
+        #    전사가 「시험」인데 MX 가 「도입」으로 갔으면 출발점(시험)이 컬럼과
+        #    같아서 「안 움직였다」로 읽힌다. 단계 거르기와 같은 부류의 실수다.
+        if mv and mv[0] and mv[0] != d['stage']:
             d['movedFrom'] = mv[0]
             d['movedAt'] = mv[1].isoformat() if mv[1] else None
         out.append(d)
@@ -312,6 +327,9 @@ def list_tech():
     #    복제되면 갈린다. 그래서 거르기도 여기서 한다.
     if request.args.get('stale') in ('1', 'true', 'yes'):
         out = [t for t in out if t.get('isStale')]
+    # 사업부 눈일 때의 단계 거르기 — **푼 값**으로 한다(위 참고).
+    if request.args.get('stage') and division:
+        out = [t for t in out if t.get('stage') == request.args['stage']]
     return success_response(out)
 
 
@@ -379,6 +397,77 @@ def update_tech(uuid):
     db.session.commit()
     cnt, last = S.evidence_stats([t.uuid]).get(t.uuid, (0, None))
     return success_response(t.to_dict(last_evidence_at=last, evidence_count=cnt))
+
+
+@bp.route('/tech/<uuid>/division-stages', methods=['GET'])
+@jwt_required()
+def list_division_stages(uuid):
+    """이 기술을 **사업부별로 죽 편다.** 상세 화면의 표가 이걸 그린다.
+
+    ⚠️ 예외가 걸린 사업부만 온다. 나머지는 전사 값을 따르는 것이고, 그것이 정상이다.
+    """
+    actor = _actor()
+    denied = _deny_read(actor)
+    if denied is not None:
+        return denied
+
+    t = IntelTech.query.filter_by(uuid=uuid).first()
+    if t is None:
+        return not_found_response('기술을 찾을 수 없습니다.')
+
+    rows = S.stages_by_division(uuid)
+    return success_response({
+        'companyStage': t.stage,
+        'divisions': S.known_divisions(),
+        'overrides': [{
+            'division': d,
+            'stage': r.stage,
+            'reason': r.reason,
+            'changedAt': r.changed_at.isoformat() if r.changed_at else None,
+        } for d, r in rows.items()],
+    })
+
+
+@bp.route('/tech/<uuid>/division-stage', methods=['PUT'])
+@jwt_required()
+def set_division_stage(uuid):
+    """한 사업부만 전사와 다르게 본다고 적는다.
+
+    ⚠️ **단계 변경과 같은 권한이다**(관리자ㆍ사무국). 사업부별이라고 해서 아무나
+       옮길 수 있게 하면, 좁혀 둔 「조직의 판단」이 옆문으로 새어 나간다.
+
+    ⚠️ 전사와 **같은 값**을 보내면 예외를 지운다 — 「전사와 같다」와 「아직 안
+       정했다」는 구별할 필요가 없고, 굳이 남겨 두면 전사가 움직였을 때 이 사업부만
+       옛 값에 붙박인다.
+    """
+    actor = _actor()
+    denied = _deny_curate(actor)
+    if denied is not None:
+        return denied
+
+    data = get_request_json() or {}
+    row, err = S.set_division_stage(
+        uuid, data.get('division'), (data.get('stage') or '').strip(),
+        reason=data.get('reason'), actor=actor, source=_origin_of(data))
+    if err:
+        return error_response(err, status_code=400)
+    return success_response(row.to_dict() if row is not None else None)
+
+
+@bp.route('/tech/<uuid>/division-stage', methods=['DELETE'])
+@jwt_required()
+def clear_division_stage(uuid):
+    """사업부 예외를 지우고 **전사 값을 따라가게** 되돌린다."""
+    actor = _actor()
+    denied = _deny_curate(actor)
+    if denied is not None:
+        return denied
+
+    division = (request.args.get('division') or '').strip()
+    if not division:
+        return error_response('사업부를 골라야 합니다.', status_code=400)
+    S.clear_division_stage(uuid, division, actor=actor)
+    return success_response({'division': division, 'cleared': True})
 
 
 @bp.route('/tech/<uuid>/stage', methods=['PUT'])

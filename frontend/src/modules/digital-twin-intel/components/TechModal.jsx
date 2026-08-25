@@ -6,6 +6,7 @@ import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil, History, Merge,
 import api from '../services/api';
 import AssistPanel from './AssistPanel';
 import { STAGES } from './RadarBoard';
+import DivisionStages from './DivisionStages';
 import {
   Overlay, Panel, Head, CloseBtn, Body, Foot, Field, Hint, Warn,
   PrimaryBtn, GhostBtn, Spacer,
@@ -189,6 +190,21 @@ const Kids = styled.ul`
   }
 `;
 
+/* 지금 무엇 기준으로 보고 있는지. ⚠️ 경고(노랑)와 색을 달리한다 — 잘못된 것이
+   아니라 **다른 눈으로 보고 있다**는 안내다. */
+const Lens = styled.p`
+  margin: 0;
+  padding: 0.4375rem 0.625rem;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 0.4375rem;
+  font-size: 0.75rem;
+  color: #3730a3;
+  line-height: 1.6;
+
+  b { font-weight: 700; }
+`;
+
 const Body2 = styled.p`
   margin: 0;
   font-size: 0.8125rem;
@@ -277,6 +293,7 @@ const LinkList = ({ rows, onRemove }) => {
 };
 
 const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
+                    division, onDivisionChanged,
                     onOpenTech, onCompare, canCurate, showError }) => {
   const [evidence, setEvidence] = useState(null);
   const [links, setLinks] = useState([]);
@@ -350,6 +367,21 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
         </Head>
 
         <Body>
+          {/*
+            ⚠️ **지금 보고 있는 단계가 어느 기준인지 먼저 말한다.** 사업부 눈으로
+               연 창에서 그냥 「도입」이라고만 쓰여 있으면 전사가 도입인 줄 안다 —
+               그 오해가 그대로 회의에 들어간다.
+          */}
+          {tech.isDivisionOverride && (
+            <Lens>
+              <b>{tech.division}</b> 기준으로 <b>{tech.stage}</b> 입니다.
+              전사는 <b>{tech.companyStage}</b> 입니다
+              {tech.divisionStageAt
+                ? ` (${String(tech.divisionStageAt).slice(0, 10)}부터).` : '.'}
+              {tech.divisionStageReason ? ` — ${tech.divisionStageReason}` : ''}
+            </Lens>
+          )}
+
           {tech.isStale && (
             <Warn>
               <AlertTriangle size={13} />
@@ -560,6 +592,13 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
               </span>
             </Warn>
           )}
+
+          {/*
+            ⚠️ **단계를 바꾸는 자리 가까이 둔다.** 멀리 두면 전사만 바꾸고 사업부는
+               안 건드리게 되고, 그러면 사업부 값이 조용히 옛것으로 남는다.
+          */}
+          <DivisionStages tech={tech} canCurate={canCurate}
+                          onChanged={onDivisionChanged} showError={showError} />
 
           <LinkList rows={links} onRemove={dropLink} />
 
