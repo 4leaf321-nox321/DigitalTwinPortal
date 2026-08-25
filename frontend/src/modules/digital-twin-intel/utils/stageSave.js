@@ -14,7 +14,7 @@
  *        이제 저장은 창에 하나뿐이고, **둘 중 하나만 바뀌어도 켜진다.**
  */
 
-/** 사업부 칸에서 「전사를 따름」. 값이 없는 것이 곧 따른다는 뜻이다. */
+/** 사업부 칸에서 「기본 설정을 따름」. 값이 없는 것이 곧 따른다는 뜻이다. */
 export const FOLLOW = '';
 
 /**
@@ -25,7 +25,7 @@ export const FOLLOW = '';
 export const baseStageOf = (tech) =>
   (tech && (tech.companyStage || tech.stage)) || '';
 
-/** 사업부 한 줄을 「적을 것」 모양으로. 없거나 전사를 따르면 빈 초안이다. */
+/** 사업부 한 줄을 「적을 것」 모양으로. 없거나 기본 설정을 따르면 빈 초안이다. */
 export const asDraft = (kept) => ({
   stage: kept && !kept.followsCompany ? kept.stage : FOLLOW,
   reason: (kept && kept.reason) || '',
@@ -50,7 +50,7 @@ export const divisionDirty = (kept, draft) => {
 };
 
 /**
- * 예외를 만들 때만 이유가 필요하다. 「전사를 따름」은 주장이 아니다.
+ * 예외를 만들 때만 이유가 필요하다. 「기본 설정을 따름」은 주장이 아니다.
  *
  * ⚠️ **서버가 정본이다**(400 을 낸다). 여기 있는 것은 헛걸음을 막는 손잡이다.
  */

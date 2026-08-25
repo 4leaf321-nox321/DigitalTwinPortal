@@ -322,7 +322,7 @@ class IntelTech(BaseModel):
 
     def stale_after_days(self, stage=None):
         """⚠️ **어느 단계로 보느냐에 따라 기준 일수가 다르다.** 사업부별 단계가
-           걸린 줄은 그 사업부의 단계로 재야 한다 — 전사가 「도입」(540일)인데
+           걸린 줄은 그 사업부의 단계로 재야 한다 — 기본 설정이 「도입」(540일)인데
            우리 사업부는 「관찰」(180일)이면, 우리한테는 벌써 낡은 것이다.
         """
         key = stage or self.stage
@@ -365,7 +365,7 @@ class IntelTech(BaseModel):
             d['children'] = children
         """
         ⚠️⚠️ **사업부 눈으로 볼 때는 `stage` 를 그 사업부 값으로 바꿔 내보낸다.**
-           화면이 두 값(전사ㆍ사업부) 중 무엇을 그릴지 고르게 하면 레이더ㆍ목록ㆍ
+           화면이 두 값(기본 설정ㆍ사업부) 중 무엇을 그릴지 고르게 하면 레이더ㆍ목록ㆍ
            상세가 서로 다른 것을 그리게 된다 — 낡음 판정을 서버가 하는 것과 같은
            이유다. **고르는 일은 서버에서 한 번만 한다.**
         """
@@ -373,7 +373,7 @@ class IntelTech(BaseModel):
         if division:
             d['division'] = division
             # ⚠️⚠️ 사업부 줄이 있어도 **단계가 비어 있으면 예외가 아니다** — 도구나
-            #    메모만 적어 둔 줄이다. 여기서 안 가리면 전사 값이 None 으로
+            #    메모만 적어 둔 줄이다. 여기서 안 가리면 기본 설정 값이 None 으로
             #    지워지고, 레이더에서 그 점이 통째로 사라진다.
             d['isDivisionOverride'] = bool(division_stage and division_stage.stage)
             if division_stage:
@@ -445,9 +445,9 @@ class IntelChange(BaseModel):
     subject_name = db.Column(db.String(300))
 
     field = db.Column(db.String(30), nullable=False)      # stage · status …
-    # ⚠️ **어느 사업부의 판단인가.** 비어 있으면 전사다. `field` 에 사업부 이름을
+    # ⚠️ **어느 사업부의 판단인가.** 비어 있으면 기본 설정이다. `field` 에 사업부 이름을
     #    이어 붙이는 것(`stage:MX`)도 생각했지만, 그러면 「단계 이력」을 뽑는 모든
-    #    질의가 문자열을 쪼개야 하고 한 번만 빠뜨려도 전사와 사업부가 뒤섞인다.
+    #    질의가 문자열을 쪼개야 하고 한 번만 빠뜨려도 기본 설정과 사업부가 뒤섞인다.
     scope = db.Column(db.String(100), index=True)
     before_value = db.Column(db.String(200))
     after_value = db.Column(db.String(200))
@@ -494,11 +494,11 @@ class IntelTechCapability(BaseModel):
 
 
 class IntelDivisionStage(BaseModel):
-    """**사업부별 단계 — 전사와 다를 때만** 한 줄 남긴다.
+    """**사업부별 단계 — 기본 설정과 다를 때만** 한 줄 남긴다.
 
-    ⚠️⚠️ **전사 값이 정본이고, 여기 있는 것은 예외뿐이다.** 사업부 8개 × 역량 39개
+    ⚠️⚠️ **기본 설정 값이 정본이고, 여기 있는 것은 예외뿐이다.** 사업부 8개 × 역량 39개
        = 312칸을 채우게 하면 아무도 안 채우고, 채운 것도 곧 낡아 **표 전체를 못
-       믿게 된다.** 없으면 전사 값을 쓴다 — 그래서 「아직 안 정함」과 「전사와 같음」이
+       믿게 된다.** 없으면 기본 설정 값을 쓴다 — 그래서 「아직 안 정함」과 「기본 설정과 같음」이
        같은 뜻이 되고, 그게 맞다.
 
     ⚠️ 이 표가 있어야 사업부 비교가 성립한다. 도구 단위로는 원리적으로 불가능하다 —
@@ -523,12 +523,12 @@ class IntelDivisionStage(BaseModel):
     tech_uuid = db.Column(db.String(36), nullable=False, index=True)
     division = db.Column(db.String(100), nullable=False, index=True)
     """
-    ⚠️⚠️ **비어 있으면 「전사를 따른다」**는 뜻이고, 그때도 줄은 남을 수 있다 —
+    ⚠️⚠️ **비어 있으면 「기본 설정을 따른다」**는 뜻이고, 그때도 줄은 남을 수 있다 —
        도구나 메모를 적어 두려고. 예외를 만들어야만 도구를 적을 수 있으면 가장 흔한
-       경우(전사 도입 · 우리도 도입 · 도구는 LS-DYNA)를 **아예 못 적는다.**
+       경우(기본 설정 도입 · 우리도 도입 · 도구는 LS-DYNA)를 **아예 못 적는다.**
 
-           None      전사를 따른다. 전사가 움직이면 같이 움직인다
-           '도입'     전사와 다르게 본다 (예외)
+           None      기본 설정을 따른다. 기본 설정이 움직이면 같이 움직인다
+           '도입'     기본 설정과 다르게 본다 (예외)
     """
     stage = db.Column(db.String(10))
     # ⚠️⚠️ **이유 없이 예외를 만들 수 없다**(서비스가 막는다). 단계만 바꿔 놓고
@@ -542,7 +542,7 @@ class IntelDivisionStage(BaseModel):
     changed_by = db.Column(db.Integer)
 
     def follows_company(self):
-        """전사를 따르는 줄인가. 도구ㆍ메모만 담고 단계는 안 정한 상태."""
+        """기본 설정을 따르는 줄인가. 도구ㆍ메모만 담고 단계는 안 정한 상태."""
         return not self.stage
 
     def is_empty(self):

@@ -276,7 +276,7 @@ def list_tech():
 
     # ⚠️⚠️ 사업부를 고르면 **그 사업부 눈으로 다시 그린다**(거르는 것이 아니다).
     #    「우리 사업부와 관련된 것만」이 아니라 「우리 사업부는 어디까지 왔나」가
-    #    묻고 싶은 것이다 — 관련 없는 것은 전사 값 그대로 서면 되고 그게 정확하다.
+    #    묻고 싶은 것이다 — 관련 없는 것은 기본 설정 값 그대로 서면 되고 그게 정확하다.
     division = (request.args.get('division') or '').strip()
 
     q = IntelTech.query
@@ -321,7 +321,7 @@ def list_tech():
     # ⚠️ 「움직였다」만이 아니라 **어디서 왔는지**를 함께 준다. 레이더의 값은
     #    「무엇이 안쪽으로 들어왔나」에 있다.
     # ⚠️ 이동 화살표도 **그 사업부의 이력**만 본다. 안 나누면 화면은 「MX 기준」이라
-    #    써 놓고 화살표는 전사 이동을 그린다 — 거짓말하는 화살표는 없느니만 못하다.
+    #    써 놓고 화살표는 기본 설정 이동을 그린다 — 거짓말하는 화살표는 없느니만 못하다.
     moves = S.recent_moves(uuids, days=_moved_days(request.args),
                            scope=division or None)
     # 상위 이름. ⚠️ 걸러 본 목록에는 그 역량이 없을 수 있으므로 따로 물어 온다.
@@ -353,7 +353,7 @@ def list_tech():
             d['divisionMarks'] = marks[r.uuid]
         mv = moves.get(r.uuid)
         # ⚠️ **푼 값과 견준다.** 컬럼 값과 견주면 사업부 눈에서 화살표가 사라진다 —
-        #    전사가 「시험」인데 MX 가 「도입」으로 갔으면 출발점(시험)이 컬럼과
+        #    기본 설정이 「시험」인데 MX 가 「도입」으로 갔으면 출발점(시험)이 컬럼과
         #    같아서 「안 움직였다」로 읽힌다. 단계 거르기와 같은 부류의 실수다.
         if mv and mv[0] and mv[0] != d['stage']:
             d['movedFrom'] = mv[0]
@@ -449,7 +449,7 @@ def update_tech(uuid):
 def list_division_stages(uuid):
     """이 기술을 **사업부별로 죽 편다.** 상세 화면의 표가 이걸 그린다.
 
-    ⚠️ 예외가 걸린 사업부만 온다. 나머지는 전사 값을 따르는 것이고, 그것이 정상이다.
+    ⚠️ 예외가 걸린 사업부만 온다. 나머지는 기본 설정 값을 따르는 것이고, 그것이 정상이다.
     """
     actor = _actor()
     denied = _deny_read(actor)
@@ -468,7 +468,7 @@ def list_division_stages(uuid):
         # ⚠️ 고를 수 있는 도구는 **이 역량 밑에 매달린 것**뿐이다. 화면이 목록
         #    전체에서 고르게 하면 「explicit 해석을 Grafana 로 한다」가 생긴다.
         'toolChoices': S.children_of([uuid]).get(uuid, []),
-        # ⚠️ `stage` 가 비어 있는 줄은 **예외가 아니다** — 전사를 따르면서 도구나
+        # ⚠️ `stage` 가 비어 있는 줄은 **예외가 아니다** — 기본 설정을 따르면서 도구나
         #    메모만 적어 둔 줄이다. 화면이 이 둘을 갈라 보여야 한다.
         'overrides': [{
             'division': d,
@@ -500,13 +500,13 @@ def used_by(uuid):
 @bp.route('/tech/<uuid>/division-stage', methods=['PUT'])
 @jwt_required()
 def set_division_stage(uuid):
-    """한 사업부만 전사와 다르게 본다고 적는다.
+    """한 사업부만 기본 설정과 다르게 본다고 적는다.
 
     ⚠️ **단계 변경과 같은 권한이다**(관리자ㆍ사무국). 사업부별이라고 해서 아무나
        옮길 수 있게 하면, 좁혀 둔 「조직의 판단」이 옆문으로 새어 나간다.
 
-    ⚠️ 전사와 **같은 값**을 보내면 예외를 지운다 — 「전사와 같다」와 「아직 안
-       정했다」는 구별할 필요가 없고, 굳이 남겨 두면 전사가 움직였을 때 이 사업부만
+    ⚠️ 기본 설정과 **같은 값**을 보내면 예외를 지운다 — 「기본 설정과 같다」와 「아직 안
+       정했다」는 구별할 필요가 없고, 굳이 남겨 두면 기본 설정이 움직였을 때 이 사업부만
        옛 값에 붙박인다.
     """
     actor = _actor()
@@ -530,7 +530,7 @@ def set_division_stage(uuid):
 @bp.route('/tech/<uuid>/division-stage', methods=['DELETE'])
 @jwt_required()
 def clear_division_stage(uuid):
-    """사업부 예외를 지우고 **전사 값을 따라가게** 되돌린다."""
+    """사업부 예외를 지우고 **기본 설정 값을 따라가게** 되돌린다."""
     actor = _actor()
     denied = _deny_curate(actor)
     if denied is not None:

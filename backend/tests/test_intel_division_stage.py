@@ -1,8 +1,8 @@
 """사업부별 단계 — 「우리 사업부는 어디까지 왔나」.
 
-⚠️⚠️ **전사 값이 정본이고, 저장하는 것은 예외뿐이다.** 사업부 8개 × 역량 39개 =
+⚠️⚠️ **기본 설정 값이 정본이고, 저장하는 것은 예외뿐이다.** 사업부 8개 × 역량 39개 =
    312칸을 채우게 하면 아무도 안 채우고, 채운 것도 곧 낡아 **표 전체를 못 믿게
-   된다.** 없으면 전사 값을 쓴다 — 그래서 「전사와 같음」과 「아직 안 정함」이
+   된다.** 없으면 기본 설정 값을 쓴다 — 그래서 「기본 설정과 같음」과 「아직 안 정함」이
    같은 뜻이 되고, 그게 맞다.
 
 ⚠️ 이 층은 **역량 위에서만 뜻이 있다**(test_intel_capability.py 참고). 도구
@@ -69,10 +69,10 @@ def _row(client, auth, user, url, name):
 
 # ── 정본과 예외 ──────────────────────────────────────────────────────────────
 
-def test_안_정했으면_전사_값을_쓴다(db, client, auth, admin, divs):
+def test_안_정했으면_기본설정_값을_쓴다(db, client, auth, admin, divs):
     """
     ⚠️ **이게 이 설계의 뼈대다.** 312칸을 채우게 하면 아무도 안 채운다. 비어 있는
-       것이 곧 「전사를 따른다」여야 한다.
+       것이 곧 「기본 설정을 따른다」여야 한다.
     """
     _cap(admin, 'CFD', stage='시험')
     row = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'CFD')
@@ -95,33 +95,33 @@ def test_사업부마다_다르게_선다(db, client, auth, admin, divs):
     assert (vd['stage'], vd['companyStage'], vd['isDivisionOverride']) \
         == ('시험', '관찰', True)
 
-    # 사업부를 안 고르면 전사 값 그대로다.
+    # 사업부를 안 고르면 기본 설정 값 그대로다.
     all_ = _row(client, auth, admin, f'{BASE}/tech', 'explicit 해석')
     assert all_['stage'] == '관찰'
     assert 'isDivisionOverride' not in all_
 
 
-def test_전사와_같게_맞추면_예외를_지운다(db, client, auth, admin, divs):
+def test_기본설정과_같게_맞추면_예외를_지운다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ 같은 값을 굳이 한 줄로 남겨 두면, 나중에 **전사가 움직였을 때 이 사업부만
+    ⚠️⚠️ 같은 값을 굳이 한 줄로 남겨 두면, 나중에 **기본 설정이 움직였을 때 이 사업부만
        옛 값에 붙박여** 따라가지 않는다. 그게 표를 못 믿게 만드는 방식이다.
     """
     cap = _cap(admin, 'CFD', stage='관찰')
     _put(client, auth, admin, cap, 'MX', '도입')
     assert IntelDivisionStage.query.count() == 1
 
-    # 전사와 같아졌다 → 「따름」. 담아 둔 것이 없으면 줄까지 사라진다.
+    # 기본 설정과 같아졌다 → 「따름」. 담아 둔 것이 없으면 줄까지 사라진다.
     _put(client, auth, admin, cap, 'MX', '관찰', reason='')
     assert IntelDivisionStage.query.count() == 0
 
-    # 전사가 움직이면 MX 도 따라간다.
+    # 기본 설정이 움직이면 MX 도 따라간다.
     client.put(f'{BASE}/tech/{cap.uuid}/stage', json={'stage': '시험'},
                headers=auth(admin))
     assert _row(client, auth, admin, f'{BASE}/tech?division=MX', 'CFD')['stage'] \
         == '시험'
 
 
-def test_예외를_지우면_전사를_따른다(db, client, auth, admin, divs):
+def test_예외를_지우면_기본설정을_따른다(db, client, auth, admin, divs):
     cap = _cap(admin, 'CFD', stage='관찰')
     _put(client, auth, admin, cap, 'MX', '도입')
     r = client.delete(f'{BASE}/tech/{cap.uuid}/division-stage?division=MX',
@@ -134,8 +134,8 @@ def test_예외를_지우면_전사를_따른다(db, client, auth, admin, divs):
 
 def test_낡음_기준이_그_사업부의_단계를_따른다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ 단계마다 기준 일수가 다르다(도입 540 · 관찰 180). 전사가 「도입」인데 우리
-       사업부는 「관찰」이면 **우리한테는 벌써 낡은 것**이다. 전사 단계로 재면
+    ⚠️⚠️ 단계마다 기준 일수가 다르다(도입 540 · 관찰 180). 기본 설정이 「도입」인데 우리
+       사업부는 「관찰」이면 **우리한테는 벌써 낡은 것**이다. 기본 설정 단계로 재면
        화면은 「관찰」이라 써 놓고 낡음은 540일로 재게 되고, 그 순간 표가 거짓말한다.
     """
     cap = _cap(admin, '느린 것', stage='도입')
@@ -156,12 +156,12 @@ def test_낡음_기준이_그_사업부의_단계를_따른다(db, client, auth,
 
 def test_이동_화살표가_그_사업부_이력만_본다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ 안 나누면 화면은 「MX 기준」이라 써 놓고 화살표는 **전사 이동**을 그린다.
+    ⚠️⚠️ 안 나누면 화면은 「MX 기준」이라 써 놓고 화살표는 **기본 설정 이동**을 그린다.
        거짓말하는 화살표는 없는 화살표보다 나쁘다.
     """
     cap = _cap(admin, '움직인 역량', stage='관찰')
     client.put(f'{BASE}/tech/{cap.uuid}/stage', json={'stage': '시험'},
-               headers=auth(admin))                       # 전사: 관찰 → 시험
+               headers=auth(admin))                       # 기본 설정: 관찰 → 시험
     _put(client, auth, admin, cap, 'MX', '도입')            # MX:  시험 → 도입
 
     company = _row(client, auth, admin, f'{BASE}/tech', '움직인 역량')
@@ -172,12 +172,12 @@ def test_이동_화살표가_그_사업부_이력만_본다(db, client, auth, ad
     assert mx['movedFrom'] == '시험', 'MX 의 이력만 봐야 한다'
 
 
-def test_전사_이력에_사업부_판단이_안_섞인다(db, client, auth, admin, divs):
+def test_기본설정_이력에_사업부_판단이_안_섞인다(db, client, auth, admin, divs):
     cap = _cap(admin, 'CFD', stage='관찰')
     _put(client, auth, admin, cap, 'MX', '도입')
 
     row = _row(client, auth, admin, f'{BASE}/tech', 'CFD')
-    assert 'movedFrom' not in row, '전사는 안 움직였다'
+    assert 'movedFrom' not in row, '기본 설정은 안 움직였다'
     assert IntelChange.query.filter_by(scope='MX').count() == 1
 
 
@@ -188,7 +188,7 @@ def test_단계로_거를_때도_푼_값을_쓴다(db, client, auth, admin, divs
     ⚠️ 단계 거르기를 SQL 로 하면 **컬럼 값**을 보게 되는데, 화면에 그려지는 것은
        푼 값이다. 「도입만」을 눌렀는데 도입 아닌 것이 나오거나 그 반대가 된다.
     """
-    a = _cap(admin, '전사만 도입', stage='도입')
+    a = _cap(admin, '기본 설정만 도입', stage='도입')
     b = _cap(admin, 'MX 만 도입', stage='관찰')
     _put(client, auth, admin, b, 'MX', '도입')
     _put(client, auth, admin, a, 'MX', '보류', reason='우리는 안 쓴다')
@@ -215,7 +215,7 @@ def test_이유_없이는_예외를_못_만든다(db, client, auth, admin, divs)
        끝이었다. 그러면 이 표는 앞선 세 번의 시도와 똑같아진다 — 적혀는 있는데
        아무도 왜인지 모르는 표. 「MX 도입」 네 글자는 6개월 뒤 아무 뜻도 아니다.
     """
-    cap = _cap(admin, 'CFD')                       # 전사 관찰
+    cap = _cap(admin, 'CFD')                       # 기본 설정 관찰
     r = _put(client, auth, admin, cap, 'MX', '도입', reason='')
     assert r.status_code == 400
     assert '이유' in (r.get_json() or {}).get('message', '')
@@ -249,7 +249,7 @@ def test_한_기술_한_사업부에_두_줄이_안_생긴다(db, client, auth, 
 
 
 def test_사업부별로_죽_펴서_본다(db, client, auth, admin, divs):
-    """상세 화면의 표. ⚠️ 예외가 걸린 사업부만 온다 — 나머지는 전사를 따른다."""
+    """상세 화면의 표. ⚠️ 예외가 걸린 사업부만 온다 — 나머지는 기본 설정을 따른다."""
     cap = _cap(admin, 'explicit 해석', stage='관찰')
     _put(client, auth, admin, cap, 'MX', '도입', '3년째 쓰는 중')
 

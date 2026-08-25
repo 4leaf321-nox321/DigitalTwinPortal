@@ -16,11 +16,11 @@ import { Field, Hint } from './modalStyles';
  *    적혀는 있는데 아무도 왜인지 모르는 표. 「MX 도입」 네 글자는 6개월 뒤 아무
  *    뜻도 아니다. 그래서 줄을 펴서 **단계 · 이유 · 쓰는 도구**를 함께 받는다.
  *
- * ⚠️⚠️ **전사 값이 정본이고, 남기는 것은 예외뿐이다.** 사업부 8개 × 역량 39개 =
- *    312칸을 채우게 하면 아무도 안 채운다. 안 정한 칸은 「전사를 따름」이고,
+ * ⚠️⚠️ **기본 설정 값이 정본이고, 남기는 것은 예외뿐이다.** 사업부 8개 × 역량 39개 =
+ *    312칸을 채우게 하면 아무도 안 채운다. 안 정한 칸은 「기본 설정을 따름」이고,
  *    그것이 결함이 아니라 기본값이다.
  *
- * ⚠️ **전사를 따르면서 도구만 적을 수 있다.** 가장 흔한 경우가 「전사도 도입,
+ * ⚠️ **기본 설정을 따르면서 도구만 적을 수 있다.** 가장 흔한 경우가 「기본 설정도 도입,
  *    우리도 도입, 우리는 LS-DYNA」인데, 예외를 만들어야만 도구를 적을 수 있으면
  *    그 경우를 아예 못 적는다.
  */
@@ -298,10 +298,10 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
     <Field>
       <span>사업부별로 어디까지 · 왜 · 무엇으로</span>
       <Head>
-        전사 <b>{data.companyStage}</b>
+        기본 설정 <b>{data.companyStage}</b>
         {diffCount > 0
           ? <> · 다르게 보는 사업부 <b>{diffCount}</b></>
-          : ' · 아직 전부 전사 값을 따릅니다'}
+          : ' · 아직 전부 기본 설정 값을 따릅니다'}
       </Head>
 
       <Grid>
@@ -314,7 +314,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
               <Line>
                 <b>{d}</b>
                 <Stage $diff={diff}>
-                  {diff ? o.stage : `${data.companyStage} (전사)`}
+                  {diff ? o.stage : `${data.companyStage} (기본 설정)`}
                 </Stage>
 
                 {/*
@@ -327,7 +327,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                   {o && (o.toolNames || []).length > 0 && (o.reason ? ' · ' : '')}
                   {o && o.reason}
                   {(!o || (!(o.toolNames || []).length && !o.reason))
-                    && <i>{canCurate ? '아직 아무것도 안 적혔습니다' : '전사 값을 따릅니다'}</i>}
+                    && <i>{canCurate ? '아직 아무것도 안 적혔습니다' : '기본 설정 값을 따릅니다'}</i>}
                 </Said>
 
                 {o && o.changedAt && !editing && (
@@ -350,7 +350,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                     <select value={draft.stage}
                             onChange={(e) => setDraft((p) => ({ ...p, stage: e.target.value }))}>
                       <option value={FOLLOW}>
-                        전사를 따름 ({data.companyStage}) — 전사가 바뀌면 같이 바뀝니다
+                        기본 설정을 따름 ({data.companyStage}) — 기본 설정이 바뀌면 같이 바뀝니다
                       </option>
                       {STAGES.filter((st) => st.key !== data.companyStage).map((st) => (
                         <option key={st.key} value={st.key}>{st.key} — {st.desc}</option>
@@ -359,13 +359,13 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                   </label>
 
                   {/*
-                    ⚠️ **이유는 예외를 만들 때만 묻는다.** 「전사를 따름」은 주장이
-                       아니라서 물을 자리가 아니다. 반대로 전사와 다르게 본다면
+                    ⚠️ **이유는 예외를 만들 때만 묻는다.** 「기본 설정을 따름」은 주장이
+                       아니라서 물을 자리가 아니다. 반대로 기본 설정과 다르게 본다면
                        그것은 판단이고, 판단은 근거가 남아야 한다.
                   */}
                   {draft.stage !== FOLLOW && (
                     <label>
-                      전사({data.companyStage})와 다르게 보는 이유 *
+                      기본 설정과 다르게 보는 이유 *
                       <input value={draft.reason} autoFocus
                              onChange={(e) => setDraft((p) => ({ ...p, reason: e.target.value }))}
                              placeholder="예: 차체 충돌 해석이 본업이라 3년째 상시 사용" />
@@ -399,7 +399,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                   {needReason && (
                     <Need>
                       <AlertTriangle size={11} />
-                      전사와 다르게 보는 판단입니다. 이유 없는 줄은 6개월 뒤 아무
+                      기본 설정과 다르게 보는 판단입니다. 이유 없는 줄은 6개월 뒤 아무
                       뜻도 아닙니다.
                     </Need>
                   )}
@@ -414,7 +414,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                     {busy && <Loader2 size={12} />}
                     {/*
                       ⚠️ **적어 둔 것을 통째로 무르는 자리다.** 단계만 되돌리려면
-                         위에서 「전사를 따름」을 고르면 되고, 그때 도구는 남는다.
+                         위에서 「기본 설정을 따름」을 고르면 되고, 그때 도구는 남는다.
                     */}
                     {o && (
                       <IconBtn type="button" style={{ marginLeft: 'auto' }}
@@ -433,9 +433,9 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
 
       {canCurate && (
         <Hint>
-          단계를 <b>전사와 같게</b> 두면 예외가 사라지고 전사를 따라갑니다 — 그때도
-          적어 둔 도구는 남습니다. 「전사와 같다」와 「아직 안 정했다」는 같은 뜻이라,
-          굳이 붙박아 두면 전사가 움직였을 때 그 사업부만 옛 값에 남습니다.
+          단계를 <b>기본 설정과 같게</b> 두면 예외가 사라지고 기본 설정을 따라갑니다 — 그때도
+          적어 둔 도구는 남습니다. 「기본 설정과 같다」와 「아직 안 정했다」는 같은 뜻이라,
+          굳이 붙박아 두면 기본 설정이 움직였을 때 그 사업부만 옛 값에 남습니다.
         </Hint>
       )}
     </Field>

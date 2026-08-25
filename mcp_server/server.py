@@ -1089,8 +1089,8 @@ async def list_intel_tech(
        OPC UA 도 나온다(표준화가 태그로 걸려 있다).
 
     ⚠️⚠️ `division="MX"` 로 주면 **그 사업부 눈으로 다시 그려서** 준다 — 거르는 것이
-       아니다. 단계ㆍ낡음ㆍ이동이 모두 그 사업부 기준이 되고, 전사와 다르게 정한
-       줄에는 `isDivisionOverride: true` 와 `companyStage`(전사 값)가 함께 온다.
+       아니다. 단계ㆍ낡음ㆍ이동이 모두 그 사업부 기준이 되고, 기본 설정과 다르게 정한
+       줄에는 `isDivisionOverride: true` 와 `companyStage`(기본 설정 값)가 함께 온다.
        「MX 는 이 기술 어디까지 왔나」를 물으면 이걸 쓴다.
 
     ⚠️ 사업부 단계를 **정하는** 도구는 없다. 조직의 판단이라 화면에서 관리자ㆍ
@@ -1105,8 +1105,8 @@ async def list_intel_tech(
         capabilities   이 도구가 속한 역량들 `[{uuid, name}…]`. **여럿일 수 있다.**
                        빈 목록이면 아직 어디에도 안 매달렸다
         children       역량 밑에 매달린 도구들 (역량일 때만)
-        companyStage   전사 단계. `division` 을 줬을 때 `stage` 와 다를 수 있다
-        isDivisionOverride  그 사업부가 전사와 **다르게** 보고 있다는 표시
+        companyStage   기본 설정 단계. `division` 을 줬을 때 `stage` 와 다를 수 있다
+        isDivisionOverride  그 사업부가 기본 설정과 **다르게** 보고 있다는 표시
         evidenceCount  이 기술을 떠받치는 소식 수 — 역량은 **자식 것까지 함께** 센다
         isStale        근거가 오래 없어 **낡았다**는 표시. 단계마다 기준이 다르다
                        (관찰 180일 · 도입 540일). true 면 새 근거가 필요하다는 뜻

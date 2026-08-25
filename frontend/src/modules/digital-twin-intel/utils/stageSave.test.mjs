@@ -24,7 +24,7 @@ test('열어만 보고 닫는 것은 바꾼 것이 아니다', () => {
   const kept = { division: 'MX', stage: '도입', followsCompany: false,
                  reason: '3년째 쓰는 중', tools: ['t1', 't2'] };
   assert.equal(divisionDirty(kept, asDraft(kept)), false);
-  // 전사를 따르던 줄을 펴기만 한 것도 마찬가지.
+  // 기본 설정을 따르던 줄을 펴기만 한 것도 마찬가지.
   assert.equal(divisionDirty(null, asDraft(null)), false);
   assert.equal(divisionDirty(null, null), false);
 });
@@ -38,7 +38,7 @@ test('사업부 쪽이 바뀌면 잡아낸다 — 단계ㆍ이유ㆍ도구 어�
   // 순서만 다른 것은 바뀐 것이 아니다.
   const two = { stage: '도입', followsCompany: false, reason: '쓴다', tools: ['t1', 't2'] };
   assert.equal(divisionDirty(two, { ...asDraft(two), tools: ['t2', 't1'] }), false);
-  // 전사를 따르기로 되돌리는 것도 바뀐 것이다.
+  // 기본 설정을 따르기로 되돌리는 것도 바뀐 것이다.
   assert.equal(divisionDirty(kept, { stage: FOLLOW, reason: '', tools: [] }), true);
 });
 
@@ -51,7 +51,7 @@ test('예외를 만들 때만 이유가 필요하다', () => {
   assert.equal(divisionNeedsReason({ stage: '도입', reason: '' }), true);
   assert.equal(divisionNeedsReason({ stage: '도입', reason: '  ' }), true);
   assert.equal(divisionNeedsReason({ stage: '도입', reason: '쓴다' }), false);
-  // 전사를 따르는 것은 주장이 아니다 — 이유를 안 묻는다.
+  // 기본 설정을 따르는 것은 주장이 아니다 — 이유를 안 묻는다.
   assert.equal(divisionNeedsReason({ stage: FOLLOW, reason: '' }), false);
   assert.equal(divisionNeedsReason(null), false);
 });

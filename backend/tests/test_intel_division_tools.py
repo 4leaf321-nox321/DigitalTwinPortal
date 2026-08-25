@@ -8,7 +8,7 @@
 
 여기서 지키는 것 세 가지
     ① 예외를 만들려면 **이유가 있어야 한다**
-    ② 전사를 따르면서 **도구만** 적을 수 있다 (가장 흔한 경우다)
+    ② 기본 설정을 따르면서 **도구만** 적을 수 있다 (가장 흔한 경우다)
     ③ 도구는 **그 역량 밑에 매달린 것**에서만 고른다
 """
 import pytest
@@ -83,13 +83,13 @@ def test_이유_없이는_예외를_못_만든다(db, client, auth, admin, divs)
                 reason='3년째 쓰는 중').status_code == 200
 
 
-# ── ② 전사를 따르면서 도구만 ────────────────────────────────────────────────
+# ── ② 기본 설정을 따르면서 도구만 ────────────────────────────────────────────────
 
-def test_전사를_따르면서_도구만_적을_수_있다(db, client, auth, admin, divs):
+def test_기본설정을_따르면서_도구만_적을_수_있다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ **가장 흔한 경우다** — 전사도 도입, 우리도 도입, 우리는 LS-DYNA 를 쓴다.
+    ⚠️⚠️ **가장 흔한 경우다** — 기본 설정도 도입, 우리도 도입, 우리는 LS-DYNA 를 쓴다.
        예외를 만들어야만 도구를 적을 수 있으면 이 경우를 **아예 못 적는다.**
-       그래서 단계를 비운 줄을 허락한다: 전사가 움직이면 **같이 움직인다.**
+       그래서 단계를 비운 줄을 허락한다: 기본 설정이 움직이면 **같이 움직인다.**
     """
     cap = _cap(admin, 'explicit 해석', stage='도입')
     dyna = _tool(admin, 'LS-DYNA', cap)
@@ -98,13 +98,13 @@ def test_전사를_따르면서_도구만_적을_수_있다(db, client, auth, ad
     assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
 
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
-    assert mx['isDivisionOverride'] is False, '예외가 아니다 — 전사를 따른다'
+    assert mx['isDivisionOverride'] is False, '예외가 아니다 — 기본 설정을 따른다'
     assert mx['stage'] == '도입'
     assert mx['divisionTools'] == ['LS-DYNA']
 
-    # 전사가 움직이면 MX 도 따라간다. 적어 둔 도구는 그대로 남는다.
+    # 기본 설정이 움직이면 MX 도 따라간다. 적어 둔 도구는 그대로 남는다.
     client.put(f'{BASE}/tech/{cap.uuid}/stage',
-               json={'stage': '보류', 'reason': '전사 차원 중단'},
+               json={'stage': '보류', 'reason': '기본 설정 차원 중단'},
                headers=auth(admin))
     mx2 = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
     assert mx2['stage'] == '보류', '붙박이면 안 된다'
@@ -112,7 +112,7 @@ def test_전사를_따르면서_도구만_적을_수_있다(db, client, auth, ad
 
 
 def test_따르기만_할_땐_이유를_안_묻는다(db, client, auth, admin, divs):
-    """⚠️ 「우리도 전사와 같다」는 주장이 아니다. 이유를 물을 자리가 아니다."""
+    """⚠️ 「우리도 기본 설정과 같다」는 주장이 아니다. 이유를 물을 자리가 아니다."""
     cap = _cap(admin, 'CFD', stage='도입')
     tool = _tool(admin, 'OpenFOAM', cap)
     r = _put(client, auth, admin, cap, 'MX', tools=[tool.uuid])

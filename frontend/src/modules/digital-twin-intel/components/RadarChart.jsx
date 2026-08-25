@@ -401,7 +401,7 @@ const DAY_CHOICES = [30, 90, 180, 365, 730];
 const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                      movedWindowDays = 90, onMovedWindowChange,
                      movedOnly = false, onMovedOnlyChange }) => {
-  // 범례에 「◆ 전사와 다르게 봄」을 띄울지. ⚠️ 전사 기준으로 볼 때 이 줄을 띄우면
+  // 범례에 「◆ 기본 설정과 다르게 봄」을 띄울지. ⚠️ 기본 설정 기준으로 볼 때 이 줄을 띄우면
   //    있지도 않은 표시를 설명하는 꼴이 된다.
   const divisionLens = rows.some((t) => t.division);
   // 이 기간 안에 옮겨온 것이 몇 개인가. ⚠️ 요약 막대가 말해 주던 수를 여기서 잇는다.
@@ -776,7 +776,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                           ? ` · ${b.tech.divisionMarks.map((m) => `${m.division} ${m.stage}`).join(' · ')}`
                           : ''}`
                      + `${b.tech.isDivisionOverride
-                          ? ` · ${b.tech.division} 는 전사(${b.tech.companyStage})와 다르게 봅니다`
+                          ? ` · 기본 설정은 ${b.tech.companyStage} — ${b.tech.division} 는 다르게 봅니다`
                           : ''}`
                      + `${(b.tech.children || []).length
                           ? ` · 도구 ${b.tech.children.length}개`
@@ -889,7 +889,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
             </span>
           )}
           {divisionLens && (
-            <span><b style={{ color: '#4f46e5' }}>◆</b> 전사와 다르게 봄</span>
+            <span><b style={{ color: '#4f46e5' }}>◆</b> 기본 설정과 다르게 봄</span>
           )}
           <span>안쪽일수록 이미 쓰는 것</span>
         </Legend>
@@ -925,14 +925,14 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                             </Moved></>
                           )}
                           {/*
-                            ⚠️ **전사와 다르게 본 것을 표시한다.** 안 하면 사업부
-                               눈으로 그린 레이더가 전사 레이더와 구별이 안 되고,
-                               그러면 「우리가 전사와 어디서 갈리나」 — 이 화면을
+                            ⚠️ **기본 설정과 다르게 본 것을 표시한다.** 안 하면 사업부
+                               눈으로 그린 레이더가 기본 설정 레이더와 구별이 안 되고,
+                               그러면 「우리가 기본 설정과 어디서 갈리나」 — 이 화면을
                                보는 단 하나의 이유 — 를 읽을 수 없다.
                           */}
                           {b.tech.isDivisionOverride && (
                             <> <Mark $color="#4f46e5"
-                                     title={`전사는 「${b.tech.companyStage}」 입니다`}>
+                                     title={`기본 설정은 「${b.tech.companyStage}」 입니다`}>
                               ◆
                             </Mark></>
                           )}

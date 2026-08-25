@@ -67,7 +67,7 @@ def log_change(kind, uuid, name, field, before, after, *,
         before_value=(str(before)[:200] if before is not None else None),
         after_value=(str(after)[:200] if after is not None else None),
         reason=reason,
-        # ⚠️ 비어 있으면 **전사**의 판단이다. 안 실으면 이력에서 전사와 사업부가
+        # ⚠️ 비어 있으면 **기본 설정**의 판단이다. 안 실으면 이력에서 기본 설정과 사업부가
         #    뒤섞이고, 레이더의 이동 화살표가 거짓말을 한다.
         scope=scope,
         actor_user_id=getattr(actor, 'id', None),
@@ -89,7 +89,7 @@ def recent_moves(tech_uuids, days=90, scope=None):
        여기까지 왔나」다.
 
     ⚠️⚠️ **사업부 눈으로 볼 때는 그 사업부의 이력만 본다**(`scope`). 안 나누면
-       화면은 「MX 기준」이라고 써 놓고 화살표는 전사 이동을 그리게 된다 — 테와
+       화면은 「MX 기준」이라고 써 놓고 화살표는 기본 설정 이동을 그리게 된다 — 테와
        화살표가 같은 값을 보게 맞춰 놓은 것과 같은 이유다. 거짓말하는 화살표는
        없는 화살표보다 나쁘다.
     """
@@ -406,7 +406,7 @@ def division_marks(tech_uuids):
 def division_stages(tech_uuids, division):
     """그 사업부에 **따로 정해 둔** 단계들. `{tech_uuid: row}`.
 
-    ⚠️ 없는 것이 정상이다 — 전사 값이 정본이고 여기 있는 것은 예외뿐이다.
+    ⚠️ 없는 것이 정상이다 — 기본 설정 값이 정본이고 여기 있는 것은 예외뿐이다.
     """
     if not tech_uuids or not division:
         return {}
@@ -445,13 +445,13 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
        표.** 「MX 도입」 네 글자는 6개월 뒤 아무 뜻도 아니다.
 
     ⚠️⚠️ **단계를 안 정하고 도구만 적을 수 있다**(`stage` 를 비운다). 가장 흔한
-       경우가 「전사도 도입, 우리도 도입, 우리는 LS-DYNA 를 쓴다」인데, 예외를
+       경우가 「기본 설정도 도입, 우리도 도입, 우리는 LS-DYNA 를 쓴다」인데, 예외를
        만들어야만 도구를 적을 수 있으면 그 경우를 아예 못 적는다.
 
-           stage 없음   전사를 따른다. **전사가 움직이면 같이 움직인다**
-           stage 있음   전사와 다르게 본다 → 이유가 있어야 한다
+           stage 없음   기본 설정을 따른다. **기본 설정이 움직이면 같이 움직인다**
+           stage 있음   기본 설정과 다르게 본다 → 이유가 있어야 한다
 
-    ⚠️ 전사와 **같은 값**을 보내면 「안 정함」으로 되돌린다. 굳이 붙박아 두면 전사가
+    ⚠️ 기본 설정과 **같은 값**을 보내면 「안 정함」으로 되돌린다. 굳이 붙박아 두면 기본 설정이
        움직였을 때 이 사업부만 옛 값에 남는다.
     """
     division = (division or '').strip()
@@ -469,13 +469,13 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
     stage = (stage or '').strip() or None
     if stage is not None and stage not in STAGES:
         return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
-    # 전사와 같아졌다 → 예외가 아니라 「따름」이다.
+    # 기본 설정과 같아졌다 → 예외가 아니라 「따름」이다.
     if stage == t.stage:
         stage = None
 
     reason = (reason or '').strip()
     if stage is not None and not reason:
-        return None, ('전사(%s)와 다르게 「%s」 로 보는 이유를 적어야 합니다. '
+        return None, ('기본 설정(%s)와 다르게 「%s」 로 보는 이유를 적어야 합니다. '
                       '이유 없는 줄은 6개월 뒤 아무 뜻도 아닙니다.' % (t.stage, stage))
 
     tools = _clean_tools(tools, parent=t)
@@ -496,7 +496,7 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
         if row is not None:
             if before != after:
                 log_change('tech', t.uuid, t.name, 'stage', before, after,
-                           reason='전사 값을 따르도록 되돌렸습니다.',
+                           reason='기본 설정 값을 따르도록 되돌렸습니다.',
                            actor=actor, source=source, scope=division)
             db.session.delete(row)
             db.session.commit()
@@ -514,7 +514,7 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
     if before != after:
         row.changed_at = datetime.utcnow()
         log_change('tech', t.uuid, t.name, 'stage', before, after,
-                   reason=reason or '전사 값을 따르도록 되돌렸습니다.',
+                   reason=reason or '기본 설정 값을 따르도록 되돌렸습니다.',
                    actor=actor, source=source, scope=division)
 
     db.session.commit()
@@ -572,7 +572,7 @@ def used_by_division(tool_uuid):
         'division': r.division,
         'capability': caps.get(r.tech_uuid),
         'capabilityUuid': r.tech_uuid,
-        'stage': r.stage,                      # 비어 있으면 전사를 따른다
+        'stage': r.stage,                      # 비어 있으면 기본 설정을 따른다
         'reason': r.reason,
     } for r in rows]
 
@@ -580,8 +580,8 @@ def used_by_division(tool_uuid):
 def clear_division_stage(tech_uuid, division, actor=None, source='ui'):
     """그 사업부 줄을 통째로 지운다 — 단계ㆍ이유ㆍ도구가 함께 사라진다.
 
-    ⚠️ 「전사로 되돌리기」와 「적어 둔 것 지우기」를 **한 단추로 묶지 않는다**.
-       단계만 되돌리고 도구는 남기고 싶으면 단계를 「전사를 따름」으로 고르면 된다.
+    ⚠️ 「기본 설정으로 되돌리기」와 「적어 둔 것 지우기」를 **한 단추로 묶지 않는다**.
+       단계만 되돌리고 도구는 남기고 싶으면 단계를 「기본 설정을 따름」으로 고르면 된다.
        이 길은 그 사업부에 대해 적어 둔 것을 전부 무르는 자리다.
     """
     row = IntelDivisionStage.query.filter_by(
@@ -591,7 +591,7 @@ def clear_division_stage(tech_uuid, division, actor=None, source='ui'):
     t = IntelTech.query.filter_by(uuid=tech_uuid).first()
     log_change('tech', tech_uuid, t.name if t else None, 'stage',
                row.stage, t.stage if t else None,
-               reason='사업부 예외를 지우고 전사 값을 따릅니다.',
+               reason='사업부 예외를 지우고 기본 설정 값을 따릅니다.',
                actor=actor, source=source, scope=division)
     db.session.delete(row)
     db.session.commit()

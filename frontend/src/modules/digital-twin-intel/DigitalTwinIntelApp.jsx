@@ -288,7 +288,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       기술 탭 — 그 사업부 **눈으로 다시 그린다.** 거르는 것이 아니다.
 
     ⚠️ 기술에서 「관련된 것만」으로 거르지 않는 이유 — 묻고 싶은 것은 「우리 사업부는
-       어디까지 왔나」이지 「우리와 관련된 것만」이 아니다. 관련 없는 것은 전사 값
+       어디까지 왔나」이지 「우리와 관련된 것만」이 아니다. 관련 없는 것은 기본 설정 값
        그대로 서면 되고, 그게 더 정확하다.
   */
   const [division, setDivision] = useState('');
@@ -343,7 +343,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     setError(null);
     try {
       /*
-        ⚠️⚠️ **사업부 눈으로 푸는 일은 서버가 한다.** 화면이 전사 값과 사업부 값 중
+        ⚠️⚠️ **사업부 눈으로 푸는 일은 서버가 한다.** 화면이 기본 설정 값과 사업부 값 중
            무엇을 그릴지 고르게 하면 레이더ㆍ목록ㆍ상세가 서로 다른 것을 그리게
            되고, 낡음 기준(단계마다 다르다)과 이동 화살표까지 갈린다. 낡음 판정을
            서버에 둔 것과 **같은 이유**다 — 고르는 일은 한 곳에서 한 번만.
@@ -402,7 +402,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       /*
         ⚠️ 여기서 사업부로 **거르지 않는다.** 서버가 이미 그 사업부 눈으로 풀어
            보냈고, 「관련된 것만」으로 좁히면 「우리 사업부는 어디까지 왔나」에
-           답할 수 없다 — 안 걸린 것이 전사 값으로 서는 것도 답의 일부다.
+           답할 수 없다 — 안 걸린 것이 기본 설정 값으로 서는 것도 답의 일부다.
       */
       if (focus === 'stale' && !t.isStale) return false;
       if (focus === 'moved' && !t.movedFrom) return false;
@@ -423,7 +423,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     });
   }, [tech, q, category, stage, staleOnly, focus, kind, techView]);
 
-  // 전사와 다르게 정한 것이 몇 개인가. **이 숫자가 사업부별 보기의 답이다.**
+  // 기본 설정과 다르게 정한 것이 몇 개인가. **이 숫자가 사업부별 보기의 답이다.**
   const overrideCount = useMemo(
     () => shownTech.filter((t) => t.isDivisionOverride).length, [shownTech]);
 
@@ -675,7 +675,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                       title={tab === 'tech'
                         ? '그 사업부 눈으로 다시 그립니다 (거르지 않습니다)'
                         : '그 사업부와 관련 있다고 적힌 것만 봅니다'}>
-                <option value="">{tab === 'tech' ? '전사 기준' : '사업부 전체'}</option>
+                <option value="">{tab === 'tech' ? '기본 설정 기준' : '사업부 전체'}</option>
                 {divisionOptions.map((d) => <option key={d} value={d}>{d}</option>)}
               </Select>
             )}
@@ -738,19 +738,19 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           {/*
             ⚠️ **고르기의 뜻이 바뀌었다는 것을 말해 준다.** 안 말하면 「걸러진 줄
                알았는데 전부 그대로 있네」로 읽히고, 그러면 이 기능을 안 쓴다.
-            ⚠️ 전사와 다른 것이 **몇 개인지**가 이 화면의 답이다 — 그 숫자가 곧
-               「우리 사업부가 전사와 얼마나 다른가」다.
+            ⚠️ 기본 설정과 다른 것이 **몇 개인지**가 이 화면의 답이다 — 그 숫자가 곧
+               「우리 사업부가 기본 설정과 얼마나 다른가」다.
           */}
           {tab === 'tech' && division && !loading && !error && (
             <LensBar>
               <span>
                 <b>{division}</b> 눈으로 봅니다 — 단계ㆍ낡음ㆍ이동 화살표가 모두 이
-                사업부 기준입니다. 전사와 다르게 정한 것은 <em>◆</em> 로 표시됩니다
+                사업부 기준입니다. 기본 설정과 다르게 정한 것은 <em>◆</em> 로 표시됩니다
                 {overrideCount > 0
                   ? ` (${overrideCount}개).`
-                  : '. 아직 하나도 없어 전부 전사 값 그대로입니다.'}
+                  : '. 아직 하나도 없어 전부 기본 설정 값 그대로입니다.'}
               </span>
-              <button type="button" onClick={() => setDivision('')}>전사로</button>
+              <button type="button" onClick={() => setDivision('')}>기본 설정으로</button>
             </LensBar>
           )}
 

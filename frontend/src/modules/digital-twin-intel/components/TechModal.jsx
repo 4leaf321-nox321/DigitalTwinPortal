@@ -497,12 +497,12 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             <ColHead>무엇인가</ColHead>
           {/*
             ⚠️ **지금 보고 있는 단계가 어느 기준인지 먼저 말한다.** 사업부 눈으로
-               연 창에서 그냥 「도입」이라고만 쓰여 있으면 전사가 도입인 줄 안다 —
+               연 창에서 그냥 「도입」이라고만 쓰여 있으면 기본 설정이 도입인 줄 안다 —
                그 오해가 그대로 회의에 들어간다.
           */}
           {(tech.divisionTools || []).length > 0 && !tech.isDivisionOverride && (
             <Lens>
-              <b>{tech.division}</b> 는 전사({tech.companyStage})를 따르고,
+              <b>{tech.division}</b> 는 기본 설정 <b>{tech.companyStage}</b> 을 따르고,
               이것을 <b>{tech.divisionTools.join(' · ')}</b> 로 합니다.
               {tech.divisionStageReason ? ` — ${tech.divisionStageReason}` : ''}
             </Lens>
@@ -513,7 +513,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
               <b>{tech.division}</b> 기준으로 <b>{tech.stage}</b> 입니다.
               {(tech.divisionTools || []).length > 0
                 && <> 이것을 <b>{tech.divisionTools.join(' · ')}</b> 로 합니다.</>}
-              전사는 <b>{tech.companyStage}</b> 입니다
+              기본 설정은 <b>{tech.companyStage}</b> 입니다
               {tech.divisionStageAt
                 ? ` (${String(tech.divisionStageAt).slice(0, 10)}부터).` : '.'}
               {tech.divisionStageReason ? ` — ${tech.divisionStageReason}` : ''}
@@ -841,7 +841,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           )}
 
           {/*
-            ⚠️ **단계를 바꾸는 자리 가까이 둔다.** 멀리 두면 전사만 바꾸고 사업부는
+            ⚠️ **단계를 바꾸는 자리 가까이 둔다.** 멀리 두면 기본 설정만 바꾸고 사업부는
                안 건드리게 되고, 그러면 사업부 값이 조용히 옛것으로 남는다.
           */}
           <DivisionStages ref={divRef} tech={tech} canCurate={canCurate}
