@@ -760,6 +760,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           {fixed && (
             <RadarSlot>
               <RadarChart rows={shownTech} categories={settings.techCategories}
+                          movedOnly={focus === 'moved'}
+                          onMovedOnlyChange={(on) => pickFocus(on ? 'moved' : '')}
                           onMovedWindowChange={(d) => {
                             // ⚠️ 기억해 둔다. 못 써도 그냥 넘어간다(시크릿 창 등).
                             try { window.localStorage.setItem(MOVED_KEY, String(d)); }

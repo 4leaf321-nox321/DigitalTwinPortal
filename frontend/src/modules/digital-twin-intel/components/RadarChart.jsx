@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
-  AlertTriangle, Minus, Plus, Maximize2, Move, Tag, History,
+  AlertTriangle, Minus, Plus, Maximize2, Move, Tag, History, Filter,
 } from 'lucide-react';
 
 import { STAGES } from './RadarBoard';
@@ -384,10 +384,13 @@ const writePref = (key, on) => {
 const DAY_CHOICES = [30, 90, 180, 365, 730];
 
 const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
-                     movedWindowDays = 90, onMovedWindowChange }) => {
+                     movedWindowDays = 90, onMovedWindowChange,
+                     movedOnly = false, onMovedOnlyChange }) => {
   // 범례에 「◆ 전사와 다르게 봄」을 띄울지. ⚠️ 전사 기준으로 볼 때 이 줄을 띄우면
   //    있지도 않은 표시를 설명하는 꼴이 된다.
   const divisionLens = rows.some((t) => t.division);
+  // 이 기간 안에 옮겨온 것이 몇 개인가. ⚠️ 요약 막대가 말해 주던 수를 여기서 잇는다.
+  const movedCount = rows.filter((t) => t.movedFrom).length;
   const [hot, setHot] = useState(null);
   const [labels, setLabels] = useState(() => readPref(LABEL_KEY, false));
   /*
@@ -528,7 +531,15 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
   };
 
   const toggleLabels = () => setLabels((v) => { writePref(LABEL_KEY, !v); return !v; });
-  const toggleMoves = () => setMoves((v) => { writePref(MOVE_KEY, !v); return !v; });
+  const toggleMoves = () => setMoves((v) => {
+    writePref(MOVE_KEY, !v);
+    /*
+      ⚠️⚠️ **끄면 거르기도 함께 푼다.** 안 풀면 「움직인 것만」이 걸린 채로 그 단추가
+         사라져, 레이더에 일부만 뜨는데 **왜 그런지 화면 어디에도 안 보인다.**
+    */
+    if (v && movedOnly && onMovedOnlyChange) onMovedOnlyChange(false);
+    return !v;
+  });
 
   const reset = () => setView({ k: 1, x: 0, y: 0 });
   const zoomed = view.k > 1.001;
@@ -555,6 +566,18 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
             ⚠️ 고르면 **서버에 다시 묻는다** — 무엇이 움직였는지는 서버가 센다.
                화면이 따로 재면 화살표ㆍ테ㆍ범례가 서로 다른 기간을 말하게 된다.
           */}
+          {/*
+            ⚠️ 거르기를 **시간 단추 밑에** 둔다. 위쪽 요약 막대에 따로 있으면 시간에
+               관한 것이 두 군데로 갈리고, 어느 쪽이 무엇을 하는지 흐려진다.
+          */}
+          {moves && onMovedOnlyChange && (
+            <ToolBtn $on={movedOnly} onClick={() => onMovedOnlyChange(!movedOnly)}
+                     title={movedOnly
+                       ? '전부 다시 보기'
+                       : `옮겨온 것만 남깁니다 (${movedCount}개)`}>
+              <Filter size={13} />
+            </ToolBtn>
+          )}
           {moves && onMovedWindowChange && (
             <DaySel value={movedWindowDays}
                     title="최근 며칠 안의 이동을 볼지"
@@ -787,7 +810,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                       strokeDasharray="3 2" opacity="0.6" />
                 <path d="M14 3 L20 6 L14 9 z" fill="#64748b" opacity="0.6" />
               </svg>
-              최근 {movedWindowDays}일 내 옮겨온 자리
+              최근 {movedWindowDays}일 내 옮겨온 자리 ({movedCount})
             </span>
           )}
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="#64748b" stroke="#b45309" strokeWidth="2" /></svg> 근거 낡음</span>

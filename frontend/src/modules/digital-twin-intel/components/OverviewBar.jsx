@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Newspaper, AlertTriangle, ArrowUpRight, Unlink, HelpCircle } from 'lucide-react';
+import { Newspaper, AlertTriangle, Unlink, HelpCircle } from 'lucide-react';
 
 const Bar = styled.div`
   display: flex;
@@ -73,13 +73,12 @@ const OverviewBar = ({ data, active, onPick, tab = 'news' }) => {
     { key: 'stale', on: !isNews, n: data.staleTech, icon: AlertTriangle,
       label: '낡은 기술', color: '#b45309', bg: '#fffbeb',
       why: '근거가 오래 없어 아직 유효한 판단인지 확인할 때가 됐습니다' },
-    /* ⚠️ 「30일」을 이름에 박지 않는다 — 보는 사람이 고르는 값이 됐다. 서버가
-       실제로 센 기간을 그대로 적는다. */
-    { key: 'moved', on: !isNews, n: data.movedRecent, icon: ArrowUpRight,
-      label: `최근 ${data.movedWindowDays}일 단계 이동`,
-      color: '#0f766e', bg: '#f0fdfa',
-      why: `최근 ${data.movedWindowDays}일 안에 단계가 바뀐 것입니다`
-           + ' (레이더 도구에서 기간을 바꿀 수 있습니다)' },
+    /*
+      ⚠️⚠️ **「최근 N일 단계 이동」은 여기 없다.** 레이더 오른쪽 위의 시간 단추가
+         이미 같은 것을 다루는데(켜고 끄기 · 기간 고르기), 거르기만 여기 따로
+         있으면 **시간에 관한 것이 두 군데로 갈린다**(2026-08-25 신고).
+         거르기는 그 시간 단추 밑으로 옮겼다 — 지운 것이 아니다.
+    */
     { key: 'unlinked', on: isNews, n: data.unlinkedNews, icon: Unlink,
       label: '우리 것과 안 이어진 소식', color: '#7c3aed', bg: '#f5f3ff',
       why: '아직 과제·지표와 안 이어졌습니다. AI 정리로 후보를 받아 보세요' },
@@ -91,7 +90,7 @@ const OverviewBar = ({ data, active, onPick, tab = 'news' }) => {
         <Quiet>
           {isNews
             ? `지금 손볼 소식이 없습니다 — 안 읽은 것도, 안 이어진 것도 없습니다. (소식 ${data.totalNews}건)`
-            : `지금 손볼 기술이 없습니다 — 낡은 것도, 최근 옮긴 것도 없습니다. (레이더 ${data.totalTech}개)`}
+            : `지금 손볼 기술이 없습니다 — 근거가 낡은 것이 없습니다. (레이더 ${data.totalTech}개)`}
         </Quiet>
       </Bar>
     );
