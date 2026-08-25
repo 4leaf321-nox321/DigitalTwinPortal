@@ -57,7 +57,19 @@ const Frame = styled.div`
   border-radius: 0.75rem;
   overflow: hidden;
 
-  svg {
+  /*
+    ⚠️⚠️ **바로 아래 자식(>)에만 건다.** 그냥 svg 로 두면 이 틀 안의 **모든** svg 에
+       걸리는데, 여기엔 오른쪽 위 도구 단추의 아이콘도 들어 있다. 그러면 아이콘이
+       width:100% · height:100% · flex:1 로 늘어나 단추를 꽉 채운다 — 전역
+       규칙(button svg { width: 1em })이 있는데도 **이쪽이 명시도에서 이겨서**
+       (0,1,1 대 0,0,2) 조용히 덮어쓴다. 2026-08-25 신고.
+
+    이 규칙이 겨냥하는 것은 **레이더 그림 하나뿐**이고, 그것은 이 틀의 바로 아래
+    자식이다.
+
+    ⚠️ 이 주석에 백틱을 쓰면 안 된다 — 스타일 템플릿이 거기서 끊긴다(방금 겪었다).
+  */
+  > svg {
     flex: 1;
     min-height: 0;
     width: 100%;
@@ -69,7 +81,7 @@ const Frame = styled.div`
 
   @media (max-width: 1000px) {
     height: auto;
-    svg { height: auto; }
+    > svg { height: auto; }
   }
 `;
 
