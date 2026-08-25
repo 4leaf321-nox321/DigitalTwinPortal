@@ -159,22 +159,28 @@ const Group = styled.section`
   ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.0625rem; }
 `;
 
-const Entry = styled.button`
+/* 감싸는 것은 **div** 다 — 안에 버튼이 둘 들어가므로 버튼이면 안 된다. */
+const Entry = styled.div`
+  border-radius: 0.3125rem;
+  padding: 0.25rem 0.3125rem;
+  background: ${(p) => (p.$hot ? '#eef2ff' : 'transparent')};
+
+  &:hover { background: #eef2ff; }
+`;
+
+const MainBtn = styled.button`
   display: flex;
   align-items: flex-start;
   gap: 0.375rem;
   width: 100%;
   text-align: left;
   border: none;
-  background: ${(p) => (p.$hot ? '#eef2ff' : 'none')};
-  border-radius: 0.3125rem;
-  padding: 0.25rem 0.3125rem;
+  background: none;
+  padding: 0;
   cursor: pointer;
   font-size: 0.75rem;
   color: #334155;
   line-height: 1.45;
-
-  &:hover { background: #eef2ff; }
 
   > b {
     color: #fff;
@@ -190,7 +196,17 @@ const Entry = styled.button`
     flex-shrink: 0;
     margin-top: 0.0625rem;
   }
-  small { color: #94a3b8; font-size: 0.6875rem; display: block; }
+`;
+
+const SubRow = styled.div`
+  display: flex;
+  gap: 0.25rem;
+  align-items: baseline;
+  padding-left: 1.5rem;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+
+  em { font-style: normal; }
 `;
 
 const Moved = styled.span`
@@ -229,6 +245,8 @@ const SectorBtn = styled.button`
   cursor: pointer;
   font: inherit;
   color: inherit;
+
+  &:hover { color: #4338ca; text-decoration: underline; }
 `;
 
 /* ⚠️ 가로를 세로보다 넓게 잡는다. 정사각형이면 좌ㆍ우 부채꼴 이름이 잘린다
@@ -638,36 +656,44 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
             <Group key={st.key} $color={st.color}>
               <h4>{st.key} ({items.length})</h4>
               <ol>
+                {/*
+                  ⚠️ **버튼 안에 버튼을 넣지 않는다.** 분류를 누를 수 있게 하려고
+                     한때 그렇게 짰는데, HTML 이 금지하는 모양이라 클릭이 어느 쪽에
+                     먹을지 브라우저마다 다르고 키보드ㆍ스크린리더가 깨진다
+                     (React 가 `validateDOMNesting` 으로 운다 — 2026-08-25 신고).
+                     둘을 **형제**로 펴고 감싸는 것은 div 로 둔다.
+                */}
                 {items.map((b) => (
                   <li key={b.tech.uuid}>
-                    <Entry type="button" $hot={hot === b.tech.uuid} $color={st.color}
+                    <Entry $hot={hot === b.tech.uuid}
                            onMouseEnter={() => setHot(b.tech.uuid)}
-                           onMouseLeave={() => setHot(null)}
-                           onClick={() => onSelect(b.tech)}>
-                      <b>{b.no}</b>
-                      <span>
-                        {b.tech.name}
-                        {b.tech.movedFrom && (
-                          <> <Moved title={`${b.tech.movedFrom} 에서 옮겨왔습니다`}>
-                            {b.tech.movedFrom}→
-                          </Moved></>
-                        )}
-                        {b.tech.isStale && (
-                          <> <Mark $color="#b45309" title="근거가 오래 없습니다">
-                            <AlertTriangle size={11} />
-                          </Mark></>
-                        )}
-                        <small>
-                          <SectorBtn type="button"
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       if (onSectorClick) onSectorClick(b.tech.category || '');
-                                     }}>
-                            {b.tech.category || UNCATEGORIZED}
-                          </SectorBtn>
-                          {' · 근거 '}{b.tech.evidenceCount ?? 0}건
-                        </small>
-                      </span>
+                           onMouseLeave={() => setHot(null)}>
+                      <MainBtn type="button" $color={st.color}
+                               onClick={() => onSelect(b.tech)}>
+                        <b>{b.no}</b>
+                        <span>
+                          {b.tech.name}
+                          {b.tech.movedFrom && (
+                            <> <Moved title={`${b.tech.movedFrom} 에서 옮겨왔습니다`}>
+                              {b.tech.movedFrom}→
+                            </Moved></>
+                          )}
+                          {b.tech.isStale && (
+                            <> <Mark $color="#b45309" title="근거가 오래 없습니다">
+                              <AlertTriangle size={11} />
+                            </Mark></>
+                          )}
+                        </span>
+                      </MainBtn>
+                      <SubRow>
+                        <SectorBtn type="button"
+                                   title="이 갈래만 봅니다"
+                                   onClick={() => onSectorClick
+                                     && onSectorClick(b.tech.category || '')}>
+                          {b.tech.category || UNCATEGORIZED}
+                        </SectorBtn>
+                        <em>· 근거 {b.tech.evidenceCount ?? 0}건</em>
+                      </SubRow>
                     </Entry>
                   </li>
                 ))}
