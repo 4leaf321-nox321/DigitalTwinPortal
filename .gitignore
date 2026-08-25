@@ -81,7 +81,10 @@ backend/uploads/
 
 # End of .gitignore
 
-# SSR·CSS 검사가 만드는 찌꺼기 (scratchpad 로 안 빠지는 것들)
-frontend/a.css
-frontend/*.cjs
-frontend/ssr-*.cjs
+# SSR·CSS 검사 찌꺼기.
+# ⚠️ node_modules 를 쓰려면 번들을 frontend/ 안에 떨궈야 해서 여기 생긴다.
+#    esbuild 는 번들 옆에 **같은 이름의 .css 도 함께** 만든다 — 이름을 하나씩
+#    적었더니 다음 검사가 다른 이름을 써서 또 딸려 들어갔다(a.css → x.css).
+#    그래서 패턴으로 막는다. 진짜 소스는 src/ 밑에만 있다.
+/frontend/*.cjs
+/frontend/*.css

@@ -25,13 +25,23 @@ import { Overlay, Panel, Head, CloseBtn, Body, Foot, Hint, GhostBtn } from './mo
  */
 const ORPHAN = '__orphan__';
 
+/*
+  ⚠️⚠️ **`width` 만 덮어쓰면 안 된다.** `Panel` 은 `max-width` 로 폭을 잡는데,
+     여기서 `width: min(58rem, 94vw)` 만 주고 있었다. `max-width` 가 기본값
+     38rem 그대로라 **실제로는 38rem 이었다** — 왼쪽 15rem + 오른쪽이 그 안에
+     욱여넣어져 있었다(2026-08-25 신고: 「폭을 좀 더 넓게」).
+     `Panel` 이 쓰는 길(`$wide`)을 그대로 쓴다.
+
+  두 칸짜리 관리 화면이라 다른 창보다 넓게 잡는다. 좁은 화면에서는 `vw` 가 이긴다.
+*/
 const Wide = styled(Panel)`
-  width: min(58rem, 94vw);
+  max-width: min(76rem, 96vw);
 `;
 
 const Split = styled.div`
   display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
+  /* ⚠️ 역량 이름이 길다(「이산사건 공정 시뮬레이션」) — 좁으면 전부 …로 잘린다. */
+  grid-template-columns: 18rem minmax(0, 1fr);
   gap: 0.75rem;
   min-height: 0;
 
@@ -42,7 +52,8 @@ const Left = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  max-height: 26rem;
+  /* 창이 커진 만큼 목록도 길게. ⚠️ 화면이 낮으면 vh 가 이긴다. */
+  max-height: min(32rem, 56vh);
   overflow-y: auto;
   padding-right: 0.25rem;
 `;
@@ -85,7 +96,7 @@ const Right = styled.div`
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
-  max-height: 26rem;
+  max-height: min(32rem, 56vh);
 `;
 
 const Bar = styled.div`
@@ -164,7 +175,7 @@ const Item = styled.li`
 
   select {
     flex-shrink: 0;
-    max-width: 11rem;
+    max-width: 14rem;
     font-size: 0.6875rem;
     padding: 0.25rem;
     border: 1px solid #e2e8f0;

@@ -226,7 +226,8 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
 
   return (
     <Overlay onClick={onClose}>
-      <Panel $wide="40rem" onClick={(e) => e.stopPropagation()}>
+      {/* ⚠️ 층 고르기가 두 칸으로 서고 CPT 가 세 칸으로 서는 창이라 좁으면 답답하다. */}
+      <Panel $wide="52rem" onClick={(e) => e.stopPropagation()}>
         <Head>
           <Radar size={17} color="#4f46e5" />
           <h2>{edit ? '기술 고치기' : '기술 추가'}</h2>
