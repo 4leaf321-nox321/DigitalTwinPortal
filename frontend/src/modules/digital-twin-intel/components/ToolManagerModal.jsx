@@ -86,8 +86,10 @@ const CapBtn = styled.button`
 
   &:hover { background: #f8fafc; }
 
-  b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-      white-space: nowrap; font-weight: inherit; }
+  /* ⚠️ **이름은 안 자른다.** 「제어 설계ㆍ검증 (MIL/SIL/HIL)」처럼 긴 이름이
+     잘리면 옆 것과 구별이 안 된다. 줄을 접는다. */
+  b { flex: 1; min-width: 0; white-space: normal; word-break: keep-all;
+      line-height: 1.4; font-weight: inherit; }
   em { font-style: normal; font-size: 0.6875rem; color: #94a3b8;
        font-variant-numeric: tabular-nums; }
 `;

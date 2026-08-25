@@ -113,13 +113,15 @@ const Pick = styled.button`
   }
 
   /* 이미 매달린 도구 — **가장 강한 힌트다.** */
+  /* ⚠️ 도구 이름은 안 자른다 — 「어디에 무엇이 들어 있나」가 고르는 근거다.
+     다만 **몇 개까지만** 보여준다(그 아래 「외 N」). 목록을 줄이는 것과 이름을
+     자르는 것은 다른 일이다. */
   em {
     font-style: normal;
     font-size: 0.6875rem;
     color: #4338ca;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.4;
+    word-break: keep-all;
   }
 `;
 

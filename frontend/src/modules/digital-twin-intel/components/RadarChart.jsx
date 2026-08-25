@@ -357,16 +357,6 @@ const readLabelPref = () => {
   }
 };
 
-/*
-  이름표에 쓸 글자. ⚠️ 긴 이름을 그대로 쓰면 옆 점을 덮는다 — 「이산사건 공정
-  시뮬레이션」이 이웃 서넛을 가린다. 자르되 **전체 이름은 풍선말에 그대로 있다.**
-*/
-const LABEL_MAX = 10;
-const shortName = (name) => {
-  const v = name || '';
-  return v.length > LABEL_MAX ? `${v.slice(0, LABEL_MAX)}…` : v;
-};
-
 const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                      movedWindowDays = 90 }) => {
   // 범례에 「◆ 전사와 다르게 봄」을 띄울지. ⚠️ 전사 기준으로 볼 때 이 줄을 띄우면
@@ -688,6 +678,13 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
 
               ⚠️ `pointerEvents: none` — 이름표가 클릭을 가로채면 점을 눌러도
                  창이 안 열린다. 예전에 setPointerCapture 로 같은 일을 겪었다.
+
+              ⚠️⚠️ **자르지 않는다.** 한때 10자에서 잘랐는데, 「반도체ㆍ전자 패키징
+                 해석」과 「반도체ㆍ전자 패키징 검사」가 화면에서 **똑같은 글자**가
+                 되어 버렸다 — 이름표를 켜는 이유가 「어느 점이 무엇인지」인데 자르면
+                 그 답이 안 나온다(2026-08-25 신고: 「…으로 생략 안 되게」).
+                 길어서 겹치는 것은 **확대해서 푼다** — 글자 크기가 `/ k` 로 고정돼
+                 있어 확대하면 이름표끼리 벌어진다.
             */}
             {labels && blips.map((b) => {
               const k = view.k;
@@ -709,7 +706,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                       strokeWidth={3 / k}
                       paintOrder="stroke"
                       style={{ pointerEvents: 'none' }}>
-                  {shortName(b.tech.name)}
+                  {b.tech.name}
                 </text>
               );
             })}

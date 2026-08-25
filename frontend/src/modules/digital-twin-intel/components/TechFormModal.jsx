@@ -94,8 +94,10 @@ const PickBtn = styled.button`
 
   &:hover { border-color: #a5b4fc; }
 
+  /* ⚠️ **이름은 안 자른다.** 무엇을 골랐는지 확인하는 자리인데 잘리면 확인이
+     안 된다. 길면 줄을 접어 단추가 조금 높아질 뿐이다. */
   b { flex: 1; min-width: 0; font-size: 0.8125rem; font-weight: ${(p) => (p.$set ? 600 : 400)};
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      white-space: normal; word-break: keep-all; line-height: 1.4; }
   em { font-style: normal; font-size: 0.6875rem; color: #6366f1; flex-shrink: 0; }
 `;
 

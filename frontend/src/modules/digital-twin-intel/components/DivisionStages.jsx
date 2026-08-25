@@ -68,9 +68,10 @@ const Said = styled.small`
   font-size: 0.6875rem;
   color: #475569;
   line-height: 1.45;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* ⚠️ **도구 이름이 여기 들어 있다** — 자르면 무엇으로 하는지가 안 보인다.
+     이유가 길면 줄을 접는다. */
+  white-space: normal;
+  word-break: keep-all;
 
   em { font-style: normal; color: #4338ca; font-weight: 600; }
   i { font-style: normal; color: #94a3b8; }
