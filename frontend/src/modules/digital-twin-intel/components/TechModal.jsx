@@ -192,6 +192,80 @@ const Kids = styled.ul`
 
 /* 지금 무엇 기준으로 보고 있는지. ⚠️ 경고(노랑)와 색을 달리한다 — 잘못된 것이
    아니라 **다른 눈으로 보고 있다**는 안내다. */
+/*
+  ⚠️⚠️ **상세는 세로로만 늘어서 있었다.** 읽을 것(요약ㆍ분류ㆍ근거)과 정할
+     것(단계ㆍ사업부별ㆍ연결)이 한 줄로 이어져서, 무언가를 적으려면 한참 굴려
+     내려가야 했다 — 굴려야 닿는 칸은 안 채워진다(2026-08-25 신고).
+
+     화면의 80% 를 쓰고 **두 칸으로 가른다.**
+
+         왼쪽  무엇인가   요약 · 층 · 분류 · 함께 나오는 것 · 근거 소식
+         오른쪽 무엇을 정하나  단계 · 사업부별 · 연결 · 이력
+
+  ⚠️ 칸마다 **따로 굴린다.** 하나로 굴리면 두 칸으로 가른 뜻이 없다 — 오른쪽을
+     보려고 왼쪽 끝까지 내려가야 하는 것은 똑같다.
+*/
+const Wide = styled(Panel)`
+  max-width: 80vw;
+  width: 80vw;
+  height: 80vh;
+  max-height: 80vh;
+
+  /* 좁은 화면에서는 80% 가 오히려 답답하다 — 다 쓴다. */
+  @media (max-width: 900px) {
+    max-width: 94vw;
+    width: 94vw;
+    height: 90vh;
+    max-height: 90vh;
+  }
+`;
+
+const Two = styled.div`
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 1.25rem;
+  padding: 1rem 1.125rem;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+`;
+
+const Col = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.375rem;
+
+  /* 오른쪽 칸은 왼쪽과 사이를 그어 둔다 — 두 갈래라는 것이 눈에 보이게. */
+  ${(p) => p.$right && `
+    border-left: 1px solid #f1f5f9;
+    padding-left: 1.25rem;
+    padding-right: 0;
+  `}
+
+  @media (max-width: 900px) {
+    overflow-y: visible;
+    border-left: none;
+    padding-left: 0;
+  }
+`;
+
+/* 칸 안의 작은 머리글. ⚠️ 두 칸이 무엇으로 갈렸는지 말해 주지 않으면 그냥
+   흩어진 것으로 보인다. */
+const ColHead = styled.h3`
+  margin: 0 0 -0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #6366f1;
+  letter-spacing: 0.02em;
+`;
+
 const Lens = styled.p`
   margin: 0;
   padding: 0.4375rem 0.625rem;
@@ -364,7 +438,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
 
   return (
     <Overlay onClick={onClose}>
-      <Panel $wide="42rem" onClick={(e) => e.stopPropagation()}>
+      <Wide onClick={(e) => e.stopPropagation()}>
         <Head>
           <Radar size={17} color="#4f46e5" />
           <h2>{tech.name}</h2>
@@ -374,7 +448,9 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           <CloseBtn onClick={onClose}><X size={18} /></CloseBtn>
         </Head>
 
-        <Body>
+        <Two>
+          <Col>
+            <ColHead>무엇인가</ColHead>
           {/*
             ⚠️ **지금 보고 있는 단계가 어느 기준인지 먼저 말한다.** 사업부 눈으로
                연 창에서 그냥 「도입」이라고만 쓰여 있으면 전사가 도입인 줄 안다 —
@@ -590,6 +666,49 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           )}
 
           {/*
+            ⚠️ **근거는 읽는 쪽이다.** 「왜 이 단계인가」에 답하는 자리라 무엇인가와
+               함께 둔다 — 정하는 칸에 섞으면 그 칸이 길어져 입력이 다시 아래로 밀린다.
+          */}
+          <Field>
+            <span>근거가 된 소식 {evidence ? `(${evidence.length}건)` : ''}</span>
+            {evidence === null && <Hint>불러오는 중…</Hint>}
+            {evidence !== null && evidence.length === 0 && (
+              <Hint>
+                아직 근거가 없습니다. 소식을 등록할 때 이 기술을 걸면 여기에 쌓입니다.
+              </Hint>
+            )}
+            {evidence !== null && evidence.length > 0 && (
+              <Evidence>
+                {evidence.map((row) => (
+                  <li key={row.news.uuid}>
+                    <b>{row.news.title}</b>
+                    <small>{row.news.published_at || '날짜 미상'}{row.news.source ? ` · ${row.news.source}` : ''}</small>
+                    {row.note && <em>{row.note}</em>}
+                    {row.news.url && (
+                      <a href={row.news.url} target="_blank" rel="noreferrer">
+                        원문 <ExternalLink size={11} />
+                      </a>
+                    )}
+                    {/* 잘못 걸린 근거를 끊는다 — 걸 수 있으면 끊을 수도 있어야 한다. */}
+                    <UnlinkBtn onClick={() => dropEvidence(row.news.uuid)}
+                               title="이 소식을 근거에서 뺍니다">
+                      <X size={11} />
+                    </UnlinkBtn>
+                  </li>
+                ))}
+              </Evidence>
+            )}
+          </Field>
+
+          </Col>
+
+          {/*
+            ⚠️ 여기서부터가 **정하는 쪽**이다. 읽는 것과 섞어 두면 무엇을 적어야
+               하는지가 안 보이고, 한참 굴려 내려가야 닿는다.
+          */}
+          <Col $right>
+            <ColHead>무엇을 정하나</ColHead>
+          {/*
             ⚠️ 단계를 「조직의 판단」이라며 좁혀 놓고 기록이 없으면 좁힌 의미가 절반이다.
                「왜 작년에 도입이었다가 보류로 내려갔지」에 답할 수 있어야 한다.
           */}
@@ -668,37 +787,8 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           <AssistPanel kind="tech" uuid={tech.uuid}
                        onLinked={reloadLinks} showError={showError} />
 
-          <Field>
-            <span>근거가 된 소식 {evidence ? `(${evidence.length}건)` : ''}</span>
-            {evidence === null && <Hint>불러오는 중…</Hint>}
-            {evidence !== null && evidence.length === 0 && (
-              <Hint>
-                아직 근거가 없습니다. 소식을 등록할 때 이 기술을 걸면 여기에 쌓입니다.
-              </Hint>
-            )}
-            {evidence !== null && evidence.length > 0 && (
-              <Evidence>
-                {evidence.map((row) => (
-                  <li key={row.news.uuid}>
-                    <b>{row.news.title}</b>
-                    <small>{row.news.published_at || '날짜 미상'}{row.news.source ? ` · ${row.news.source}` : ''}</small>
-                    {row.note && <em>{row.note}</em>}
-                    {row.news.url && (
-                      <a href={row.news.url} target="_blank" rel="noreferrer">
-                        원문 <ExternalLink size={11} />
-                      </a>
-                    )}
-                    {/* 잘못 걸린 근거를 끊는다 — 걸 수 있으면 끊을 수도 있어야 한다. */}
-                    <UnlinkBtn onClick={() => dropEvidence(row.news.uuid)}
-                               title="이 소식을 근거에서 뺍니다">
-                      <X size={11} />
-                    </UnlinkBtn>
-                  </li>
-                ))}
-              </Evidence>
-            )}
-          </Field>
-        </Body>
+          </Col>
+        </Two>
 
         <Foot>
           {canCurate && (
@@ -730,7 +820,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             </PrimaryBtn>
           )}
         </Foot>
-      </Panel>
+      </Wide>
     </Overlay>
   );
 };
