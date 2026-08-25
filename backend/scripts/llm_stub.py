@@ -117,6 +117,8 @@ _MARK_GRAPH_NARRATE = '### dt-graph-agent: narrate'
 _MARK_NAME_MATCH = '### dxkpi-import: name-match'
 # ⚠️ `digital_twin_strategy/survey_voice.py` 의 MARK 와 **같은 문자열**이어야 한다.
 _MARK_VOICES = '### dt-strategy: survey-voices'
+# ⚠️ `digital_twin_intel/assist.py` 의 `MARK_INTEL` 과 **같은 문자열**이어야 한다.
+_MARK_INTEL = '### dt-intel: suggest'
 
 # KPI 추천 프롬프트의 지표 줄:  - id=12 `설계 리드타임 단축률` (효율) 단위 %
 _KPI_RE = re.compile(r'^-\s*id=(\d+)\s*`([^`]*)`(.*)$', re.M)
@@ -154,6 +156,66 @@ _STUB_LINE_CHARS = 30
 # 서버가 버리고 화면이 "왜 안 넣었는지" 를 띄우는 길을 눈으로 확인할 때 쓴다.
 # (`!tool …` 과 같은 결의 장치다)
 _FORGE_MARK = '!지어내기'
+
+
+def _intel_payload(user_text: str) -> dict:
+    """기술정보 정리 제안을 만든다.
+
+    ⚠️ **프롬프트에 실린 실제 후보에서 뽑는다.** 고정 문자열을 돌려주면 화면이 늘 같은
+       것만 보여줘 시험이 되지 않고, 무엇보다 **서버가 후보에 없는 값을 버리는 길**
+       (`assist._resolve`)을 한 번도 못 태운다.
+
+    ⚠️ 마지막 과제·지표는 **일부러 지어낸 값**을 하나씩 섞는다. 서버가 그것을 버리고
+       화면이 「후보에 없어 뺐습니다」를 띄우는 길을 눈으로 확인하려면 그래야 한다.
+       (`!지어내기` 와 같은 결의 장치다)
+    """
+    text = user_text or ''
+
+    def _pick(header, pattern, limit):
+        block = text.split(header)[1] if header in text else ''
+        block = block.split('\n\n')[0]
+        # ⚠️ `re.M` 이 있어야 한다. 없으면 `^` 가 **문자열 맨 앞에서만** 맞아
+        #    후보를 하나도 못 고른다. 그러면 「맞는 값을 받아들이는 길」을 한 번도
+        #    못 태우고, 지어낸 값 버리는 길만 돌아 초록으로 보인다
+        #    (2026-08-25 에 실제로 그랬다).
+        return re.findall(pattern, block, re.M)[:limit]
+
+    # "- <uuid> | <제목> | <사업부>"
+    projects = _pick('## 고를 수 있는 우리 과제',
+                     r'^- ([0-9a-f-]{36}) \| ([^|\n]+)', 2)
+    # "- <id> | <라벨>"
+    kpis = _pick('## 고를 수 있는 DX KPI', r'^- (\d+) \| ([^\n]+)', 2)
+
+    sectors = []
+    if '## 레이더 부채꼴' in text:
+        line = text.split('## 레이더 부채꼴')[1].split('\n')
+        for ln in line[1:3]:
+            if '/' in ln:
+                sectors = [x.strip() for x in ln.split('/') if x.strip()]
+                break
+
+    title = ''
+    m = re.search(r'^제목: (.+)$', text, re.M)
+    if m:
+        title = m.group(1).strip()
+
+    out = {
+        'summary': f'{title} — 스텁이 만든 요약입니다. 개발서버에서는 실제 모델이 '
+                   f'아니라 이 문장이 나옵니다.',
+        'soWhat': '우리 조직에는 아직 판단이 필요합니다(스텁 응답).',
+        'category': sectors[0] if sectors else '플랫폼',
+        'tags': ['스텁', '개발용'],
+        'cpt': ['Integration', 'Intelligence'],
+        'projects': [{'uuid': u, 'why': f'{t.strip()} 과 관련이 있어 보입니다(스텁).'}
+                     for u, t in projects],
+        'kpis': [{'id': int(i), 'why': f'{lb.strip()} 를 움직일 수 있습니다(스텁).'}
+                 for i, lb in kpis],
+    }
+    # 지어낸 값 하나씩 — 서버가 버리는지 보려고.
+    out['projects'].append({'uuid': '00000000-0000-0000-0000-000000000000',
+                            'why': '스텁이 지어낸 과제입니다. 서버가 버려야 합니다.'})
+    out['kpis'].append({'id': 999999, 'why': '스텁이 지어낸 지표입니다. 서버가 버려야 합니다.'})
+    return out
 
 
 def _system_text(messages) -> str:
@@ -598,6 +660,8 @@ def chat_completions():
         return jsonify(_json_message(model, _name_match_payload(_last_user(messages))))
     if _MARK_VOICES in system:
         return jsonify(_json_message(model, _voices_payload(_last_user(messages))))
+    if _MARK_INTEL in system:
+        return jsonify(_json_message(model, _intel_payload(_last_user(messages))))
 
     # ① 운영 캡처 fixture 가 있으면 그대로 재생 (진짜 응답 모양에 파싱 핀 고정)
     if _FIXTURE.exists():

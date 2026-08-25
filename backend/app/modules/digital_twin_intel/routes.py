@@ -6,7 +6,7 @@
    그건 "로그인했다" 지 "이걸 해도 된다" 가 아니다. 2026-08-25 조사에서 아홉 모듈이
    그 상태였고, 이 모듈은 거기 끼지 않는다. 규칙은 `permissions.py` 한 곳에 있다.
 """
-from flask import request
+from flask import current_app, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -393,6 +393,129 @@ def tech_evidence(uuid):
         'note': ev.note,
         'news': news.to_dict(),
     } for ev, news in rows])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 포털 안쪽과의 연결 — AI 제안 + 사람이 고른 것만 저장
+# ─────────────────────────────────────────────────────────────────────────────
+
+@bp.route('/<kind>/<uuid>/suggest', methods=['POST'])
+@jwt_required()
+def suggest_links(kind, uuid):
+    """사내 LLM 이 읽고 **정리와 연결 후보**를 낸다. `kind` 는 news | tech.
+
+    ⚠️⚠️ **제안일 뿐 저장하지 않는다.** 자동으로 걸면 근거 없는 연결이 쌓이고,
+       그러면 연결 자체를 아무도 안 믿게 된다 — 안 믿는 연결은 없는 것과 같다.
+       사람이 고른 것만 `POST /links` 로 들어간다.
+
+    ⚠️ 후보 과제는 **그 사람이 볼 수 있는 것만** 넣는다. 안 그러면 남의 사업부 과제
+       이름이 제안에 실려 새어 나간다.
+    """
+    actor = _actor()
+    denied = _deny_write(actor)      # 읽기만 하지만 LLM 을 태우므로 쓰기 권한과 같이 본다
+    if denied is not None:
+        return denied
+
+    from app.modules.digital_twin_dashboard.ai import llm as _llm
+    from app.modules.digital_twin_intel import assist
+
+    sectors = get_settings_value('techCategories') or list(DEFAULT_SECTORS)
+    try:
+        out, err = assist.suggest(actor, kind, uuid, sectors=sectors)
+    except _llm.LLMNotConfigured as exc:
+        # 기능이 꺼진 것이지 고장이 아니다. 503 으로 갈라 화면이 다르게 안내한다.
+        return error_response(str(exc), status_code=503)
+    except _llm.LLMError as exc:
+        current_app.logger.exception('[intel] AI 정리 실패')
+        return error_response(f'AI 정리에 실패했습니다: {exc}', status_code=502)
+
+    if err:
+        code = 404 if '찾을 수 없' in err else 400
+        return error_response(err, status_code=code)
+    return success_response(out)
+
+
+@bp.route('/links', methods=['POST'])
+@jwt_required()
+def add_link():
+    """소식·기술을 과제 / KPI / 보유SW 와 잇는다. **사람이 고른 것만 여기 온다.**"""
+    actor = _actor()
+    denied = _deny_write(actor)
+    if denied is not None:
+        return denied
+
+    data = get_request_json() or {}
+    ln, err = S.add_link(
+        (data.get('subjectKind') or '').strip(),
+        (data.get('subjectUuid') or '').strip(),
+        (data.get('targetKind') or '').strip(),
+        data.get('targetRef'),
+        relevance=data.get('relevance'),
+        actor_id=actor.id,
+        source=_origin_of(data))
+    if err:
+        return error_response(err, status_code=400)
+    return created_response({'id': ln.id, 'targetKind': ln.target_kind,
+                             'targetRef': ln.target_ref})
+
+
+@bp.route('/<kind>/<uuid>/links', methods=['GET'])
+@jwt_required()
+def list_links(kind, uuid):
+    """그 소식·기술에 걸린 포털 안쪽 연결. **이름까지 붙여** 돌려준다.
+
+    ⚠️ `target_ref` 만 주면 화면이 과제 uuid 를 다시 조회해야 한다. 목록마다
+       왕복이 생기고, 무엇보다 **지워진 과제를 가리키는 줄**을 화면이 알아서 처리해야
+       한다. 여기서 한 번에 붙여 준다.
+    """
+    actor = _actor()
+    denied = _deny_read(actor)
+    if denied is not None:
+        return denied
+    if kind not in ('news', 'tech'):
+        return error_response("kind 는 'news' 또는 'tech' 여야 합니다.", status_code=400)
+
+    rows = (S.links_for(kind, [uuid]) or {}).get(uuid, [])
+    return success_response(_decorate_links(rows))
+
+
+def _decorate_links(rows):
+    """연결에 사람이 읽을 이름을 붙인다. 대상이 사라졌으면 그렇게 표시한다."""
+    from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+    from app.modules.dx_kpi_management.models import KpiDefinition
+
+    p_refs = [r['targetRef'] for r in rows if r['targetKind'] == 'project']
+    k_refs = [r['targetRef'] for r in rows if r['targetKind'] == 'kpi']
+    projects = {p.uuid: p for p in Dt2Project.query.filter(
+        Dt2Project.uuid.in_(p_refs)).all()} if p_refs else {}
+    kpis = {}
+    if k_refs:
+        ids = [int(x) for x in k_refs if str(x).isdigit()]
+        if ids:
+            kpis = {str(d.id): d for d in KpiDefinition.query.filter(
+                KpiDefinition.id.in_(ids)).all()}
+
+    out = []
+    for r in rows:
+        label = None
+        if r['targetKind'] == 'project':
+            p = projects.get(r['targetRef'])
+            label = p.title if p else None
+        elif r['targetKind'] == 'kpi':
+            d = kpis.get(str(r['targetRef']))
+            label = d.label if d else None
+        out.append({**r, 'label': label,
+                    # 대상이 사라진 줄. 조용히 빈칸으로 두면 「이름 없는 연결」이 남는다.
+                    'missing': label is None and r['targetKind'] in ('project', 'kpi')})
+    return out
+
+
+def get_settings_value(key):
+    """저장된 설정 하나. 없으면 None."""
+    from app.modules.digital_twin_dashboard.models import ModuleSettings
+    row = ModuleSettings.query.filter_by(
+        module_name=MODULE_NAME, settings_key=key).first()
+    return row.settings_data if row else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

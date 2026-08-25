@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil } from 'lucide-react';
 
 import api from '../services/api';
+import AssistPanel from './AssistPanel';
 import { STAGES } from './RadarBoard';
 import {
   Overlay, Panel, Head, CloseBtn, Body, Foot, Field, Hint, Warn,
@@ -48,6 +49,37 @@ const Evidence = styled.ul`
   small { font-size: 0.6875rem; color: #64748b; }
   em { font-style: normal; font-size: 0.75rem; color: #334155; }
   a { color: #4f46e5; font-size: 0.6875rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.125rem; }
+`;
+
+const Links = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+    padding: 0.3125rem 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.4375rem;
+    font-size: 0.75rem;
+  }
+  em {
+    font-style: normal;
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: #64748b;
+    background: #f1f5f9;
+    border-radius: 0.25rem;
+    padding: 0.0625rem 0.3125rem;
+  }
+  b { color: #0f172a; }
+  small { color: #64748b; width: 100%; line-height: 1.5; }
 `;
 
 const Lead = styled.p`
@@ -99,8 +131,35 @@ const DangerBtn = styled(GhostBtn)`
  *    그것이 앞선 세 번의 시도가 죽은 방식이다 — 단계는 적혀 있는데 근거가 없어
  *    아무도 못 고치고, 못 고치니 낡고, 낡으니 안 본다.
  */
+
+/**
+ * 이미 걸린 포털 연결.
+ *
+ * ⚠️ 대상이 지워졌으면 서버가 `missing` 으로 알려 준다. 조용히 빈칸으로 두면
+ *    「이름 없는 연결」이 남고, 그러면 그 줄을 지울지 고칠지 아무도 못 정한다.
+ */
+const LinkList = ({ rows }) => {
+  if (!rows || !rows.length) return null;
+  const label = { project: '과제', kpi: 'KPI', sw: '보유 SW' };
+  return (
+    <Field>
+      <span>이어 둔 우리 것 ({rows.length})</span>
+      <Links>
+        {rows.map((l) => (
+          <li key={l.id}>
+            <em>{label[l.targetKind] || l.targetKind}</em>
+            <b>{l.label || (l.missing ? '(지워진 대상)' : l.targetRef)}</b>
+            {l.relevance && <small>{l.relevance}</small>}
+          </li>
+        ))}
+      </Links>
+    </Field>
+  );
+};
+
 const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, showError }) => {
   const [evidence, setEvidence] = useState(null);
+  const [links, setLinks] = useState([]);
   const [stage, setStage] = useState(tech?.stage || '관찰');
   const [reason, setReason] = useState(tech?.stage_reason || '');
   const [busy, setBusy] = useState(false);
@@ -113,7 +172,11 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, show
     api.techEvidence(tech.uuid)
       .then(setEvidence)
       .catch(() => setEvidence([]));
+    api.listLinks('tech', tech.uuid).then(setLinks).catch(() => setLinks([]));
   }, [tech]);
+
+  const reloadLinks = () =>
+    api.listLinks('tech', tech.uuid).then(setLinks).catch(() => {});
 
   if (!tech) return null;
 
@@ -245,6 +308,11 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, show
               </span>
             </Warn>
           )}
+
+          <LinkList rows={links} />
+
+          <AssistPanel kind="tech" uuid={tech.uuid}
+                       onLinked={reloadLinks} showError={showError} />
 
           <Field>
             <span>근거가 된 소식 {evidence ? `(${evidence.length}건)` : ''}</span>

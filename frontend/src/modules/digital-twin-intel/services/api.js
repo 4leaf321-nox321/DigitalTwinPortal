@@ -116,6 +116,30 @@ class DtIntelApi {
                         '근거를 잇지 못했습니다.');
   }
 
+  // ── AI 정리 · 포털 연결 ───────────────────────────────────────────────────
+  /**
+   * 사내 LLM 이 읽고 **정리와 연결 후보**를 낸다.
+   *
+   * ⚠️ **제안일 뿐 저장되지 않는다.** 사람이 고른 것만 `addLink` 로 들어간다.
+   * ⚠️ LLM 이 꺼져 있으면 **503** 이다 — 고장이 아니라 기능이 꺼진 것이라
+   *    화면이 다르게 안내해야 한다(`err.status` 로 가른다).
+   */
+  suggest(kind, uuid) {
+    return this.request(`${this.baseUrl}/${kind}/${uuid}/suggest`, { method: 'POST' },
+                        'AI 정리에 실패했습니다.');
+  }
+
+  addLink(body) {
+    return this.request(`${this.baseUrl}/links`,
+                        { method: 'POST', body: JSON.stringify(body) },
+                        '연결하지 못했습니다.');
+  }
+
+  listLinks(kind, uuid) {
+    return this.request(`${this.baseUrl}/${kind}/${uuid}/links`, {},
+                        '연결을 불러오지 못했습니다.');
+  }
+
   // ── 설정 ──────────────────────────────────────────────────────────────────
   getSettings() {
     return this.request(`${this.baseUrl}/settings`, {}, '설정을 불러오지 못했습니다.');

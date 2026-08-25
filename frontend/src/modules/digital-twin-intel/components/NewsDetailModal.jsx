@@ -3,10 +3,42 @@ import styled from 'styled-components';
 import { X, Newspaper, ExternalLink, Archive, AlertTriangle, Save } from 'lucide-react';
 
 import api from '../services/api';
+import AssistPanel from './AssistPanel';
 import {
   Overlay, Panel, Head, CloseBtn, Body, Foot, Field, Hint, Warn,
   PrimaryBtn, GhostBtn, Spacer,
 } from './modalStyles';
+
+const Links = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+    padding: 0.3125rem 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.4375rem;
+    font-size: 0.75rem;
+  }
+  em {
+    font-style: normal;
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: #64748b;
+    background: #f1f5f9;
+    border-radius: 0.25rem;
+    padding: 0.0625rem 0.3125rem;
+  }
+  b { color: #0f172a; }
+  small { color: #64748b; width: 100%; line-height: 1.5; }
+`;
 
 const Meta = styled.div`
   display: flex;
@@ -79,8 +111,35 @@ const Stored = styled.span`
  * ⚠️ **링크는 썩는다.** 회사가 글을 내리거나 주소를 바꾸면 제목만 남는다. 그래서
  *    원문을 시스템에 담아 두고, 안 담긴 소식은 여기서 담을 수 있게 한다.
  */
+
+/**
+ * 이미 걸린 포털 연결.
+ *
+ * ⚠️ 대상이 지워졌으면 서버가 `missing` 으로 알려 준다. 조용히 빈칸으로 두면
+ *    「이름 없는 연결」이 남고, 그러면 그 줄을 지울지 고칠지 아무도 못 정한다.
+ */
+const LinkList = ({ rows }) => {
+  if (!rows || !rows.length) return null;
+  const label = { project: '과제', kpi: 'KPI', sw: '보유 SW' };
+  return (
+    <Field>
+      <span>이어 둔 우리 것 ({rows.length})</span>
+      <Links>
+        {rows.map((l) => (
+          <li key={l.id}>
+            <em>{label[l.targetKind] || l.targetKind}</em>
+            <b>{l.label || (l.missing ? '(지워진 대상)' : l.targetRef)}</b>
+            {l.relevance && <small>{l.relevance}</small>}
+          </li>
+        ))}
+      </Links>
+    </Field>
+  );
+};
+
 const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, showError }) => {
   const [full, setFull] = useState(null);
+  const [links, setLinks] = useState([]);
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -92,7 +151,11 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, showError }) => 
     api.getNews(news.uuid)
       .then((d) => { setFull(d); setDraft(d.body || ''); })
       .catch((e) => { showError(e.message); setFull({ ...news, body: '' }); });
+    api.listLinks('news', news.uuid).then(setLinks).catch(() => setLinks([]));
   }, [news]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const reloadLinks = () =>
+    api.listLinks('news', news.uuid).then(setLinks).catch(() => {});
 
   if (!news) return null;
   const n = full || news;
@@ -155,6 +218,11 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, showError }) => 
               </Chips>
             </Field>
           )}
+
+          <LinkList rows={links} />
+
+          <AssistPanel kind="news" uuid={n.uuid}
+                       onLinked={reloadLinks} showError={showError} />
 
           {full === null && <Hint>원문을 불러오는 중…</Hint>}
 
