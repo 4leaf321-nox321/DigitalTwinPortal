@@ -249,5 +249,11 @@ def test_기술이_지워져도_기록은_남는다(db, client, auth, admin):
     client.delete(f'{BASE}/tech/{t.uuid}', headers=auth(admin))
 
     rows = IntelChange.query.filter_by(subject_uuid=t.uuid).all()
-    assert len(rows) == 1
-    assert rows[0].subject_name == '곧 지울 기술'
+    assert all(r.subject_name == '곧 지울 기술' for r in rows)
+    fields = sorted(r.field for r in rows)
+    # ⚠️ **지운 것도 기록이다.** 「이 기술이 왜 없어졌지」에 답이 없으면, 판단을
+    #    좁혀 둔 뜻이 절반이다 — 지우기는 사무국만 할 수 있는 판단이다.
+    #    역량을 지울 땐 매달린 도구를 몇 개 떼어 냈는지도 그 줄에 적힌다.
+    assert fields == ['delete', 'stage'], fields
+    moved = next(r for r in rows if r.field == 'stage')
+    assert (moved.before_value, moved.after_value) == ('관찰', '시험')

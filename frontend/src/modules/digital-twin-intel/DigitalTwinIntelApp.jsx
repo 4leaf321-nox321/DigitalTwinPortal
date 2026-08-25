@@ -27,6 +27,7 @@ import RadarBoard, { STAGES } from './components/RadarBoard';
 import NewsModal from './components/NewsModal';
 import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
+import ToolManagerModal from './components/ToolManagerModal';
 import RadarChart from './components/RadarChart';
 import NewsDetailModal from './components/NewsDetailModal';
 import NewsEditModal from './components/NewsEditModal';
@@ -255,6 +256,13 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   // ⚠️ 역할 문자열은 `dt_office` 다 — 모델 상수 이름(DT_OFFICE_MEMBER)과 다르다.
   //    `is_admin` 도 함께 본다(다른 화면들과 같은 잣대).
   const canCurate = ['admin', 'dt_office'].includes(user?.role) || !!user?.is_admin;
+  /*
+    ⚠️ **읽을 수 있으면 쓸 수 있다**(서버의 `can_write` 가 곧 `can_read` 다).
+       기술을 넣고 매다는 것은 **판단이 아니라 정리**라서 좁히지 않았다 — 여기서
+       막으면 도구가 영영 미아로 남고, 미아는 어느 사업부 표에도 안 나온다.
+       좁혀 둔 것은 단계 변경ㆍ삭제(`canCurate`)뿐이다.
+  */
+  const canWrite = true;
 
   const [tab, setTab] = useState('news');
   const [news, setNews] = useState([]);
@@ -283,6 +291,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   */
   const [division, setDivision] = useState('');
 
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [techView, setTechView] = useState('radar');   // radar | board
   // 목록에서 층을 걸러 본다. '' 면 둘 다. ⚠️ 레이더에는 안 건다 — 레이더가 그리는
   // 것은 이미 「역량 + 안 매달린 도구」로 정해져 있다.
@@ -390,6 +399,15 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   // 전사와 다르게 정한 것이 몇 개인가. **이 숫자가 사업부별 보기의 답이다.**
   const overrideCount = useMemo(
     () => shownTech.filter((t) => t.isDivisionOverride).length, [shownTech]);
+
+  /*
+    아직 어느 역량에도 안 매달린 도구. ⚠️ **이 수가 곧 할 일이다** — 그 도구들은
+    레이더에는 혼자 서지만 **어느 사업부 표에도 안 나온다.** 화면 어디에도 그
+    사실이 안 보이면 아무도 안 매달고, 「무엇으로 하나」는 영영 빈칸으로 남는다.
+  */
+  const orphanCount = useMemo(
+    () => tech.filter((t) => t.kind !== 'capability' && !t.parentUuid).length,
+    [tech]);
 
   // 도구를 매달 곳. 이름 차례는 서버가 준 그대로다.
   const capabilities = useMemo(
@@ -576,6 +594,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
         newsCount={news.length}
         techCount={tech.length}
         onAdd={() => (tab === 'news' ? setAddOpen(true) : setTechForm({}))}
+        onTools={() => setToolsOpen(true)}
+        orphanCount={orphanCount}
         canCurate={canCurate}
         onGoHome={onGoHome}
       />
@@ -747,6 +767,12 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                     onOpen={(t) => {
                       setCompareA(null); setCompareB(null); openTechByRef(t);
                     }} />
+
+      <ToolManagerModal isOpen={toolsOpen} tech={tech}
+                        canWrite={canWrite} canCurate={canCurate}
+                        onClose={() => setToolsOpen(false)}
+                        onChanged={async (msg) => { await load(); if (msg) say(msg); }}
+                        showError={say} />
 
       {/* `key` 로 초기값을 다시 잡는다 — 없으면 다른 기술을 열어도 앞엣것이 남는다. */}
       {techForm && (

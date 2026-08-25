@@ -80,3 +80,8 @@ deploy_package.zip
 backend/uploads/
 
 # End of .gitignore
+
+# SSR·CSS 검사가 만드는 찌꺼기 (scratchpad 로 안 빠지는 것들)
+frontend/a.css
+frontend/*.cjs
+frontend/ssr-*.cjs

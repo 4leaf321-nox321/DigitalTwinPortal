@@ -534,13 +534,14 @@ def delete_tech(uuid):
     if denied is not None:
         return denied
 
-    t = IntelTech.query.filter_by(uuid=uuid).first()
-    if t is None:
-        return not_found_response('기술을 찾을 수 없습니다.')
-    IntelEvidence.query.filter_by(tech_uuid=uuid).delete()
-    db.session.delete(t)
-    db.session.commit()
-    return success_response(message='기술을 지웠습니다.')
+    # ⚠️ 딸린 것을 추스르는 일은 서비스가 한다 — 역량을 지우면 그 밑 도구가
+    #    레이더에서 통째로 사라지던 구멍이 여기 있었다.
+    freed, err = S.remove_tech(uuid, actor=actor)
+    if err:
+        return not_found_response(err)
+    return success_response(message=(
+        f'기술을 지웠습니다. 매달려 있던 도구 {freed}개는 떼어 내 레이더에 그대로 둡니다.'
+        if freed else '기술을 지웠습니다.'))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

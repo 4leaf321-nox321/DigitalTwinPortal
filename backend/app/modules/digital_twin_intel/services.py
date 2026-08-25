@@ -544,6 +544,58 @@ def clear_division_stage(tech_uuid, division, actor=None, source='ui'):
     return True, None
 
 
+def _drop_from_division_tools(tool_uuid, capability_uuid):
+    """그 역량의 사업부 줄에서 이 도구를 뺀다. **커밋은 부르는 쪽이 한다.**
+
+    ⚠️⚠️ 도구를 떼어 내거나 다른 역량으로 옮기면, 옛 역량의 「무엇으로 하나」에
+       적힌 이 도구는 **거짓말이 된다** — 「MX 는 explicit 해석을 LS-DYNA 로 한다」고
+       적혀 있는데 LS-DYNA 가 더는 explicit 해석에 속하지 않는 상태. 저장할 때
+       걸러지긴 하지만, 그때까지 화면은 틀린 것을 보여준다.
+    """
+    if not capability_uuid:
+        return
+    rows = (IntelDivisionStage.query
+            .filter(IntelDivisionStage.tech_uuid == capability_uuid,
+                    IntelDivisionStage.tools.contains([tool_uuid])).all())
+    for r in rows:
+        r.tools = [u for u in (r.tools or []) if u != tool_uuid]
+
+
+def remove_tech(tech_uuid, actor=None):
+    """기술 한 줄을 지운다. **딸린 것을 먼저 추스른다.**
+
+    ⚠️⚠️ **역량을 지우면 그 밑 도구가 없어진 uuid 를 가리킨다.** 레이더는 「역량이거나
+       부모 없는 도구」만 그리므로, 그 도구들이 **화면에서 통째로 사라진다.**
+       합치기에서 겪은 것과 같은 구멍이다 — 여기서는 자식을 **떼어 내** 미아로
+       돌린다. 미아는 레이더에 그대로 서므로 아무것도 안 사라진다.
+
+    ⚠️ 도구를 지우면 사업부들이 적어 둔 「무엇으로 하나」에서도 뺀다. 안 빼면 없는
+       이름을 가리키는 칸이 남고, 화면은 그냥 빈칸으로 보인다.
+    """
+    t = IntelTech.query.filter_by(uuid=tech_uuid).first()
+    if t is None:
+        return None, '기술을 찾을 수 없습니다.'
+
+    freed = 0
+    if t.kind == 'capability':
+        for kid in IntelTech.query.filter_by(parent_uuid=t.uuid).all():
+            kid.parent_uuid = None
+            freed += 1
+
+    IntelDivisionStage.query.filter_by(tech_uuid=t.uuid).delete()
+    for r in IntelDivisionStage.query.filter(
+            IntelDivisionStage.tools.contains([t.uuid])).all():
+        r.tools = [u for u in (r.tools or []) if u != t.uuid]
+
+    IntelEvidence.query.filter_by(tech_uuid=t.uuid).delete()
+    log_change('tech', t.uuid, t.name, 'delete', t.name, None,
+               reason=(f'매달린 도구 {freed}개는 떼어 냈습니다.' if freed else None),
+               actor=actor)
+    db.session.delete(t)
+    db.session.commit()
+    return freed, None
+
+
 def names_of(uuids):
     """uuid → 이름. 상위 역량 이름을 곁들일 때 쓴다."""
     if not uuids:
@@ -583,6 +635,7 @@ def set_parent(tech_uuid, parent_uuid, actor=None):
 
     parent_uuid = (parent_uuid or '').strip()
     if not parent_uuid:
+        _drop_from_division_tools(t.uuid, t.parent_uuid)
         t.parent_uuid = None
         db.session.commit()
         return t, None
@@ -599,6 +652,7 @@ def set_parent(tech_uuid, parent_uuid, actor=None):
     if p.parent_uuid == tech_uuid:
         return None, '서로를 상위로 두면 고리가 생깁니다.'
 
+    _drop_from_division_tools(t.uuid, t.parent_uuid)
     t.parent_uuid = parent_uuid
     db.session.commit()
     return t, None

@@ -254,3 +254,89 @@ def test_도구를_합치면_무엇으로_하나도_따라간다(db, client, aut
 
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
     assert mx['divisionTools'] == ['LS-DYNA']
+
+
+# ── 지우기ㆍ떼어내기가 남기는 자국 ───────────────────────────────────────────
+
+def test_역량을_지우면_밑의_도구는_떼어져_살아남는다(db, client, auth, admin, divs):
+    """
+    ⚠️⚠️ **합치기에서 겪은 것과 같은 구멍이 지우기에도 있었다.** 안 추스르면 그 밑
+       도구가 없어진 uuid 를 가리키고, 레이더는 「역량이거나 부모 없는 도구」만
+       그리므로 그 도구들이 **화면에서 통째로 사라진다.** 미아로 돌리면 레이더에
+       그대로 서므로 아무것도 안 사라진다.
+    """
+    cap = _cap(admin, 'explicit 해석')
+    dyna = _tool(admin, 'LS-DYNA', cap)
+
+    r = client.delete(f'{BASE}/tech/{cap.uuid}', headers=auth(admin))
+    assert r.status_code == 200
+    _db.session.expire_all()
+
+    left = IntelTech.query.filter_by(uuid=dyna.uuid).first()
+    assert left is not None, '도구까지 지워지면 안 된다'
+    assert left.parent_uuid is None, '미아로 돌아야 한다'
+
+    r2 = client.get(f'{BASE}/tech?radar=1', headers=auth(admin))
+    names = [x['name'] for x in (r2.get_json() or {}).get('data') or []]
+    assert 'LS-DYNA' in names, '레이더에서 사라지면 안 된다'
+
+
+def test_역량을_지우면_사업부_줄도_사라진다(db, client, auth, admin, divs):
+    cap = _cap(admin, 'CFD')
+    _put(client, auth, admin, cap, 'MX', stage='도입', reason='쓴다')
+    client.delete(f'{BASE}/tech/{cap.uuid}', headers=auth(admin))
+    assert IntelDivisionStage.query.count() == 0
+
+
+def test_도구를_지우면_무엇으로_하나에서도_빠진다(db, client, auth, admin, divs):
+    """⚠️ 안 빼면 없는 이름을 가리키는 칸이 남고, 화면에는 그냥 빈칸으로 보인다."""
+    cap = _cap(admin, 'explicit 해석')
+    dyna = _tool(admin, 'LS-DYNA', cap)
+    rad = _tool(admin, 'RADIOSS', cap)
+    _put(client, auth, admin, cap, 'MX', stage='도입', reason='쓴다',
+         tools=[dyna.uuid, rad.uuid])
+
+    client.delete(f'{BASE}/tech/{dyna.uuid}', headers=auth(admin))
+    _db.session.expire_all()
+
+    mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
+    assert mx['divisionTools'] == ['RADIOSS']
+    row = IntelDivisionStage.query.filter_by(tech_uuid=cap.uuid).first()
+    assert dyna.uuid not in (row.tools or []), '가리키는 값까지 빠져야 한다'
+
+
+def test_도구를_떼어_내면_그_역량의_무엇으로_하나에서_빠진다(db, client, auth,
+                                                           admin, divs):
+    """
+    ⚠️⚠️ 떼어 내면 「MX 는 explicit 해석을 LS-DYNA 로 한다」는 **거짓말이 된다** —
+       LS-DYNA 가 더는 explicit 해석에 속하지 않기 때문이다. 저장할 때 걸러지긴
+       하지만, 그때까지 화면은 틀린 것을 보여준다.
+    """
+    cap = _cap(admin, 'explicit 해석')
+    dyna = _tool(admin, 'LS-DYNA', cap)
+    _put(client, auth, admin, cap, 'MX', stage='도입', reason='쓴다',
+         tools=[dyna.uuid])
+
+    client.put(f'{BASE}/tech/{dyna.uuid}/parent', json={'parentUuid': ''},
+               headers=auth(admin))
+    _db.session.expire_all()
+
+    mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
+    assert mx.get('divisionTools', []) == []
+
+
+def test_다른_역량으로_옮겨도_옛_역량에서_빠진다(db, client, auth, admin, divs):
+    cap = _cap(admin, 'explicit 해석')
+    other = _cap(admin, '충돌ㆍ고속 해석')
+    dyna = _tool(admin, 'LS-DYNA', cap)
+    _put(client, auth, admin, cap, 'MX', stage='도입', reason='쓴다',
+         tools=[dyna.uuid])
+
+    client.put(f'{BASE}/tech/{dyna.uuid}/parent',
+               json={'parentUuid': other.uuid}, headers=auth(admin))
+    _db.session.expire_all()
+
+    mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
+    assert mx.get('divisionTools', []) == []
+    assert IntelTech.query.filter_by(uuid=dyna.uuid).first().parent_uuid \
+        == other.uuid
