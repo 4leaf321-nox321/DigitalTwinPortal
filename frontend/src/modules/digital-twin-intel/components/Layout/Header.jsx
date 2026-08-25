@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Radar, Plus, Newspaper, Wrench } from 'lucide-react';
+import { Radar, Plus, Newspaper, Wrench, ClipboardList } from 'lucide-react';
 import { CommonHeader } from '../../../../shared/components/Header';
 
 const Tabs = styled.div`
@@ -73,6 +73,13 @@ const ToolButton = styled.button`
   }
 `;
 
+const SheetButton = styled(ToolButton)`
+  background: #eef2ff;
+  border-color: #a5b4fc;
+
+  &:hover { background: #e0e7ff; }
+`;
+
 const AddButton = styled.button`
   display: flex;
   align-items: center;
@@ -95,7 +102,7 @@ const AddButton = styled.button`
  * 소식에서 기술이 만들어지고, 기술에서 그 소식을 되짚는다.
  */
 const Header = ({ tab, onTab, newsCount, techCount, onAdd, onGoHome,
-                  onTools, orphanCount = 0 }) => (
+                  onTools, onSheet, orphanCount = 0 }) => (
   <CommonHeader
     logo={<Radar size={24} strokeWidth={2} />}
     title="디지털 트윈 기술정보"
@@ -112,6 +119,17 @@ const Header = ({ tab, onTab, newsCount, techCount, onAdd, onGoHome,
     */
     rightContent={
       <Right>
+        {/*
+          ⚠️ **적는 자리를 도구 관리 앞에 세운다.** 지금 이 화면의 병목은 「무엇이
+             있나」가 아니라 「우리가 무엇을 쓰나가 안 적혀 있다」이다 — 504칸 중
+             24칸(4.8%)만 찼다. 먼저 눈에 띄어야 할 단추가 이것이다.
+        */}
+        {tab === 'tech' && onSheet && (
+          <SheetButton type="button" onClick={onSheet}
+                       title="우리 사업부가 어느 역량을 무엇으로 하는지 한 판에 적습니다">
+            <ClipboardList size={15} /> 사업부 적기
+          </SheetButton>
+        )}
         {tab === 'tech' && onTools && (
           <ToolButton type="button" onClick={onTools}
                       title="역량마다 쓸 수 있는 S/W 목록을 정합니다">

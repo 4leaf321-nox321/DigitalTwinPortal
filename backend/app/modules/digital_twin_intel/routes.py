@@ -482,6 +482,51 @@ def list_division_stages(uuid):
     })
 
 
+@bp.route('/division-sheet', methods=['GET'])
+@jwt_required()
+def division_sheet():
+    """**한 사업부가 한 판에 다 적는 표.** 역량 전부를 한 번에 내려준다.
+
+    ⚠️ 사업부 이름은 **물음표 뒤로** 받는다. 사업부 이름은 한글이라 경로에 박으면
+       중간의 프록시마다 인코딩이 갈린다 — 실제로 여기서 한 번 데었다.
+
+    ⚠️ 읽는 것은 누구나. 「우리 사업부가 무엇을 쓰나」는 감출 것이 아니고, 감추면
+       옆 사업부가 이미 답을 적어 둔 줄도 모르고 처음부터 다시 고른다.
+    """
+    actor = _actor()
+    denied = _deny_read(actor)
+    if denied is not None:
+        return denied
+
+    data, err = S.division_sheet(request.args.get('division'))
+    if err:
+        return error_response(err, status_code=400)
+    return success_response(data)
+
+
+@bp.route('/division-sheet', methods=['PUT'])
+@jwt_required()
+def save_division_sheet():
+    """표에서 **바뀐 줄만** 받아 한 번에 담는다.
+
+    ⚠️ **단계 변경과 같은 권한이다**(관리자ㆍ사무국) — 한 판에 담는다고 해서 문이
+       더 넓어지면 안 된다. 오히려 여기가 한 번에 63줄을 움직이는 자리다.
+
+    ⚠️ 틀린 줄이 있어도 **나머지는 담고** 틀린 것만 돌려준다. 40줄 적고 한 줄
+       때문에 전부 날아가면 그 사람은 다시 안 적는다.
+    """
+    actor = _actor()
+    denied = _deny_curate(actor)
+    if denied is not None:
+        return denied
+
+    data = get_request_json() or {}
+    saved, bad = S.save_division_sheet(
+        data.get('division') or request.args.get('division'),
+        data.get('items') or [], actor=actor, source=_origin_of(data))
+    return success_response({'saved': saved, 'failed': bad})
+
+
 @bp.route('/tech/<uuid>/used-by', methods=['GET'])
 @jwt_required()
 def used_by(uuid):

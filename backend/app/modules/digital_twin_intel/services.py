@@ -11,7 +11,8 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.modules.digital_twin_intel.models import (
-    CPT_KEYS, MOVED_WINDOW_DAYS, ORIGINS, STAGES, STAGE_NEW, TECH_KINDS, IntelChange,
+    CPT_KEYS, DEFAULT_SECTORS, MOVED_WINDOW_DAYS, ORIGINS, STAGES, STAGE_NEW,
+    TECH_KINDS, IntelChange,
     IntelDivisionStage, IntelEvidence, IntelLink, IntelNews, IntelTech,
     IntelTechCapability, shows_vendor,
 )
@@ -436,7 +437,7 @@ def known_divisions():
 
 
 def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
-                       actor=None, source='ui'):
+                       actor=None, source='ui', commit=True):
     """그 사업부가 이 역량을 **어디까지 · 왜 · 무엇으로** 하는지 적는다.
 
     ⚠️⚠️ **이유 없이 예외를 만들 수 없다.** 예전에는 드롭다운으로 단계만 고르면
@@ -475,8 +476,9 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
 
     reason = (reason or '').strip()
     if stage is not None and not reason:
-        return None, ('기본 설정(%s)와 다르게 「%s」 로 보는 이유를 적어야 합니다. '
-                      '이유 없는 줄은 6개월 뒤 아무 뜻도 아닙니다.' % (t.stage, stage))
+        return None, ('기본 설정은 「%s」 입니다 — 다르게 「%s」 로 보는 이유를 '
+                      '적어야 합니다. 이유 없는 줄은 6개월 뒤 아무 뜻도 '
+                      '아닙니다.' % (t.stage, stage))
 
     tools = _clean_tools(tools, parent=t)
 
@@ -499,7 +501,8 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
                            reason='기본 설정 값을 따르도록 되돌렸습니다.',
                            actor=actor, source=source, scope=division)
             db.session.delete(row)
-            db.session.commit()
+            if commit:
+                db.session.commit()
         return None, None
 
     if row is None:
@@ -517,7 +520,8 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
                    reason=reason or '기본 설정 값을 따르도록 되돌렸습니다.',
                    actor=actor, source=source, scope=division)
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return row, None
 
 
@@ -1020,3 +1024,121 @@ def links_for(subject_kind, subject_uuids):
             'relevance': ln.relevance,
         })
     return out
+
+
+def _sector_key(name):
+    """분야를 정해진 차례대로. 표에 없는 분야는 뒤로 민다."""
+    try:
+        return DEFAULT_SECTORS.index(name)
+    except ValueError:
+        return len(DEFAULT_SECTORS)
+
+
+def division_sheet(division):
+    """**한 사업부가 한 판에 다 적는 표.**
+
+    왜 따로 두나
+        지금은 역량 하나를 적으려면 레이더에서 점을 찾아 → 창을 열고 → 사업부 칸을
+        펴고 → 고르고 → 저장하기를 **63번** 해야 한다. 아무도 안 한다 — 실제로
+        504칸 중 24칸(4.8%)만 찼다. 비교표도 분야별 그림도 전부 여기서 막혀 있다.
+        그래서 **한 번 불러 한 번 저장**하는 자리를 따로 둔다.
+
+    ⚠️⚠️ **역량만 담는다.** 도구는 「무엇으로 하나」의 선택지로만 나온다. 사업부가
+       도구마다 단계를 매기게 하면 63줄이 546줄이 되고, 그러면 다시 아무도 안
+       채운다 — 줄이 적어서 채울 만한 것이 이 화면의 전부다.
+
+    ⚠️ 사업부를 안 주면 **아직 아무것도 안 적힌 표**를 준다. 화면이 사업부를 고르기
+       전에도 무엇을 적게 되는지 보여줘야 고를 마음이 든다.
+    """
+    division = (division or '').strip()
+    known = known_divisions()
+    if division and known and division not in known:
+        return None, '모르는 사업부입니다: %s' % division
+
+    caps = (IntelTech.query.filter_by(kind='capability')
+            .order_by(IntelTech.name.asc()).all())
+    uuids = [c.uuid for c in caps]
+    kids = children_of(uuids)
+
+    saved = {}
+    if division and uuids:
+        saved = {r.tech_uuid: r for r in IntelDivisionStage.query.filter(
+            IntelDivisionStage.division == division,
+            IntelDivisionStage.tech_uuid.in_(uuids)).all()}
+
+    rows = []
+    for c in caps:
+        r = saved.get(c.uuid)
+        rows.append({
+            'uuid': c.uuid,
+            'name': c.name,
+            'category': c.category or '',
+            'summary': c.summary or '',
+            'companyStage': c.stage,
+            # ⚠️ 비어 있으면 **예외가 아니다** — 기본 설정을 따르는 것이다.
+            'stage': r.stage if r else None,
+            'reason': (r.reason if r else '') or '',
+            'tools': (r.tools if r else None) or [],
+            # ⚠️ 그 역량 밑에 매달린 도구만. 목록 전체에서 고르게 하면
+            #    「explicit 해석을 Grafana 로 한다」가 생긴다.
+            'toolChoices': kids.get(c.uuid, []),
+        })
+    rows.sort(key=lambda x: (_sector_key(x['category']), x['name']))
+
+    sectors = []
+    for x in rows:
+        if x['category'] and x['category'] not in sectors:
+            sectors.append(x['category'])
+
+    return {
+        'division': division,
+        'divisions': known,
+        'sectors': sectors,
+        'rows': rows,
+        # 얼마나 찼나. ⚠️ 이 숫자가 이 화면을 여는 이유다.
+        'filled': len(saved),
+        'total': len(rows),
+    }, None
+
+
+def save_division_sheet(division, items, actor=None, source='ui'):
+    """표에서 **바뀐 줄만 한 번에** 담는다. `(담은 수, [{name, error}…])`.
+
+    ⚠️⚠️ **한 줄이 틀렸다고 나머지를 버리지 않는다.** 40줄을 적고 한 줄 때문에 전부
+       날아가면 그 사람은 다시 안 적는다. 틀린 줄만 돌려주고 나머지는 담는다.
+
+    ⚠️ 커밋은 **맨 끝에 한 번.** 줄마다 커밋하면 63번이고, 중간에 끊기면 절반만
+       담긴 채로 남아 무엇이 담겼는지 아무도 모른다.
+    """
+    division = (division or '').strip()
+    if not division:
+        return 0, [{'name': '', 'error': '사업부를 골라야 합니다.'}]
+    known = known_divisions()
+    if known and division not in known:
+        return 0, [{'name': '', 'error': '모르는 사업부입니다: %s' % division}]
+
+    names = {}
+    if items:
+        for t in IntelTech.query.filter(
+                IntelTech.uuid.in_([i.get('uuid') for i in items if i.get('uuid')])).all():
+            names[t.uuid] = t.name
+
+    saved, bad = 0, []
+    for it in (items or []):
+        u = it.get('uuid')
+        if not u:
+            continue
+        _, err = set_division_stage(
+            u, division, it.get('stage'), reason=it.get('reason'),
+            tools=it.get('tools'), actor=actor, source=source, commit=False)
+        if err:
+            # ⚠️ 이름을 함께 준다 — uuid 만 돌려주면 어느 줄이 틀렸는지 못 찾는다.
+            bad.append({'name': names.get(u, u), 'error': err})
+        else:
+            saved += 1
+
+    if saved:
+        db.session.commit()
+    else:
+        db.session.rollback()
+    return saved, bad

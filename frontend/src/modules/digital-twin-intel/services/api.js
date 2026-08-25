@@ -128,6 +128,31 @@ class DtIntelApi {
   }
 
   /**
+   * **한 사업부가 한 판에 다 적는 표.** 역량 전부가 한 번에 온다.
+   *
+   * ⚠️ 사업부 이름은 물음표 뒤로 보낸다 — 한글이라 경로에 박으면 중간의
+   *    프록시마다 인코딩이 갈린다.
+   */
+  divisionSheet(division) {
+    return this.request(
+      `${this.baseUrl}/division-sheet?division=${encodeURIComponent(division || '')}`,
+      {}, '사업부 표를 불러오지 못했습니다.');
+  }
+
+  /**
+   * 표에서 **바뀐 줄만** 한 번에 담는다. `{saved, failed:[{name, error}]}`.
+   *
+   * ⚠️ 틀린 줄이 있어도 **나머지는 담긴다.** 그래서 200 이 왔다고 다 담긴 것이
+   *    아니다 — 화면은 반드시 `failed` 를 봐야 한다.
+   */
+  saveDivisionSheet(division, items) {
+    return this.request(`${this.baseUrl}/division-sheet`,
+                        { method: 'PUT',
+                          body: JSON.stringify({ division, items }) },
+                        '사업부 표를 저장하지 못했습니다.');
+  }
+
+  /**
    * **이 도구를 쓰는 사업부.** 사업부 줄을 거꾸로 읽는다.
    *
    * ⚠️ 적어 넣는 쪽만 있고 되짚는 쪽이 없으면 적을 이유가 절반으로 준다.

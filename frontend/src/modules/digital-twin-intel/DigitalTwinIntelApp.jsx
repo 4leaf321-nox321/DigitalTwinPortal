@@ -28,6 +28,7 @@ import RadarBoard, { STAGES } from './components/RadarBoard';
 import NewsModal from './components/NewsModal';
 import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
+import DivisionSheet from './components/DivisionSheet';
 import ToolManagerModal from './components/ToolManagerModal';
 import RadarChart from './components/RadarChart';
 import TechTree from './components/TechTree';
@@ -294,6 +295,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [division, setDivision] = useState('');
 
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   /*
     레이더가 「최근 며칠」의 이동을 볼지.
 
@@ -630,6 +632,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
         techCount={tech.length}
         onAdd={() => (tab === 'news' ? setAddOpen(true) : setTechForm({}))}
         onTools={() => setToolsOpen(true)}
+        onSheet={() => setSheetOpen(true)}
         orphanCount={orphanCount}
         canCurate={canCurate}
         onGoHome={onGoHome}
@@ -825,6 +828,21 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                     onOpen={(t) => {
                       setCompareA(null); setCompareB(null); openTechByRef(t);
                     }} />
+
+      {/*
+        ⚠️ **여는 사업부는 지금 보고 있는 눈을 따른다.** 눈은 MX 로 놓고 표는 VD
+           가 열리면, 적어 놓고 화면이 안 바뀌는 것처럼 보인다.
+        ⚠️ `key` 로 다시 잡는다 — 닫았다 다른 사업부로 열면 앞엣것이 남는다.
+      */}
+      <DivisionSheet key={`${sheetOpen}:${division}`}
+                     isOpen={sheetOpen} divisions={settings.divisions || []}
+                     initial={division} canCurate={canCurate}
+                     onClose={() => setSheetOpen(false)}
+                     onSaved={async (n) => {
+                       await load();
+                       if (n) say(`${n}줄 담았습니다.`);
+                     }}
+                     showError={say} />
 
       <ToolManagerModal isOpen={toolsOpen} tech={tech}
                         categories={settings.techCategories}
