@@ -131,6 +131,21 @@ def main():
                 fixed += 1
         db.session.commit()
 
+        # ── 4.5 표에 없는데 역량 밑에 있는 도구 ────────────────────────────
+        """
+        ⚠️⚠️ **자동으로 안 지운다.** 이 자리에는 MCPㆍ소식으로 들어온 도구도 함께
+           산다 — 표에 없다고 지우면 바깥에서 조사해 넣은 것이 매번 사라진다.
+        ⚠️ 그래도 **알려는 줘야 한다.** 표에서 옮기거나 뺀 줄이 옛 자리에 조용히
+           남으면, 다음에 볼 때 「왜 여기 있지」가 된다.
+        """
+        listed = {t for _n, _s2, _sm, _c, _tg, tools in TAXONOMY for t in tools}
+        strays = []
+        for c in IntelTech.query.filter_by(kind='capability').all():
+            for t in IntelTech.query.filter_by(parent_uuid=c.uuid).all():
+                names = [t.name] + list(t.aliases or [])
+                if not any(n in listed for n in names):
+                    strays.append((c.name, t.name))
+
         # ── 5. 보고 ────────────────────────────────────────────────────────
         caps = IntelTech.query.filter_by(kind='capability').all()
         tools = IntelTech.query.filter_by(kind='tool').all()
@@ -141,6 +156,11 @@ def main():
         print('사업부 줄에서 어긋난 도구 정리 %d줄' % fixed)
         if dropped:
             print('  지운 옛 역량:', ', '.join(dropped))
+        if strays:
+            print()
+            print('표에 없는데 역량 밑에 있는 도구 %d개 (안 지운다 — 확인만):' % len(strays))
+            for cap_name, tool_name in strays:
+                print('     %-24s ← %s' % (cap_name[:24], tool_name))
         print()
         print('== 지금 ==')
         print('역량 %d · 도구 %d (안 매달린 것 %d)' % (len(caps), len(tools), len(orph)))

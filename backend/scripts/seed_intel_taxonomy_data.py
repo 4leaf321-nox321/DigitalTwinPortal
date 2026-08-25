@@ -30,7 +30,8 @@ TAXONOMY = [
     #    가장 큰 것이 이 회사의 실상이다 — 억지로 줄이면 그림만 예뻐지고 답이 는다.
     ('구조 해석', SIM, '하중을 받는 구조가 얼마나 변형되고 언제 버티지 못하는지 푼다. 선형ㆍ비선형 정적.',
      [IQ], ['FEA', '구조'],
-     ['Ansys Mechanical', 'Abaqus', 'Altair OptiStruct', 'MSC Nastran', 'Simcenter 3D']),
+     ['Ansys Mechanical', 'Abaqus', 'Altair OptiStruct', 'MSC Nastran',
+      'Simcenter 3D']),
     ('동역학ㆍ진동 해석', SIM, '움직이는 구조의 고유진동ㆍ과도응답ㆍ랜덤 진동을 푼다.',
      [IQ], ['동역학', '진동'],
      ['MSC Adams', 'Simpack', 'Ansys Motion', 'RecurDyn']),
@@ -100,8 +101,10 @@ TAXONOMY = [
     ('모델 검증ㆍ보정 (V&V)', TRUST,
      '해석이 실물과 얼마나 맞는지 재고, 안 맞으면 모델을 맞춘다. **트윈의 근간이다.**',
      [TW, IQ], ['V&V', '보정'],
-     ['ASME V&V 10 / 20 / 40', 'NAFEMS 품질 지침', 'Model Updating (FEMtools)',
-      'Simcenter Testlab Model Correlation']),
+     # ⚠️ ASMEㆍNAFEMS 같은 **표준은 여기 안 둔다** — 표준화 부채꼴의
+     #    「해석 신뢰성 표준」이 그 자리다. 역량 밑에는 **쓰는 도구**만 둔다.
+     ['FEMtools Model Updating', 'Simcenter Testlab Model Correlation',
+      'Ansys Model Calibration', 'MATLAB System Identification Toolbox']),
     ('불확실성 정량화 (UQ)', TRUST, '입력이 흔들릴 때 답이 얼마나 흔들리는지 센다. 「얼마나 믿을 수 있나」.',
      [TW, IQ], ['UQ', '확률'],
      ['Ansys optiSLang UQ', 'Dakota', 'UQLab', 'Monte Carlo / LHS 샘플링']),
@@ -154,6 +157,8 @@ TAXONOMY = [
       'Autodesk ReCap', 'Gaussian Splatting']),
     ('시계열 저장', DATA, '시간축 데이터를 쌓고 빠르게 되읽는다.',
      [DS], ['시계열'],
+     # ⚠️ 한때 「시계열 DB (InfluxDB · TimescaleDB)」 한 줄이었다 — **서로 다른
+     #    두 제품**이라 사업부가 「무엇으로 하나」에서 하나만 고를 수가 없었다.
      ['InfluxDB', 'TimescaleDB', 'Apache IoTDB']),
     ('스트리밍 처리', DATA, '흘러오는 사건을 실시간으로 가공한다.',
      [DS, IN], ['스트리밍'],
@@ -248,8 +253,166 @@ TAXONOMY = [
       'ISA-95', 'Digital Twin CPT']),
     ('해석 신뢰성 표준', STD, '해석을 얼마나 믿을 수 있다고 말하려면 무엇을 지켜야 하나.',
      [TW, MG], ['표준', 'V&V'],
-     ['ASME V&V 10', 'ASME V&V 20', 'ASME V&V 40 (의료기기)', 'NAFEMS 인증']),
+     ['ASME V&V 10', 'ASME V&V 20', 'ASME V&V 40 (의료기기)', 'NAFEMS 인증',
+      'NASA-STD-7009', 'ASME V&V 10 / 20 / 40', 'NAFEMS 품질 지침']),
     ('보안ㆍ신뢰성 표준', STD, '트윈이 현장에 닿을수록 필요해진다.',
      [TW], ['표준', '보안'],
      ['IEC 62443', 'ISO/IEC 27001', 'NIST CSF']),
+]
+"""역량마다 **더 채워 넣는 도구들**.
+
+⚠️ 본 표(`TAXONOMY`)에 직접 이어 붙이지 않고 따로 둔다 — 63줄짜리 튜플을 손대는 것보다
+   「무엇을 더 넣었나」가 한눈에 보이고, 나중에 지우거나 옮기기도 쉽다.
+
+⚠️⚠️ **한 도구는 한 역량에만.** 같은 이름을 두 곳에 적으면 적용 스크립트가 아무것도
+   건드리기 전에 멈춘다(실제로 한 번 잡혔다 — Abaqus/Explicit).
+   그래서 이미 다른 역량에 있는 것은 여기 다시 안 적는다
+   (예: Dakota 는 UQ 에 있으므로 해석 자동화에 또 안 적는다).
+"""
+
+EXTRA = {
+    # ── 시뮬레이션·해석 ─────────────────────────────────────────────────────
+    '구조 해석': ['MSC Marc', 'Altair SimSolid', 'Femap', 'MIDAS NFX',
+                 'Code_Aster', 'CalculiX', 'ADINA'],
+    '동역학ㆍ진동 해석': ['Simcenter 3D Motion', 'Project Chrono', 'Universal Mechanism'],
+    '충돌ㆍ고속 비선형 해석': ['ESI Virtual Performance Solution', 'MADYMO',
+                            'IMPETUS Afea'],
+    '피로ㆍ파손 해석': ['FRANC3D', 'Ansys SMART Fracture', 'CAEfatigue',
+                     'Simcenter 3D Durability'],
+    '유동 해석 (CFD)': ['Altair AcuSolve', 'SU2', 'Dassault PowerFLOW',
+                      'Convergent Science CONVERGE', 'XFlow', 'Autodesk CFD'],
+    '열ㆍ열관리 해석': ['Simcenter FloEFD', 'Cadence Celsius Thermal Solver',
+                     'TAITherm', 'ESATAN-TMS'],
+    '음향ㆍNVH 해석': ['ESI VA One', 'COMSOL Acoustics Module',
+                     'HEAD acoustics ArtemiS', 'Siemens Simcenter Testlab NVH'],
+    '전자기ㆍEMC 해석': ['JMAG', 'Ansys Motor-CAD', 'Simcenter MAGNET',
+                      'Dassault Opera', 'Sonnet Suites'],
+    '광학ㆍ조명 해석': ['Synopsys CODE V', 'Lambda Research TracePro',
+                     'Photon Engineering FRED', 'VirtualLab Fusion'],
+    '반도체ㆍ전자 패키징 해석': ['Cadence Sigrity', 'Ansys Q3D Extractor',
+                            'Ansys Sherlock', 'Silvaco TCAD',
+                            'Keysight ADS'],
+    '멀티피직스 연성': ['MOOSE Framework', 'Elmer FEM', 'SimScale'],
+    '재료ㆍ분자 시뮬레이션': ['Quantum ESPRESSO', 'ABINIT', 'OpenMM',
+                        'Thermo-Calc', 'JMatPro', 'MICRESS',
+                        'Schrödinger Materials Science'],
+    '공정 성형 해석': ['Simufact Forming', 'DEFORM', 'QForm', 'SIGMASOFT',
+                    'ESI ProCAST', 'Dynaform', 'Stampack'],
+    '용접ㆍ접합 공정 해석': ['GeonX Virfac', 'Hexagon Weld Planner',
+                        'Abaqus Welding Interface'],
+    '적층제조(AM) 공정 해석': ['Materialise Magics', '3D Systems 3DXpert',
+                          'FLOW-3D AM', 'Additive Works Amphyon'],
+    '분체ㆍ입자 거동 해석 (DEM)': ['Yade', 'MFiX', 'Barracuda Virtual Reactor',
+                             'Siemens Simcenter STAR-CCM+ DEM'],
+    '1D 시스템 시뮬레이션': ['ESI SimulationX', 'Wolfram System Modeler', '20-sim',
+                        'Simcenter Flomaster', 'Ricardo WAVE'],
+    '제어 설계ㆍ검증 (MIL/SIL/HIL)': ['ETAS LABCAR', 'Vector CANoe', 'Speedgoat',
+                                  'OPAL-RT', 'Typhoon HIL'],
+    '이산사건 공정 시뮬레이션': ['Rockwell Arena', 'SIMUL8', 'Lanner WITNESS',
+                          'DELMIA Quest'],
+    '로봇 시뮬레이션': ['CoppeliaSim', 'Webots', 'ROS 2', 'ABB RobotStudio',
+                    'FANUC ROBOGUIDE', 'DELMIA Robotics'],
+    '인체ㆍ인간공학 시뮬레이션': ['RAMSIS', 'DELMIA Ergonomics', 'Siemens Process Simulate Human'],
+
+    # ── 모델 신뢰·운영 ──────────────────────────────────────────────────────
+    '모델 검증ㆍ보정 (V&V)': ['Ansys optiSLang Calibration', 'BETA CAE Meta Correlation',
+                          'ModelCenter Validation', 'Correlation Toolbox (Simcenter)'],
+    '불확실성 정량화 (UQ)': ['SALib', 'OpenTURNS', 'Chaospy', 'PSUADE',
+                         'SmartUQ'],
+    '실시간 동기화ㆍ상태 추정': ['OpenDA', 'NCAR DART', 'FilterPy', 'PyMC',
+                          'Moving Horizon Estimation (MHE)'],
+    '축약 모델 (ROM)': ['Ansys Dynamic ROM Builder', 'PySINDy',
+                     '동적 모드 분해 (DMD)', 'MOR for ANSYS'],
+    # ⚠️ HyperWorks 는 전처리 묶음이라 구조 해석이 아니라 여기가 맞다.
+    '메시ㆍ형상 준비': ['Gmsh', 'snappyHexMesh', 'Coreform Cubit', 'Altair SimLab',
+                   'SALOME', 'Ansys SpaceClaim', 'Altair HyperWorks'],
+    '재료 물성 데이터': ['Total Materia', 'MMPDS', 'Granta EduPack',
+                    'NIST 재료 데이터 저장소'],
+    '해석 자동화ㆍ설계 탐색': ['Ansys ModelCenter', 'Noesis Optimus', 'pyOptSparse',
+                         'Phoenix Integration ModelCenter', 'SmartDO'],
+    'HPCㆍ계산 자원': ['IBM Spectrum LSF', 'Altair Grid Engine',
+                   'Azure CycleCloud', 'Kubernetes Volcano', 'OpenPBS'],
+    '해석 데이터 관리 (SDM)': ['Aras Simulation Management', 'BETA CAE SPDRM',
+                          'Ansys Cloud Direct', 'GNS SimDM'],
+    '시험 계측 연계': ['imc 계측 시스템', 'Kistler DAQ', 'HBK catman',
+                  '디지털 이미지 상관법 (DIC)', 'GOM ARAMIS'],
+
+    # ── 데이터·연결 ─────────────────────────────────────────────────────────
+    '설비 통신': ['EtherNet/IP', 'CC-Link IE', 'Matrikon OPC',
+               'Softing edgeAggregator', 'BACnet'],
+    '경량 메시징': ['CoAP', 'DDS (Data Distribution Service)', 'Eclipse Zenoh',
+                'NATS'],
+    '센서ㆍ계측 하드웨어': ['레이저 변위 센서', '초음파 두께 센서', '음향 방출(AE) 센서',
+                     'RFIDㆍUWB 측위', 'MEMS IMU'],
+    '현실 캡처 (3D 스캔)': ['GOM ATOS 구조광 스캐너', 'Matterport', 'Leica BLK2GO',
+                        'CloudCompare', 'NeRF (신경 복사장)'],
+    '시계열 저장': ['AVEVA PI System', 'ClickHouse', 'QuestDB', 'VictoriaMetrics',
+                'Aspen InfoPlus.21'],
+    '스트리밍 처리': ['Apache Pulsar', 'RabbitMQ', 'Spark Structured Streaming',
+                 'Azure Event Hubs'],
+    '분석용 데이터 형식': ['Apache Avro', 'Apache ORC', 'Zarr', 'NetCDF'],
+    '트윈 상태 관리': ['FIWARE Orion Context Broker', 'ThingsBoard',
+                  'Eclipse Vorto'],
+    '수집ㆍ연결 도구': ['Fluent Bit', 'Logstash', 'Benthos', 'Cribl Stream'],
+    '클라우드 IoT': ['AWS IoT Core', 'Siemens Insights Hub (구 MindSphere)',
+                  'Azure IoT Central', 'Bosch IoT Suite'],
+    '모니터링ㆍ대시보드': ['Kibana', 'Zabbix', 'Datadog', 'Microsoft Power BI',
+                    'Tableau'],
+    '엣지 컴퓨팅': ['NVIDIA Jetson', 'Siemens Industrial Edge', 'EdgeX Foundry',
+                'Balena', 'Intel OpenVINO'],
+    'OTㆍ데이터 보안': ['Claroty', 'Nozomi Networks', 'Tenable OT Security',
+                   '제로 트러스트 (SASE)', 'Fortinet OT Fabric'],
+
+    # ── AI ──────────────────────────────────────────────────────────────────
+    '대리모델 (Surrogate)': ['Ansys SimAI', 'Neural Concept Shape', 'SciANN',
+                          'NeuralOperator', 'Siemens Simcenter Studio'],
+    '생성형ㆍ위상 최적화': ['Autodesk Fusion Generative Design', 'Altair Inspire',
+                     'Optuna', 'Rhino Grasshopper'],
+    '예지보전': ['Siemens Senseye', 'AVEVA Predictive Analytics',
+              'MATLAB Predictive Maintenance Toolbox', 'Uptake', 'Augury'],
+    '비전 검사': ['Keyence 비전 시스템', 'MVTec HALCON', 'NVIDIA TAO Toolkit',
+              'Landing AI', 'Roboflow'],
+    '강화학습 제어': ['Ray RLlib', 'Gymnasium', 'Microsoft Project Bonsai'],
+    'LLM 활용': ['LangChain', 'LlamaIndex', 'vLLM', 'Ollama',
+              'MCP (Model Context Protocol)'],
+    'AI 운영ㆍ신뢰 (MLOps)': ['Kubeflow', 'DVC', 'BentoML', 'NVIDIA Triton',
+                          'TensorRT', 'Evidently AI'],
+
+    # ── 플랫폼 ──────────────────────────────────────────────────────────────
+    '산업 3D 플랫폼': ['Hexagon HxDR', 'Esri ArcGIS', 'Cesium for Omniverse',
+                   'Unity Digital Twin 솔루션'],
+    'PLM ㆍ수명주기': ['SAP PLM', 'Oracle Agile PLM', 'Autodesk Fusion Manage',
+                   'Duro PLM'],
+    'IIoT ㆍ운영 트윈 플랫폼': ['AVEVA System Platform', 'GE Vernova Predix',
+                          'Hitachi Lumada', 'Litmus Edge', 'Cognite Data Fusion'],
+    '실시간 시각화ㆍXR': ['Three.js', 'Babylon.js', 'Microsoft HoloLens ㆍ Mesh',
+                    'Apple Vision Pro', 'PTC Vuforia'],
+    '가상 시운전': ['Siemens PLCSIM Advanced', 'CODESYS', 'Simumatik',
+                'Beckhoff TwinCAT Simulation'],
+    '인프라ㆍ건물 트윈': ['Willow', 'Siemens Building X', 'Johnson Controls OpenBlue',
+                   'openBIM (IFC)'],
+
+    # ── 표준화 ──────────────────────────────────────────────────────────────
+    '3D 데이터 교환 표준': ['3MF', 'X3D', 'Parasolid', 'ACIS'],
+    '모델 교환 표준': ['eFMI', 'Modelica 언어 표준', 'SysML v2'],
+    '자산ㆍ설비 정보 표준': ['OPC UA Companion Specification', 'eCl@ss',
+                       'IEC 61987', 'ISO 15926'],
+    '트윈 아키텍처 표준': ['RAMI 4.0', 'IIRA (산업인터넷 참조 아키텍처)',
+                    'ISO/IEC 21823 (상호운용성)', 'ISO 23704 (CPS 제조)'],
+    '해석 신뢰성 표준': ['ASME V&V 70 (기계학습)', 'FDA 시뮬레이션 신뢰성 지침',
+                   'ISO/IEC 17025', 'NAFEMS Sim Governance'],
+    '보안ㆍ신뢰성 표준': ['NIST SP 800-82 (OT 보안)', 'ISO/SAE 21434',
+                   'EU 사이버복원력법 (CRA)', 'IEC 62443-4-2'],
+}
+
+
+"""
+⚠️ 덧붙임을 본 표에 합친다. 여기서 합쳐 두면 쓰는 쪽(`seed_intel_taxonomy.py`)은
+   `TAXONOMY` 하나만 보면 된다 — 「본 표와 덧붙임 중 어느 것을 봐야 하나」가
+   생기지 않는다.
+"""
+TAXONOMY = [
+    (name, sector, summary, cpt, tags, tools + [
+        t for t in EXTRA.get(name, []) if t not in tools])
+    for (name, sector, summary, cpt, tags, tools) in TAXONOMY
 ]
