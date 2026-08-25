@@ -17,7 +17,8 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Search, AlertCircle, Loader2, Radar as RadarIcon, List, AlertTriangle }
+import { Search, AlertCircle, Loader2, Radar as RadarIcon, List, AlertTriangle,
+  Network }
   from 'lucide-react';
 
 import { useAuth } from '../../contexts/AuthContext';
@@ -29,6 +30,7 @@ import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
 import ToolManagerModal from './components/ToolManagerModal';
 import RadarChart from './components/RadarChart';
+import TechTree from './components/TechTree';
 import NewsDetailModal from './components/NewsDetailModal';
 import NewsEditModal from './components/NewsEditModal';
 import OverviewBar from './components/OverviewBar';
@@ -311,7 +313,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       return 0;
     }
   });
-  const [techView, setTechView] = useState('radar');   // radar | board
+  const [techView, setTechView] = useState('radar');   // radar | tree | board
   // 목록에서 층을 걸러 본다. '' 면 둘 다. ⚠️ 레이더에는 안 건다 — 레이더가 그리는
   // 것은 이미 「역량 + 안 매달린 도구」로 정해져 있다.
   const [kind, setKind] = useState('');
@@ -713,6 +715,14 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                 <ViewBtn $on={techView === 'radar'} onClick={() => setTechView('radar')}>
                   <RadarIcon size={13} /> 레이더
                 </ViewBtn>
+                {/*
+                  ⚠️ **목록에는 포함관계가 안 보인다.** 단계별 네 칸이라 역량과 도구가
+                     나란히 섞여 서고, 관계는 작은 글씨 하나뿐이다 — 600줄에서 그건
+                     안 읽힌다(2026-08-25 신고). 계통은 그 관계를 그대로 편다.
+                */}
+                <ViewBtn $on={techView === 'tree'} onClick={() => setTechView('tree')}>
+                  <Network size={13} /> 계통
+                </ViewBtn>
                 <ViewBtn $on={techView === 'board'} onClick={() => setTechView('board')}>
                   <List size={13} /> 목록
                 </ViewBtn>
@@ -774,6 +784,13 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                           onSectorClick={setCategory}
                           movedWindowDays={movedDays || settings.movedWindowDays} />
             </RadarSlot>
+          )}
+
+          {!loading && !error && tab === 'tech' && techView === 'tree' && (
+            <TechTree rows={shownTech} all={tech}
+                      categories={settings.techCategories}
+                      onSelect={merging ? doMerge
+                        : compareA && !compareB ? pickCompare : setSelected} />
           )}
 
           {!loading && !error && tab === 'tech' && techView === 'board' && (
