@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { AlertTriangle, Minus, Plus, Maximize2, Move, Tag } from 'lucide-react';
+import {
+  AlertTriangle, Minus, Plus, Maximize2, Move, Tag, History,
+} from 'lucide-react';
 
 import { STAGES } from './RadarBoard';
 
@@ -348,13 +350,19 @@ const layout = (items, b) => {
      조용히 기본값(꺼짐)으로 간다 — 이 하나 때문에 레이더가 안 뜨면 안 된다.
 */
 const LABEL_KEY = 'dtIntel.radarLabels';
+const MOVE_KEY = 'dtIntel.radarMoves';
 
-const readLabelPref = () => {
+const readPref = (key, fallback) => {
   try {
-    return window.localStorage.getItem(LABEL_KEY) === '1';
+    const v = window.localStorage.getItem(key);
+    return v === null ? fallback : v === '1';
   } catch {
-    return false;
+    return fallback;
   }
+};
+
+const writePref = (key, on) => {
+  try { window.localStorage.setItem(key, on ? '1' : '0'); } catch { /* 못 써도 그만 */ }
 };
 
 const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
@@ -363,7 +371,18 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
   //    있지도 않은 표시를 설명하는 꼴이 된다.
   const divisionLens = rows.some((t) => t.division);
   const [hot, setHot] = useState(null);
-  const [labels, setLabels] = useState(readLabelPref);
+  const [labels, setLabels] = useState(() => readPref(LABEL_KEY, false));
+  /*
+    시간에 따른 변화(단계 이동)를 그릴지.
+
+    ⚠️ **기본은 켜짐이다.** 지금까지 늘 그리던 것이라, 기본을 끄면 있던 것이 말없이
+       사라진 것으로 보인다. 새로 생긴 것은 「끌 수 있다」는 쪽이다.
+
+    ⚠️⚠️ 화살표ㆍ테ㆍ옆 목록의 「관찰→」ㆍ범례가 **한 스위치로 같이** 움직인다.
+       하나라도 남으면 「테는 있는데 화살표가 없는 줄」이 생기고, 그러면 둘 다
+       못 믿게 된다 — 그 셋이 같은 값을 보게 맞춰 둔 이유가 그것이다.
+  */
+  const [moves, setMoves] = useState(() => readPref(MOVE_KEY, true));
   const [view, setView] = useState({ k: 1, x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const svgRef = useRef(null);
@@ -489,10 +508,8 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
     fn();
   };
 
-  const toggleLabels = () => setLabels((v) => {
-    try { window.localStorage.setItem(LABEL_KEY, v ? '0' : '1'); } catch { /* 못 써도 그만 */ }
-    return !v;
-  });
+  const toggleLabels = () => setLabels((v) => { writePref(LABEL_KEY, !v); return !v; });
+  const toggleMoves = () => setMoves((v) => { writePref(MOVE_KEY, !v); return !v; });
 
   const reset = () => setView({ k: 1, x: 0, y: 0 });
   const zoomed = view.k > 1.001;
@@ -507,6 +524,12 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                    title="축소"><Minus size={15} /></ToolBtn>
           <ToolBtn onClick={reset} disabled={!zoomed && !view.x && !view.y}
                    title="처음 크기로"><Maximize2 size={14} /></ToolBtn>
+          <ToolBtn $on={moves} onClick={toggleMoves}
+                   title={moves
+                     ? `시간에 따른 변화 끄기 (최근 ${movedWindowDays}일 이동)`
+                     : `최근 ${movedWindowDays}일 안에 단계가 옮겨온 자리를 화살표로 그립니다`}>
+            <History size={14} />
+          </ToolBtn>
           <ToolBtn $on={labels} onClick={toggleLabels}
                    title={labels
                      ? '이름표 끄기'
@@ -592,7 +615,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                  ThoughtWorks 가 매 판마다 이동을 표시하는 이유가 그것이다.
               ⚠️ 화살표는 **점보다 먼저** 그린다. 나중에 그리면 점을 덮어 번호가 안 읽힌다.
             */}
-            {blips.map((b) => {
+            {moves && blips.map((b) => {
               const fromIdx = stageIndex[b.tech.movedFrom];
               if (fromIdx === undefined || fromIdx === b.ri) return null;
               // 출발 고리의 한가운데. 각도는 지금 자리와 같게 둔다 — 부채꼴(분류)은
@@ -618,7 +641,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
               const on = hot === b.tech.uuid;
               // ⚠️ 화살표와 **같은 값**을 본다. 둘이 다른 데서 오면 「테는 있는데
               //    화살표가 없는 줄」이 생기고, 그러면 둘 다 못 믿게 된다.
-              const moved = Boolean(b.tech.movedFrom);
+              const moved = moves && Boolean(b.tech.movedFrom);
               const k = view.k;
               const rr = BLIP_R / k;
               return (
@@ -638,6 +661,11 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                      + `${(b.tech.children || []).length
                           ? ` · 도구 ${b.tech.children.length}개`
                           : ''}`
+                     /*
+                       ⚠️ 풍선말은 **스위치를 꺼도 말해 준다.** 끄는 것은 「그림을
+                          어지럽히지 말라」는 뜻이지 「그 사실을 감추라」는 뜻이
+                          아니다 — 한 점을 짚어 물었을 때는 알려 주는 게 맞다.
+                     */
                      + `${b.tech.movedFrom
                           ? ` · ${b.tech.movedFrom}에서 옮겨옴 (${ymd(b.tech.movedAt)})`
                           : ''}`}
@@ -717,14 +745,17 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
       <Side>
         <Legend>
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#64748b" /></svg> 기술</span>
-          <span>
-            <svg width="22" height="12">
-              <line x1="1" y1="6" x2="14" y2="6" stroke="#64748b" strokeWidth="1.4"
-                    strokeDasharray="3 2" opacity="0.6" />
-              <path d="M14 3 L20 6 L14 9 z" fill="#64748b" opacity="0.6" />
-            </svg>
-            최근 {movedWindowDays}일 내 옮겨온 자리
-          </span>
+          {/* ⚠️ 꺼 놓고 범례만 남기면 **있지도 않은 표시를 설명하는 꼴**이 된다. */}
+          {moves && (
+            <span>
+              <svg width="22" height="12">
+                <line x1="1" y1="6" x2="14" y2="6" stroke="#64748b" strokeWidth="1.4"
+                      strokeDasharray="3 2" opacity="0.6" />
+                <path d="M14 3 L20 6 L14 9 z" fill="#64748b" opacity="0.6" />
+              </svg>
+              최근 {movedWindowDays}일 내 옮겨온 자리
+            </span>
+          )}
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="#64748b" stroke="#b45309" strokeWidth="2" /></svg> 근거 낡음</span>
           {divisionLens && (
             <span><b style={{ color: '#4f46e5' }}>◆</b> 전사와 다르게 봄</span>
@@ -757,7 +788,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                         <span>
                           {b.tech.name}
                           {/* ⚠️ **언제** 옮겼는지가 없으면 화살표를 못 믿는다. */}
-                          {b.tech.movedFrom && (
+                          {moves && b.tech.movedFrom && (
                             <> <Moved title={`${ymd(b.tech.movedAt)} 에 ${b.tech.movedFrom} 에서 옮겨왔습니다`}>
                               {b.tech.movedFrom}→ {ymd(b.tech.movedAt)}
                             </Moved></>
