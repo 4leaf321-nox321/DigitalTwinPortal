@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { AlertTriangle, Filter, Minus, Plus, Maximize2, Move } from 'lucide-react';
+import { AlertTriangle, Minus, Plus, Maximize2, Move } from 'lucide-react';
 
 import { STAGES } from './RadarBoard';
 
@@ -15,10 +15,10 @@ import { STAGES } from './RadarBoard';
  *     라이선스 검토가 필요하다.
  *
  * ⚠️⚠️ **레이더는 늘어나지 않는다.** ThoughtWorks 판이 한 번에 약 120개고, 그래서
- *    매 판마다 편집으로 골라낸다. 그래서 이 컴포넌트는 두 갈래로 대응한다 —
- *      · 90개가 넘으면 **스스로 「걸러서 보라」고 말한다**(`CROWDED`)
- *      · 그래도 몰린 자리는 **확대해서 본다**(휠ㆍ드래그ㆍ버튼)
- *    전부 훑는 자리는 목록 보기다.
+ *    매 판마다 편집으로 골라낸다. 여기서는 **확대**로 대응한다 — 점 크기가 고정이라
+ *    몰린 자리를 키우면 벌어진다. 전부 훑는 자리는 목록 보기다.
+ *    (한때 90개가 넘으면 「걸러서 보라」는 안내를 띄웠는데, **늘 떠 있어서 아무도
+ *     안 읽는 잔소리**가 됐다. 확대가 실제 해법이므로 안내는 걷어냈다.)
  *
  * ⚠️ 부채꼴 수를 넷으로 강제하지 않는다. 분류는 설정에서 늘어나는 값이라
  *    (`techCategories`) 넷으로 맞추면 다섯째를 넣는 순간 그림이 깨진다.
@@ -116,25 +116,6 @@ const ZoomTag = styled.div`
   font-size: 0.6875rem;
   color: #64748b;
   font-variant-numeric: tabular-nums;
-`;
-
-const Crowd = styled.div`
-  position: absolute;
-  left: 0.75rem;
-  top: 0.75rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.3125rem;
-  padding: 0.375rem 0.5625rem;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 0.4375rem;
-  color: #92400e;
-  font-size: 0.6875rem;
-  line-height: 1.55;
-  max-width: 18rem;
-
-  svg { flex-shrink: 0; margin-top: 0.125rem; }
 `;
 
 /* 넘치는 것은 **여기 안에서만** 흐른다. */
@@ -258,8 +239,6 @@ const CY = H / 2;
 const R_MAX = H / 2 - 34;
 const RINGS = [0.3, 0.5, 0.7, 1].map((r) => r * R_MAX);
 const BLIP_R = 11;
-const CROWDED = 90;
-const MOVED_DAYS = 90;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 8;
 
@@ -273,6 +252,9 @@ const hash01 = (s, salt = 0) => {
 };
 
 const UNCATEGORIZED = '분류 없음';
+
+/** ISO 시각에서 `YYYY-MM-DD` 만. 없으면 빈 문자열. */
+const ymd = (v) => (v ? String(v).slice(0, 10) : '');
 const polar = (a, r) => [CX + Math.cos(a) * r, CY + Math.sin(a) * r];
 
 const wedgePath = (a0, a1, rOut) => {
@@ -337,7 +319,8 @@ const layout = (items, b) => {
   });
 };
 
-const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector }) => {
+const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
+                     movedWindowDays = 90 }) => {
   const [hot, setHot] = useState(null);
   const [view, setView] = useState({ k: 1, x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -470,17 +453,6 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
   return (
     <Wrap>
       <Frame $dragging={dragging}>
-        {blips.length > CROWDED && (
-          <Crowd>
-            <Filter size={13} />
-            <span>
-              지금 <b>{blips.length}개</b>입니다. 레이더는 <b>100개 안팎까지</b>가
-              읽을 수 있는 한계입니다 — 걸러 보거나, <b>몰린 자리를 확대</b>해 보세요.
-              확대해도 <b>점 크기는 그대로</b>라 뭉친 것이 벌어집니다 (휠ㆍ드래그).
-            </span>
-          </Crowd>
-        )}
-
         <Tools>
           <ToolBtn onClick={() => zoomAt(1.35)} disabled={view.k >= ZOOM_MAX}
                    title="확대 (휠을 올려도 됩니다)"><Plus size={15} /></ToolBtn>
@@ -604,7 +576,9 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
                   <title>
                     {`${b.tech.name} · ${b.tech.stage}`
                      + `${b.tech.isStale ? ' · 근거 낡음' : ''}`
-                     + `${b.tech.movedFrom ? ` · ${b.tech.movedFrom}에서 옮겨옴` : ''}`}
+                     + `${b.tech.movedFrom
+                          ? ` · ${b.tech.movedFrom}에서 옮겨옴 (${ymd(b.tech.movedAt)})`
+                          : ''}`}
                   </title>
                   {on && <circle cx={b.x} cy={b.y} r={(BLIP_R + 7) / k}
                                  fill={st.color} opacity="0.16" />}
@@ -643,7 +617,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
                     strokeDasharray="3 2" opacity="0.6" />
               <path d="M14 3 L20 6 L14 9 z" fill="#64748b" opacity="0.6" />
             </svg>
-            최근 {MOVED_DAYS}일 내 옮겨온 자리
+            최근 {movedWindowDays}일 내 옮겨온 자리
           </span>
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="#64748b" stroke="#b45309" strokeWidth="2" /></svg> 근거 낡음</span>
           <span>안쪽일수록 이미 쓰는 것</span>
@@ -673,9 +647,10 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
                         <b>{b.no}</b>
                         <span>
                           {b.tech.name}
+                          {/* ⚠️ **언제** 옮겼는지가 없으면 화살표를 못 믿는다. */}
                           {b.tech.movedFrom && (
-                            <> <Moved title={`${b.tech.movedFrom} 에서 옮겨왔습니다`}>
-                              {b.tech.movedFrom}→
+                            <> <Moved title={`${ymd(b.tech.movedAt)} 에 ${b.tech.movedFrom} 에서 옮겨왔습니다`}>
+                              {b.tech.movedFrom}→ {ymd(b.tech.movedAt)}
                             </Moved></>
                           )}
                           {b.tech.isStale && (

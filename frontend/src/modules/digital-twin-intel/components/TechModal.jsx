@@ -325,6 +325,16 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           <Facts>
             <li><b>공급사</b><span>{tech.vendor || '—'}</span></li>
             <li><b>분류</b><span>{tech.category || '—'}</span></li>
+            {/* ⚠️ 「어디서 왔나」만 있고 「언제」가 없으면 못 믿는다. */}
+            {tech.movedFrom && (
+              <li>
+                <b>단계 이동</b>
+                <span>
+                  {tech.movedFrom} → {tech.stage}
+                  {tech.movedAt ? ` · ${String(tech.movedAt).slice(0, 10)}` : ''}
+                </span>
+              </li>
+            )}
             <li>
               <b>공식 문서</b>
               <span>

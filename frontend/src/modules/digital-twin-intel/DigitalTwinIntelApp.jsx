@@ -238,6 +238,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   // ⚠️ 낡음 판정은 **서버가 준다**(단계마다 기준 일수가 다르다). 여기서는 그 표시를
   //    걸러 보기만 한다 — 판정 규칙을 화면에 복제하면 반드시 서버와 갈린다.
   const [staleOnly, setStaleOnly] = useState(false);
+  // 사업부별로 도입 정도가 다르다. 우선 **걸러 보기**부터.
+  const [division, setDivision] = useState('');
 
   const [techView, setTechView] = useState('radar');   // radar | board
   const [openNews, setOpenNews] = useState(null);
@@ -286,6 +288,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     const key = q.trim().toLowerCase();
     return news.filter((n) => {
       // ⚠️ 숫자를 보여만 주고 찾아가게 하면 아무도 안 간다. 누르면 **그 줄만** 남는다.
+      if (division && !(n.divisions || []).includes(division)) return false;
       if (focus === 'unread' && n.status !== '신규') return false;
       if (focus === 'unlinked' && (n.linkCount || 0) > 0) return false;
       if (category && n.category !== category) return false;
@@ -294,11 +297,12 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       return [n.title, n.summary, n.source]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [news, q, category, status, focus]);
+  }, [news, q, category, status, focus, division]);
 
   const shownTech = useMemo(() => {
     const key = q.trim().toLowerCase();
     return tech.filter((t) => {
+      if (division && !(t.divisions || []).includes(division)) return false;
       if (focus === 'stale' && !t.isStale) return false;
       if (focus === 'moved' && !t.movedFrom) return false;
       if (staleOnly && !t.isStale) return false;
@@ -310,7 +314,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       return [t.name, t.vendor, t.summary, ...(t.tags || []), ...(t.cpt || [])]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [tech, q, category, stage, staleOnly, focus]);
+  }, [tech, q, category, stage, staleOnly, focus, division]);
 
   const saveNews = async (body) => {
     setSaving(true);
@@ -449,6 +453,15 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const fixed = tab === 'tech' && techView === 'radar' && !loading && !error;
   const Shell = fixed ? WideContent : Content;
 
+  // 자료에 실제로 적힌 사업부만. 순서는 설정 차례를 따르되, 설정에 없는 것도 뒤에 붙인다.
+  const divisionOptions = useMemo(() => {
+    const used = new Set();
+    [...news, ...tech].forEach((r) => (r.divisions || []).forEach((d) => used.add(d)));
+    const ordered = (settings.divisions || []).filter((d) => used.has(d));
+    used.forEach((d) => { if (!ordered.includes(d)) ordered.push(d); });
+    return ordered;
+  }, [news, tech, settings.divisions]);
+
   const categoryOptions = tab === 'news'
     ? (settings.newsCategories || [])
     : (settings.techCategories || []);
@@ -489,6 +502,19 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
               <option value="">분류 전체</option>
               {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
+
+            {/*
+              ⚠️ 사업부 목록은 **자료에 실제로 적힌 것**으로 만든다. 설정의 전체
+                 사업부를 쓰면 하나도 안 걸리는 항목이 목록에 서고, 골라도 빈 화면이
+                 된다 — 116개 중 사업부가 적힌 것이 13개뿐이다(2026-08-25).
+            */}
+            {divisionOptions.length > 0 && (
+              <Select value={division} onChange={(e) => setDivision(e.target.value)}
+                      title="그 사업부와 관련 있다고 적힌 것만 봅니다">
+                <option value="">사업부 전체</option>
+                {divisionOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+              </Select>
+            )}
 
             {tab === 'news' && (
               <Select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -552,7 +578,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                           onSelect={merging ? doMerge
                             : compareA && !compareB ? pickCompare : setSelected}
                           activeSector={category}
-                          onSectorClick={setCategory} />
+                          onSectorClick={setCategory}
+                          movedWindowDays={settings.movedWindowDays} />
             </RadarSlot>
           )}
 

@@ -24,8 +24,11 @@ from app.shared.utils import get_request_json
 
 MODULE_NAME = 'digital_twin_intel'
 
-# 레이더에 「어디서 왔는지」 화살표를 그리는 기간. 화면의 「최근 이동」 표시와
-# **같은 값이어야 한다** — 갈리면 화살표는 있는데 표시가 없는 줄이 생긴다.
+# 레이더에 「어디서 왔는지」 화살표를 그리는 기간.
+#
+# ⚠️ **화면에 같은 숫자를 박지 않는다.** 한때 `RadarChart.jsx` 에도 90 이 박혀 있었다 —
+#    여기만 바꾸면 범례가 「최근 90일」이라 말하면서 실제로는 다른 기간을 그린다.
+#    설정 응답(`movedWindowDays`)으로 내려보내 **화면이 서버 값을 읽게** 한다.
 MOVED_WINDOW_DAYS = 90
 
 # 분류 목록의 초기값. **설정에서 늘린다** — 코드에 박으면 조직이 바뀔 때 화면이
@@ -691,8 +694,23 @@ def get_settings():
     #    다시 씌운다 — 늘리거나 이름을 바꾸면 업계 기준과 대조가 안 된다.
     out['cptGroups'] = [{'key': k, 'label': ko} for k, ko in CPT_GROUPS]
     out['newsStatuses'] = list(NEWS_STATUSES)
+    # 화면 범례가 이 값을 읽는다. 숫자를 두 곳에 두지 않는다.
+    out['movedWindowDays'] = MOVED_WINDOW_DAYS
+
+    # ⚠️ 사업부 이름을 여기 박지 않는다. 조직이 바뀌면 화면이 조용히 틀어진다 —
+    #    포털의 사업부 표를 그대로 읽어 **차례까지** 넘긴다(화면은 자료에 실제로
+    #    적힌 것만 골라 쓴다).
+    try:
+        from app.modules.digital_twin_dashboard.models import Division
+        out['divisions'] = [d.name for d in Division.query
+                            .filter(Division.is_active.is_(True))
+                            .order_by(Division.order.asc(), Division.id.asc()).all()]
+    except Exception:
+        # 사업부 표를 못 읽는다고 설정 전체가 죽으면 안 된다.
+        out['divisions'] = []
     for row in ModuleSettings.query.filter_by(module_name=MODULE_NAME).all():
-        if row.settings_key in ('cptGroups', 'stages', 'newsStatuses'):
+        if row.settings_key in ('cptGroups', 'stages', 'newsStatuses',
+                                'movedWindowDays'):
             continue                      # 표준·고정값은 덮어쓸 수 없다
         out[row.settings_key] = row.settings_data
     return success_response(out)
