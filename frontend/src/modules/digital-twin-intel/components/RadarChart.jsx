@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { AlertTriangle, Minus, Plus, Maximize2, Move } from 'lucide-react';
+import { AlertTriangle, Minus, Plus, Maximize2, Move, Tag } from 'lucide-react';
 
 import { STAGES } from './RadarBoard';
 
@@ -100,6 +100,14 @@ const ToolBtn = styled.button`
 
   &:hover:not(:disabled) { background: #eef2ff; color: #4338ca; }
   &:disabled { opacity: 0.35; cursor: default; }
+
+  /* 켜진 상태. ⚠️ 눌린 것이 보여야 한다 — 안 보이면 이름표가 안 뜨는 것이
+     고장인지 꺼 둔 것인지 알 수 없다. */
+  ${(p) => p.$on && `
+    background: #4f46e5;
+    color: #fff;
+    &:hover:not(:disabled) { background: #4338ca; color: #fff; }
+  `}
 `;
 
 const ZoomTag = styled.div`
@@ -319,12 +327,41 @@ const layout = (items, b) => {
   });
 };
 
+/*
+  이름표를 켜 뒀는지 **기억한다.** ⚠️ 한 번 켜고 다른 화면 갔다 오면 다시 꺼져
+  있으면, 매번 찾아 누르느니 안 쓰게 된다. 브라우저별ㆍ사람별 취향이라 서버에
+  둘 것은 아니다.
+
+  ⚠️ 시크릿 창ㆍ저장 막아 둔 브라우저에서는 읽기ㆍ쓰기 자체가 튄다. 실패하면
+     조용히 기본값(꺼짐)으로 간다 — 이 하나 때문에 레이더가 안 뜨면 안 된다.
+*/
+const LABEL_KEY = 'dtIntel.radarLabels';
+
+const readLabelPref = () => {
+  try {
+    return window.localStorage.getItem(LABEL_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/*
+  이름표에 쓸 글자. ⚠️ 긴 이름을 그대로 쓰면 옆 점을 덮는다 — 「이산사건 공정
+  시뮬레이션」이 이웃 서넛을 가린다. 자르되 **전체 이름은 풍선말에 그대로 있다.**
+*/
+const LABEL_MAX = 10;
+const shortName = (name) => {
+  const v = name || '';
+  return v.length > LABEL_MAX ? `${v.slice(0, LABEL_MAX)}…` : v;
+};
+
 const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                      movedWindowDays = 90 }) => {
   // 범례에 「◆ 전사와 다르게 봄」을 띄울지. ⚠️ 전사 기준으로 볼 때 이 줄을 띄우면
   //    있지도 않은 표시를 설명하는 꼴이 된다.
   const divisionLens = rows.some((t) => t.division);
   const [hot, setHot] = useState(null);
+  const [labels, setLabels] = useState(readLabelPref);
   const [view, setView] = useState({ k: 1, x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const svgRef = useRef(null);
@@ -450,6 +487,11 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
     fn();
   };
 
+  const toggleLabels = () => setLabels((v) => {
+    try { window.localStorage.setItem(LABEL_KEY, v ? '0' : '1'); } catch { /* 못 써도 그만 */ }
+    return !v;
+  });
+
   const reset = () => setView({ k: 1, x: 0, y: 0 });
   const zoomed = view.k > 1.001;
 
@@ -463,6 +505,12 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                    title="축소"><Minus size={15} /></ToolBtn>
           <ToolBtn onClick={reset} disabled={!zoomed && !view.x && !view.y}
                    title="처음 크기로"><Maximize2 size={14} /></ToolBtn>
+          <ToolBtn $on={labels} onClick={toggleLabels}
+                   title={labels
+                     ? '이름표 끄기'
+                     : '점 옆에 이름을 붙입니다 (몰린 자리는 확대해서 보세요)'}>
+            <Tag size={14} />
+          </ToolBtn>
         </Tools>
 
         {zoomed && (
@@ -611,6 +659,43 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                     {b.no}
                   </text>
                 </g>
+              );
+            })}
+
+            {/*
+              이름표. ⚠️⚠️ **점을 다 그린 뒤 따로 한 번 더 돈다.** 점마다 같은
+                 묶음(<g>) 안에서 그리면 **나중에 그려진 점이 앞 점의 이름표를
+                 덮는다** — 몰린 자리일수록 심해지는데, 이름표가 필요한 곳이
+                 바로 그 자리다.
+
+              ⚠️ 글자 크기도 `/ k` 로 고정한다. 점과 같은 규칙이라야 확대했을 때
+                 이름표만 같이 커져서 도로 겹치는 일이 없다.
+
+              ⚠️ `pointerEvents: none` — 이름표가 클릭을 가로채면 점을 눌러도
+                 창이 안 열린다. 예전에 setPointerCapture 로 같은 일을 겪었다.
+            */}
+            {labels && blips.map((b) => {
+              const k = view.k;
+              const right = b.x >= CX;      // 바깥쪽으로 눕혀야 테두리를 안 넘는다
+              const on = hot === b.tech.uuid;
+              return (
+                <text key={`lb-${b.tech.uuid}`}
+                      x={b.x + (right ? 1 : -1) * (BLIP_R + 3.5) / k}
+                      y={b.y}
+                      fontSize={10.5 / k}
+                      textAnchor={right ? 'start' : 'end'}
+                      dominantBaseline="central"
+                      fill={on ? '#0f172a' : '#334155'}
+                      fontWeight={on ? 700 : 500}
+                      opacity={on ? 1 : 0.88}
+                      /* ⚠️ 흰 테를 글자 **뒤로** 깔아야 고리ㆍ부채꼴 위에서 읽힌다.
+                         paintOrder 없이 stroke 만 주면 글자가 뭉개진다. */
+                      stroke="#fff"
+                      strokeWidth={3 / k}
+                      paintOrder="stroke"
+                      style={{ pointerEvents: 'none' }}>
+                  {shortName(b.tech.name)}
+                </text>
               );
             })}
           </g>
