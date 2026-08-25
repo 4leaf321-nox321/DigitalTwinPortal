@@ -48,6 +48,13 @@ ORIGINS = ('ui', 'mcp', 'file', 'llm')
 #          안 쓰기로 한 이유를 안 적으면 6개월 뒤 같은 논의를 처음부터 다시 한다.
 STAGES = ('도입', '시험', '관찰', '보류')
 
+# 소식이 어디까지 처리됐나. **거르기만 되고 바꾸는 길이 없으면 죽은 칸이 된다** —
+# 실제로 그랬다(2026-08-25 까지 전부 '신규' 였다).
+#   신규    아무도 안 읽었다
+#   확인됨  사람이 한 번 읽고 쓸모를 판단했다
+#   보관    다 본 것. 목록에서 내려도 되지만 지우지는 않는다
+NEWS_STATUSES = ('신규', '확인됨', '보관')
+
 # 근거가 이만큼 없으면 낡은 것으로 본다. 단계별로 다르다 —
 # '도입'ㆍ'시험' 은 쓰고 있는 것이라 조용해도 이상하지 않지만,
 # '관찰' 은 **지켜보겠다고 해 놓고 안 보고 있다는 뜻**이라 빨리 걸려야 한다.
@@ -251,6 +258,42 @@ class IntelEvidence(BaseModel):
 
     def __repr__(self):
         return f'<IntelEvidence {self.news_uuid[:8]}→{self.tech_uuid[:8]}>'
+
+
+class IntelChange(BaseModel):
+    """무엇이 언제 왜 바뀌었나 — **지금은 레이더 단계 이동만** 남긴다.
+
+    ⚠️ 단계를 「조직의 판단」이라며 관리자ㆍ사무국으로 좁혀 놓고 **그 판단의 기록이
+       없었다.** `stage`ㆍ`stage_reason` 은 **지금 값**만 들고 있어서, 「왜 작년에
+       도입이었다가 보류로 내려갔지」에 답할 수 없다. 판단을 좁혔으면 그 판단이
+       남아야 한다 — 안 남으면 좁힌 의미가 절반이다.
+
+    ⚠️ FK 를 걸지 않는다. 기술이 지워져도 「그때 이런 판단이 있었다」는 남아야 한다
+       (`dt2_project_changes`ㆍ`dt_investment_changes` 와 같은 판단).
+    """
+    __tablename__ = 'dt_intel_changes'
+
+    subject_kind = db.Column(db.String(10), nullable=False, index=True)   # tech | news
+    subject_uuid = db.Column(db.String(36), nullable=False, index=True)
+    # 지워져도 무엇에 대한 기록인지 알아야 한다.
+    subject_name = db.Column(db.String(300))
+
+    field = db.Column(db.String(30), nullable=False)      # stage · status …
+    before_value = db.Column(db.String(200))
+    after_value = db.Column(db.String(200))
+    reason = db.Column(db.Text)
+
+    actor_user_id = db.Column(db.Integer, index=True)
+    actor_name = db.Column(db.String(100))
+    source = db.Column(db.String(20), nullable=False, default='ui')
+
+    def to_dict(self):
+        d = super().to_dict()
+        return d
+
+    def __repr__(self):
+        return (f'<IntelChange {self.subject_kind}:{self.subject_uuid[:8]} '
+                f'{self.field} {self.before_value}→{self.after_value}>')
 
 
 class IntelLink(BaseModel):

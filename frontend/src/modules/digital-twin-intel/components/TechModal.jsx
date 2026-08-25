@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil } from 'lucide-react';
+import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil, History, Merge }
+  from 'lucide-react';
 
 import api from '../services/api';
 import AssistPanel from './AssistPanel';
@@ -82,6 +83,19 @@ const Links = styled.ul`
   small { color: #64748b; width: 100%; line-height: 1.5; }
 `;
 
+/* ⚠️ 못 무르는 기능은 안 쓰는 기능이다. 잘못 건 연결을 여기서 끊는다. */
+const UnlinkBtn = styled.button`
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 0 0 0 0.25rem;
+  display: flex;
+
+  &:hover { color: #dc2626; }
+`;
+
 const Lead = styled.p`
   margin: 0;
   font-size: 0.8125rem;
@@ -117,6 +131,40 @@ const Body2 = styled.p`
   white-space: pre-wrap;
 `;
 
+const HistBtn = styled.button`
+  margin-left: 0.375rem;
+  border: none;
+  background: none;
+  color: #6366f1;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+
+  &:hover { text-decoration: underline; }
+`;
+
+const Hist = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  li {
+    padding: 0.3125rem 0.5rem;
+    border-left: 2px solid #c7d2fe;
+    background: #f8fafc;
+    border-radius: 0 0.25rem 0.25rem 0;
+    font-size: 0.75rem;
+  }
+  b { color: #0f172a; margin-right: 0.375rem; }
+  span { color: #94a3b8; font-size: 0.6875rem; }
+  small { display: block; color: #475569; margin-top: 0.125rem; line-height: 1.5; }
+`;
+
 const DangerBtn = styled(GhostBtn)`
   color: #b91c1c;
   border-color: #fecaca;
@@ -138,7 +186,7 @@ const DangerBtn = styled(GhostBtn)`
  * ⚠️ 대상이 지워졌으면 서버가 `missing` 으로 알려 준다. 조용히 빈칸으로 두면
  *    「이름 없는 연결」이 남고, 그러면 그 줄을 지울지 고칠지 아무도 못 정한다.
  */
-const LinkList = ({ rows }) => {
+const LinkList = ({ rows, onRemove }) => {
   if (!rows || !rows.length) return null;
   const label = { project: '과제', kpi: 'KPI', sw: '보유 SW' };
   return (
@@ -150,6 +198,11 @@ const LinkList = ({ rows }) => {
             <em>{label[l.targetKind] || l.targetKind}</em>
             <b>{l.label || (l.missing ? '(지워진 대상)' : l.targetRef)}</b>
             {l.relevance && <small>{l.relevance}</small>}
+            {onRemove && (
+              <UnlinkBtn onClick={() => onRemove(l)} title="이 연결을 끊습니다">
+                <X size={11} />
+              </UnlinkBtn>
+            )}
           </li>
         ))}
       </Links>
@@ -157,9 +210,11 @@ const LinkList = ({ rows }) => {
   );
 };
 
-const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, showError }) => {
+const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
+                    canCurate, showError }) => {
   const [evidence, setEvidence] = useState(null);
   const [links, setLinks] = useState([]);
+  const [changes, setChanges] = useState(null);
   const [stage, setStage] = useState(tech?.stage || '관찰');
   const [reason, setReason] = useState(tech?.stage_reason || '');
   const [busy, setBusy] = useState(false);
@@ -177,6 +232,23 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, show
 
   const reloadLinks = () =>
     api.listLinks('tech', tech.uuid).then(setLinks).catch(() => {});
+
+  const dropLink = async (l) => {
+    try {
+      await api.removeLink(l.id);
+      reloadLinks();
+    } catch (e) { showError(e.message); }
+  };
+
+  const dropEvidence = async (newsUuid) => {
+    try {
+      await api.removeEvidence(newsUuid, tech.uuid);
+      setEvidence((p) => (p || []).filter((r) => r.news.uuid !== newsUuid));
+    } catch (e) { showError(e.message); }
+  };
+
+  const loadChanges = () =>
+    api.listChanges('tech', tech.uuid).then(setChanges).catch(() => setChanges([]));
 
   if (!tech) return null;
 
@@ -270,6 +342,34 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, show
             </Field>
           )}
 
+          {/*
+            ⚠️ 단계를 「조직의 판단」이라며 좁혀 놓고 기록이 없으면 좁힌 의미가 절반이다.
+               「왜 작년에 도입이었다가 보류로 내려갔지」에 답할 수 있어야 한다.
+          */}
+          <Field>
+            <span>
+              단계가 바뀐 기록
+              {changes === null && (
+                <HistBtn onClick={loadChanges}><History size={11} /> 보기</HistBtn>
+              )}
+            </span>
+            {changes !== null && changes.length === 0 && (
+              <Hint>아직 단계를 옮긴 적이 없습니다.</Hint>
+            )}
+            {changes !== null && changes.length > 0 && (
+              <Hist>
+                {changes.map((c) => (
+                  <li key={c.id}>
+                    <b>{c.before_value} → {c.after_value}</b>
+                    <span>{(c.created_at || '').slice(0, 10)}
+                      {c.actor_name ? ` · ${c.actor_name}` : ''}</span>
+                    {c.reason && <small>{c.reason}</small>}
+                  </li>
+                ))}
+              </Hist>
+            )}
+          </Field>
+
           <Field>
             <span>레이더 단계</span>
             <StageRow>
@@ -309,7 +409,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, show
             </Warn>
           )}
 
-          <LinkList rows={links} />
+          <LinkList rows={links} onRemove={dropLink} />
 
           <AssistPanel kind="tech" uuid={tech.uuid}
                        onLinked={reloadLinks} showError={showError} />
@@ -334,6 +434,11 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, show
                         원문 <ExternalLink size={11} />
                       </a>
                     )}
+                    {/* 잘못 걸린 근거를 끊는다 — 걸 수 있으면 끊을 수도 있어야 한다. */}
+                    <UnlinkBtn onClick={() => dropEvidence(row.news.uuid)}
+                               title="이 소식을 근거에서 뺍니다">
+                      <X size={11} />
+                    </UnlinkBtn>
                   </li>
                 ))}
               </Evidence>
@@ -346,6 +451,12 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, canCurate, show
             <DangerBtn onClick={() => onDelete(tech)}>
               <Trash2 size={13} /> 지우기
             </DangerBtn>
+          )}
+          {/* 두 줄이 됐을 때 합치는 자리. 되돌릴 수 없어 사무국만. */}
+          {canCurate && onMerge && (
+            <GhostBtn onClick={() => onMerge(tech)} title="이 기술을 다른 기술에 합칩니다">
+              <Merge size={13} /> 합치기
+            </GhostBtn>
           )}
           {/* 고치기는 **누구나** — 설명을 채우는 것은 판단이 아니라 기여다. */}
           <GhostBtn onClick={() => onEdit(tech)}>

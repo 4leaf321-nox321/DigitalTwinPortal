@@ -17,7 +17,8 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Search, AlertCircle, Loader2, Radar as RadarIcon, List } from 'lucide-react';
+import { Search, AlertCircle, Loader2, Radar as RadarIcon, List, AlertTriangle }
+  from 'lucide-react';
 
 import { useAuth } from '../../contexts/AuthContext';
 import Header from './components/Layout/Header';
@@ -28,6 +29,7 @@ import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
 import RadarChart from './components/RadarChart';
 import NewsDetailModal from './components/NewsDetailModal';
+import NewsEditModal from './components/NewsEditModal';
 import api from './services/api';
 
 const Container = styled.div`
@@ -106,6 +108,20 @@ const SearchBox = styled.div`
 
 /* 레이더 그림 / 칸 목록 전환. 둘 다 쓸모가 달라 하나를 고를 이유가 없다 —
    그림은 **두 축을 한눈에**, 목록은 **훑고 고르기**에 낫다. */
+const StaleBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4375rem 0.625rem;
+  border: 1px solid ${(p) => (p.$on ? '#f59e0b' : '#cbd5e1')};
+  background: ${(p) => (p.$on ? '#fffbeb' : '#fff')};
+  color: ${(p) => (p.$on ? '#92400e' : '#475569')};
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+`;
+
 const ViewToggle = styled.div`
   display: flex;
   gap: 0.125rem;
@@ -157,6 +173,31 @@ const RadarSlot = styled.div`
   min-height: 0;
 `;
 
+const MergeBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  color: #92400e;
+  line-height: 1.6;
+
+  button {
+    margin-left: auto;
+    flex-shrink: 0;
+    border: 1px solid #fbbf24;
+    background: #fff;
+    color: #92400e;
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.6875rem;
+    cursor: pointer;
+  }
+`;
+
 const Toast = styled.div`
   position: fixed;
   left: 50%;
@@ -191,6 +232,10 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [stage, setStage] = useState('');
+  const [status, setStatus] = useState('');
+  // ⚠️ 낡음 판정은 **서버가 준다**(단계마다 기준 일수가 다르다). 여기서는 그 표시를
+  //    걸러 보기만 한다 — 판정 규칙을 화면에 복제하면 반드시 서버와 갈린다.
+  const [staleOnly, setStaleOnly] = useState(false);
 
   const [techView, setTechView] = useState('radar');   // radar | board
   const [openNews, setOpenNews] = useState(null);
@@ -199,6 +244,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [selected, setSelected] = useState(null);
   // `null` 이면 닫힘. `{}` 면 새로 만들기, 기술 객체면 그것을 고치기.
   const [techForm, setTechForm] = useState(null);
+  const [newsEdit, setNewsEdit] = useState(null);
+  // 합칠 대상을 고르는 중인 기술. null 이면 안 고르는 중.
+  const [merging, setMerging] = useState(null);
 
   const say = useCallback((msg) => {
     setToast(msg);
@@ -229,15 +277,17 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     const key = q.trim().toLowerCase();
     return news.filter((n) => {
       if (category && n.category !== category) return false;
+      if (status && n.status !== status) return false;
       if (!key) return true;
       return [n.title, n.summary, n.source]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [news, q, category]);
+  }, [news, q, category, status]);
 
   const shownTech = useMemo(() => {
     const key = q.trim().toLowerCase();
     return tech.filter((t) => {
+      if (staleOnly && !t.isStale) return false;
       if (stage && t.stage !== stage) return false;
       if (category && t.category !== category) return false;
       if (!key) return true;
@@ -246,7 +296,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       return [t.name, t.vendor, t.summary, ...(t.tags || []), ...(t.cpt || [])]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [tech, q, category, stage]);
+  }, [tech, q, category, stage, staleOnly]);
 
   const saveNews = async (body) => {
     setSaving(true);
@@ -289,6 +339,43 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       say(e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveNewsEdit = async (body) => {
+    setSaving(true);
+    try {
+      await api.updateNews(newsEdit.uuid, body);
+      setNewsEdit(null);
+      setOpenNews(null);
+      await load();
+      say('고쳤습니다.');
+    } catch (e) {
+      say(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /*
+    합치기. **되돌릴 수 없다** — 고른 쪽이 지워지고 근거·연결이 옮겨간다.
+    ⚠️ 그래서 두 번 묻는다: 어느 것에 합칠지 고르게 하고, 그다음 확인한다.
+  */
+  const doMerge = async (into) => {
+    const from = merging;
+    if (!from || from.uuid === into.uuid) { setMerging(null); return; }
+    if (!window.confirm(
+      `「${from.name}」 를 「${into.name}」 에 합칩니다.\n\n`
+      + `「${from.name}」 는 지워지고 근거·연결이 옮겨갑니다. `
+      + '되돌릴 수 없습니다.')) return;
+    try {
+      await api.mergeTech(from.uuid, into.uuid);
+      setMerging(null);
+      setSelected(null);
+      await load();
+      say(`「${from.name}」 를 「${into.name}」 에 합쳤습니다. 지운 이름은 별칭으로 남습니다.`);
+    } catch (e) {
+      say(e.message);
     }
   };
 
@@ -356,11 +443,30 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
               {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
 
+            {tab === 'news' && (
+              <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">상태 전체</option>
+                {(settings.newsStatuses || []).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </Select>
+            )}
+
             {tab === 'tech' && (
               <Select value={stage} onChange={(e) => setStage(e.target.value)}>
                 <option value="">단계 전체</option>
                 {STAGES.map((s) => <option key={s.key} value={s.key}>{s.key}</option>)}
               </Select>
+            )}
+
+            {/* ⚠️ 낡음 표시가 있어도 **모아 보는 자리가 없으면** 하나씩 찾아다녀야 한다. */}
+            {tab === 'tech' && (
+              <StaleBtn type="button" $on={staleOnly}
+                        onClick={() => setStaleOnly((v) => !v)}
+                        title="근거가 오래 없어 다시 볼 때가 된 것만 봅니다">
+                <AlertTriangle size={13} /> 낡은 것만
+                {staleOnly ? ` (${shownTech.length})` : ''}
+              </StaleBtn>
             )}
 
             {tab === 'tech' && (
@@ -375,6 +481,16 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
             )}
           </Toolbar>
 
+          {merging && (
+            <MergeBar>
+              <span>
+                <b>「{merging.name}」 를 어디에 합칠까요?</b> 아래에서 <b>남길 기술</b>을
+                고르세요. 「{merging.name}」 는 지워지고 근거·연결이 그쪽으로 옮겨갑니다.
+              </span>
+              <button type="button" onClick={() => setMerging(null)}>그만두기</button>
+            </MergeBar>
+          )}
+
           {loading && <State><Loader2 size={16} /> 불러오는 중…</State>}
           {!loading && error && <State $error><AlertCircle size={16} /> {error}</State>}
 
@@ -386,14 +502,14 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           {fixed && (
             <RadarSlot>
               <RadarChart rows={shownTech} categories={settings.techCategories}
-                          onSelect={setSelected}
+                          onSelect={merging ? doMerge : setSelected}
                           activeSector={category}
                           onSectorClick={setCategory} />
             </RadarSlot>
           )}
 
           {!loading && !error && tab === 'tech' && techView === 'board' && (
-            <RadarBoard rows={shownTech} onSelect={setSelected} />
+            <RadarBoard rows={shownTech} onSelect={merging ? doMerge : setSelected} />
           )}
         </Shell>
       </Scroller>
@@ -405,6 +521,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                  onChanged={async () => { setSelected(null); await load(); say('단계를 바꿨습니다.'); }}
                  onDelete={removeTech}
                  onEdit={(t) => { setSelected(null); setTechForm(t); }}
+                 onMerge={(t) => { setSelected(null); setMerging(t); }}
                  canCurate={canCurate} showError={say} />
 
       {/* `key` 로 초기값을 다시 잡는다 — 없으면 다른 기술을 열어도 앞엣것이 남는다. */}
@@ -424,8 +541,17 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
       <NewsDetailModal news={openNews} onClose={() => setOpenNews(null)}
                        onSaved={load}
+                       onEdit={(n) => setNewsEdit(n)}
                        onTechClick={(t) => { setOpenNews(null); openTechByRef(t); }}
                        showError={say} />
+
+      {newsEdit && (
+        <NewsEditModal key={newsEdit.uuid} news={newsEdit}
+                       statuses={settings.newsStatuses}
+                       categories={settings.newsCategories}
+                       onClose={() => setNewsEdit(null)}
+                       onSave={saveNewsEdit} saving={saving} />
+      )}
 
       {toast && <Toast>{toast}</Toast>}
     </Container>

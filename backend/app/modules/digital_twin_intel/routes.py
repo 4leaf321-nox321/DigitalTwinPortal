@@ -14,7 +14,8 @@ from app.modules.digital_twin_intel import bp
 from app.modules.digital_twin_intel import permissions as P
 from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
-    CPT_GROUPS, DEFAULT_SECTORS, ORIGINS, STAGES, IntelEvidence, IntelNews, IntelTech,
+    CPT_GROUPS, DEFAULT_SECTORS, NEWS_STATUSES, ORIGINS, STAGES,
+    IntelEvidence, IntelNews, IntelTech,
 )
 from app.shared.responses import (
     created_response, error_response, not_found_response, success_response,
@@ -178,6 +179,15 @@ def update_news(uuid):
         return not_found_response('소식을 찾을 수 없습니다.')
 
     data = get_request_json() or {}
+    # ⚠️ 아는 값만 받는다. 오타가 들어가면 그 소식은 **어느 거르기에도 안 걸려**
+    #    목록에서 조용히 사라진다.
+    if 'status' in data and data['status'] not in NEWS_STATUSES:
+        return error_response(
+            f'상태는 {" · ".join(NEWS_STATUSES)} 중 하나여야 합니다.', status_code=400)
+    if 'status' in data and data['status'] != n.status:
+        S.log_change('news', n.uuid, n.title, 'status', n.status, data['status'],
+                     actor=actor, source=_origin_of(data))
+
     for key, col in (('title', 'title'), ('summary', 'summary'), ('body', 'body'),
                      ('source', 'source'), ('url', 'url'), ('category', 'category'),
                      ('status', 'status')):
@@ -248,6 +258,11 @@ def list_tech():
     for r in rows:
         cnt, last = stats.get(r.uuid, (0, None))
         out.append(r.to_dict(last_evidence_at=last, evidence_count=cnt))
+
+    # ⚠️ **낡음 판정은 서버가 한다.** 단계마다 기준 일수가 다르고, 그 표가 화면에
+    #    복제되면 갈린다. 그래서 거르기도 여기서 한다.
+    if request.args.get('stale') in ('1', 'true', 'yes'):
+        out = [t for t in out if t.get('isStale')]
     return success_response(out)
 
 
@@ -323,7 +338,8 @@ def change_stage(uuid):
 
     data = get_request_json() or {}
     tech, err = S.set_stage(uuid, (data.get('stage') or '').strip(),
-                            reason=data.get('reason'), actor_id=actor.id)
+                            reason=data.get('reason'), actor=actor,
+                            source=_origin_of(data))
     if err:
         code = 404 if '찾을 수 없' in err else 400
         return error_response(err, status_code=code)
@@ -374,6 +390,74 @@ def add_evidence():
                     actor_id=actor.id, source=_origin_of(data))
     db.session.commit()
     return created_response({'newsUuid': news_uuid, 'techUuid': tech_uuid})
+
+
+@bp.route('/evidence', methods=['DELETE'])
+@jwt_required()
+def remove_evidence():
+    """근거를 끊는다. 질의 `newsUuid`ㆍ`techUuid`.
+
+    ⚠️ **되돌릴 수 있어야 한다.** AI 제안을 눌러 잘못 걸었는데 무를 방법이 없으면
+       한 번 데인 사람은 그다음부터 안 누른다 — **못 무르는 기능은 안 쓰는 기능이다.**
+
+    ⚠️ 지우는 권한을 사무국으로 좁히지 **않는다.** 거는 것이 누구나인데 끊는 것만
+       좁히면, 실수한 사람이 자기 실수를 못 치운다. 근거는 값싸고 다시 걸 수 있다
+       (소식ㆍ기술 자체를 지우는 것은 여전히 사무국만).
+    """
+    actor = _actor()
+    denied = _deny_write(actor)
+    if denied is not None:
+        return denied
+
+    news_uuid = (request.args.get('newsUuid') or '').strip()
+    tech_uuid = (request.args.get('techUuid') or '').strip()
+    if not news_uuid or not tech_uuid:
+        return error_response('newsUuid 와 techUuid 가 모두 필요합니다.', status_code=400)
+    if not S.unlink_evidence(news_uuid, tech_uuid):
+        return not_found_response('그 근거를 찾을 수 없습니다.')
+    return success_response(message='근거를 끊었습니다.')
+
+
+@bp.route('/tech/<uuid>/merge', methods=['POST'])
+@jwt_required()
+def merge_tech(uuid):
+    """이 기술을 다른 기술에 **합친다**. 본문 `intoUuid`. 관리자ㆍ사무국만.
+
+    ⚠️ 되돌릴 수 없다(한쪽이 지워진다). 그래서 지우기와 같은 권한으로 좁힌다.
+    ⚠️ 지는 쪽 **이름이 이기는 쪽 별칭으로 들어간다** — 안 그러면 다음 소식이 그
+       이름으로 들어와 **지운 줄이 곧바로 다시 생긴다.**
+    """
+    actor = _actor()
+    denied = _deny_curate(actor)
+    if denied is not None:
+        return denied
+
+    into = ((get_request_json() or {}).get('intoUuid') or '').strip()
+    if not into:
+        return error_response('합칠 대상(intoUuid)이 필요합니다.', status_code=400)
+    winner, err = S.merge_tech(uuid, into, actor=actor)
+    if err:
+        code = 404 if '찾을 수 없' in err else 400
+        return error_response(err, status_code=code)
+    cnt, last = S.evidence_stats([winner.uuid]).get(winner.uuid, (0, None))
+    return success_response(winner.to_dict(last_evidence_at=last, evidence_count=cnt))
+
+
+@bp.route('/<kind>/<uuid>/changes', methods=['GET'])
+@jwt_required()
+def list_changes(kind, uuid):
+    """무엇이 언제 왜 바뀌었나. 지금은 **레이더 단계와 소식 상태**를 남긴다.
+
+    ⚠️ 단계를 「조직의 판단」이라며 좁혀 놓고 기록이 없으면 좁힌 의미가 절반이다 —
+       「왜 작년에 도입이었다가 보류로 내려갔지」에 답할 수 있어야 한다.
+    """
+    actor = _actor()
+    denied = _deny_read(actor)
+    if denied is not None:
+        return denied
+    if kind not in ('news', 'tech'):
+        return error_response("kind 는 'news' 또는 'tech' 여야 합니다.", status_code=400)
+    return success_response([r.to_dict() for r in S.changes_for(kind, uuid)])
 
 
 @bp.route('/tech/<uuid>/evidence', methods=['GET'])
@@ -459,6 +543,19 @@ def add_link():
                              'targetRef': ln.target_ref})
 
 
+@bp.route('/links/<int:link_id>', methods=['DELETE'])
+@jwt_required()
+def remove_link(link_id):
+    """연결을 끊는다. **AI 제안을 잘못 눌렀을 때 무르는 자리다.**"""
+    actor = _actor()
+    denied = _deny_write(actor)
+    if denied is not None:
+        return denied
+    if not S.remove_link(link_id):
+        return not_found_response('그 연결을 찾을 수 없습니다.')
+    return success_response(message='연결을 끊었습니다.')
+
+
 @bp.route('/<kind>/<uuid>/links', methods=['GET'])
 @jwt_required()
 def list_links(kind, uuid):
@@ -536,8 +633,9 @@ def get_settings():
     # ⚠️ CPT 는 **설정이 아니라 외부 표준**이다. 저장된 값으로 덮이지 않게 아래에서
     #    다시 씌운다 — 늘리거나 이름을 바꾸면 업계 기준과 대조가 안 된다.
     out['cptGroups'] = [{'key': k, 'label': ko} for k, ko in CPT_GROUPS]
+    out['newsStatuses'] = list(NEWS_STATUSES)
     for row in ModuleSettings.query.filter_by(module_name=MODULE_NAME).all():
-        if row.settings_key in ('cptGroups', 'stages'):
+        if row.settings_key in ('cptGroups', 'stages', 'newsStatuses'):
             continue                      # 표준·고정값은 덮어쓸 수 없다
         out[row.settings_key] = row.settings_data
     return success_response(out)

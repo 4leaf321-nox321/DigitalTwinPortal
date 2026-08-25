@@ -110,6 +110,41 @@ class DtIntelApi {
                         '근거를 불러오지 못했습니다.');
   }
 
+  /**
+   * 근거를 끊는다.
+   *
+   * ⚠️ **못 무르는 기능은 안 쓰는 기능이다.** AI 제안을 눌러 잘못 걸었는데 무를
+   *    방법이 없으면 한 번 데인 사람은 그다음부터 안 누른다.
+   */
+  removeEvidence(newsUuid, techUuid) {
+    const qs = new URLSearchParams({ newsUuid, techUuid }).toString();
+    return this.request(`${this.baseUrl}/evidence?${qs}`, { method: 'DELETE' },
+                        '근거를 끊지 못했습니다.');
+  }
+
+  removeLink(id) {
+    return this.request(`${this.baseUrl}/links/${id}`, { method: 'DELETE' },
+                        '연결을 끊지 못했습니다.');
+  }
+
+  /** 무엇이 언제 왜 바뀌었나 — 레이더 단계·소식 상태. */
+  listChanges(kind, uuid) {
+    return this.request(`${this.baseUrl}/${kind}/${uuid}/changes`, {},
+                        '이력을 불러오지 못했습니다.');
+  }
+
+  /**
+   * 두 줄이 된 기술을 합친다.
+   *
+   * ⚠️ 되돌릴 수 없다 — `uuid` 쪽이 지워지고 `intoUuid` 로 근거·연결이 옮겨간다.
+   *    지는 이름은 이기는 쪽 별칭이 되어, 다음 소식이 같은 줄에 붙는다.
+   */
+  mergeTech(uuid, intoUuid) {
+    return this.request(`${this.baseUrl}/tech/${uuid}/merge`,
+                        { method: 'POST', body: JSON.stringify({ intoUuid }) },
+                        '합치지 못했습니다.');
+  }
+
   addEvidence(newsUuid, techUuid, note) {
     return this.request(`${this.baseUrl}/evidence`,
                         { method: 'POST', body: JSON.stringify({ newsUuid, techUuid, note }) },

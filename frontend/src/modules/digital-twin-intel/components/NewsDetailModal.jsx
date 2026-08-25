@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { X, Newspaper, ExternalLink, Archive, AlertTriangle, Save } from 'lucide-react';
+import { X, Newspaper, ExternalLink, Archive, AlertTriangle, Save, Pencil }
+  from 'lucide-react';
 
 import api from '../services/api';
 import AssistPanel from './AssistPanel';
@@ -38,6 +39,19 @@ const Links = styled.ul`
   }
   b { color: #0f172a; }
   small { color: #64748b; width: 100%; line-height: 1.5; }
+`;
+
+/* ⚠️ 못 무르는 기능은 안 쓰는 기능이다. 잘못 건 연결을 여기서 끊는다. */
+const UnlinkBtn = styled.button`
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 0 0 0 0.25rem;
+  display: flex;
+
+  &:hover { color: #dc2626; }
 `;
 
 const Meta = styled.div`
@@ -92,6 +106,19 @@ const Chip = styled.span`
   color: #3730a3;
 
   em { font-style: normal; opacity: 0.7; }
+
+  button {
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+  }
+  button:last-child { color: #a5b4fc; margin-left: 0.125rem; }
+  button:last-child:hover { color: #dc2626; }
 `;
 
 const Stored = styled.span`
@@ -118,7 +145,7 @@ const Stored = styled.span`
  * ⚠️ 대상이 지워졌으면 서버가 `missing` 으로 알려 준다. 조용히 빈칸으로 두면
  *    「이름 없는 연결」이 남고, 그러면 그 줄을 지울지 고칠지 아무도 못 정한다.
  */
-const LinkList = ({ rows }) => {
+const LinkList = ({ rows, onRemove }) => {
   if (!rows || !rows.length) return null;
   const label = { project: '과제', kpi: 'KPI', sw: '보유 SW' };
   return (
@@ -130,6 +157,11 @@ const LinkList = ({ rows }) => {
             <em>{label[l.targetKind] || l.targetKind}</em>
             <b>{l.label || (l.missing ? '(지워진 대상)' : l.targetRef)}</b>
             {l.relevance && <small>{l.relevance}</small>}
+            {onRemove && (
+              <UnlinkBtn onClick={() => onRemove(l)} title="이 연결을 끊습니다">
+                <X size={11} />
+              </UnlinkBtn>
+            )}
           </li>
         ))}
       </Links>
@@ -137,7 +169,7 @@ const LinkList = ({ rows }) => {
   );
 };
 
-const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, showError }) => {
+const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showError }) => {
   const [full, setFull] = useState(null);
   const [links, setLinks] = useState([]);
   const [draft, setDraft] = useState('');
@@ -156,6 +188,21 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, showError }) => 
 
   const reloadLinks = () =>
     api.listLinks('news', news.uuid).then(setLinks).catch(() => {});
+
+  const dropLink = async (l) => {
+    try {
+      await api.removeLink(l.id);
+      reloadLinks();
+    } catch (e) { showError(e.message); }
+  };
+
+  const dropTech = async (techUuid) => {
+    try {
+      await api.removeEvidence(news.uuid, techUuid);
+      setFull((p) => ({ ...p,
+        technologies: (p.technologies || []).filter((t) => t.uuid !== techUuid) }));
+    } catch (e) { showError(e.message); }
+  };
 
   if (!news) return null;
   const n = full || news;
@@ -209,17 +256,22 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, showError }) => 
               <span>이 소식이 말하는 기술</span>
               <Chips>
                 {n.technologies.map((t) => (
-                  <Chip key={t.uuid} as="button" type="button"
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => onTechClick(t)}>
-                    {t.name} <em>{t.stage}</em>
+                  <Chip key={t.uuid}>
+                    <button type="button" onClick={() => onTechClick(t)}>
+                      {t.name} <em>{t.stage}</em>
+                    </button>
+                    {/* 잘못 걸린 기술을 뺀다. 기술 자체는 안 지워진다. */}
+                    <button type="button" onClick={() => dropTech(t.uuid)}
+                            title="이 기술을 근거에서 뺍니다">
+                      <X size={10} />
+                    </button>
                   </Chip>
                 ))}
               </Chips>
             </Field>
           )}
 
-          <LinkList rows={links} />
+          <LinkList rows={links} onRemove={dropLink} />
 
           <AssistPanel kind="news" uuid={n.uuid}
                        onLinked={reloadLinks} showError={showError} />
@@ -260,6 +312,11 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, showError }) => 
           {!editing && (
             <>
               <GhostBtn onClick={onClose}>닫기</GhostBtn>
+              {onEdit && (
+                <GhostBtn onClick={() => onEdit(n)}>
+                  <Pencil size={13} /> 고치기
+                </GhostBtn>
+              )}
               <PrimaryBtn onClick={() => setEditing(true)} disabled={full === null}>
                 <Archive size={13} /> {hasBody ? '원문 고치기' : '원문 담기'}
               </PrimaryBtn>

@@ -11,7 +11,8 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.modules.digital_twin_intel.models import (
-    CPT_KEYS, ORIGINS, STAGES, IntelEvidence, IntelLink, IntelNews, IntelTech,
+    CPT_KEYS, ORIGINS, STAGES, IntelChange, IntelEvidence, IntelLink, IntelNews,
+    IntelTech,
 )
 
 
@@ -48,6 +49,34 @@ def _clean_list(v):
     if not isinstance(v, (list, tuple)):
         return []
     return [str(x).strip() for x in v if str(x).strip()]
+
+
+def log_change(kind, uuid, name, field, before, after, *,
+               reason=None, actor=None, source='ui'):
+    """무엇이 언제 왜 바뀌었나. **커밋은 부르는 쪽이 한다**(같은 트랜잭션이어야 한다).
+
+    ⚠️ 값이 안 바뀌었으면 안 남긴다. 안 그러면 저장 누를 때마다 이력이 한 줄씩 늘어
+       **진짜 변경이 잡음에 묻힌다.**
+    """
+    if (before or None) == (after or None):
+        return None
+    row = IntelChange(
+        subject_kind=kind, subject_uuid=uuid, subject_name=(name or '')[:300],
+        field=field,
+        before_value=(str(before)[:200] if before is not None else None),
+        after_value=(str(after)[:200] if after is not None else None),
+        reason=reason,
+        actor_user_id=getattr(actor, 'id', None),
+        actor_name=getattr(actor, 'name', None),
+        source=source if source in ORIGINS else 'ui')
+    db.session.add(row)
+    return row
+
+
+def changes_for(kind, uuid, limit=50):
+    return (IntelChange.query
+            .filter_by(subject_kind=kind, subject_uuid=uuid)
+            .order_by(IntelChange.id.desc()).limit(limit).all())
 
 
 def _clean_cpt(v):
@@ -121,7 +150,7 @@ def create_tech(actor_id=None, origin='ui', **data):
     return t, None
 
 
-def set_stage(tech_uuid, stage, reason=None, actor_id=None):
+def set_stage(tech_uuid, stage, reason=None, actor=None, source='ui'):
     """레이더 단계를 옮긴다. **이유 없이 '보류' 로 못 간다.**
 
     ⚠️ 안 쓰기로 한 판단이야말로 근거가 남아야 한다. 안 남기면 6개월 뒤 같은 논의를
@@ -139,6 +168,10 @@ def set_stage(tech_uuid, stage, reason=None, actor_id=None):
 
     if t.stage != stage:
         t.stage_changed_at = datetime.utcnow()
+        # ⚠️ **이 한 줄이 판단의 기록이다.** 단계를 관리자ㆍ사무국으로 좁혀 놓고
+        #    기록을 안 남기면, 「왜 작년에 도입이었다가 보류로 내려갔지」에 답할 수 없다.
+        log_change('tech', t.uuid, t.name, 'stage', t.stage, stage,
+                   reason=reason, actor=actor, source=source)
     t.stage = stage
     if reason:
         t.stage_reason = reason
@@ -242,6 +275,21 @@ def link_evidence(news_uuid, tech_uuid, note=None, actor_id=None, source='ui'):
     return e
 
 
+def unlink_evidence(news_uuid, tech_uuid):
+    """소식 ↔ 기술 근거를 끊는다.
+
+    ⚠️ **되돌릴 수 있어야 한다.** AI 제안을 눌러 잘못 걸었는데 무를 방법이 없으면,
+       한 번 데인 사람은 **그다음부터 안 누른다.** 못 무르는 기능은 안 쓰는 기능이다.
+    """
+    row = IntelEvidence.query.filter_by(
+        news_uuid=news_uuid, tech_uuid=tech_uuid).first()
+    if row is None:
+        return False
+    db.session.delete(row)
+    db.session.commit()
+    return True
+
+
 def evidence_for_news(news_uuids):
     """소식마다 걸린 기술 목록. 목록 화면이 한 번에 쓴다."""
     if not news_uuids:
@@ -287,6 +335,72 @@ def add_link(subject_kind, subject_uuid, target_kind, target_ref,
     db.session.add(ln)
     db.session.commit()
     return ln, None
+
+
+def remove_link(link_id):
+    row = IntelLink.query.filter_by(id=link_id).first()
+    if row is None:
+        return False
+    db.session.delete(row)
+    db.session.commit()
+    return True
+
+
+def merge_tech(loser_uuid, winner_uuid, actor=None):
+    """두 줄이 된 기술을 하나로 합친다.
+
+    ⚠️ **레이더가 잡동사니가 되는 마지막 구멍이다.** 별칭으로 대부분 막지만, 표기가
+       많이 다르면(「Omniverse」 vs 「엔비디아 옴니버스」) 두 줄이 선다. 합칠 방법이
+       없으면 그 두 줄은 영원히 남고, 근거도 둘로 갈려 **어느 쪽도 제대로 안 보인다.**
+
+    지는 쪽의 **이름을 이기는 쪽 별칭에 넣는다** — 그래야 다음에 그 이름으로 소식이
+    들어와도 같은 줄에 붙는다. 이걸 안 하면 지운 줄이 곧바로 다시 생긴다.
+    """
+    if loser_uuid == winner_uuid:
+        return None, '같은 기술입니다.'
+    loser = IntelTech.query.filter_by(uuid=loser_uuid).first()
+    winner = IntelTech.query.filter_by(uuid=winner_uuid).first()
+    if loser is None or winner is None:
+        return None, '기술을 찾을 수 없습니다.'
+
+    # 근거 옮기기 — 이미 같은 짝이 있으면 버린다(유니크 제약).
+    have = {e.news_uuid for e in IntelEvidence.query.filter_by(
+        tech_uuid=winner.uuid).all()}
+    for e in IntelEvidence.query.filter_by(tech_uuid=loser.uuid).all():
+        if e.news_uuid in have:
+            db.session.delete(e)
+        else:
+            e.tech_uuid = winner.uuid
+
+    # 포털 연결 옮기기 — 같은 대상이 이미 있으면 버린다.
+    have_l = {(l.target_kind, l.target_ref) for l in IntelLink.query.filter_by(
+        subject_kind='tech', subject_uuid=winner.uuid).all()}
+    for l in IntelLink.query.filter_by(subject_kind='tech',
+                                       subject_uuid=loser.uuid).all():
+        if (l.target_kind, l.target_ref) in have_l:
+            db.session.delete(l)
+        else:
+            l.subject_uuid = winner.uuid
+
+    # ⚠️ 지는 이름을 별칭에 넣는다. 안 넣으면 다음 소식이 그 이름으로 들어와
+    #    **지운 줄이 곧바로 다시 생긴다.**
+    aliases = list(winner.aliases or [])
+    for name in [loser.name] + list(loser.aliases or []):
+        if name and _norm(name) != _norm(winner.name) \
+                and not any(_norm(a) == _norm(name) for a in aliases):
+            aliases.append(name)
+    winner.aliases = aliases
+
+    # 이기는 쪽이 비어 있으면 지는 쪽 설명을 물려받는다 — 버리면 아까운 것만.
+    for col in ('summary', 'description', 'vendor', 'url', 'category'):
+        if not getattr(winner, col) and getattr(loser, col):
+            setattr(winner, col, getattr(loser, col))
+
+    log_change('tech', winner.uuid, winner.name, 'merge', loser.name, winner.name,
+               reason=f'「{loser.name}」 를 합쳤습니다.', actor=actor)
+    db.session.delete(loser)
+    db.session.commit()
+    return winner, None
 
 
 def links_for(subject_kind, subject_uuids):

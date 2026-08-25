@@ -1179,6 +1179,32 @@ async def update_intel_tech(
 
 
 @mcp.tool()
+async def unlink_intel_evidence(
+    news_uuid: str,
+    tech_uuid: str,
+    ctx: Context,
+) -> dict:
+    """잘못 걸린 근거를 끊는다. **기술 자체는 안 지워진다.**
+
+    ⚠️ 넣을 때 엉뚱한 기술을 걸었으면 여기서 무른다. 그냥 두면 그 기술의 레이더
+       판단이 **엉뚱한 근거 위에 서 있게** 되고, 나중에 아무도 왜 그 단계인지 모른다.
+    """
+    return await _intel(ctx, "DELETE", "/evidence",
+                        params={"newsUuid": news_uuid, "techUuid": tech_uuid})
+
+
+@mcp.tool()
+async def list_intel_changes(kind: str, uuid: str, ctx: Context) -> list:
+    """무엇이 언제 왜 바뀌었나 — 레이더 단계 이동과 소식 상태.
+
+    ⚠️ 「왜 이 기술이 지금 이 단계인지」를 물으면 `get_intel_tech_evidence`(근거)와
+       이것(판단의 경로)을 **함께** 봐야 한다. 근거만 보면 무엇을 봤는지는 알아도
+       조직이 그걸 어떻게 읽었는지는 모른다.
+    """
+    return await _intel(ctx, "GET", f"/{kind}/{uuid}/changes")
+
+
+@mcp.tool()
 async def link_intel_evidence(
     news_uuid: str,
     tech_uuid: str,

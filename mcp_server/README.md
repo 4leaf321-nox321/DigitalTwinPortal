@@ -36,9 +36,9 @@ Claude Code ──PAT──> MCP 서버(3003) ──REST+PAT──> DT 백엔드
 | **오프라인 설치** | wheel 번들 + 설정 스크립트 | `packages/` · `setup_venv.bat`·`.ps1` |
 | **DB** | `personal_access_tokens` (추가만) | 마이그레이션 `860bcaf47aa8` |
 
-## MCP 도구 37개
+## MCP 도구 39개
 
-읽기 11 · 쓰기 5 · 확인 2 · **기술정보 9**(2026-08-25 추가). **위험도 판단은 백엔드가 한다** — 여기서 하지 않는다
+읽기 11 · 쓰기 5 · 확인 2 · **기술정보 11**(2026-08-25 추가). **위험도 판단은 백엔드가 한다** — 여기서 하지 않는다
 (규칙이 두 곳에 있으면 반드시 갈라진다).
 
 > **생성(`create_project`·`create_performance`)만 확인 절차가 없다.** 기존 값을 덮지 않고
@@ -163,6 +163,8 @@ get_intel_tech_evidence   그 기술을 떠받치는 소식들
 add_intel_tech            기술만 따로 올린다 (보통은 add_intel_news 를 쓴다)
 update_intel_tech         빈 요약ㆍ링크를 채운다
 link_intel_evidence       이미 있는 소식과 기술을 잇는다
+unlink_intel_evidence     잘못 걸린 근거를 끊는다 — **무를 수 있어야 쓴다**
+list_intel_changes        단계가 바뀐 기록 (왜 지금 이 단계인지)
 ```
 
 ⚠️⚠️ **이 도구들이 그 모듈의 주 입구다.** 포털 서버는 인터넷에 못 나간다(바깥 호출이
