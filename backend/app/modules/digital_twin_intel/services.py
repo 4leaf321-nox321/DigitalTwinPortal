@@ -11,7 +11,7 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.modules.digital_twin_intel.models import (
-    CPT_KEYS, MOVED_WINDOW_DAYS, ORIGINS, STAGES, TECH_KINDS, IntelChange,
+    CPT_KEYS, MOVED_WINDOW_DAYS, ORIGINS, STAGES, STAGE_NEW, TECH_KINDS, IntelChange,
     IntelDivisionStage, IntelEvidence, IntelLink, IntelNews, IntelTech,
     IntelTechCapability, shows_vendor,
 )
@@ -242,7 +242,9 @@ def create_tech(actor_id=None, origin='ui', **data):
         # 조용히 새로 만들면 레이더에 같은 기술이 두 줄이 된다. 있는 것을 돌려준다.
         return dup, None
 
-    stage = (data.get('stage') or '관찰').strip()
+    # ⚠️ 새로 들어오는 것은 **감지** — 아직 아무도 안 봤다. 「관찰」이라 적으면
+    #    안 본 것을 「지켜보는 중」이라 말하는 셈이다.
+    stage = (data.get('stage') or STAGE_NEW).strip()
     if stage not in STAGES:
         return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
 
@@ -375,6 +377,29 @@ def evidence_stats(tech_uuids, rollup=True):
             if kl and (last is None or kl > last):
                 last = kl
         out[uuid] = (cnt, last)
+    return out
+
+
+def division_marks(tech_uuids):
+    """역량마다 **사업부들이 정한 단계**. `{tech_uuid: [{division, stage}…]}`.
+
+    ⚠️⚠️ 레이더가 「주점 + 위성」을 그리는 데 쓴다. 주점은 기본 설정 고리에 하나,
+       **다르게 보는 사업부만** 그 고리에 작은 위성으로 찍는다 — 사업부 수만큼
+       점을 쪼개면 63개가 최대 504개가 되어 밀도가 무너지고, 「이 역량이 어디
+       있나」가 하나로 안 읽힌다.
+
+    ⚠️ 단계를 안 정한 줄(도구만 적어 둔 줄)은 안 싣는다 — 그건 갈림이 아니다.
+    """
+    if not tech_uuids:
+        return {}
+    rows = (IntelDivisionStage.query
+            .filter(IntelDivisionStage.tech_uuid.in_(list(tech_uuids)),
+                    IntelDivisionStage.stage.isnot(None))
+            .order_by(IntelDivisionStage.division.asc()).all())
+    out = {}
+    for r in rows:
+        out.setdefault(r.tech_uuid, []).append(
+            {'division': r.division, 'stage': r.stage})
     return out
 
 

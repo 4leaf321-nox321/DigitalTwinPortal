@@ -440,3 +440,120 @@ def test_역량으로_걸러_볼_수_있다(db, client, auth, admin):
 
     r = client.get(f'{BASE}/tech?capabilityUuid={a.uuid}', headers=auth(admin))
     assert [x['name'] for x in (r.get_json() or {}).get('data') or []] == ['걸친 도구']
+
+
+# ── 「감지」 — 아직 아무도 안 본 자리 ────────────────────────────────────────
+#
+# ⚠️⚠️ 「감지」와 「관찰」의 차이가 이 층의 요점이다. 앞엣것은 **누가 넣었다**는
+#    사실이고 뒤엣것은 **판단**이다. 안 갈려 있어서, 검토하고 동의한 것과 한 번도
+#    안 열어 본 것이 화면에서 같아 보였다 — 504칸 중 24칸(4.8%)만 차 있었는데
+#    나머지가 전부 「관찰」로 보였다.
+
+def test_새로_들어온_것은_감지다(db, client, auth, admin):
+    t = _tool(admin, '방금 들어온 도구')
+    assert t.stage == '감지'
+    c = _cap(admin, '방금 만든 역량')
+    assert c.stage == '감지'
+
+
+def test_감지는_낡음을_아예_안_잰다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **재면 안 된다.** 아무도 안 본 것이 수십 개인데 반년 뒤 한꺼번에 켜지면,
+       낡음 표시가 신호가 아니라 잡음이 된다 — 이 모듈의 자정 장치를 스스로
+       망가뜨리는 셈이다.
+    """
+    old = _cap(admin, '오래 방치된 감지')
+    old.created_at = datetime.utcnow() - timedelta(days=2000)
+    old.stage_changed_at = old.created_at
+    _db.session.commit()
+
+    row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
+                           .get_json() or {})['data'] if x['name'] == '오래 방치된 감지')
+    assert row['stage'] == '감지'
+    assert row['isStale'] is False, '감지는 낡을 것이 없다'
+    assert row['staleAfterDays'] is None
+
+    # 「지켜보기로 정했다」로 옮기면 그때부터 잰다.
+    client.put(f'{BASE}/tech/{old.uuid}/stage', json={'stage': '관찰'},
+               headers=auth(admin))
+    _db.session.expire_all()
+    o2 = IntelTech.query.filter_by(uuid=old.uuid).first()
+    o2.stage_changed_at = datetime.utcnow() - timedelta(days=200)
+    _db.session.commit()
+    row2 = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
+                            .get_json() or {})['data'] if x['name'] == '오래 방치된 감지')
+    assert row2['staleAfterDays'] == 180 and row2['isStale'] is True
+
+
+def test_감지도_요약의_낡음_셈에_안_든다(db, client, auth, admin):
+    for i in range(3):
+        c = _cap(admin, '안 본 역량 %d' % i)
+        c.created_at = datetime.utcnow() - timedelta(days=2000)
+        c.stage_changed_at = c.created_at
+    _db.session.commit()
+    d = (client.get(f'{BASE}/overview', headers=auth(admin)).get_json() or {})['data']
+    assert d['staleTech'] == 0, '아무도 안 본 것이 낡음으로 세어지면 안 된다'
+
+
+# ── 주점 + 위성 — 사업부가 다르게 볼 때 ─────────────────────────────────────
+
+def test_사업부가_어디_있는지를_함께_보낸다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **점을 사업부 수만큼 쪼개지 않는다.** 63개가 최대 504개가 되어 밀도가
+       무너지고 「이 역량이 어디 있나」가 하나로 안 읽힌다. 주점은 기본 설정 고리에
+       하나 두고, **다르게 보는 사업부만** 위성으로 찍는다 — 그 자료가 이것이다.
+    """
+    from app.modules.digital_twin_dashboard.models import Division
+    for i, nm in enumerate(['MX', 'VD']):
+        if Division.query.filter_by(name=nm).first() is None:
+            _db.session.add(Division(name=nm, order=i, is_active=True))
+    _db.session.commit()
+
+    cap = _cap(admin, 'explicit 해석')
+    client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
+               json={'division': 'MX', 'stage': '도입', 'reason': '3년째'},
+               headers=auth(admin))
+    client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
+               json={'division': 'VD', 'stage': '시험', 'reason': '검토 중'},
+               headers=auth(admin))
+
+    row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
+                           .get_json() or {})['data'] if x['name'] == 'explicit 해석')
+    assert row['stage'] == '감지', '주점은 기본 설정 자리에 그대로'
+    assert row['divisionMarks'] == [{'division': 'MX', 'stage': '도입'},
+                                    {'division': 'VD', 'stage': '시험'}]
+
+
+def test_사업부_눈일_때는_위성을_안_보낸다(db, client, auth, admin):
+    """⚠️ 「내 사업부 눈」인데 남의 점이 널리면 지금 보는 것이 무엇인지 흐려진다."""
+    from app.modules.digital_twin_dashboard.models import Division
+    if Division.query.filter_by(name='MX').first() is None:
+        _db.session.add(Division(name='MX', order=0, is_active=True))
+        _db.session.commit()
+
+    cap = _cap(admin, 'CFD')
+    client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
+               json={'division': 'MX', 'stage': '도입', 'reason': '쓴다'},
+               headers=auth(admin))
+
+    row = next(x for x in (client.get(f'{BASE}/tech?division=MX', headers=auth(admin))
+                           .get_json() or {})['data'] if x['name'] == 'CFD')
+    assert row['stage'] == '도입', '그 사업부 값이 주점이 된다'
+    assert 'divisionMarks' not in row
+
+
+def test_도구만_적은_줄은_위성이_아니다(db, client, auth, admin):
+    """⚠️ 단계를 안 정한 줄은 **갈림이 아니다** — 위성으로 찍으면 없는 판단을 그린다."""
+    from app.modules.digital_twin_dashboard.models import Division
+    if Division.query.filter_by(name='MX').first() is None:
+        _db.session.add(Division(name='MX', order=0, is_active=True))
+        _db.session.commit()
+
+    cap = _cap(admin, 'CFD')
+    tool = _tool(admin, 'OpenFOAM', cap)
+    client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
+               json={'division': 'MX', 'tools': [tool.uuid]}, headers=auth(admin))
+
+    row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
+                           .get_json() or {})['data'] if x['name'] == 'CFD')
+    assert 'divisionMarks' not in row

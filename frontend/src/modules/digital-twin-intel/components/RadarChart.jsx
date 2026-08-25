@@ -274,8 +274,23 @@ const H = 620;
 const CX = W / 2;
 const CY = H / 2;
 const R_MAX = H / 2 - 34;
-const RINGS = [0.3, 0.5, 0.7, 1].map((r) => r * R_MAX);
+/*
+  고리 다섯. ⚠️⚠️ **자리 수를 재서 정한 값이다.** 「감지」에 아무도 안 본 50개가
+  몰리므로 그 고리를 넓게 잡고, 「보류」는 적으니 얇게 뒀다(2026-08-26 요청).
+
+      도입 8 · 시험 5 · 관찰 0 · 감지 50 · 보류 0  ← 자료의 실제 분포
+      이 비율로 재면 다섯 고리가 각각 필요한 만큼 담긴다.
+*/
+const RINGS = [0.28, 0.44, 0.58, 0.90, 1].map((r) => r * R_MAX);
 const BLIP_R = 11;
+/*
+  고리 안쪽 여백. ⚠️ 고리가 넷에서 다섯으로 늘면서 가운데가 얇아졌다 — 예전
+  여백(점 반지름+3=14px)을 그대로 두면 「관찰」이 11px 밖에 안 남아 점이 고리선을
+  넘는다. 6px 로 줄이면 가장 얇은 「보류」도 16px 이 남는다(재서 확인).
+*/
+const RING_PAD = 6;
+// 가장 바깥 고리. ⚠️ 번호를 박지 않는다 — 고리가 늘면 그때마다 어긋난다.
+const R_OUT = RINGS[RINGS.length - 1];
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 8;
 
@@ -439,8 +454,8 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
       const [si, ri] = key.split('|').map(Number);
       const a0 = si * span - Math.PI / 2 + PAD_A;
       const a1 = (si + 1) * span - Math.PI / 2 - PAD_A;
-      const rIn = Math.max((ri === 0 ? 0 : RINGS[ri - 1]) + BLIP_R + 3, BLIP_R + 4);
-      const rOut = Math.max(RINGS[ri] - BLIP_R - 3, rIn + 1);
+      const rIn = Math.max((ri === 0 ? 0 : RINGS[ri - 1]) + RING_PAD, BLIP_R + 4);
+      const rOut = Math.max(RINGS[ri] - RING_PAD, rIn + 1);
       out.push(...layout(items, { a0, a1, rIn, rOut }));
     });
 
@@ -611,7 +626,12 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
             ))}
           </defs>
           <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
-            {[3, 2, 1, 0].map((i) => (
+            {/*
+              ⚠️ **바깥부터 그린다** — 안쪽 고리가 나중에 그려져 위에 얹혀야 한다.
+              ⚠️⚠️ 개수를 손으로 적지 않는다. 한때 `[3,2,1,0]` 이라 박혀 있었는데,
+                 단계가 다섯이 되자 **바깥 고리가 말없이 안 그려졌다**(2026-08-26).
+            */}
+            {STAGES.map((_, i) => STAGES.length - 1 - i).map((i) => (
               <circle key={STAGES[i].key} cx={CX} cy={CY} r={RINGS[i]}
                       fill={STAGES[i].bg} stroke={STAGES[i].border}
                       strokeWidth={1 / view.k} />
@@ -620,19 +640,19 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
             {activeSector && sectors.includes(activeSector) && (
               <path d={wedgePath(sectors.indexOf(activeSector) * span - Math.PI / 2,
                                  (sectors.indexOf(activeSector) + 1) * span - Math.PI / 2,
-                                 RINGS[3])}
+                                 R_OUT)}
                     fill="#4f46e5" opacity="0.06" />
             )}
 
             {sectors.map((c, i) => {
-              const [x, y] = polar(i * span - Math.PI / 2, RINGS[3]);
+              const [x, y] = polar(i * span - Math.PI / 2, R_OUT);
               return <line key={c} x1={CX} y1={CY} x2={x} y2={y}
                            stroke="#e2e8f0" strokeWidth={1 / view.k} />;
             })}
 
             {sectors.map((c, i) => {
               const a = (i + 0.5) * span - Math.PI / 2;
-              const [x, y] = polar(a, RINGS[3] + 14);
+              const [x, y] = polar(a, R_OUT + 14);
               const n = blips.filter((b) => b.si === i).length;
               const on = activeSector === c;
               return (
@@ -693,6 +713,46 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
               );
             })}
 
+            {/*
+              ⚠️⚠️ **사업부가 다르게 보는 자리를 위성으로 찍는다.** 점을 사업부 수만큼
+                 쪼개면 63개가 최대 504개가 되어 밀도가 무너지고, 「이 역량이 어디
+                 있나」가 하나로 안 읽힌다. 주점은 기본 설정 고리에 하나 두고,
+                 **갈리는 사업부만** 그 고리 쪽으로 작은 점을 찍어 선으로 잇는다
+                 (2026-08-26 요청).
+
+              ⚠️ 위성은 점보다 **먼저** 그린다 — 나중에 그리면 주점을 덮어 번호가
+                 안 읽힌다. 이동 화살표와 같은 이유, 같은 표현법이다.
+            */}
+            {blips.map((b) => {
+              const marks = b.tech.divisionMarks || [];
+              if (!marks.length) return null;
+              const a = Math.atan2(b.y - CY, b.x - CX);
+              return marks.map((m) => {
+                const ri = stageIndex[m.stage];
+                if (ri === undefined || ri === b.ri) return null;
+                // 그 고리의 한가운데 반지름 — 주점과 같은 각도에 놓는다.
+                const rIn = ri === 0 ? 0 : RINGS[ri - 1];
+                const r = (rIn + RINGS[ri]) / 2;
+                const [x, y] = polar(a, r);
+                return (
+                  <g key={`sat-${b.tech.uuid}-${m.division}`}
+                     style={{ pointerEvents: 'none' }}>
+                    <title>{`${m.division} — ${m.stage}`}</title>
+                    <line x1={b.x} y1={b.y} x2={x} y2={y}
+                          stroke={STAGES[ri].color} strokeWidth={1 / view.k}
+                          opacity="0.35" strokeDasharray={`${3 / view.k} ${2 / view.k}`} />
+                    <circle cx={x} cy={y} r={5 / view.k} fill={STAGES[ri].color}
+                            stroke="#fff" strokeWidth={1.2 / view.k} opacity="0.9" />
+                    <text x={x} y={y - 8 / view.k} fontSize={8.5 / view.k}
+                          fill={STAGES[ri].color} fontWeight="700" textAnchor="middle"
+                          stroke="#fff" strokeWidth={2.5 / view.k} paintOrder="stroke">
+                      {m.division}
+                    </text>
+                  </g>
+                );
+              });
+            })}
+
             {blips.map((b) => {
               const st = STAGES[b.ri];
               const on = hot === b.tech.uuid;
@@ -711,6 +771,9 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                      + `${b.tech.isStale ? ' · 근거 낡음' : ''}`
                      + `${(b.tech.divisionTools || []).length
                           ? ` · ${b.tech.division}: ${b.tech.divisionTools.join(' · ')}`
+                          : ''}`
+                     + `${(b.tech.divisionMarks || []).length
+                          ? ` · ${b.tech.divisionMarks.map((m) => `${m.division} ${m.stage}`).join(' · ')}`
                           : ''}`
                      + `${b.tech.isDivisionOverride
                           ? ` · ${b.tech.division} 는 전사(${b.tech.companyStage})와 다르게 봅니다`
@@ -814,6 +877,17 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
             </span>
           )}
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="#64748b" stroke="#b45309" strokeWidth="2" /></svg> 근거 낡음</span>
+          {blips.some((t) => (t.tech.divisionMarks || []).length) && (
+            <span>
+              <svg width="22" height="12">
+                <line x1="2" y1="9" x2="14" y2="4" stroke="#64748b" strokeWidth="1"
+                      strokeDasharray="3 2" opacity="0.5" />
+                <circle cx="3" cy="9" r="4" fill="#64748b" />
+                <circle cx="16" cy="4" r="3" fill="#64748b" opacity="0.9" />
+              </svg>
+              사업부가 다르게 보는 자리
+            </span>
+          )}
           {divisionLens && (
             <span><b style={{ color: '#4f46e5' }}>◆</b> 전사와 다르게 봄</span>
           )}
@@ -881,6 +955,13 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                              레이더가 갑자기 짧아진 것으로만 읽히고, 접힌 도구들이
                              어디 갔는지 알 수 없다.
                         */}
+                        {/* ⚠️ 점 옆 딱지만으로는 밀집 구간에서 안 읽힌다. 목록에도 적는다. */}
+                        {(b.tech.divisionMarks || []).map((m) => (
+                          <em key={m.division} title={`${m.division} 는 「${m.stage}」`}
+                              style={{ color: STAGES[stageIndex[m.stage]]?.color }}>
+                            · {m.division} {m.stage}
+                          </em>
+                        ))}
                         {(b.tech.divisionTools || []).length > 0 && (
                           <em title={`${b.tech.division} 가 이 역량을 하는 도구`}>
                             · {b.tech.divisionTools.join(' · ')}

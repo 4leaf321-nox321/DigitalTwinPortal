@@ -329,6 +329,13 @@ def list_tech():
     #    이름까지 따로 물어 온다.
     caps_of = S.capabilities_of([r.uuid for r in rows if r.kind != 'capability'])
     dstages = S.division_stages(uuids, division) if division else {}
+    """
+    ⚠️ 사업부를 안 골랐을 때는 **누가 어디 있는지**를 함께 싣는다. 레이더가 주점
+       옆에 위성을 찍고 점마다 사업부 딱지를 붙이는 데 쓴다.
+    ⚠️ 사업부를 골랐을 때는 안 싣는다 — 그때는 그 사업부 값이 주점이 되고 나머지
+       위성은 사라진다(안 그러면 「내 사업부 눈」인데 남의 점이 널린다).
+    """
+    marks = S.division_marks([r.uuid for r in rows if r.kind == 'capability'])         if not division else {}
     # ⚠️ 도구 이름을 목록에 함께 싣는다. 화면이 줄마다 따로 물으면 수십 번 왕복한다.
     dtools = S.tools_of(list(dstages.values())) if dstages else {}
     out = []
@@ -342,6 +349,8 @@ def list_tech():
                       division_tools=(dtools.get(dstages[r.uuid].id)
                                       if r.uuid in dstages else None),
                       children=kids.get(r.uuid, []) if r.kind == 'capability' else None)
+        if r.uuid in marks:
+            d['divisionMarks'] = marks[r.uuid]
         mv = moves.get(r.uuid)
         # ⚠️ **푼 값과 견준다.** 컬럼 값과 견주면 사업부 눈에서 화살표가 사라진다 —
         #    전사가 「시험」인데 MX 가 「도입」으로 갔으면 출발점(시험)이 컬럼과

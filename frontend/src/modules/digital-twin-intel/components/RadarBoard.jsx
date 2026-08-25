@@ -11,19 +11,29 @@ import { AlertTriangle } from 'lucide-react';
  * ⚠️ 순서가 왼쪽부터 도입 → 시험 → 관찰 → 보류 다. 안쪽(이미 쓰는 것)에서
  *    바깥쪽(아직 안 본 것)으로 가는 ThoughtWorks 레이더의 고리 순서 그대로다.
  */
+/*
+  ⚠️⚠️ **차례가 곧 레이더 고리 차례**다 — 앞이 안쪽(이미 쓰는 것), 뒤가 바깥쪽.
+     서버(`models.STAGES`)와 **같은 차례**여야 한다. 갈리면 화면이 다른 고리에 그린다.
+
+  ⚠️ 「감지」와 「관찰」의 차이가 이 층의 요점이다. 앞엣것은 **누가 넣었다**는 사실,
+     뒤엣것은 **판단**이다. 안 갈려 있어서 검토하고 동의한 것과 한 번도 안 열어 본
+     것이 같아 보였다(504칸 중 24칸만 차 있었는데 나머지가 전부 「관찰」로 보였다).
+*/
 const STAGES = [
   { key: '도입', desc: '이미 쓰고 있거나 바로 쓸 수 있다', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
   { key: '시험', desc: '과제 하나에 걸어 보는 중', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
-  { key: '관찰', desc: '눈여겨보고 있다. 아직 안 써 봤다', color: '#a16207', bg: '#fefce8', border: '#fde68a' },
-  { key: '보류', desc: '봤고, 지금은 아니라고 판단했다', color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
+  { key: '관찰', desc: '눈여겨보기로 정했다. 아직 안 써 봤다', color: '#a16207', bg: '#fefce8', border: '#fde68a' },
+  { key: '감지', desc: '목록에 들어왔다. 아직 아무도 안 봤다', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
+  { key: '보류', desc: '봤고, 지금은 아니라고 판단했다', color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
 ];
 
 const Board = styled.div`
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
   align-items: start;
 
+  @media (max-width: 1400px) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @media (max-width: 640px)  { grid-template-columns: 1fr; }
 `;

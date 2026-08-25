@@ -79,7 +79,7 @@ def test_일반_사용자는_레이더_단계를_못_바꾼다(db, client, auth,
     assert r.status_code == 403, f'{r.status_code} · {r.get_json()}'
 
     _db.session.expire_all()
-    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage == '관찰'
+    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage == '감지'
 
 
 def test_사무국은_단계를_바꿀_수_있다(db, client, auth, office, admin):
@@ -109,7 +109,7 @@ def test_일반_수정_길로는_단계가_안_바뀐다(db, client, auth, plain
     assert r.status_code == 400, f'{r.status_code} · {r.get_json()}'
 
     _db.session.expire_all()
-    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage == '관찰'
+    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage == '감지'
 
 
 def test_보류로_옮길_때는_이유가_필요하다(db, client, auth, admin):
@@ -139,7 +139,7 @@ def test_소식을_넣으면_기술이_생긴다(db, client, auth, plain):
 
     tech = IntelTech.query.filter_by(name='Omniverse').first()
     assert tech is not None, '소식만 들어오고 레이더는 비었다'
-    assert tech.stage == '관찰', '새로 본 기술의 기본은 관찰이다'
+    assert tech.stage == '감지', '⚠️ 새로 본 기술의 기본은 **감지** — 아직 아무도 안 봤다'
     assert tech.origin == 'ui'
 
     got = (r.get_json() or {}).get('data', {}).get('technologies') or []
@@ -197,7 +197,12 @@ def test_근거가_오래_없으면_낡음으로_나온다(db, client, auth, adm
     ⚠️ **자정 장치다.** 앞선 셋은 낡아도 낡은 줄 몰랐다. 화면이 「이 줄은 N개월째
        근거가 없다」고 스스로 말해야 아무도 안 보는 표가 되지 않는다.
     """
-    tech, _ = S.create_tech(actor_id=admin.id, name='오래된 기술')
+    """
+    ⚠️ **'관찰' 로 놓고 잰다.** 기본값 '감지' 는 「아직 아무도 안 봤다」라 낡음을
+       아예 안 잰다 — 안 그러면 아무도 안 본 수십 개가 반년 뒤 한꺼번에 켜져
+       낡음 표시가 신호가 아니라 잡음이 된다.
+    """
+    tech, _ = S.create_tech(actor_id=admin.id, name='오래된 기술', stage='관찰')
     # '관찰' 의 기준은 180일. 그보다 오래 전으로 돌려 둔다.
     tech.stage_changed_at = datetime.utcnow() - timedelta(days=200)
     tech.created_at = tech.stage_changed_at

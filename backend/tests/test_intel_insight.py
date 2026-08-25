@@ -39,7 +39,7 @@ def test_최근에_어느_단계에서_왔는지_알려준다(db, client, auth, 
     r = client.get(f'{BASE}/tech', headers=auth(admin))
     row = next(x for x in (r.get_json() or {}).get('data') or []
                if x['name'] == '움직인 기술')
-    assert row['movedFrom'] == '관찰'
+    assert row['movedFrom'] == '감지'
     assert row['stage'] == '시험'
     assert row['movedAt']
 
@@ -56,7 +56,7 @@ def test_여러_번_움직였으면_가장_오래된_출발점을_쓴다(db, cli
     r = client.get(f'{BASE}/tech', headers=auth(admin))
     row = next(x for x in (r.get_json() or {}).get('data') or []
                if x['name'] == '두 번 움직인 기술')
-    assert row['movedFrom'] == '관찰', '중간 단계가 아니라 출발점이어야 한다'
+    assert row['movedFrom'] == '감지', '중간 단계가 아니라 출발점이어야 한다'
     assert row['stage'] == '도입'
 
 
@@ -205,7 +205,7 @@ def test_최근_며칠로_볼지_고를_수_있다(db, client, auth, admin):
         return got.get('movedFrom')
 
     assert moved() is None, '기본 90일로는 안 보인다'
-    assert moved('?movedDays=200') == '관찰', '200일로 보면 보인다'
+    assert moved('?movedDays=200') == '감지', '200일로 보면 보인다'
     assert moved('?movedDays=30') is None, '30일로 좁히면 다시 안 보인다'
 
 

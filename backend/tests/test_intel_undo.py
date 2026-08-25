@@ -126,8 +126,9 @@ def test_낡은_것만_모아볼_수_있다(db, client, auth, admin):
     """
     from datetime import datetime, timedelta
 
-    fresh, _ = S.create_tech(actor_id=admin.id, name='새 기술')
-    old, _ = S.create_tech(actor_id=admin.id, name='낡은 기술')
+    # ⚠️ 둘 다 '관찰' 로 둔다 — 기본값 '감지' 는 낡음을 **아예 안 잰다.**
+    fresh, _ = S.create_tech(actor_id=admin.id, name='새 기술', stage='관찰')
+    old, _ = S.create_tech(actor_id=admin.id, name='낡은 기술', stage='관찰')
     old.stage_changed_at = datetime.utcnow() - timedelta(days=400)
     old.created_at = old.stage_changed_at
     _db.session.commit()
@@ -219,7 +220,7 @@ def test_단계를_옮기면_기록이_남는다(db, client, auth, admin):
     assert rows[0]['before_value'] == '시험' and rows[0]['after_value'] == '보류'
     assert rows[0]['reason'] == '라이선스 비용'
     assert rows[0]['actor_user_id'] == admin.id
-    assert rows[1]['before_value'] == '관찰' and rows[1]['after_value'] == '시험'
+    assert rows[1]['before_value'] == '감지' and rows[1]['after_value'] == '시험'
 
 
 def test_같은_단계로_다시_눌러도_기록이_안_는다(db, client, auth, admin):
@@ -228,7 +229,8 @@ def test_같은_단계로_다시_눌러도_기록이_안_는다(db, client, auth
     """
     t, _ = S.create_tech(actor_id=admin.id, name='Omniverse')
     for _ in range(3):
-        client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '관찰'},
+        # ⚠️ 기본값과 **같은 단계**를 눌러야 「안 바뀐 것」이 된다(이제 기본은 감지).
+        client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '감지'},
                    headers=auth(admin))
     assert IntelChange.query.filter_by(subject_uuid=t.uuid, field='stage').count() == 0
 
@@ -256,4 +258,4 @@ def test_기술이_지워져도_기록은_남는다(db, client, auth, admin):
     #    역량을 지울 땐 매달린 도구를 몇 개 떼어 냈는지도 그 줄에 적힌다.
     assert fields == ['delete', 'stage'], fields
     moved = next(r for r in rows if r.field == 'stage')
-    assert (moved.before_value, moved.after_value) == ('관찰', '시험')
+    assert (moved.before_value, moved.after_value) == ('감지', '시험')

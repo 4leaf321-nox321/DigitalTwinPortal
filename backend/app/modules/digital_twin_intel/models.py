@@ -46,7 +46,28 @@ ORIGINS = ('ui', 'mcp', 'file', 'llm')
 #   관찰   눈여겨보고 있다. 아직 안 써 봤다
 #   보류   봤고, 지금은 아니라고 판단했다  ← **이 칸이 제일 값지다.**
 #          안 쓰기로 한 이유를 안 적으면 6개월 뒤 같은 논의를 처음부터 다시 한다.
-STAGES = ('도입', '시험', '관찰', '보류')
+"""
+레이더의 단계. **차례가 곧 고리 차례**다 — 앞이 안쪽(이미 쓰는 것), 뒤가 바깥쪽.
+
+    도입   이미 쓰고 있거나 바로 쓸 수 있다
+    시험   과제 하나에 걸어 보는 중
+    관찰   눈여겨보고 있다. **지켜보기로 정했다**
+    감지   목록에 들어왔다. **아직 아무도 안 봤다**        ← 2026-08-26 추가
+    보류   봤고, 지금은 아니라고 판단했다
+
+⚠️⚠️ **「감지」와 「관찰」의 차이가 이 층의 요점이다.** 앞엣것은 「누가 넣었다」는
+   사실이고 뒤엣것은 **판단**이다. 그 둘이 안 갈려 있어서, 사업부가 검토하고
+   동의한 것과 **한 번도 안 열어 본 것**이 화면에서 같아 보였다 — 자료로 재 보니
+   역량 63 × 사업부 8 = 504칸 중 **24칸(4.8%)** 만 차 있었는데, 나머지가 전부
+   「관찰」로 보였다.
+
+⚠️ 새로 들어오는 것은 **감지**로 시작한다. 소식ㆍMCP 로 들어온 것을 「관찰」이라
+   적으면, 아무도 안 본 것을 「지켜보는 중」이라 말하는 셈이다.
+"""
+STAGES = ('도입', '시험', '관찰', '감지', '보류')
+
+# 아직 아무도 안 본 것. 여러 곳에서 기본값으로 쓴다.
+STAGE_NEW = '감지'
 
 # 소식이 어디까지 처리됐나. **거르기만 되고 바꾸는 길이 없으면 죽은 칸이 된다** —
 # 실제로 그랬다(2026-08-25 까지 전부 '신규' 였다).
@@ -121,7 +142,11 @@ def shows_sector(kind, linked):
 # 근거가 이만큼 없으면 낡은 것으로 본다. 단계별로 다르다 —
 # '도입'ㆍ'시험' 은 쓰고 있는 것이라 조용해도 이상하지 않지만,
 # '관찰' 은 **지켜보겠다고 해 놓고 안 보고 있다는 뜻**이라 빨리 걸려야 한다.
-STALE_DAYS = {'도입': 540, '시험': 270, '관찰': 180, '보류': 365}
+#
+# ⚠️⚠️ **'감지' 는 낡음을 아예 안 잰다**(None). 「아직 아무도 안 봤다」는 상태라
+#    낡을 것이 없다 — 재면 아무도 안 본 50여 개가 반년 뒤 **한꺼번에 켜져** 낡음
+#    표시가 신호가 아니라 잡음이 된다. 이 모듈의 자정 장치를 스스로 망가뜨리는 셈이다.
+STALE_DAYS = {'도입': 540, '시험': 270, '관찰': 180, '감지': None, '보류': 365}
 STALE_DAYS_DEFAULT = 270
 
 # 레이더의 **부채꼴**. 기술 하나는 여기서 딱 하나에 속한다 — 자리를 정해야 그림이
@@ -300,7 +325,8 @@ class IntelTech(BaseModel):
            걸린 줄은 그 사업부의 단계로 재야 한다 — 전사가 「도입」(540일)인데
            우리 사업부는 「관찰」(180일)이면, 우리한테는 벌써 낡은 것이다.
         """
-        return STALE_DAYS.get(stage or self.stage, STALE_DAYS_DEFAULT)
+        key = stage or self.stage
+        return STALE_DAYS[key] if key in STALE_DAYS else STALE_DAYS_DEFAULT
 
     def is_stale(self, last_evidence_at=None, now=None, stage=None):
         """근거가 오래 없으면 낡은 것으로 본다.
@@ -311,11 +337,14 @@ class IntelTech(BaseModel):
         `last_evidence_at` 이 None 이면 근거가 한 건도 없다는 뜻이라, **만든 지**
         오래됐는지로 본다(넣어만 두고 아무도 안 쓴 줄).
         """
+        days = self.stale_after_days(stage)
+        if days is None:
+            return False        # '감지' — 아직 아무도 안 봤으니 낡을 것이 없다
         now = now or datetime.utcnow()
         base = last_evidence_at or self.stage_changed_at or self.created_at
         if base is None:
             return False
-        return (now - base) > timedelta(days=self.stale_after_days(stage))
+        return (now - base) > timedelta(days=days)
 
     def to_dict(self, last_evidence_at=None, evidence_count=None, now=None,
                 children=None, capabilities=None, division=None,
