@@ -1,7 +1,7 @@
 {
   "name": "knowledge-graph-frontend",
   "private": true,
-  "version": "0.12.4",
+  "version": "0.12.5",
   "author": "Yongjin",
   "repository": {
     "type": "git",

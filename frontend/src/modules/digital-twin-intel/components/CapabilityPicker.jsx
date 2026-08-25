@@ -27,7 +27,91 @@ const Above = styled(Overlay)`
 `;
 
 const Box = styled(Panel)`
-  max-width: min(46rem, 94vw);
+  max-width: min(74rem, 92vw);
+  width: min(74rem, 92vw);
+  height: 80vh;
+  max-height: 80vh;
+
+  @media (max-width: 900px) {
+    width: 94vw;
+    max-width: 94vw;
+    height: 90vh;
+    max-height: 90vh;
+  }
+`;
+
+/* ⚠️ 찾기 칸과 탭은 **늘 보이고**, 목록만 구른다. 함께 굴리면 탭을 바꾸려고 매번
+   위로 올라가야 한다. */
+const Scroll = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 0.25rem;
+`;
+
+/*
+  분야 탭. ⚠️⚠️ 63개를 세로로 죽 늘어놓으면 **찾기 전에 지친다**(2026-08-25 신고).
+  갈래를 먼저 고르면 스무 개 남짓으로 줄어든다.
+*/
+const Tabs = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding-bottom: 0.125rem;
+  border-bottom: 1px solid #f1f5f9;
+`;
+
+const Tab = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.625rem;
+  border-radius: 0.4375rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border: 1px solid ${(p) => (p.$on ? '#818cf8' : 'transparent')};
+  background: ${(p) => (p.$on ? '#eef2ff' : 'transparent')};
+  color: ${(p) => (p.$on ? '#3730a3' : '#475569')};
+  font-weight: ${(p) => (p.$on ? 700 : 400)};
+
+  &:hover:not(:disabled) { background: #f8fafc; }
+
+  /* ⚠️ 찾는 말에 안 걸리는 갈래는 **흐리게 두되 없애지 않는다** — 탭이 사라지면
+     화면이 들썩이고, 「원래 몇 갈래였지」를 잃는다. */
+  &:disabled { opacity: 0.35; cursor: default; }
+
+  em {
+    font-style: normal;
+    font-size: 0.6875rem;
+    color: ${(p) => (p.$on ? '#4f46e5' : '#94a3b8')};
+    font-variant-numeric: tabular-nums;
+  }
+`;
+
+const Elsewhere = styled.p`
+  margin: 0;
+  padding: 1.25rem 0.5rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.6;
+
+  button {
+    margin-top: 0.5rem;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    border: 1px solid #a5b4fc;
+    background: #fff;
+    color: #4338ca;
+    border-radius: 0.375rem;
+    padding: 0.3125rem 0.75rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
 `;
 
 const Bar = styled.div`
@@ -73,10 +157,11 @@ const Group = styled.section`
 
 const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.25rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.3125rem;
 
-  @media (max-width: 640px) { grid-template-columns: 1fr; }
+  @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 640px)  { grid-template-columns: 1fr; }
 `;
 
 const Pick = styled.button`
@@ -138,9 +223,27 @@ const Empty = styled.p`
   color: #94a3b8;
 `;
 
+const ALL = '__all__';
+
+/*
+  `initialQuery` · `initialTab` 은 **화면에서는 안 쓴다.** 찾기 칸과 탭은 눌러야
+  바뀌는 값이라 서버 렌더로는 그 상태에 못 닿는데, 이 창에서 가장 위험한 자리가
+  바로 거기다 — **다른 갈래에 있는 것을 찾았을 때 빈 화면이 되면** 찾는 사람은
+  「없다」고 읽고 그만둔다. 검사가 그 상태를 그려 볼 수 있게 낸 자리다.
+*/
 const CapabilityPicker = ({ isOpen, capabilities, categories, value,
-                            allowNone = true, noneLabel, title, onPick, onClose }) => {
-  const [q, setQ] = useState('');
+                            allowNone = true, noneLabel, title, onPick, onClose,
+                            initialQuery = '', initialTab = null }) => {
+  const [q, setQ] = useState(initialQuery);
+  /*
+    고른 갈래. ⚠️ **지금 골라 둔 역량이 있으면 그 갈래로 연다** — 「바꾸기」로 열었을
+       때 지금 자리가 안 보이면 무엇을 바꾸는 중인지 놓친다.
+  */
+  const [tab, setTab] = useState(() => {
+    if (initialTab) return initialTab;
+    const cur = (capabilities || []).find((c) => c.uuid === value);
+    return cur ? (cur.category || UNCATEGORIZED) : ALL;
+  });
 
   const groups = useMemo(() => {
     const key = q.trim().toLowerCase();
@@ -156,16 +259,28 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
       if (!by.has(g)) by.set(g, []);
       by.get(g).push(c);
     });
-    // ⚠️ 차례는 설정을 따르되, 설정에 없는 분야도 뒤에 붙인다 — 안 붙이면 그 역량이
-    //    통째로 안 보이고, 「왜 안 나오지」가 된다.
-    const ordered = (categories || []).filter((g) => by.has(g));
-    [...by.keys()].forEach((g) => { if (!ordered.includes(g)) ordered.push(g); });
-    return ordered.map((g) => [g, by.get(g)]);
+    /*
+      ⚠️ 차례는 설정을 따르되, 설정에 없는 분야도 뒤에 붙인다.
+      ⚠️⚠️ **찾는 말에 하나도 안 걸린 갈래도 탭에는 남긴다**(빈 목록으로). 탭이
+         사라지면 화면이 들썩이고, 「원래 몇 갈래였지」를 잃는다. 그래서 갈래
+         목록은 **거르기 전 전체**에서 만든다.
+    */
+    const every = new Set((capabilities || []).map((c) => c.category || UNCATEGORIZED));
+    const ordered = (categories || []).filter((g) => every.has(g));
+    [...every].forEach((g) => { if (!ordered.includes(g)) ordered.push(g); });
+    return ordered.map((g) => [g, by.get(g) || []]);
   }, [capabilities, categories, q]);
 
   if (!isOpen) return null;
 
   const total = groups.reduce((n, [, rows]) => n + rows.length, 0);
+  const shown = tab === ALL ? groups : groups.filter(([g]) => g === tab);
+  const shownCount = shown.reduce((n, [, rows]) => n + rows.length, 0);
+  /*
+    ⚠️⚠️ **다른 갈래에 있는 것을 찾았을 때 빈 화면이 되면 안 된다.** 찾는 사람은
+       「없다」고 읽고 그만둔다. 몇 개가 어디 있는지 말해 주고 한 번에 건너가게 한다.
+  */
+  const elsewhere = tab !== ALL && shownCount === 0 && total > 0;
 
   return (
     <Above onClick={onClose}>
@@ -185,6 +300,26 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
                    placeholder="역량 이름·설명으로, 또는 이미 매달린 도구 이름으로" />
           </Bar>
 
+          {/*
+            ⚠️⚠️ 갈래를 **탭으로** 올린다. 63개를 세로로 죽 늘어놓으면 찾기 전에
+               지친다 — 갈래를 먼저 고르면 스무 개 남짓으로 줄어든다.
+            ⚠️ 셈은 **찾는 말을 걸러 낸 뒤**의 수다. 그래야 어느 갈래에 걸렸는지가
+               탭만 보고 읽힌다.
+          */}
+          <Tabs>
+            <Tab type="button" $on={tab === ALL} onClick={() => setTab(ALL)}>
+              전체 <em>{total}</em>
+            </Tab>
+            {groups.map(([g, rows]) => (
+              <Tab key={g} type="button" $on={tab === g}
+                   disabled={rows.length === 0}
+                   onClick={() => setTab(g)}>
+                {g} <em>{rows.length}</em>
+              </Tab>
+            ))}
+          </Tabs>
+
+          <Scroll>
           {allowNone && (
             <None type="button" $on={!value} onClick={() => onPick('')}>
               <b>
@@ -209,8 +344,17 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
             <Empty>「{q.trim()}」 에 걸리는 역량이 없습니다.</Empty>
           )}
 
-          {groups.map(([g, rows]) => (
+          {elsewhere && (
+            <Elsewhere>
+              「{q.trim()}」 는 <b>이 갈래에 없습니다.</b> 다른 갈래에 {total}개
+              있습니다.
+              <button type="button" onClick={() => setTab(ALL)}>전체에서 보기</button>
+            </Elsewhere>
+          )}
+
+          {shown.map(([g, rows]) => (rows.length === 0 ? null : (
             <Group key={g}>
+              {/* ⚠️ 한 갈래만 볼 때도 머리글은 둔다 — 무엇을 보고 있는지 잊는다. */}
               <h4>{g} <span /></h4>
               <Grid>
                 {rows.map((c) => {
@@ -234,7 +378,8 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
                 })}
               </Grid>
             </Group>
-          ))}
+          )))}
+          </Scroll>
 
           <Hint>
             <b>이미 매달린 도구</b>가 함께 보입니다 — 비슷한 것이 어디 들어 있는지가
