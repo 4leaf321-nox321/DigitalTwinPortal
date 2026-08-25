@@ -164,9 +164,16 @@ class DtIntelApi {
                         '함께 나온 기술을 불러오지 못했습니다.');
   }
 
-  /** 화면 맨 위의 「오늘 뭘 봐야 하나」. */
-  overview() {
-    return this.request(`${this.baseUrl}/overview`, {}, '요약을 불러오지 못했습니다.');
+  /**
+    * 화면 맨 위의 「오늘 뭘 봐야 하나」.
+    *
+    * ⚠️ **레이더와 같은 기간을 넘긴다.** 안 넘기면 막대는 90일로 세고 레이더는
+    *    고른 기간을 그려서, 눌러 뜨는 수와 적힌 수가 달라진다.
+    */
+  overview(movedDays) {
+    const qs = movedDays ? `?movedDays=${movedDays}` : '';
+    return this.request(`${this.baseUrl}/overview${qs}`, {},
+                        '요약을 불러오지 못했습니다.');
   }
 
   techEvidence(uuid) {

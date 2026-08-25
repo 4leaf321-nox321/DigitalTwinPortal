@@ -224,3 +224,51 @@ def test_고를_수_있는_범위를_알려준다(db, client, auth, admin):
     d = (r.get_json() or {}).get('data') or {}
     assert d['movedWindowDays'] == 90
     assert d['movedWindowRange'] == [7, 1095]
+
+
+# ── 요약 막대의 셈이 「눌렀을 때 보이는 것」과 같아야 한다 ───────────────────
+
+def test_요약은_레이더에_서는_것만_센다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **안 맞으면 이 막대를 아무도 안 믿는다.** 「낡은 기술 200」을 눌렀는데
+       화면에 20개만 뜨면 그렇게 된다. 매달린 도구는 레이더에 안 서므로 눌러도
+       안 보인다 — 그러니 세지도 않는다.
+       실측(2026-08-25) — 전체 322줄 중 레이더에 서는 것은 63개뿐이었다.
+    """
+    cap, _ = S.create_tech(actor_id=admin.id, name='explicit 해석',
+                           kind='capability')
+    S.create_tech(actor_id=admin.id, name='LS-DYNA', parentUuid=cap.uuid)
+    S.create_tech(actor_id=admin.id, name='아직 안 매단 도구')
+
+    d = (client.get(f'{BASE}/overview', headers=auth(admin)).get_json() or {})['data']
+    assert d['totalTech'] == 2, '역량 + 안 매달린 도구만 (매달린 LS-DYNA 는 뺀다)'
+    assert d['capabilityCount'] == 1
+    assert d['toolCount'] == 2, '도구 수는 따로, 전부 센다'
+
+    # 눌렀을 때 보이는 것과 같은지 — 레이더 목록과 맞춰 본다.
+    r = client.get(f'{BASE}/tech?radar=1', headers=auth(admin))
+    assert len(r.get_json()['data']) == d['totalTech']
+
+
+def test_요약의_이동도_고른_기간을_따른다(db, client, auth, admin):
+    """
+    ⚠️ 막대는 「최근 30일」이라 써 놓고 레이더는 90일을 그리고 있었다. 같은 값을
+       봐야 한다 — 안 그러면 눌러서 뜨는 수와 적힌 수가 다르다.
+    """
+    from app.modules.digital_twin_intel.models import IntelChange
+
+    t, _ = S.create_tech(actor_id=admin.id, name='두 달 전에 움직인 기술')
+    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '시험'},
+               headers=auth(admin))
+    row = IntelChange.query.filter_by(subject_uuid=t.uuid).first()
+    row.created_at = datetime.utcnow() - timedelta(days=60)
+    _db.session.commit()
+
+    def n(qs=''):
+        d = (client.get(f'{BASE}/overview{qs}',
+                        headers=auth(admin)).get_json() or {})['data']
+        return d['movedRecent'], d['movedWindowDays']
+
+    assert n() == (1, 90), '기본이 레이더와 **같은 90일**이라 잡힌다'
+    assert n('?movedDays=30') == (0, 30), '30일로 좁히면 안 잡힌다'
+    assert n('?movedDays=180') == (1, 180), '넓히면 그대로 잡힌다'

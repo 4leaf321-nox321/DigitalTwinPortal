@@ -350,7 +350,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       if (division) q.division = division;
       if (movedDays) q.movedDays = movedDays;
       const [n, t, s, o] = await Promise.all([
-        api.listNews(), api.listTech(q), api.getSettings(), api.overview(),
+        api.listNews(), api.listTech(q), api.getSettings(),
+        // ⚠️ 요약도 **레이더와 같은 기간**을 봐야 한다(위 참고).
+        api.overview(movedDays),
       ]);
       setNews(n || []);
       setTech(t || []);
@@ -529,6 +531,11 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     기술 셈은 레이더에서만 뜻이 있다 — 안 옮기면 눌러도 아무 일이 안 일어난 것처럼
     보인다.
   */
+  /*
+    ⚠️ 요약 막대는 이제 **지금 탭에서 볼 수 있는 것만** 띄우므로, 탭을 옮길 일은
+       사실 없다. 그래도 남겨 둔다 — 나중에 딴 데서 이 길을 부르게 되면 그때
+       엉뚱한 탭에 필터만 걸리는 일이 생긴다.
+  */
   const pickFocus = (key) => {
     setFocus(key);
     if (!key) return;
@@ -623,7 +630,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
       <Scroller $fixed={fixed}>
         <Shell>
-          <OverviewBar data={overview} active={focus} onPick={pickFocus} />
+          <OverviewBar data={overview} active={focus} onPick={pickFocus} tab={tab} />
 
           {compareA && !compareB && (
             <MergeBar>

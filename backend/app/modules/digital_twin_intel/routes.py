@@ -14,7 +14,8 @@ from app.modules.digital_twin_intel import bp
 from app.modules.digital_twin_intel import permissions as P
 from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
-    CPT_GROUPS, DEFAULT_SECTORS, NEWS_STATUSES, ORIGINS, STAGES, TECH_KINDS,
+    CPT_GROUPS, DEFAULT_SECTORS, MOVED_WINDOW_DAYS, MOVED_WINDOW_MAX,
+    MOVED_WINDOW_MIN, NEWS_STATUSES, ORIGINS, STAGES, TECH_KINDS,
     IntelEvidence, IntelNews, IntelTech, shows_vendor,
 )
 from app.shared.responses import (
@@ -29,12 +30,6 @@ MODULE_NAME = 'digital_twin_intel'
 # ⚠️ **화면에 같은 숫자를 박지 않는다.** 한때 `RadarChart.jsx` 에도 90 이 박혀 있었다 —
 #    여기만 바꾸면 범례가 「최근 90일」이라 말하면서 실제로는 다른 기간을 그린다.
 #    설정 응답(`movedWindowDays`)으로 내려보내 **화면이 서버 값을 읽게** 한다.
-MOVED_WINDOW_DAYS = 90
-# 보는 사람이 고칠 수 있는 범위. ⚠️ **너무 짧으면 아무것도 안 뜨고, 너무 길면 전부
-#    움직인 것처럼 보여** 어느 쪽이든 신호가 아니게 된다. 일주일~3년으로 물린다.
-MOVED_WINDOW_MIN, MOVED_WINDOW_MAX = 7, 1095
-
-
 def _moved_days(args):
     """레이더가 「최근 며칠」을 볼지. 안 주면 기본값.
 
@@ -652,7 +647,8 @@ def overview():
     denied = _deny_read(actor)
     if denied is not None:
         return denied
-    return success_response(S.overview(actor))
+    return success_response(
+        S.overview(actor, moved_days=_moved_days(request.args)))
 
 
 @bp.route('/tech/<uuid>/parent', methods=['PUT'])

@@ -52,31 +52,46 @@ const Quiet = styled.div`
  *
  * ⚠️ 0 인 칸은 **아예 안 보인다.** 「낡은 것 0」을 늘 띄우면 눈이 그 자리를 지나치게
  *    되고, 진짜로 1이 됐을 때도 안 보인다.
+ *
+ * ⚠️⚠️ **지금 탭에서 볼 수 있는 것만 띄운다**(2026-08-25 신고: 「레이더 탭의 소식
+ *    버튼이 애매하다」). 레이더를 보는 중에 「안 읽은 소식」을 눌러 봐야 **소식 탭으로
+ *    튀어 나간다** — 지금 화면과 상관없는 단추가 섞여 있으면 이 막대가 무엇을
+ *    말하는 것인지부터 흐려진다.
+ *
+ * ⚠️⚠️ 셈은 **눌렀을 때 보이는 것**과 같아야 한다. 기술 셈은 서버가 「레이더에 서는
+ *    줄」로만 센다(역량 + 안 매달린 도구) — 전체 322줄을 세던 때는 「기술 322」라고
+ *    써 놓고 레이더에는 63개만 떴다.
  */
-const OverviewBar = ({ data, active, onPick }) => {
+const OverviewBar = ({ data, active, onPick, tab = 'news' }) => {
   if (!data) return null;
 
+  const isNews = tab === 'news';
   const items = [
-    { key: 'unread', n: data.unreadNews, icon: Newspaper,
+    { key: 'unread', on: isNews, n: data.unreadNews, icon: Newspaper,
       label: '안 읽은 소식', color: '#4f46e5', bg: '#eef2ff',
       why: '아직 아무도 안 읽은 소식입니다. 읽고 「확인됨」으로 옮겨 주세요' },
-    { key: 'stale', n: data.staleTech, icon: AlertTriangle,
+    { key: 'stale', on: !isNews, n: data.staleTech, icon: AlertTriangle,
       label: '낡은 기술', color: '#b45309', bg: '#fffbeb',
       why: '근거가 오래 없어 아직 유효한 판단인지 확인할 때가 됐습니다' },
-    { key: 'moved', n: data.movedIn30d, icon: ArrowUpRight,
-      label: '최근 30일 단계 이동', color: '#0f766e', bg: '#f0fdfa',
-      why: '최근 한 달 안에 단계가 바뀐 기술입니다' },
-    { key: 'unlinked', n: data.unlinkedNews, icon: Unlink,
+    /* ⚠️ 「30일」을 이름에 박지 않는다 — 보는 사람이 고르는 값이 됐다. 서버가
+       실제로 센 기간을 그대로 적는다. */
+    { key: 'moved', on: !isNews, n: data.movedRecent, icon: ArrowUpRight,
+      label: `최근 ${data.movedWindowDays}일 단계 이동`,
+      color: '#0f766e', bg: '#f0fdfa',
+      why: `최근 ${data.movedWindowDays}일 안에 단계가 바뀐 것입니다`
+           + ' (레이더 도구에서 기간을 바꿀 수 있습니다)' },
+    { key: 'unlinked', on: isNews, n: data.unlinkedNews, icon: Unlink,
       label: '우리 것과 안 이어진 소식', color: '#7c3aed', bg: '#f5f3ff',
       why: '아직 과제·지표와 안 이어졌습니다. AI 정리로 후보를 받아 보세요' },
-  ].filter((it) => (it.n || 0) > 0);
+  ].filter((it) => it.on && (it.n || 0) > 0);
 
   if (!items.length) {
     return (
       <Bar>
         <Quiet>
-          지금 손볼 것이 없습니다 — 안 읽은 소식도, 낡은 기술도 없습니다.
-          (소식 {data.totalNews}건 · 기술 {data.totalTech}개)
+          {isNews
+            ? `지금 손볼 소식이 없습니다 — 안 읽은 것도, 안 이어진 것도 없습니다. (소식 ${data.totalNews}건)`
+            : `지금 손볼 기술이 없습니다 — 낡은 것도, 최근 옮긴 것도 없습니다. (레이더 ${data.totalTech}개)`}
         </Quiet>
       </Bar>
     );
@@ -96,9 +111,15 @@ const OverviewBar = ({ data, active, onPick }) => {
           </Card>
         );
       })}
-      <Quiet title="전체 규모">
+      {/*
+        ⚠️ 「기술 322」는 거짓말이었다 — 레이더에는 63개만 선다. 레이더에 서는 수를
+           적고, 접힌 도구는 **따로** 말한다.
+      */}
+      <Quiet title={isNews ? '전체 소식' : '레이더에 서는 수 · 그 밑에 매달린 도구 수'}>
         <HelpCircle size={11} style={{ verticalAlign: '-0.1em' }} />{' '}
-        소식 {data.totalNews} · 기술 {data.totalTech}
+        {isNews
+          ? `소식 ${data.totalNews}건`
+          : `레이더 ${data.totalTech}개 (역량 ${data.capabilityCount} · 도구 ${data.toolCount})`}
       </Quiet>
     </Bar>
   );

@@ -11,8 +11,9 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.modules.digital_twin_intel.models import (
-    CPT_KEYS, ORIGINS, STAGES, TECH_KINDS, IntelChange, IntelDivisionStage,
-    IntelEvidence, IntelLink, IntelNews, IntelTech, shows_vendor,
+    CPT_KEYS, MOVED_WINDOW_DAYS, ORIGINS, STAGES, TECH_KINDS, IntelChange,
+    IntelDivisionStage, IntelEvidence, IntelLink, IntelNews, IntelTech,
+    shows_vendor,
 )
 
 
@@ -140,14 +141,24 @@ def co_occurring(tech_uuid, limit=8):
     return out
 
 
-def overview(actor=None):
+def overview(actor=None, moved_days=MOVED_WINDOW_DAYS):
     """화면 맨 위에 띄울 **「오늘 뭘 봐야 하나」**.
 
-    ⚠️ 지금은 열면 기술 100여 개가 깔린다. 무엇을 봐야 하는지가 없으면 사람은
-       **훑다가 닫는다.** 전부 이미 계산되는 값이라 세기만 하면 된다.
+    ⚠️⚠️ **셈은 「눌렀을 때 보이는 것」과 같아야 한다.** 안 그러면 「낡은 기술 200」을
+       눌렀는데 화면에 20개만 뜨고, 그 순간 이 막대를 아무도 안 믿는다. 그래서
+       기술 셈은 **레이더에 서는 줄**(역량 + 안 매달린 도구)로만 센다 — 매달린
+       도구는 레이더에 안 서므로 눌러도 안 보인다.
+
+       실측(2026-08-25) — 전체 322줄 중 레이더에 서는 것은 **63개**뿐이었다.
+
+    ⚠️ 이동도 **보는 사람이 고른 기간**으로 센다(`moved_days`). 막대는 「최근 30일」
+       이라 써 놓고 레이더는 90일을 그리고 있었다.
     """
     unread = IntelNews.query.filter_by(status='신규').count()
-    techs = IntelTech.query.filter(IntelTech.is_archived.is_(False)).all()
+    every = IntelTech.query.filter(IntelTech.is_archived.is_(False)).all()
+    # 레이더가 그리는 것과 **같은 규칙**이다(routes 의 `radar=1` 과 한 몸).
+    techs = [t for t in every if t.kind == 'capability' or not t.parent_uuid]
+
     stats = evidence_stats([t.uuid for t in techs])
     stale = no_evidence = 0
     for t in techs:
@@ -156,7 +167,7 @@ def overview(actor=None):
             no_evidence += 1
         if t.is_stale(last):
             stale += 1
-    moved = len(recent_moves([t.uuid for t in techs], days=30))
+    moved = len(recent_moves([t.uuid for t in techs], days=moved_days))
     # 링크가 안 걸린 소식 — 「그래서 우리한테 뭔데」가 아직 안 붙은 것
     linked = {l.subject_uuid for l in IntelLink.query.filter_by(
         subject_kind='news').all()}
@@ -166,10 +177,15 @@ def overview(actor=None):
         'unreadNews': unread,
         'staleTech': stale,
         'noEvidenceTech': no_evidence,
-        'movedIn30d': moved,
+        # ⚠️ 이름에 30을 박지 않는다 — 기간이 바뀌는 값이 됐다.
+        'movedRecent': moved,
+        'movedWindowDays': moved_days,
         'unlinkedNews': unlinked_news,
         'totalNews': IntelNews.query.count(),
+        # ⚠️ **레이더에 서는 수**다. 매달린 도구까지 세면 화면과 안 맞는다.
         'totalTech': len(techs),
+        'capabilityCount': sum(1 for t in every if t.kind == 'capability'),
+        'toolCount': sum(1 for t in every if t.kind != 'capability'),
     }
 
 
