@@ -14,7 +14,7 @@ from app.modules.digital_twin_intel import bp
 from app.modules.digital_twin_intel import permissions as P
 from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
-    CPT_GROUPS, DEFAULT_SECTORS, NEWS_STATUSES, ORIGINS, STAGES,
+    CPT_GROUPS, DEFAULT_SECTORS, NEWS_STATUSES, ORIGINS, STAGES, TECH_KINDS,
     IntelEvidence, IntelNews, IntelTech,
 )
 from app.shared.responses import (
@@ -272,17 +272,36 @@ def list_tech():
                             IntelTech.description.ilike(like)))
     if request.args.get('includeArchived') not in ('1', 'true', 'yes'):
         q = q.filter(IntelTech.is_archived.is_(False))
+    if request.args.get('kind') in TECH_KINDS:
+        q = q.filter(IntelTech.kind == request.args['kind'])
+    if request.args.get('parentUuid'):
+        q = q.filter(IntelTech.parent_uuid == request.args['parentUuid'])
+
+    """
+    ⚠️ **레이더에 그리는 것은 「역량 + 부모 없는 도구」다**(`radar=1`).
+       역량 밑에 매달린 도구까지 그리면 같은 것이 두 번 서고, 층을 나눈 뜻이 사라진다.
+       역량 정의가 안 끝나도 돌아야 하므로 **부모 없는 도구는 그대로 뜬다.**
+    """
+    if request.args.get('radar') in ('1', 'true', 'yes'):
+        q = q.filter(db.or_(IntelTech.kind == 'capability',
+                            IntelTech.parent_uuid.is_(None)))
 
     rows = q.order_by(IntelTech.name.asc()).all()
     uuids = [r.uuid for r in rows]
+    # 역량은 자식(도구)의 근거를 함께 센다 — 안 그러면 만들자마자 「낡음」이 된다.
     stats = S.evidence_stats(uuids)
+    kids = S.children_of([r.uuid for r in rows if r.kind == 'capability'])
     # ⚠️ 「움직였다」만이 아니라 **어디서 왔는지**를 함께 준다. 레이더의 값은
     #    「무엇이 안쪽으로 들어왔나」에 있다.
     moves = S.recent_moves(uuids, days=MOVED_WINDOW_DAYS)
+    # 상위 이름. ⚠️ 걸러 본 목록에는 그 역량이 없을 수 있으므로 따로 물어 온다.
+    parents = S.names_of([r.parent_uuid for r in rows if r.parent_uuid])
     out = []
     for r in rows:
         cnt, last = stats.get(r.uuid, (0, None))
-        d = r.to_dict(last_evidence_at=last, evidence_count=cnt)
+        d = r.to_dict(last_evidence_at=last, evidence_count=cnt,
+                      parent_name=parents.get(r.parent_uuid),
+                      children=kids.get(r.uuid, []) if r.kind == 'capability' else None)
         mv = moves.get(r.uuid)
         if mv and mv[0] and mv[0] != r.stage:
             d['movedFrom'] = mv[0]
@@ -338,6 +357,15 @@ def update_tech(uuid):
     for key in ('name', 'vendor', 'category', 'url', 'summary', 'description'):
         if key in data:
             setattr(t, key, data[key])
+    if 'kind' in data and data['kind'] in TECH_KINDS:
+        # ⚠️ 자식이 달린 역량을 도구로 내리면 그 자식들이 부모 없는 도구가 되어
+        #    레이더에 갑자기 쏟아진다. 먼저 떼어 내게 한다.
+        if data['kind'] == 'tool' and t.kind == 'capability':
+            if S.children_of([t.uuid]).get(t.uuid):
+                return error_response(
+                    '이 역량에 매달린 도구가 있습니다. 먼저 떼어 낸 뒤 바꾸세요.',
+                    status_code=400)
+        t.kind = data['kind']
     if 'aliases' in data:
         t.aliases = S._clean_list(data['aliases'])
     if 'divisions' in data:
@@ -476,6 +504,28 @@ def overview():
     if denied is not None:
         return denied
     return success_response(S.overview(actor))
+
+
+@bp.route('/tech/<uuid>/parent', methods=['PUT'])
+@jwt_required()
+def set_parent(uuid):
+    """도구를 역량 밑에 매단다. 본문 `parentUuid` (비우면 떼어 낸다).
+
+    ⚠️ 매다는 것은 **판단이 아니라 정리**라 누구나 할 수 있다. 단계와 다르다 —
+       거기서 막으면 도구가 영영 부모 없이 남는다.
+    """
+    actor = _actor()
+    denied = _deny_write(actor)
+    if denied is not None:
+        return denied
+
+    data = get_request_json() or {}
+    t, err = S.set_parent(uuid, data.get('parentUuid'), actor=actor)
+    if err:
+        code = 404 if '찾을 수 없' in err else 400
+        return error_response(err, status_code=code)
+    cnt, last = S.evidence_stats([t.uuid]).get(t.uuid, (0, None))
+    return success_response(t.to_dict(last_evidence_at=last, evidence_count=cnt))
 
 
 @bp.route('/tech/<uuid>/merge', methods=['POST'])
@@ -696,6 +746,7 @@ def get_settings():
     out['newsStatuses'] = list(NEWS_STATUSES)
     # 화면 범례가 이 값을 읽는다. 숫자를 두 곳에 두지 않는다.
     out['movedWindowDays'] = MOVED_WINDOW_DAYS
+    out['techKinds'] = list(TECH_KINDS)
 
     # ⚠️ 사업부 이름을 여기 박지 않는다. 조직이 바뀌면 화면이 조용히 틀어진다 —
     #    포털의 사업부 표를 그대로 읽어 **차례까지** 넘긴다(화면은 자료에 실제로
@@ -710,7 +761,7 @@ def get_settings():
         out['divisions'] = []
     for row in ModuleSettings.query.filter_by(module_name=MODULE_NAME).all():
         if row.settings_key in ('cptGroups', 'stages', 'newsStatuses',
-                                'movedWindowDays'):
+                                'movedWindowDays', 'techKinds', 'divisions'):
             continue                      # 표준·고정값은 덮어쓸 수 없다
         out[row.settings_key] = row.settings_data
     return success_response(out)

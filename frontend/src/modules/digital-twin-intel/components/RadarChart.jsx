@@ -576,6 +576,9 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                   <title>
                     {`${b.tech.name} · ${b.tech.stage}`
                      + `${b.tech.isStale ? ' · 근거 낡음' : ''}`
+                     + `${(b.tech.children || []).length
+                          ? ` · 도구 ${b.tech.children.length}개`
+                          : ''}`
                      + `${b.tech.movedFrom
                           ? ` · ${b.tech.movedFrom}에서 옮겨옴 (${ymd(b.tech.movedAt)})`
                           : ''}`}
@@ -667,6 +670,16 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                                      && onSectorClick(b.tech.category || '')}>
                           {b.tech.category || UNCATEGORIZED}
                         </SectorBtn>
+                        {/*
+                          ⚠️ **역량에 몇 개가 접혀 있는지를 보여준다.** 안 보이면
+                             레이더가 갑자기 짧아진 것으로만 읽히고, 접힌 도구들이
+                             어디 갔는지 알 수 없다.
+                        */}
+                        {(b.tech.children || []).length > 0 && (
+                          <em title={b.tech.children.map((c) => c.name).join(' · ')}>
+                            · 도구 {b.tech.children.length}
+                          </em>
+                        )}
                         <em>· 근거 {b.tech.evidenceCount ?? 0}건</em>
                       </SubRow>
                     </Entry>

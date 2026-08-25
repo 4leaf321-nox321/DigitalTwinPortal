@@ -111,6 +111,21 @@ const Stale = styled.span`
   font-weight: 600;
 `;
 
+/*
+  ⚠️ 목록에서는 **역량과 도구가 섞여 나온다**(층으로 걸러 보기 전에는). 딱지가
+     없으면 「explicit 해석」과 「LS-DYNA」가 같은 줄로 보이고, 그러면 단계를
+     어디에 매기는 것인지가 사람마다 갈린다.
+*/
+const Kind = styled.span`
+  flex-shrink: 0;
+  padding: 0 0.3125rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  background: ${(p) => (p.$cap ? '#eef2ff' : '#f1f5f9')};
+  color: ${(p) => (p.$cap ? '#4338ca' : '#64748b')};
+`;
+
 const Empty = styled.div`
   font-size: 0.75rem;
   color: #94a3b8;
@@ -134,6 +149,9 @@ const RadarBoard = ({ rows, onSelect }) => (
             <Item key={t.uuid} onClick={() => onSelect(t)}>
               <Row>
                 <b>{t.name}</b>
+                <Kind $cap={t.kind === 'capability'}>
+                  {t.kind === 'capability' ? '역량' : '도구'}
+                </Kind>
                 {t.isStale && (
                   <Stale title={`근거가 ${t.staleAfterDays}일 넘게 없습니다. 아직 유효한지 확인이 필요합니다`}>
                     <AlertTriangle size={11} /> 낡음
@@ -144,6 +162,8 @@ const RadarBoard = ({ rows, onSelect }) => (
               <small>
                 {t.vendor ? `${t.vendor} · ` : ''}
                 {t.category || '분류 없음'} · 근거 {t.evidenceCount ?? 0}건
+                {(t.children || []).length > 0 && ` · 도구 ${t.children.length}개`}
+                {t.parentName && ` · ${t.parentName} 아래`}
               </small>
             </Item>
           ))}

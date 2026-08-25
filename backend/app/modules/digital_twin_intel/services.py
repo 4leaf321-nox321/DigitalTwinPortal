@@ -11,8 +11,8 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.modules.digital_twin_intel.models import (
-    CPT_KEYS, ORIGINS, STAGES, IntelChange, IntelEvidence, IntelLink, IntelNews,
-    IntelTech,
+    CPT_KEYS, ORIGINS, STAGES, TECH_KINDS, IntelChange, IntelEvidence, IntelLink,
+    IntelNews, IntelTech,
 )
 
 
@@ -219,6 +219,27 @@ def create_tech(actor_id=None, origin='ui', **data):
     if stage not in STAGES:
         return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
 
+    # ⚠️ 기본은 **도구**다. MCPㆍ소식으로 들어오는 것의 대부분이 제품이라, 기본을
+    #    역량으로 두면 역량 목록이 곧바로 잡동사니가 된다.
+    kind = data.get('kind') if data.get('kind') in TECH_KINDS else 'tool'
+
+    parent_uuid = (data.get('parentUuid') or data.get('parent_uuid') or '').strip()
+    if parent_uuid:
+        """
+        ⚠️⚠️ **만들면서 매다는 길에도 같은 검사를 건다.** 안 걸면 여기가
+           `set_parent` 의 층 규칙을 통째로 우회하는 뒷문이 된다 — MCP 는 만들기와
+           매달기를 한 번에 하므로 이 길로만 들어오는 줄이 실제로 생긴다.
+        """
+        p = IntelTech.query.filter_by(uuid=parent_uuid).first()
+        if p is None:
+            return None, '상위 역량을 찾을 수 없습니다.'
+        if p.kind != 'capability':
+            return None, '상위는 역량이어야 합니다. 도구 밑에 도구를 매달 수 없습니다.'
+        if kind == 'capability':
+            return None, '역량은 다른 것 밑에 매달 수 없습니다. 층은 둘까지입니다.'
+    else:
+        parent_uuid = None
+
     t = IntelTech(
         uuid=_uuid(), name=name,
         aliases=_clean_list(data.get('aliases')),
@@ -233,6 +254,10 @@ def create_tech(actor_id=None, origin='ui', **data):
         divisions=_clean_list(data.get('divisions')),
         tags=_clean_list(data.get('tags')),
         cpt=_clean_cpt(data.get('cpt')),
+        # ⚠️ 기본은 **도구**다. MCPㆍ소식으로 들어오는 것의 대부분이 제품이라,
+        #    기본을 역량으로 두면 역량 목록이 곧바로 잡동사니가 된다.
+        kind=kind,
+        parent_uuid=parent_uuid,
         origin=origin if origin in ORIGINS else 'ui',
         created_by=actor_id,
     )
@@ -270,20 +295,109 @@ def set_stage(tech_uuid, stage, reason=None, actor=None, source='ui'):
     return t, None
 
 
-def evidence_stats(tech_uuids):
+def evidence_stats(tech_uuids, rollup=True):
     """기술마다 (근거 건수, 마지막 근거 시각). 낡음 판정에 쓴다.
 
     ⚠️ 목록마다 기술 하나씩 세면 수백 번 왕복한다. 한 번에 모아 온다.
+
+    ⚠️⚠️ **역량은 자식(도구)의 근거를 함께 센다**(`rollup`). 소식은 도구 이름으로
+       들어오므로 역량에는 직접 걸리는 근거가 거의 없다 — 굴려 올리지 않으면
+       **역량이 만들어지자마자 전부 「낡음」**이 되고, 그 순간 낡음 표시가 아무
+       신호도 아니게 된다.
     """
     if not tech_uuids:
         return {}
+    want = list(tech_uuids)
+
+    # 자식까지 한 번에 모으려면 (역량 → 도구) 표가 필요하다.
+    kids = {}
+    if rollup:
+        for uuid, parent in (db.session.query(IntelTech.uuid, IntelTech.parent_uuid)
+                             .filter(IntelTech.parent_uuid.in_(want)).all()):
+            kids.setdefault(parent, []).append(uuid)
+
+    lookup = set(want)
+    for v in kids.values():
+        lookup.update(v)
+
     rows = (db.session.query(
                 IntelEvidence.tech_uuid,
                 func.count(IntelEvidence.id),
                 func.max(IntelEvidence.created_at))
-            .filter(IntelEvidence.tech_uuid.in_(list(tech_uuids)))
+            .filter(IntelEvidence.tech_uuid.in_(list(lookup)))
             .group_by(IntelEvidence.tech_uuid).all())
-    return {r[0]: (r[1], r[2]) for r in rows}
+    raw = {r[0]: (r[1], r[2]) for r in rows}
+
+    out = {}
+    for uuid in want:
+        cnt, last = raw.get(uuid, (0, None))
+        for kid in kids.get(uuid, []):
+            kc, kl = raw.get(kid, (0, None))
+            cnt += kc
+            if kl and (last is None or kl > last):
+                last = kl
+        out[uuid] = (cnt, last)
+    return out
+
+
+def names_of(uuids):
+    """uuid → 이름. 상위 역량 이름을 곁들일 때 쓴다."""
+    if not uuids:
+        return {}
+    rows = (db.session.query(IntelTech.uuid, IntelTech.name)
+            .filter(IntelTech.uuid.in_(list(set(uuids)))).all())
+    return {u: n for u, n in rows}
+
+
+def children_of(parent_uuids):
+    """역량 밑에 달린 도구들. 화면이 「무엇으로 하나」를 보여줄 때 쓴다."""
+    if not parent_uuids:
+        return {}
+    rows = (IntelTech.query
+            .filter(IntelTech.parent_uuid.in_(list(parent_uuids)))
+            .order_by(IntelTech.name.asc()).all())
+    out = {}
+    for t in rows:
+        out.setdefault(t.parent_uuid, []).append({
+            'uuid': t.uuid, 'name': t.name, 'stage': t.stage,
+            'vendor': t.vendor, 'summary': t.summary,
+        })
+    return out
+
+
+def set_parent(tech_uuid, parent_uuid, actor=None):
+    """도구를 역량 밑에 매단다. `parent_uuid` 가 비면 떼어 낸다.
+
+    ⚠️ **자기 자신ㆍ자기 자식을 부모로 삼을 수 없다.** 고리가 생기면 근거를 굴려
+       올릴 때 무한히 돈다.
+    ⚠️ **역량을 다른 것 밑에 매달지 않는다.** 층은 둘까지다 — 셋이 되면 「어디까지
+       굴려 올릴 것인가」가 사람마다 달라진다.
+    """
+    t = IntelTech.query.filter_by(uuid=tech_uuid).first()
+    if t is None:
+        return None, '기술을 찾을 수 없습니다.'
+
+    parent_uuid = (parent_uuid or '').strip()
+    if not parent_uuid:
+        t.parent_uuid = None
+        db.session.commit()
+        return t, None
+
+    if parent_uuid == tech_uuid:
+        return None, '자기 자신을 상위로 둘 수 없습니다.'
+    p = IntelTech.query.filter_by(uuid=parent_uuid).first()
+    if p is None:
+        return None, '상위 역량을 찾을 수 없습니다.'
+    if p.kind != 'capability':
+        return None, '상위는 역량이어야 합니다. 도구 밑에 도구를 매달 수 없습니다.'
+    if t.kind == 'capability':
+        return None, '역량은 다른 것 밑에 매달 수 없습니다. 층은 둘까지입니다.'
+    if p.parent_uuid == tech_uuid:
+        return None, '서로를 상위로 두면 고리가 생깁니다.'
+
+    t.parent_uuid = parent_uuid
+    db.session.commit()
+    return t, None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

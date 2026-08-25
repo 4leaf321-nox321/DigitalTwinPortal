@@ -105,6 +105,19 @@ class DtIntelApi {
                         '기술을 지우지 못했습니다.');
   }
 
+  /**
+   * 도구를 역량 밑에 매단다. `parentUuid` 를 비우면 떼어 낸다.
+   *
+   * ⚠️ 일반 수정(PATCH)에 안 실었다 — 고리ㆍ층 검사가 붙는 자리라 전용 길로 둔다.
+   *    PATCH 로 함께 받으면 그 검사를 우회하는 길이 하나 더 생긴다.
+   */
+  setTechParent(uuid, parentUuid) {
+    return this.request(
+      `${this.baseUrl}/tech/${uuid}/parent`,
+      { method: 'PUT', body: JSON.stringify({ parentUuid: parentUuid || '' }) },
+      '상위 역량을 바꾸지 못했습니다.');
+  }
+
   /** 같은 소식에 함께 걸린 기술과 그 횟수. */
   relatedTech(uuid) {
     return this.request(`${this.baseUrl}/tech/${uuid}/related`, {},

@@ -962,6 +962,22 @@ async def describe_intel(ctx: Context) -> dict:
         stages          도입 / 시험 / 관찰 / 보류
         cptGroups       DTC Capabilities Periodic Table v1.1 여섯 묶음.
                         **여러 개 붙일 수 있는 태그**이고 값이 고정이다
+        techKinds       기술의 **층** — capability(역량) / tool(도구). 아래 참고
+
+    ⚠️⚠️ **기술은 두 층이다.**
+
+        역량(capability)  「하는 일」. explicit 해석 · CFD · 예지보전.
+                          레이더에 서는 것은 **이쪽**이고, 단계도 여기에 매긴다
+        도구(tool)        제품ㆍ규격. LS-DYNA · OpenFOAM · OpenUSD.
+                          **소식은 이 이름으로 들어온다**
+
+       네가 넣는 것은 거의 다 **도구**다(그것이 기본값이다). 넣은 다음
+       `set_intel_tech_parent` 로 알맞은 역량에 매다는 데까지가 한 벌이다 —
+       안 매달면 레이더에 혼자 서고, 그러면 같은 일을 하는 제품이 서너 줄로 늘어나
+       **사업부 비교가 원리적으로 불가능해진다**(MX 가 LS-DYNA 도입, VD 가 RADIOSS
+       도입이면 둘 다 「도입」인데 서로 다른 줄이라 누가 앞섰는지 못 읽는다).
+
+       매달면 그 도구의 소식이 **역량의 근거로 함께 셈해진다.**
     """
     return await _intel(ctx, "GET", "/settings")
 
@@ -1061,6 +1077,7 @@ async def list_intel_tech(
     q: str = "",
     category: str = "",
     stage: str = "",
+    kind: str = "",
 ) -> list:
     """기술 레이더 목록. **기술을 새로 만들기 전에 반드시 본다.**
 
@@ -1070,8 +1087,16 @@ async def list_intel_tech(
     ⚠️ 검색은 **태그와 CPT 까지** 닿는다 — 「표준화」로 찾으면 부채꼴이 데이터·연결인
        OPC UA 도 나온다(표준화가 태그로 걸려 있다).
 
+    ⚠️ `kind="capability"` 로 **역량만** 본다. 도구를 넣고 어디에 매달지 고를 때
+       이걸 먼저 부른다 — 목록 전체에서 눈으로 고르면 도구를 도구 밑에 매달려고
+       하게 되고, 그건 서버가 물린다(층은 둘까지다).
+
     응답에 함께 오는 것
-        evidenceCount  이 기술을 떠받치는 소식 수
+        kind           capability(역량) / tool(도구)
+        parentUuid     이 도구가 매달린 역량. 비어 있으면 **아직 안 매달렸다**
+        parentName     그 역량 이름
+        children       역량 밑에 매달린 도구들 (역량일 때만)
+        evidenceCount  이 기술을 떠받치는 소식 수 — 역량은 **자식 것까지 함께** 센다
         isStale        근거가 오래 없어 **낡았다**는 표시. 단계마다 기준이 다르다
                        (관찰 180일 · 도입 540일). true 면 새 근거가 필요하다는 뜻
     """
@@ -1082,7 +1107,32 @@ async def list_intel_tech(
         params["category"] = category
     if stage:
         params["stage"] = stage
+    if kind:
+        params["kind"] = kind
     return await _intel(ctx, "GET", "/tech", params=params or None)
+
+
+@mcp.tool()
+async def set_intel_tech_parent(uuid: str, ctx: Context,
+                                parent_uuid: str = "") -> dict:
+    """도구를 **역량 밑에 매단다.** `parent_uuid` 를 비우면 떼어 낸다.
+
+    ⚠️⚠️ **기술을 넣었으면 여기까지가 한 벌이다.** 안 매달면 레이더에 혼자 서고,
+       같은 일을 하는 제품이 서너 줄로 늘어난다 — 그러면 「우리 explicit 해석은
+       어디까지 왔나」에 답할 수 없다. 매달면 그 도구의 소식이 **역량의 근거로
+       함께 셈해진다.**
+
+    쓰는 차례
+        1. `list_intel_tech(kind="capability")` 로 알맞은 역량을 찾는다
+        2. 없으면 `add_intel_tech` 로 역량을 만든다 — 다만 **역량은 조직의 말이라
+           함부로 늘리지 않는다.** 비슷한 것이 있으면 그것을 쓴다
+        3. 여기서 매단다
+
+    ⚠️ 막히는 것 — 자기 자신ㆍ도구 밑에 도구ㆍ역량을 다른 것 밑에(층은 둘까지).
+       전부 400 이 나고, 무엇이 틀렸는지 메시지로 온다.
+    """
+    return await _intel(ctx, "PUT", f"/tech/{uuid}/parent",
+                        json_body={"parentUuid": parent_uuid or ""})
 
 
 @mcp.tool()
@@ -1103,6 +1153,8 @@ async def add_intel_tech(
     aliases: list | None = None,
     tags: list | None = None,
     cpt: list | None = None,
+    kind: str = "tool",
+    parent_uuid: str = "",
 ) -> dict:
     """기술을 레이더에 올린다. **소식 없이 기술만 따로 넣을 때** 쓴다.
 
@@ -1115,6 +1167,13 @@ async def add_intel_tech(
 
     ⚠️ 단계는 여기서 못 정한다 — 새 기술은 **늘 「관찰」로 시작**한다. 단계를 옮기는
        것은 조직의 판단이라 관리자·사무국만 할 수 있다(화면에서 한다).
+
+    ⚠️⚠️ **`kind` 는 그냥 두면 「도구」다. 그게 맞다** — 네가 조사해 오는 것은 거의
+       다 제품이다. `parent_uuid` 로 알맞은 역량에 **매다는 데까지** 하라
+       (`list_intel_tech(kind="capability")` 로 먼저 찾는다). 안 매달면 레이더에
+       혼자 서고, 같은 일을 하는 제품이 서너 줄로 늘어난다.
+       역량(`kind="capability"`)을 새로 만드는 것은 **조직의 말을 늘리는 일**이라
+       비슷한 것이 이미 있으면 만들지 말 것.
 
     각 칸이 왜 있나
         summary  **이게 뭐냐.** 한 문장. 목록에서 이것만 읽는다 — 비우면 6개월 뒤
@@ -1129,7 +1188,9 @@ async def add_intel_tech(
         cpt      DTC CPT v1.1 여섯 중 해당하는 것들. `describe_intel` 참고.
                  값이 고정이라 모르는 값은 **조용히 버려진다**
     """
-    body_json = {"name": name, "origin": "mcp"}
+    body_json = {"name": name, "origin": "mcp", "kind": kind or "tool"}
+    if parent_uuid:
+        body_json["parentUuid"] = parent_uuid
     for k, v in (("summary", summary), ("vendor", vendor), ("category", category),
                  ("url", url), ("description", description)):
         if v:

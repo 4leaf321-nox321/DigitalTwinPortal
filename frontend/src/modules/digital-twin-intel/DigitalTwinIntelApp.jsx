@@ -242,6 +242,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [division, setDivision] = useState('');
 
   const [techView, setTechView] = useState('radar');   // radar | board
+  // 목록에서 층을 걸러 본다. '' 면 둘 다. ⚠️ 레이더에는 안 건다 — 레이더가 그리는
+  // 것은 이미 「역량 + 안 매달린 도구」로 정해져 있다.
+  const [kind, setKind] = useState('');
   const [openNews, setOpenNews] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -301,7 +304,16 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
   const shownTech = useMemo(() => {
     const key = q.trim().toLowerCase();
+    const radar = techView === 'radar';
     return tech.filter((t) => {
+      /*
+        ⚠️ **레이더는 「역량 + 안 매달린 도구」만 그린다.** 매달린 도구까지 그리면
+           같은 것이 두 번 서고 층을 나눈 뜻이 사라진다. 서버도 `radar=1` 로 같은
+           것을 거를 수 있지만, 목록 보기와 자료를 한 벌만 들고 있으려고 여기서
+           거른다 — 두 번 불러오면 두 화면의 셈이 갈린다.
+      */
+      if (radar && t.kind !== 'capability' && t.parentUuid) return false;
+      if (!radar && kind && t.kind !== kind) return false;
       if (division && !(t.divisions || []).includes(division)) return false;
       if (focus === 'stale' && !t.isStale) return false;
       if (focus === 'moved' && !t.movedFrom) return false;
@@ -311,10 +323,20 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       if (!key) return true;
       // 태그ㆍCPT 도 찾을 수 있어야 한다 — 부채꼴은 하나뿐이라 얽힌 갈래는
       // 거기 들어 있다("표준화"로 찾으면 OPC UA 도 나와야 한다).
-      return [t.name, t.vendor, t.summary, ...(t.tags || []), ...(t.cpt || [])]
+      /*
+        ⚠️ **자식(도구) 이름으로도 그 역량이 걸린다.** 안 그러면 레이더에서
+           「LS-DYNA」를 찾았을 때 아무것도 안 나온다 — 매달린 도구는 안 그리니까.
+           찾는 사람은 도구 이름을 치지 역량 이름을 치지 않는다.
+      */
+      return [t.name, t.vendor, t.summary, ...(t.tags || []), ...(t.cpt || []),
+              ...(t.children || []).map((c) => c.name)]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [tech, q, category, stage, staleOnly, focus, division]);
+  }, [tech, q, category, stage, staleOnly, focus, division, kind, techView]);
+
+  // 도구를 매달 곳. 이름 차례는 서버가 준 그대로다.
+  const capabilities = useMemo(
+    () => tech.filter((t) => t.kind === 'capability'), [tech]);
 
   const saveNews = async (body) => {
     setSaving(true);
@@ -342,8 +364,17 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     const editing = techForm && techForm.uuid;
     setSaving(true);
     try {
+      /*
+        ⚠️ **상위는 전용 길(`PUT .../parent`)로 따로 보낸다.** 고리ㆍ층 검사가
+           거기 붙어 있어서, 일반 수정에 얹으면 그 검사를 우회하는 길이 하나 더
+           생긴다. 만들기(POST)는 상위를 함께 받으므로 그때는 안 보낸다.
+      */
+      const { parentUuid, ...rest } = body;
       if (editing) {
-        await api.updateTech(techForm.uuid, body);
+        await api.updateTech(techForm.uuid, rest);
+        if ((parentUuid || '') !== (techForm.parentUuid || '')) {
+          await api.setTechParent(techForm.uuid, parentUuid);
+        }
       } else {
         await api.createTech(body);
       }
@@ -542,6 +573,15 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
               </StaleBtn>
             )}
 
+            {/* ⚠️ 레이더에는 안 붙인다 — 레이더가 그리는 것은 이미 정해져 있다. */}
+            {tab === 'tech' && techView === 'board' && (
+              <Select value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="">층 전체</option>
+                <option value="capability">역량만</option>
+                <option value="tool">도구만</option>
+              </Select>
+            )}
+
             {tab === 'tech' && (
               <ViewToggle>
                 <ViewBtn $on={techView === 'radar'} onClick={() => setTechView('radar')}>
@@ -619,6 +659,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           onSave={saveTech}
           categories={settings.techCategories}
           cptGroups={settings.cptGroups}
+          capabilities={capabilities}
           canCurate={canCurate}
           saving={saving}
         />

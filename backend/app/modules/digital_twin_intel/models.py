@@ -55,6 +55,23 @@ STAGES = ('도입', '시험', '관찰', '보류')
 #   보관    다 본 것. 목록에서 내려도 되지만 지우지는 않는다
 NEWS_STATUSES = ('신규', '확인됨', '보관')
 
+# 레이더의 **두 층**.
+#
+#   capability  역량ㆍ기법. 「explicit 해석」「CFD」「ROM」 — 사업부가 **어디까지 왔나**
+#   tool        그 역량을 구현하는 제품. LS-DYNAㆍRADIOSSㆍAbaqus — **무엇으로 하나**
+#
+# ⚠️⚠️ **왜 나누나.** 도구 단위로만 두면 사업부 비교가 **원리적으로 불가능**하다 —
+#    MX 가 LS-DYNA 도입, VD 가 RADIOSS 도입이면 둘 다 「도입」인데 서로 다른 줄이라
+#    누가 앞섰는지 읽을 수 없다. 반대로 역량만 두면 **소식이 안 걸린다** — 소식은
+#    「Ansys 가 LS-DYNA 에 X 추가」처럼 **도구 이름**으로 들어온다.
+#
+# ⚠️ 그래서 소식은 **도구**에 걸리고, 그 근거가 **역량으로 굴러 올라간다**
+#    (`evidence_stats` 참고). 안 그러면 역량은 근거 0건이라 만들자마자 「낡음」이 된다.
+#
+# ⚠️ **부모 없는 도구는 레이더에 그대로 뜬다.** 역량 정의가 안 끝나도 모듈이 돌아야
+#    한다 — 「먼저 다 정리하라」고 하면 아무도 안 한다.
+TECH_KINDS = ('capability', 'tool')
+
 # 근거가 이만큼 없으면 낡은 것으로 본다. 단계별로 다르다 —
 # '도입'ㆍ'시험' 은 쓰고 있는 것이라 조용해도 이상하지 않지만,
 # '관찰' 은 **지켜보겠다고 해 놓고 안 보고 있다는 뜻**이라 빨리 걸려야 한다.
@@ -193,6 +210,12 @@ class IntelTech(BaseModel):
     # DTC Capabilities Periodic Table v1.1 의 여섯 묶음 중 해당하는 것들.
     cpt = db.Column(JSONB, default=list)
 
+    # capability | tool. 기본은 tool — 들어오는 것의 대부분이 제품이다.
+    kind = db.Column(db.String(16), nullable=False, default='tool', index=True)
+    # 도구가 속한 역량. ⚠️ FK 를 안 건다 — 역량이 지워져도 도구는 남아야 하고,
+    #    그때는 부모 없는 도구로 레이더에 그대로 선다(사라지면 안 된다).
+    parent_uuid = db.Column(db.String(36), index=True)
+
     origin = db.Column(db.String(20), nullable=False, default='ui', index=True)
     is_archived = db.Column(db.Boolean, nullable=False, default=False, index=True)
 
@@ -216,9 +239,18 @@ class IntelTech(BaseModel):
             return False
         return (now - base) > timedelta(days=self.stale_after_days())
 
-    def to_dict(self, last_evidence_at=None, evidence_count=None, now=None):
+    def to_dict(self, last_evidence_at=None, evidence_count=None, now=None,
+                children=None, parent_name=None):
         d = super().to_dict()
         d['uuid'] = self.uuid
+        # ⚠️ 상위는 **이름까지** 함께 준다. uuid 만 주면 화면이 「어느 역량인가」를
+        #    보여주려고 기술 목록 전체를 뒤져야 하고, 걸러 본 목록에는 그 역량이
+        #    아예 없을 수도 있다 — 그러면 빈칸이 뜬다.
+        d['parentUuid'] = self.parent_uuid
+        if parent_name is not None:
+            d['parentName'] = parent_name
+        if children is not None:
+            d['children'] = children
         d['staleAfterDays'] = self.stale_after_days()
         d['isStale'] = self.is_stale(last_evidence_at, now=now)
         if last_evidence_at is not None:

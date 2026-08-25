@@ -49,6 +49,33 @@ const SmallBtn = styled.button`
   &:hover { background: #f8fafc; }
 `;
 
+/*
+  층 고르기. ⚠️ **드롭다운으로 두지 않았다** — 이 창에서 가장 먼저 정해야 하는
+  것이고, 두 값의 뜻이 서로 다르다는 것을 글로 읽혀야 하기 때문이다.
+*/
+const KindRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.375rem;
+`;
+
+const KindBtn = styled.button`
+  text-align: left;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid ${(p) => (p.$on ? '#818cf8' : '#e2e8f0')};
+  background: ${(p) => (p.$on ? '#eef2ff' : '#fff')};
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+
+  &:disabled { cursor: not-allowed; opacity: 0.55; }
+
+  b { font-size: 0.8125rem; color: ${(p) => (p.$on ? '#3730a3' : '#0f172a')}; }
+  small { font-size: 0.6875rem; color: #64748b; line-height: 1.45; }
+`;
+
 const CptGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -103,8 +130,9 @@ const StageBtn = styled.button`
  *     별칭   같은 기술이 여러 줄 되는 것을 막는다
  */
 const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups,
-                        canCurate, saving }) => {
+                        capabilities, canCurate, saving }) => {
   const edit = Boolean(initial);
+  const hasChildren = (initial?.children || []).length > 0;
   const [form, setForm] = useState(() => ({
     name: initial?.name || '',
     vendor: initial?.vendor || '',
@@ -118,6 +146,12 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
   const [tags, setTags] = useState(initial?.tags || []);
   const [tagInput, setTagInput] = useState('');
   const [cpt, setCpt] = useState(initial?.cpt || []);
+  /*
+    ⚠️ **기본은 도구다.** 들어오는 것의 대부분이 제품이라, 기본을 역량으로 두면
+       역량 목록이 곧바로 잡동사니가 된다.
+  */
+  const [kind, setKind] = useState(initial?.kind || 'tool');
+  const [parentUuid, setParentUuid] = useState(initial?.parentUuid || '');
   // 새로 만들 때만 단계를 여기서 고른다. 편집은 전용 길(권한이 다르다)로 간다.
   const [stage, setStage] = useState(initial?.stage || '관찰');
   const [stageReason, setStageReason] = useState('');
@@ -149,7 +183,9 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
 
   const submit = () => {
     if (!form.name.trim()) return;
-    const body = { ...form, aliases, tags, cpt };
+    const body = { ...form, aliases, tags, cpt, kind };
+    // ⚠️ 역량은 다른 것 밑에 못 매단다. 층을 바꿔 놓고 상위가 남으면 서버가 물린다.
+    body.parentUuid = kind === 'capability' ? '' : parentUuid;
     if (!edit) {
       body.stage = stage;
       if (stageReason.trim()) body.stageReason = stageReason.trim();
@@ -167,6 +203,63 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
         </Head>
 
         <Body>
+          {/*
+            ⚠️ **층을 맨 위에서 묻는다.** 뒤에 두면 이름부터 적고 넘어가 버리고,
+               그러면 전부 도구로 쌓여 사업부 비교가 원리적으로 불가능해진다 —
+               MX 가 LS-DYNA, VD 가 RADIOSS 면 둘 다 「도입」인데 서로 다른 줄이라
+               누가 앞섰는지 읽을 수 없다.
+          */}
+          <Field>
+            <span>무엇으로 넣나 *</span>
+            <KindRow>
+              <KindBtn type="button" $on={kind === 'tool'}
+                       disabled={hasChildren}
+                       title={hasChildren
+                         ? '매달린 도구가 있어 지금은 못 내립니다'
+                         : '제품 하나. 소식은 이 이름으로 들어옵니다'}
+                       onClick={() => setKind('tool')}>
+                <b>도구</b>
+                <small>제품ㆍ규격ㆍ오픈소스. 소식이 걸리는 자리 (LS-DYNA, OpenUSD)</small>
+              </KindBtn>
+              <KindBtn type="button" $on={kind === 'capability'}
+                       title="여러 도구가 같은 일을 할 때 그 「일」을 역량으로 둡니다"
+                       onClick={() => setKind('capability')}>
+                <b>역량</b>
+                <small>도구를 묶는 「하는 일」. 레이더에 서는 자리 (explicit 해석)</small>
+              </KindBtn>
+            </KindRow>
+          </Field>
+
+          {kind === 'tool' && (
+            <Field>
+              <span>어느 역량에 속하나</span>
+              <select value={parentUuid} onChange={(e) => setParentUuid(e.target.value)}>
+                <option value="">아직 안 정함 — 레이더에 혼자 섭니다</option>
+                {(capabilities || [])
+                  .filter((c) => c.uuid !== initial?.uuid)
+                  .map((c) => (
+                    <option key={c.uuid} value={c.uuid}>{c.name}</option>
+                  ))}
+              </select>
+            </Field>
+          )}
+          {kind === 'tool' && (
+            <Hint>
+              매달면 <b>레이더에는 역량만 서고</b> 이 도구의 소식은 그 역량의 근거로
+              함께 셉니다. 안 매달아도 됩니다 — 그때는 지금처럼 혼자 레이더에 섭니다.
+            </Hint>
+          )}
+          {edit && hasChildren && (
+            <Warn>
+              <AlertTriangle size={13} />
+              <span>
+                이 역량에 도구 {initial.children.length}개가 매달려 있어 <b>도구로 못
+                내립니다.</b> 먼저 그 도구들을 다른 역량으로 옮기거나 떼어 내세요 —
+                그냥 내리면 매달려 있던 것이 레이더에 한꺼번에 쏟아집니다.
+              </span>
+            </Warn>
+          )}
+
           <TwoCol>
             <Field>
               <span>이름 *</span>

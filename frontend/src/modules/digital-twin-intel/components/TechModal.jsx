@@ -148,6 +148,47 @@ const Together = styled.ul`
   small { font-size: 0.625rem; color: #94a3b8; }
 `;
 
+/*
+  ⚠️ 제목 옆에 **층을 붙인다.** 「explicit 해석」과 「LS-DYNA」가 같은 모양으로
+     열리면 지금 보는 것이 무엇인지 알 수 없고, 그러면 단계를 어디에 매길지도
+     사람마다 갈린다 — 단계는 **역량에** 매기는 것이다.
+*/
+const Kind = styled.span`
+  flex-shrink: 0;
+  padding: 0.125rem 0.4375rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: ${(p) => (p.$cap ? '#eef2ff' : '#f1f5f9')};
+  color: ${(p) => (p.$cap ? '#4338ca' : '#475569')};
+  border: 1px solid ${(p) => (p.$cap ? '#c7d2fe' : '#e2e8f0')};
+`;
+
+const Kids = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3125rem;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    padding: 0.3125rem 0.5625rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    cursor: pointer;
+
+    &:hover { border-color: #a5b4fc; }
+
+    b { font-size: 0.75rem; color: #0f172a; font-weight: 600; }
+    em { font-style: normal; font-size: 0.6875rem; color: #64748b; }
+  }
+`;
+
 const Body2 = styled.p`
   margin: 0;
   font-size: 0.8125rem;
@@ -302,6 +343,9 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
         <Head>
           <Radar size={17} color="#4f46e5" />
           <h2>{tech.name}</h2>
+          <Kind $cap={tech.kind === 'capability'}>
+            {tech.kind === 'capability' ? '역량' : '도구'}
+          </Kind>
           <CloseBtn onClick={onClose}><X size={18} /></CloseBtn>
         </Head>
 
@@ -321,6 +365,55 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             ? <Lead>{tech.summary}</Lead>
             : <Lead $empty>한 줄 요약이 없습니다. [고치기] 에서 채워 주세요 —
                            이름만으로는 6개월 뒤 무엇이었는지 알 수 없습니다.</Lead>}
+
+          {/*
+            ⚠️ **역량 밑의 도구를 여기서 보여준다.** 역량만 있으면 「그래서 뭘로
+               하나」에 답을 못 하고, 그러면 사업부가 실제로 무엇을 쓰는지가
+               어디에도 안 남는다.
+          */}
+          {tech.kind === 'capability' && (
+            <Field>
+              <span>
+                무엇으로 하나 {(tech.children || []).length > 0
+                  ? `(${tech.children.length}개)` : ''}
+              </span>
+              {(tech.children || []).length === 0
+                ? <Hint>
+                    아직 매달린 도구가 없습니다. 도구를 고칠 때 「어느 역량에 속하나」
+                    에서 이 역량을 고르면 여기에 모이고, <b>그 도구의 소식이 이 역량의
+                    근거로 함께 셉니다.</b>
+                  </Hint>
+                : (
+                  <Kids>
+                    {tech.children.map((c) => (
+                      <li key={c.uuid}>
+                        <button type="button"
+                                onClick={() => onOpenTech && onOpenTech(c)}>
+                          <b>{c.name}</b>
+                          <em>{c.stage}</em>
+                        </button>
+                      </li>
+                    ))}
+                  </Kids>
+                )}
+            </Field>
+          )}
+
+          {tech.kind !== 'capability' && tech.parentUuid && (
+            <Field>
+              <span>어느 역량인가</span>
+              <Kids>
+                <li>
+                  <button type="button"
+                          onClick={() => onOpenTech
+                            && onOpenTech({ uuid: tech.parentUuid })}>
+                    <b>{tech.parentName || '상위 역량'}</b>
+                    <em>레이더에는 이쪽이 섭니다</em>
+                  </button>
+                </li>
+              </Kids>
+            </Field>
+          )}
 
           <Facts>
             <li><b>공급사</b><span>{tech.vendor || '—'}</span></li>
