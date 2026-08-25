@@ -152,6 +152,24 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
   */
   const [kind, setKind] = useState(initial?.kind || 'tool');
   const [parentUuid, setParentUuid] = useState(initial?.parentUuid || '');
+
+  /*
+    ⚠️⚠️ **칸마다 어느 층의 사실인지 다르다.** 둘 다에 다 보여 주면 「역량의 공급사」
+       같은 것을 적게 되고, 그 값은 **아무 데도 안 쓰이면서 화면만 어지럽힌다.**
+       규칙은 두 줄이다 (서버도 같은 규칙을 본다 — models.py 참고).
+
+           공급사 · 제품 주소       **도구에만.** 역량은 파는 회사가 없다
+           분류 · 얽힌 갈래 · CPT   **레이더에 서는 줄에만**
+                                    (= 역량이거나, 아직 안 매단 도구)
+
+    ⚠️ 자료로 확인 — 역량 39개 중 공급사ㆍ주소가 적힌 것 0개. 반대로 매달린 도구는
+       부채꼴에 안 서는데 116개가 전부 분류를 들고 있었고, 그중 3개는 상위 역량과
+       **다른 부채꼴**이었다. 안 그려지니 어긋난 줄도 몰랐다.
+  */
+  const isCap = kind === 'capability';
+  const showVendor = !isCap;
+  const showSector = isCap || !parentUuid;
+  const parentName = (capabilities || []).find((c) => c.uuid === parentUuid)?.name;
   // 새로 만들 때만 단계를 여기서 고른다. 편집은 전용 길(권한이 다르다)로 간다.
   const [stage, setStage] = useState(initial?.stage || '관찰');
   const [stageReason, setStageReason] = useState('');
@@ -183,7 +201,20 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
 
   const submit = () => {
     if (!form.name.trim()) return;
-    const body = { ...form, aliases, tags, cpt, kind };
+    /*
+      ⚠️ **안 보이는 칸은 안 보낸다.** 화면에서만 감추고 값을 그대로 실어 보내면,
+         역량으로 바꿔 저장했을 때 옛 공급사가 조용히 되살아난다. 서버도 같은
+         규칙으로 한 번 더 막지만, 두 곳이 같은 말을 해야 한다.
+      ⚠️ 다만 **분류ㆍ태그ㆍCPT 는 지우지 않는다** — 나중에 떼어 내면 그 도구가
+         다시 레이더에 서므로 그때 필요하다. 안 보낼 뿐이다.
+    */
+    const body = { ...form, kind };
+    if (!showVendor) { body.vendor = ''; body.url = ''; }
+    if (showSector) {
+      body.tags = tags;
+      body.cpt = cpt;
+    }
+    body.aliases = aliases;
     // ⚠️ 역량은 다른 것 밑에 못 매단다. 층을 바꿔 놓고 상위가 남으면 서버가 물린다.
     body.parentUuid = kind === 'capability' ? '' : parentUuid;
     if (!edit) {
@@ -260,18 +291,26 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
             </Warn>
           )}
 
-          <TwoCol>
+          {showVendor ? (
+            <TwoCol>
+              <Field>
+                <span>이름 *</span>
+                <input value={form.name} onChange={set('name')}
+                       placeholder="예: NVIDIA Omniverse" />
+              </Field>
+              <Field>
+                <span>공급사</span>
+                <input value={form.vendor} onChange={set('vendor')}
+                       placeholder="예: NVIDIA · 오픈소스" />
+              </Field>
+            </TwoCol>
+          ) : (
             <Field>
               <span>이름 *</span>
               <input value={form.name} onChange={set('name')}
-                     placeholder="예: NVIDIA Omniverse" />
+                     placeholder="예: explicit 해석 · 유동 해석 (CFD)" />
             </Field>
-            <Field>
-              <span>공급사</span>
-              <input value={form.vendor} onChange={set('vendor')}
-                     placeholder="예: NVIDIA · 오픈소스" />
-            </Field>
-          </TwoCol>
+          )}
 
           <Field>
             <span>한 줄 요약</span>
@@ -284,19 +323,38 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
             되고, 그러면 아무도 레이더를 안 봅니다.
           </Hint>
 
-          <TwoCol>
-            <Field>
-              <span>분류</span>
-              <select value={form.category} onChange={set('category')}>
-                <option value="">고르지 않음</option>
-                {(categories || []).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
-            <Field>
-              <span>공식 문서·제품 주소</span>
-              <input value={form.url} onChange={set('url')} placeholder="https://" />
-            </Field>
-          </TwoCol>
+          {(showSector || showVendor) && (
+            <TwoCol>
+              {showSector && (
+                <Field>
+                  <span>분류 (레이더 부채꼴)</span>
+                  <select value={form.category} onChange={set('category')}>
+                    <option value="">고르지 않음</option>
+                    {(categories || []).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </Field>
+              )}
+              {showVendor && (
+                <Field>
+                  <span>공식 문서·제품 주소</span>
+                  <input value={form.url} onChange={set('url')} placeholder="https://" />
+                </Field>
+              )}
+            </TwoCol>
+          )}
+
+          {/*
+            ⚠️ **왜 분류 칸이 없는지 말해 준다.** 그냥 사라지면 「어디 갔지」가 되고,
+               사람은 없어진 칸을 찾느라 시간을 쓴다.
+          */}
+          {!showSector && (
+            <Hint>
+              <b>분류ㆍ얽힌 갈래ㆍDTC 능력은 여기에 없습니다.</b> 이 도구는 역량
+              「{parentName || '상위'}」 밑에 매달려 있어 <b>레이더에 따로 서지
+              않습니다</b> — 부채꼴은 그 역량의 것을 따릅니다. 따로 두면 서로
+              어긋나도 아무 데도 안 보여서 모르고 지나갑니다.
+            </Hint>
+          )}
 
           <Field>
             <span>다른 이름 (별칭)</span>
@@ -329,7 +387,9 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
             ⚠️ 부채꼴(분류)은 **하나**여야 그림이 그려진다. 그런데 실제 기술은 여러
                갈래에 얽힌다 — OPC UA 는 데이터·연결이면서 표준화다. 얽힌 나머지를
                여기 남기지 않으면 그 사실이 사라진다.
+            ⚠️ 분류와 **한 몸**이라 분류가 없는 자리(매달린 도구)에는 같이 없다.
           */}
+          {showSector && (
           <Field>
             <span>얽힌 다른 갈래 (태그)</span>
             <AliasRow>
@@ -339,7 +399,8 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
               <SmallBtn type="button" onClick={addTag}><Plus size={13} /> 추가</SmallBtn>
             </AliasRow>
           </Field>
-          {tags.length > 0 && (
+          )}
+          {showSector && tags.length > 0 && (
             <Chips>
               {tags.map((a, i) => (
                 <Chip key={a}>
@@ -351,16 +412,19 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
               ))}
             </Chips>
           )}
-          <Hint>
-            분류는 <b>레이더에서 어느 부채꼴에 놓을지</b>를 정합니다 — 하나만 고를 수
-            있습니다. 걸치는 갈래는 여기 태그로 남기세요.
-          </Hint>
+          {showSector && (
+            <Hint>
+              분류는 <b>레이더에서 어느 부채꼴에 놓을지</b>를 정합니다 — 하나만 고를 수
+              있습니다. 걸치는 갈래는 여기 태그로 남기세요.
+            </Hint>
+          )}
 
           {/*
             ⚠️ CPT 는 **우리 분류가 아니라 외부 표준**이다(DTC Capabilities Periodic
                Table v1.1). 값이 고정이라 고르기만 한다 — 자유 입력을 열면 오타가
                섞이고, 그 순간 업계 기준과 대조가 안 된다.
           */}
+          {showSector && (
           <Field>
             <span>DTC 능력 분류 (CPT v1.1)</span>
             <CptGrid>
@@ -373,11 +437,16 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
               ))}
             </CptGrid>
           </Field>
-          <Hint>
-            Digital Twin Consortium 이 정한 <b>디지털 트윈의 여섯 능력</b>입니다.
-            기술 하나가 여럿에 걸칩니다 — 걸치는 대로 고르세요.
-            업계 기준으로 <b>우리가 어느 능력을 보고 있는지</b>를 세는 데 씁니다.
-          </Hint>
+          )}
+          {showSector && (
+            <Hint>
+              Digital Twin Consortium 이 정한 <b>디지털 트윈의 여섯 능력</b>입니다.
+              기술 하나가 여럿에 걸칩니다 — 걸치는 대로 고르세요.
+              업계 기준으로 <b>우리가 어느 능력을 보고 있는지</b>를 세는 데 씁니다.
+              {/* ⚠️ 이름 그대로 **능력(capabilities)의 주기율표**다 — 제품이 아니라
+                     역량에 붙는 것이 맞다. */}
+            </Hint>
+          )}
 
           <Field>
             <span>우리한테 어디에 쓸 만한가</span>

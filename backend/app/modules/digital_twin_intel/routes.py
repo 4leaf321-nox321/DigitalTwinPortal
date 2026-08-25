@@ -15,7 +15,7 @@ from app.modules.digital_twin_intel import permissions as P
 from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
     CPT_GROUPS, DEFAULT_SECTORS, NEWS_STATUSES, ORIGINS, STAGES, TECH_KINDS,
-    IntelEvidence, IntelNews, IntelTech,
+    IntelEvidence, IntelNews, IntelTech, shows_vendor,
 )
 from app.shared.responses import (
     created_response, error_response, not_found_response, success_response,
@@ -388,6 +388,12 @@ def update_tech(uuid):
                     '이 역량에 매달린 도구가 있습니다. 먼저 떼어 낸 뒤 바꾸세요.',
                     status_code=400)
         t.kind = data['kind']
+
+    # ⚠️ 역량은 **파는 회사가 없다.** 층이 바뀌면 그 칸을 비운다 — 안 비우면 화면에
+    #    안 보이는 값이 남아, 나중에 도구로 내렸을 때 엉뚱하게 되살아난다.
+    if not shows_vendor(t.kind):
+        t.vendor = None
+        t.url = None
     if 'aliases' in data:
         t.aliases = S._clean_list(data['aliases'])
     if 'divisions' in data:

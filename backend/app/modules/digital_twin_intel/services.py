@@ -12,7 +12,7 @@ from sqlalchemy import func
 from app.extensions import db
 from app.modules.digital_twin_intel.models import (
     CPT_KEYS, ORIGINS, STAGES, TECH_KINDS, IntelChange, IntelDivisionStage,
-    IntelEvidence, IntelLink, IntelNews, IntelTech,
+    IntelEvidence, IntelLink, IntelNews, IntelTech, shows_vendor,
 )
 
 
@@ -252,9 +252,13 @@ def create_tech(actor_id=None, origin='ui', **data):
     t = IntelTech(
         uuid=_uuid(), name=name,
         aliases=_clean_list(data.get('aliases')),
-        vendor=(data.get('vendor') or '').strip() or None,
+        # ⚠️ 역량은 **파는 회사가 없다.** 받아도 버린다 — 안 버리면 아무 데도
+        #    안 보이는 값이 남아, 나중에 도구로 내렸을 때 엉뚱하게 되살아난다.
+        vendor=((data.get('vendor') or '').strip() or None
+                if shows_vendor(kind) else None),
         category=(data.get('category') or '').strip() or None,
-        url=(data.get('url') or '').strip() or None,
+        url=((data.get('url') or '').strip() or None
+             if shows_vendor(kind) else None),
         stage=stage,
         stage_reason=data.get('stageReason') or data.get('stage_reason'),
         stage_changed_at=datetime.utcnow(),

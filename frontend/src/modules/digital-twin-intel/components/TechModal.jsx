@@ -491,9 +491,23 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             </Field>
           )}
 
+          {/*
+            ⚠️⚠️ **칸마다 어느 층의 사실인지 다르다** (models.py 의 규칙과 같다).
+
+                공급사 · 제품 주소       도구에만. 역량은 파는 회사가 없다
+                분류 · 얽힌 갈래 · CPT   레이더에 서는 줄에만
+                                         (= 역량이거나, 아직 안 매단 도구)
+
+            ⚠️ 빈 값을 「—」로 늘어놓으면 **안 채운 칸처럼 보인다.** 채울 수 없는
+               칸이라면 아예 안 보이는 것이 맞다.
+          */}
           <Facts>
-            <li><b>공급사</b><span>{tech.vendor || '—'}</span></li>
-            <li><b>분류</b><span>{tech.category || '—'}</span></li>
+            {tech.kind !== 'capability' && (
+              <li><b>공급사</b><span>{tech.vendor || '—'}</span></li>
+            )}
+            {(tech.kind === 'capability' || !tech.parentUuid) && (
+              <li><b>분류</b><span>{tech.category || '—'}</span></li>
+            )}
             {/* ⚠️ 「어디서 왔나」만 있고 「언제」가 없으면 못 믿는다. */}
             {tech.movedFrom && (
               <li>
@@ -504,27 +518,32 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                 </span>
               </li>
             )}
-            <li>
-              <b>공식 문서</b>
-              <span>
-                {tech.url
-                  ? <a href={tech.url} target="_blank" rel="noreferrer">
-                      바로가기 <ExternalLink size={11} />
-                    </a>
-                  : '—'}
-              </span>
-            </li>
+            {tech.kind !== 'capability' && (
+              <li>
+                <b>공식 문서</b>
+                <span>
+                  {tech.url
+                    ? <a href={tech.url} target="_blank" rel="noreferrer">
+                        바로가기 <ExternalLink size={11} />
+                      </a>
+                    : '—'}
+                </span>
+              </li>
+            )}
             {(tech.aliases || []).length > 0 && (
               <li><b>다른 이름</b><span>{tech.aliases.join(' · ')}</span></li>
             )}
             {(tech.divisions || []).length > 0 && (
               <li><b>관련 사업부</b><span>{tech.divisions.join(' · ')}</span></li>
             )}
-            {/* 부채꼴은 하나뿐이라 **얽힌 갈래는 여기서만 읽힌다.** */}
-            {(tech.tags || []).length > 0 && (
+            {/* 부채꼴은 하나뿐이라 **얽힌 갈래는 여기서만 읽힌다.** 분류와 한 몸이라
+                분류가 없는 자리(매달린 도구)에는 같이 없다. */}
+            {(tech.kind === 'capability' || !tech.parentUuid)
+              && (tech.tags || []).length > 0 && (
               <li><b>얽힌 갈래</b><span>{tech.tags.join(' · ')}</span></li>
             )}
-            {(tech.cpt || []).length > 0 && (
+            {(tech.kind === 'capability' || !tech.parentUuid)
+              && (tech.cpt || []).length > 0 && (
               <li>
                 <b>DTC 능력</b>
                 <span title="Digital Twin Consortium Capabilities Periodic Table v1.1">

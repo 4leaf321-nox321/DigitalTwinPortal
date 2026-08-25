@@ -282,3 +282,50 @@ def test_만들면서_매다는_길도_같은_규칙을_받는다(db, client, au
 
     assert IntelTech.query.filter(IntelTech.name.in_(['X', 'Y', 'Z'])).count() == 0, \
         '막혔으면 줄도 안 남아야 한다'
+
+
+# ── 칸마다 어느 층의 사실인가 ────────────────────────────────────────────────
+#
+# ⚠️⚠️ 둘 다에 다 보여 주면 「역량의 공급사」 같은 것을 적게 되고, 그 값은 **아무
+#    데도 안 쓰이면서 화면만 어지럽힌다.** 규칙은 두 줄이다.
+#
+#        공급사 · 제품 주소       **도구에만.** 역량은 파는 회사가 없다
+#        분류 · 얽힌 갈래 · CPT   **레이더에 서는 줄에만**
+#
+#    자료로 확인(2026-08-25) — 역량 39개 중 공급사ㆍ주소가 적힌 것 0개. 반대로
+#    매달린 도구 116개가 전부 분류를 들고 있었고 그중 3개는 상위와 다른 부채꼴이었다.
+
+def test_역량은_공급사를_안_받는다(db, client, auth, admin):
+    r = client.post(f'{BASE}/tech',
+                    json={'name': 'explicit 해석', 'kind': 'capability',
+                          'vendor': 'Ansys', 'url': 'https://x.test'},
+                    headers=auth(admin))
+    assert r.status_code == 201
+    d = (r.get_json() or {})['data']
+    assert d['vendor'] is None and d['url'] is None
+
+
+def test_도구는_공급사를_받는다(db, client, auth, admin):
+    r = client.post(f'{BASE}/tech',
+                    json={'name': 'LS-DYNA', 'vendor': 'Ansys',
+                          'url': 'https://lsdyna.test'},
+                    headers=auth(admin))
+    assert r.status_code == 201
+    d = (r.get_json() or {})['data']
+    assert d['vendor'] == 'Ansys' and d['url'] == 'https://lsdyna.test'
+
+
+def test_도구를_역량으로_올리면_공급사가_지워진다(db, client, auth, admin):
+    """
+    ⚠️ 안 지우면 **화면에 안 보이는 값이 남는다.** 나중에 도구로 되돌렸을 때
+       옛 공급사가 엉뚱하게 되살아난다.
+    """
+    t = _tool(admin, 'X')
+    client.patch(f'{BASE}/tech/{t.uuid}',
+                 json={'vendor': 'Ansys', 'url': 'https://x.test'},
+                 headers=auth(admin))
+    r = client.patch(f'{BASE}/tech/{t.uuid}', json={'kind': 'capability'},
+                     headers=auth(admin))
+    assert r.status_code == 200
+    d = (r.get_json() or {})['data']
+    assert d['vendor'] is None and d['url'] is None
