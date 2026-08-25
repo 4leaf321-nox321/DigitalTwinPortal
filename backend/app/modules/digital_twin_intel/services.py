@@ -381,20 +381,25 @@ def known_divisions():
         return []
 
 
-def set_division_stage(tech_uuid, division, stage, reason=None, actor=None,
-                       source='ui'):
-    """한 사업부만 전사와 다르게 본다고 적는다.
+def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
+                       actor=None, source='ui'):
+    """그 사업부가 이 역량을 **어디까지 · 왜 · 무엇으로** 하는지 적는다.
 
-    ⚠️⚠️ **전사와 같은 값으로 맞추면 예외를 지운다.** 「전사와 같다」와 「아직 안
-       정했다」는 화면에서 구별할 수 없고, 구별할 필요도 없다. 같은 값을 굳이
-       한 줄로 남겨 두면 나중에 전사가 움직였을 때 **이 사업부만 옛 값에 붙박여**
-       따라가지 않는다 — 그게 표를 못 믿게 만드는 방식이다.
+    ⚠️⚠️ **이유 없이 예외를 만들 수 없다.** 예전에는 드롭다운으로 단계만 고르면
+       끝이었는데, 그러면 이 표는 앞선 세 번의 시도(tech_radarㆍtech_archiveㆍ
+       digital_twin_solution)와 똑같아진다 — **적혀는 있는데 아무도 왜인지 모르는
+       표.** 「MX 도입」 네 글자는 6개월 뒤 아무 뜻도 아니다.
 
-    ⚠️ '보류' 는 여기서도 이유가 있어야 한다. 오히려 전사와 **다르게** 접는
-       판단이라 이유가 더 중요하다.
+    ⚠️⚠️ **단계를 안 정하고 도구만 적을 수 있다**(`stage` 를 비운다). 가장 흔한
+       경우가 「전사도 도입, 우리도 도입, 우리는 LS-DYNA 를 쓴다」인데, 예외를
+       만들어야만 도구를 적을 수 있으면 그 경우를 아예 못 적는다.
+
+           stage 없음   전사를 따른다. **전사가 움직이면 같이 움직인다**
+           stage 있음   전사와 다르게 본다 → 이유가 있어야 한다
+
+    ⚠️ 전사와 **같은 값**을 보내면 「안 정함」으로 되돌린다. 굳이 붙박아 두면 전사가
+       움직였을 때 이 사업부만 옛 값에 남는다.
     """
-    if stage not in STAGES:
-        return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
     division = (division or '').strip()
     if not division:
         return None, '사업부를 골라야 합니다.'
@@ -407,42 +412,124 @@ def set_division_stage(tech_uuid, division, stage, reason=None, actor=None,
     if t is None:
         return None, '기술을 찾을 수 없습니다.'
 
+    stage = (stage or '').strip() or None
+    if stage is not None and stage not in STAGES:
+        return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
+    # 전사와 같아졌다 → 예외가 아니라 「따름」이다.
+    if stage == t.stage:
+        stage = None
+
     reason = (reason or '').strip()
-    if stage == '보류' and not reason:
-        return None, "'보류' 로 옮길 때는 이유를 적어야 합니다."
+    if stage is not None and not reason:
+        return None, ('전사(%s)와 다르게 「%s」 로 보는 이유를 적어야 합니다. '
+                      '이유 없는 줄은 6개월 뒤 아무 뜻도 아닙니다.' % (t.stage, stage))
+
+    tools = _clean_tools(tools, parent=t)
 
     row = IntelDivisionStage.query.filter_by(
         tech_uuid=tech_uuid, division=division).first()
-    before = row.stage if row else t.stage
+    before = (row.stage if row else None) or t.stage
+    after = stage or t.stage
 
-    if stage == t.stage:
-        # 전사와 같아졌다 → 예외를 지우고 전사를 따라가게 둔다.
+    """
+    ⚠️ **담을 것이 있는지 먼저 본다.** 넣고 나서 비었으면 지우는 식으로 짜면, 아직
+       저장도 안 된 줄을 지우려다 터진다(시험이 잡았다). 그리고 아무것도 안 담긴
+       줄을 남기면 「다르게 보는 사업부」 셈이 부풀고, 그 숫자가 이 화면의 답이라
+       곧바로 못 믿게 된다.
+    """
+    empty = stage is None and not reason and not tools
+    if empty:
         if row is not None:
-            log_change('tech', t.uuid, t.name, 'stage', before, stage,
-                       reason=reason or '전사 값과 같아져 사업부 예외를 지웠습니다.',
-                       actor=actor, source=source, scope=division)
+            if before != after:
+                log_change('tech', t.uuid, t.name, 'stage', before, after,
+                           reason='전사 값을 따르도록 되돌렸습니다.',
+                           actor=actor, source=source, scope=division)
             db.session.delete(row)
             db.session.commit()
         return None, None
 
     if row is None:
         row = IntelDivisionStage(tech_uuid=tech_uuid, division=division,
-                                 stage=stage)
+                                 changed_at=datetime.utcnow())
         db.session.add(row)
-    if before != stage:
-        log_change('tech', t.uuid, t.name, 'stage', before, stage,
-                   reason=reason, actor=actor, source=source, scope=division)
-        row.changed_at = datetime.utcnow()
     row.stage = stage
-    if reason:
-        row.reason = reason
+    row.reason = reason or None
+    row.tools = tools
     row.changed_by = getattr(actor, 'id', None)
+
+    if before != after:
+        row.changed_at = datetime.utcnow()
+        log_change('tech', t.uuid, t.name, 'stage', before, after,
+                   reason=reason or '전사 값을 따르도록 되돌렸습니다.',
+                   actor=actor, source=source, scope=division)
+
     db.session.commit()
     return row, None
 
 
+def _clean_tools(tools, parent=None):
+    """적어 둔 도구 uuid 를 추린다.
+
+    ⚠️⚠️ **그 역량 밑에 매달린 도구만 받는다.** 아무거나 받으면 「MX 는 explicit
+       해석을 Grafana 로 한다」 같은 줄이 조용히 생기고, 그러면 「어느 사업부가
+       무엇을 쓰나」를 되짚을 때 답이 엉킨다. 없는 도구를 쓰고 있다면 **먼저 그
+       도구를 이 역량에 매다는 것**이 맞다 — 그 정리가 이 층의 값이다.
+
+    ⚠️ 도구 자신에 적는 경우(역량이 아닌 줄)에는 고를 것이 없다. 빈 목록이 된다.
+    """
+    want = [str(u).strip() for u in (tools or []) if str(u or '').strip()]
+    if not want or parent is None or parent.kind != 'capability':
+        return []
+    allowed = {t.uuid for t in IntelTech.query
+               .filter(IntelTech.parent_uuid == parent.uuid).all()}
+    out = []
+    for u in want:
+        if u in allowed and u not in out:
+            out.append(u)
+    return out
+
+
+def tools_of(rows):
+    """사업부 줄들이 가리키는 도구 이름. `{tech_uuid: {division: [이름…]}}` 가 아니라
+    줄 하나씩 풀어 쓰기 좋게 `{id: [이름…]}` 로 준다.
+
+    ⚠️ 없어진 도구는 조용히 빠진다 — FK 를 안 건 값이다.
+    """
+    rows = [r for r in rows if r is not None]
+    ids = {u for r in rows for u in (r.tools or [])}
+    names = names_of(ids)
+    return {r.id: [names[u] for u in (r.tools or []) if u in names] for r in rows}
+
+
+def used_by_division(tool_uuid):
+    """**이 도구를 쓰는 사업부.** 사업부 줄을 거꾸로 읽는다.
+
+    ⚠️ 이게 없으면 도구를 열었을 때 「누가 이걸 쓰나」에 답이 없다. 적어 넣은 쪽만
+       있고 되짚는 쪽이 없으면, 적을 이유도 절반으로 준다.
+    """
+    t = IntelTech.query.filter_by(uuid=tool_uuid).first()
+    if t is None:
+        return []
+    rows = (IntelDivisionStage.query
+            .filter(IntelDivisionStage.tools.contains([tool_uuid]))
+            .order_by(IntelDivisionStage.division.asc()).all())
+    caps = names_of([r.tech_uuid for r in rows])
+    return [{
+        'division': r.division,
+        'capability': caps.get(r.tech_uuid),
+        'capabilityUuid': r.tech_uuid,
+        'stage': r.stage,                      # 비어 있으면 전사를 따른다
+        'reason': r.reason,
+    } for r in rows]
+
+
 def clear_division_stage(tech_uuid, division, actor=None, source='ui'):
-    """사업부 예외를 지우고 **전사 값을 따라가게** 되돌린다."""
+    """그 사업부 줄을 통째로 지운다 — 단계ㆍ이유ㆍ도구가 함께 사라진다.
+
+    ⚠️ 「전사로 되돌리기」와 「적어 둔 것 지우기」를 **한 단추로 묶지 않는다**.
+       단계만 되돌리고 도구는 남기고 싶으면 단계를 「전사를 따름」으로 고르면 된다.
+       이 길은 그 사업부에 대해 적어 둔 것을 전부 무르는 자리다.
+    """
     row = IntelDivisionStage.query.filter_by(
         tech_uuid=tech_uuid, division=division).first()
     if row is None:
@@ -717,6 +804,27 @@ def merge_tech(loser_uuid, winner_uuid, actor=None):
     for col in ('summary', 'description', 'vendor', 'url', 'category'):
         if not getattr(winner, col) and getattr(loser, col):
             setattr(winner, col, getattr(loser, col))
+
+    """
+    ⚠️⚠️ **매달린 것과 사업부 줄도 함께 옮긴다.** 안 옮기면 지는 쪽 밑에 있던 도구가
+       **없어진 uuid 를 가리키게 되고**, 레이더는 「역량이거나 부모 없는 도구」만
+       그리므로 그 도구들이 화면에서 통째로 사라진다. 역량 층을 넣으면서 생긴
+       구멍이다 — 합치기는 원래 근거와 연결만 옮기고 있었다.
+    """
+    for kid in IntelTech.query.filter_by(parent_uuid=loser.uuid).all():
+        kid.parent_uuid = winner.uuid
+    have_d = {d.division for d in IntelDivisionStage.query.filter_by(
+        tech_uuid=winner.uuid).all()}
+    for d in IntelDivisionStage.query.filter_by(tech_uuid=loser.uuid).all():
+        # 같은 사업부 줄이 양쪽에 있으면 이기는 쪽을 남긴다(유니크 제약).
+        if d.division in have_d:
+            db.session.delete(d)
+        else:
+            d.tech_uuid = winner.uuid
+    # ⚠️ 「무엇으로 하나」에 지는 쪽 uuid 가 적혀 있으면 이기는 쪽으로 바꾼다.
+    for d in IntelDivisionStage.query.filter(
+            IntelDivisionStage.tools.contains([loser.uuid])).all():
+        d.tools = [winner.uuid if u == loser.uuid else u for u in (d.tools or [])]
 
     log_change('tech', winner.uuid, winner.name, 'merge', loser.name, winner.name,
                reason=f'「{loser.name}」 를 합쳤습니다.', actor=actor)

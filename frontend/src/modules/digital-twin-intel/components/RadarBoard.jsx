@@ -176,6 +176,9 @@ const RadarBoard = ({ rows, onSelect }) => (
                 {t.category || '분류 없음'} · 근거 {t.evidenceCount ?? 0}건
                 {(t.children || []).length > 0 && ` · 도구 ${t.children.length}개`}
                 {t.parentName && ` · ${t.parentName} 아래`}
+                {/* ⚠️ 사업부 눈일 때는 **무엇으로 하는지**가 단계보다 먼저 궁금하다. */}
+                {(t.divisionTools || []).length > 0
+                  && ` · ${t.division}: ${t.divisionTools.join(' · ')}`}
               </small>
             </Item>
           ))}

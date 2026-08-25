@@ -245,7 +245,7 @@ class IntelTech(BaseModel):
 
     def to_dict(self, last_evidence_at=None, evidence_count=None, now=None,
                 children=None, parent_name=None, division=None,
-                division_stage=None):
+                division_stage=None, division_tools=None):
         d = super().to_dict()
         d['uuid'] = self.uuid
         # ⚠️ 상위는 **이름까지** 함께 준다. uuid 만 주면 화면이 「어느 역량인가」를
@@ -265,10 +265,15 @@ class IntelTech(BaseModel):
         d['companyStage'] = self.stage
         if division:
             d['division'] = division
-            d['isDivisionOverride'] = bool(division_stage)
+            # ⚠️⚠️ 사업부 줄이 있어도 **단계가 비어 있으면 예외가 아니다** — 도구나
+            #    메모만 적어 둔 줄이다. 여기서 안 가리면 전사 값이 None 으로
+            #    지워지고, 레이더에서 그 점이 통째로 사라진다.
+            d['isDivisionOverride'] = bool(division_stage and division_stage.stage)
             if division_stage:
-                d['stage'] = division_stage.stage
+                if division_stage.stage:
+                    d['stage'] = division_stage.stage
                 d['divisionStageReason'] = division_stage.reason
+                d['divisionTools'] = division_tools or []
                 d['divisionStageAt'] = (
                     division_stage.changed_at.isoformat()
                     if division_stage.changed_at else None)
@@ -383,16 +388,44 @@ class IntelDivisionStage(BaseModel):
 
     tech_uuid = db.Column(db.String(36), nullable=False, index=True)
     division = db.Column(db.String(100), nullable=False, index=True)
-    stage = db.Column(db.String(10), nullable=False)
-    # ⚠️ 전사와 **다르게** 정한 것이라 이유가 더 중요하다.
+    """
+    ⚠️⚠️ **비어 있으면 「전사를 따른다」**는 뜻이고, 그때도 줄은 남을 수 있다 —
+       도구나 메모를 적어 두려고. 예외를 만들어야만 도구를 적을 수 있으면 가장 흔한
+       경우(전사 도입 · 우리도 도입 · 도구는 LS-DYNA)를 **아예 못 적는다.**
+
+           None      전사를 따른다. 전사가 움직이면 같이 움직인다
+           '도입'     전사와 다르게 본다 (예외)
+    """
+    stage = db.Column(db.String(10))
+    # ⚠️⚠️ **이유 없이 예외를 만들 수 없다**(서비스가 막는다). 단계만 바꿔 놓고
+    #    왜 그런지가 없으면, 이 표는 앞선 세 번의 시도와 똑같아진다 — 적혀는 있는데
+    #    아무도 왜인지 모르는 표.
     reason = db.Column(db.Text)
+    # 그 사업부가 이 역량을 **무엇으로 하나.** 기술 uuid 목록.
+    # ⚠️ 단계만 있고 도구가 없으면 「MX 도입」이 무슨 뜻인지 6개월 뒤에 모른다.
+    tools = db.Column(JSONB, default=list)
     changed_at = db.Column(db.DateTime, default=datetime.utcnow)
     changed_by = db.Column(db.Integer)
 
-    def to_dict(self):
+    def follows_company(self):
+        """전사를 따르는 줄인가. 도구ㆍ메모만 담고 단계는 안 정한 상태."""
+        return not self.stage
+
+    def is_empty(self):
+        """⚠️ 아무것도 안 담긴 줄은 **지워야 한다** — 안 지우면 「다르게 보는 사업부」
+           셈이 부풀고, 그 숫자가 이 화면의 답이라 곧바로 못 믿게 된다."""
+        return (self.follows_company() and not (self.reason or '').strip()
+                and not (self.tools or []))
+
+    def to_dict(self, tool_names=None):
         d = super().to_dict()
         d['changed_at'] = self.changed_at.isoformat() if self.changed_at else None
         d['changedAt'] = d['changed_at']
+        d['followsCompany'] = self.follows_company()
+        if tool_names is not None:
+            # ⚠️ uuid 만 주면 화면이 이름을 찾으러 목록 전체를 뒤져야 한다. 없어진
+            #    도구는 여기서 조용히 빠진다 — 그게 FK 를 안 건 값이다.
+            d['toolNames'] = tool_names
         return d
 
     def __repr__(self):

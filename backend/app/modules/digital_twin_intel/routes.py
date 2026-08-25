@@ -306,6 +306,8 @@ def list_tech():
     # 상위 이름. ⚠️ 걸러 본 목록에는 그 역량이 없을 수 있으므로 따로 물어 온다.
     parents = S.names_of([r.parent_uuid for r in rows if r.parent_uuid])
     dstages = S.division_stages(uuids, division) if division else {}
+    # ⚠️ 도구 이름을 목록에 함께 싣는다. 화면이 줄마다 따로 물으면 수십 번 왕복한다.
+    dtools = S.tools_of(list(dstages.values())) if dstages else {}
     out = []
     for r in rows:
         cnt, last = stats.get(r.uuid, (0, None))
@@ -313,6 +315,8 @@ def list_tech():
                       parent_name=parents.get(r.parent_uuid),
                       division=division or None,
                       division_stage=dstages.get(r.uuid),
+                      division_tools=(dtools.get(dstages[r.uuid].id)
+                                      if r.uuid in dstages else None),
                       children=kids.get(r.uuid, []) if r.kind == 'capability' else None)
         mv = moves.get(r.uuid)
         # ⚠️ **푼 값과 견준다.** 컬럼 값과 견주면 사업부 눈에서 화살표가 사라진다 —
@@ -416,16 +420,40 @@ def list_division_stages(uuid):
         return not_found_response('기술을 찾을 수 없습니다.')
 
     rows = S.stages_by_division(uuid)
+    tnames = S.tools_of(list(rows.values()))
     return success_response({
         'companyStage': t.stage,
         'divisions': S.known_divisions(),
+        # ⚠️ 고를 수 있는 도구는 **이 역량 밑에 매달린 것**뿐이다. 화면이 목록
+        #    전체에서 고르게 하면 「explicit 해석을 Grafana 로 한다」가 생긴다.
+        'toolChoices': S.children_of([uuid]).get(uuid, []),
+        # ⚠️ `stage` 가 비어 있는 줄은 **예외가 아니다** — 전사를 따르면서 도구나
+        #    메모만 적어 둔 줄이다. 화면이 이 둘을 갈라 보여야 한다.
         'overrides': [{
             'division': d,
             'stage': r.stage,
+            'followsCompany': r.follows_company(),
             'reason': r.reason,
+            'tools': r.tools or [],
+            'toolNames': tnames.get(r.id, []),
             'changedAt': r.changed_at.isoformat() if r.changed_at else None,
         } for d, r in rows.items()],
     })
+
+
+@bp.route('/tech/<uuid>/used-by', methods=['GET'])
+@jwt_required()
+def used_by(uuid):
+    """**이 도구를 쓰는 사업부.** 사업부 줄을 거꾸로 읽는다.
+
+    ⚠️ 적어 넣는 쪽만 있고 되짚는 쪽이 없으면 적을 이유가 절반으로 준다. 「LS-DYNA
+       를 누가 쓰나」에 답이 나와야 사람이 「무엇으로 하나」를 채운다.
+    """
+    actor = _actor()
+    denied = _deny_read(actor)
+    if denied is not None:
+        return denied
+    return success_response(S.used_by_division(uuid))
 
 
 @bp.route('/tech/<uuid>/division-stage', methods=['PUT'])
@@ -447,11 +475,15 @@ def set_division_stage(uuid):
 
     data = get_request_json() or {}
     row, err = S.set_division_stage(
-        uuid, data.get('division'), (data.get('stage') or '').strip(),
-        reason=data.get('reason'), actor=actor, source=_origin_of(data))
+        uuid, data.get('division'), data.get('stage'),
+        reason=data.get('reason'), tools=data.get('tools'),
+        actor=actor, source=_origin_of(data))
     if err:
         return error_response(err, status_code=400)
-    return success_response(row.to_dict() if row is not None else None)
+    if row is None:
+        return success_response(None)
+    return success_response(row.to_dict(
+        tool_names=S.tools_of([row]).get(row.id, [])))
 
 
 @bp.route('/tech/<uuid>/division-stage', methods=['DELETE'])

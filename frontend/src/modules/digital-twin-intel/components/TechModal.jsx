@@ -299,6 +299,8 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
   const [links, setLinks] = useState([]);
   const [changes, setChanges] = useState(null);
   const [related, setRelated] = useState([]);
+  // ⚠️ 도구일 때만 묻는다. 역량은 자기 밑 도구를 이미 들고 있다.
+  const [usedBy, setUsedBy] = useState([]);
   const [stage, setStage] = useState(tech?.stage || '관찰');
   const [reason, setReason] = useState(tech?.stage_reason || '');
   const [busy, setBusy] = useState(false);
@@ -313,6 +315,12 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
       .catch(() => setEvidence([]));
     api.listLinks('tech', tech.uuid).then(setLinks).catch(() => setLinks([]));
     api.relatedTech(tech.uuid).then(setRelated).catch(() => setRelated([]));
+    // ⚠️ 역량한테는 안 묻는다 — 역량은 자기 밑 도구를 이미 들고 있고, 「이 역량을
+    //    쓰는 사업부」는 바로 아래 사업부 표가 그대로 보여준다.
+    setUsedBy([]);
+    if (tech.kind !== 'capability') {
+      api.usedBy(tech.uuid).then(setUsedBy).catch(() => setUsedBy([]));
+    }
   }, [tech]);
 
   const reloadLinks = () =>
@@ -372,9 +380,19 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                연 창에서 그냥 「도입」이라고만 쓰여 있으면 전사가 도입인 줄 안다 —
                그 오해가 그대로 회의에 들어간다.
           */}
+          {(tech.divisionTools || []).length > 0 && !tech.isDivisionOverride && (
+            <Lens>
+              <b>{tech.division}</b> 는 전사({tech.companyStage})를 따르고,
+              이것을 <b>{tech.divisionTools.join(' · ')}</b> 로 합니다.
+              {tech.divisionStageReason ? ` — ${tech.divisionStageReason}` : ''}
+            </Lens>
+          )}
+
           {tech.isDivisionOverride && (
             <Lens>
               <b>{tech.division}</b> 기준으로 <b>{tech.stage}</b> 입니다.
+              {(tech.divisionTools || []).length > 0
+                && <> 이것을 <b>{tech.divisionTools.join(' · ')}</b> 로 합니다.</>}
               전사는 <b>{tech.companyStage}</b> 입니다
               {tech.divisionStageAt
                 ? ` (${String(tech.divisionStageAt).slice(0, 10)}부터).` : '.'}
@@ -428,6 +446,32 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                     ))}
                   </Kids>
                 )}
+            </Field>
+          )}
+
+          {/*
+            ⚠️⚠️ **되짚는 쪽이 없으면 적을 이유가 절반으로 준다.** 「무엇으로 하나」를
+               채워도 「LS-DYNA 를 누가 쓰나」에 답이 안 나오면, 채운 사람이 그게
+               어디에 쓰이는지 못 본다 — 그러면 다음부터 안 채운다.
+          */}
+          {usedBy.length > 0 && (
+            <Field>
+              <span>이 도구를 쓰는 사업부 ({usedBy.length})</span>
+              <Kids>
+                {usedBy.map((u) => (
+                  <li key={`${u.division}-${u.capabilityUuid}`}>
+                    <button type="button"
+                            onClick={() => onOpenTech
+                              && onOpenTech({ uuid: u.capabilityUuid })}>
+                      <b>{u.division}</b>
+                      <em>
+                        {u.capability}
+                        {u.stage ? ` · ${u.stage}` : ''}
+                      </em>
+                    </button>
+                  </li>
+                ))}
+              </Kids>
             </Field>
           )}
 

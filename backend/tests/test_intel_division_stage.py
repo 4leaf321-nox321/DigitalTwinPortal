@@ -49,10 +49,14 @@ def _cap(admin, name, stage='관찰'):
     return t
 
 
-def _put(client, auth, user, t, division, stage, reason=None):
+def _put(client, auth, user, t, division, stage, reason='그냥', tools=None):
+    """⚠️ 이유가 **기본값으로** 들어간다. 이제 이유 없이는 예외가 안 선다 —
+       이유를 안 주는 경우를 시험하려면 `reason=''` 로 **또렷이** 비운다."""
     body = {'division': division, 'stage': stage}
     if reason:
         body['reason'] = reason
+    if tools is not None:
+        body['tools'] = tools
     return client.put(f'{BASE}/tech/{t.uuid}/division-stage', json=body,
                       headers=auth(user))
 
@@ -106,7 +110,8 @@ def test_전사와_같게_맞추면_예외를_지운다(db, client, auth, admin,
     _put(client, auth, admin, cap, 'MX', '도입')
     assert IntelDivisionStage.query.count() == 1
 
-    _put(client, auth, admin, cap, 'MX', '관찰')          # 전사와 같아졌다
+    # 전사와 같아졌다 → 「따름」. 담아 둔 것이 없으면 줄까지 사라진다.
+    _put(client, auth, admin, cap, 'MX', '관찰', reason='')
     assert IntelDivisionStage.query.count() == 0
 
     # 전사가 움직이면 MX 도 따라간다.
@@ -204,10 +209,25 @@ def test_아무나_못_옮긴다(db, client, auth, plain, admin, divs):
     assert _put(client, auth, plain, cap, 'MX', '도입').status_code == 403
 
 
-def test_보류로_갈_때는_이유가_있어야_한다(db, client, auth, admin, divs):
-    """전사와 **다르게** 접는 판단이라 이유가 더 중요하다."""
+def test_이유_없이는_예외를_못_만든다(db, client, auth, admin, divs):
+    """
+    ⚠️⚠️ **이 시험이 이 판의 요점이다.** 예전에는 드롭다운으로 단계만 고르면
+       끝이었다. 그러면 이 표는 앞선 세 번의 시도와 똑같아진다 — 적혀는 있는데
+       아무도 왜인지 모르는 표. 「MX 도입」 네 글자는 6개월 뒤 아무 뜻도 아니다.
+    """
+    cap = _cap(admin, 'CFD')                       # 전사 관찰
+    r = _put(client, auth, admin, cap, 'MX', '도입', reason='')
+    assert r.status_code == 400
+    assert '이유' in (r.get_json() or {}).get('message', '')
+    assert IntelDivisionStage.query.count() == 0, '막혔으면 줄도 안 남아야 한다'
+
+    assert _put(client, auth, admin, cap, 'MX', '도입',
+                '3년째 쓰는 중').status_code == 200
+
+
+def test_보류도_마찬가지다(db, client, auth, admin, divs):
     cap = _cap(admin, 'CFD')
-    assert _put(client, auth, admin, cap, 'MX', '보류').status_code == 400
+    assert _put(client, auth, admin, cap, 'MX', '보류', reason='').status_code == 400
     assert _put(client, auth, admin, cap, 'MX', '보류',
                 '우리 제품엔 안 맞음').status_code == 200
 
@@ -215,7 +235,7 @@ def test_보류로_갈_때는_이유가_있어야_한다(db, client, auth, admin
 def test_모르는_사업부는_안_받는다(db, client, auth, admin, divs):
     """⚠️ 지어낸 이름을 받으면 **아무 데도 안 보이는 줄**이 조용히 쌓인다."""
     cap = _cap(admin, 'CFD')
-    r = _put(client, auth, admin, cap, '없는사업부', '도입')
+    r = _put(client, auth, admin, cap, '없는사업부', '도입', '아무 이유')
     assert r.status_code == 400
     assert '모르는 사업부' in (r.get_json() or {}).get('message', '')
 
@@ -240,4 +260,5 @@ def test_사업부별로_죽_펴서_본다(db, client, auth, admin, divs):
     assert len(d['overrides']) == 1
     o = d['overrides'][0]
     assert (o['division'], o['stage'], o['reason']) == ('MX', '도입', '3년째 쓰는 중')
+    assert o['followsCompany'] is False
     assert o['changedAt']

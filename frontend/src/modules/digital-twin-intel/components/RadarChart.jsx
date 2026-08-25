@@ -639,6 +639,9 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                   <title>
                     {`${b.tech.name} · ${b.tech.stage}`
                      + `${b.tech.isStale ? ' · 근거 낡음' : ''}`
+                     + `${(b.tech.divisionTools || []).length
+                          ? ` · ${b.tech.division}: ${b.tech.divisionTools.join(' · ')}`
+                          : ''}`
                      + `${b.tech.isDivisionOverride
                           ? ` · ${b.tech.division} 는 전사(${b.tech.companyStage})와 다르게 봅니다`
                           : ''}`
@@ -793,6 +796,11 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                              레이더가 갑자기 짧아진 것으로만 읽히고, 접힌 도구들이
                              어디 갔는지 알 수 없다.
                         */}
+                        {(b.tech.divisionTools || []).length > 0 && (
+                          <em title={`${b.tech.division} 가 이 역량을 하는 도구`}>
+                            · {b.tech.divisionTools.join(' · ')}
+                          </em>
+                        )}
                         {(b.tech.children || []).length > 0 && (
                           <em title={b.tech.children.map((c) => c.name).join(' · ')}>
                             · 도구 {b.tech.children.length}

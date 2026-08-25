@@ -119,11 +119,22 @@ class DtIntelApi {
    *    정했다」는 같은 뜻이고, 굳이 남겨 두면 전사가 움직였을 때 이 사업부만
    *    옛 값에 붙박인다.
    */
-  setDivisionStage(uuid, division, stage, reason) {
+  setDivisionStage(uuid, division, stage, reason, tools) {
     return this.request(
       `${this.baseUrl}/tech/${uuid}/division-stage`,
-      { method: 'PUT', body: JSON.stringify({ division, stage, reason }) },
+      { method: 'PUT',
+        body: JSON.stringify({ division, stage, reason, tools: tools || [] }) },
       '사업부 단계를 바꾸지 못했습니다.');
+  }
+
+  /**
+   * **이 도구를 쓰는 사업부.** 사업부 줄을 거꾸로 읽는다.
+   *
+   * ⚠️ 적어 넣는 쪽만 있고 되짚는 쪽이 없으면 적을 이유가 절반으로 준다.
+   */
+  usedBy(uuid) {
+    return this.request(`${this.baseUrl}/tech/${uuid}/used-by`, {},
+                        '쓰는 사업부를 불러오지 못했습니다.');
   }
 
   /** 사업부 예외를 지우고 **전사 값을 따라가게** 되돌린다. */
