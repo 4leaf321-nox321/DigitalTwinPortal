@@ -103,16 +103,13 @@ const Header = ({ tab, onTab, newsCount, techCount, onAdd, onGoHome,
     onGoHome={onGoHome}
     showStats={false}
     className="digital-twin-intel-header"
-    centerContent={
-      <Tabs>
-        <Tab type="button" $on={tab === 'news'} onClick={() => onTab('news')}>
-          <Newspaper size={15} /> 소식 <span className="count">{newsCount}</span>
-        </Tab>
-        <Tab type="button" $on={tab === 'tech'} onClick={() => onTab('tech')}>
-          <Radar size={15} /> 기술 레이더 <span className="count">{techCount}</span>
-        </Tab>
-      </Tabs>
-    }
+    /*
+      ⚠️ 탭을 **홈 단추 바로 왼쪽**에 붙인다(2026-08-25 요청). 원래는 가운데 자리에
+         있었는데, 그 사이에 「도구 관리」ㆍ「기술 추가」가 끼어 있어 탭과 홈이
+         멀찍이 떨어져 보였다. `CommonHeader` 는 가운데→오른쪽→홈 차례로 놓으므로,
+         **오른쪽 묶음의 맨 뒤**에 두면 홈 옆에 온다.
+      ⚠️ 공용 머리글(`CommonHeader`)은 안 건드린다 — 다른 화면이 같이 흔들린다.
+    */
     rightContent={
       <Right>
         {tab === 'tech' && onTools && (
@@ -131,6 +128,15 @@ const Header = ({ tab, onTab, newsCount, techCount, onAdd, onGoHome,
           <Plus size={16} />
           {tab === 'news' ? '소식 등록' : '기술 추가'}
         </AddButton>
+
+        <Tabs>
+          <Tab type="button" $on={tab === 'news'} onClick={() => onTab('news')}>
+            <Newspaper size={15} /> 소식 <span className="count">{newsCount}</span>
+          </Tab>
+          <Tab type="button" $on={tab === 'tech'} onClick={() => onTab('tech')}>
+            <Radar size={15} /> 기술 레이더 <span className="count">{techCount}</span>
+          </Tab>
+        </Tabs>
       </Right>
     }
   />
