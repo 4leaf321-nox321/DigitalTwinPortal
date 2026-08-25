@@ -246,6 +246,12 @@ def suggest(actor, kind, uuid, sectors=None):
 
     돌려주는 것은 **제안일 뿐** — 저장하지 않는다. 사람이 고른 것만 연결된다.
     """
+    # ⚠️ **입력 검사가 LLM 확인보다 먼저다.** 순서가 반대면 잘못된 `kind` 를 보냈는데
+    #    「LLM 서버가 없다」고 답한다 — 부르는 쪽이 엉뚱한 곳을 고치게 된다.
+    #    (2026-08-25 CI 에서 드러났다. 개발 PC 는 `.env` 에 주소가 있어 안 보였다)
+    if kind not in ('news', 'tech'):
+        return None, "kind 는 'news' 또는 'tech' 여야 합니다."
+
     if not llm.is_configured():
         raise llm.LLMNotConfigured(
             'AI 정리는 LLM 서버가 설정돼야 씁니다(LLM_BASE_URL). '
@@ -264,7 +270,7 @@ def suggest(actor, kind, uuid, sectors=None):
             return None, '기술을 찾을 수 없습니다.'
         subject = {'kind': 'tech', 'title': row.name, 'summary': row.summary,
                    'body': row.description, 'vendor': row.vendor, 'url': row.url}
-    else:
+    else:                                  # 위에서 이미 걸렀다. 여기 오면 안 된다.
         return None, "kind 는 'news' 또는 'tech' 여야 합니다."
 
     sectors = list(sectors or DEFAULT_SECTORS)

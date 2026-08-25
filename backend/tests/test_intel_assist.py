@@ -11,8 +11,6 @@
 ⚠️ 제안은 **저장하지 않는다.** 사람이 고른 것만 `dt_intel_links` 에 들어간다.
    자동으로 걸면 근거 없는 연결이 쌓이고, 그러면 연결 자체를 아무도 안 믿게 된다.
 """
-import pytest
-
 from app.modules.digital_twin_intel import assist
 from app.modules.digital_twin_intel.models import CPT_KEYS
 
@@ -115,9 +113,16 @@ def test_모델_답에서_JSON_을_건진다():
     assert assist._json_from('그냥 문장입니다') is None
 
 
-@pytest.mark.parametrize('kind', ['news', 'tech'])
-def test_모르는_종류는_거절한다(db, make_user, kind):
+def test_모르는_종류는_거절한다(db, make_user):
+    """
+    ⚠️ **입력 검사가 LLM 확인보다 먼저 와야 한다.** 순서가 반대면 잘못된 `kind` 를
+       보냈는데 「LLM 서버가 없다」고 답하고, 부르는 쪽이 엉뚱한 곳을 고치게 된다.
+
+    ⚠️ 이 시험은 **LLM 설정이 없어도 통과해야 한다.** 개발 PC 는 `.env` 에 주소가
+       있고 CI 는 없다 — 설정에 매인 시험은 **로컬만 초록**이 된다(2026-08-25 실제로
+       그랬다. 같은 부류를 `DT2_WRITE_ENABLED` 로 한 번 겪고도 또 했다).
+    """
     from app.modules.auth.models import UserRole
-    u = make_user(f'assist-{kind}@test.local', UserRole.ADMIN)
+    u = make_user('assist-kind@test.local', UserRole.ADMIN)
     out, err = assist.suggest(u, 'ostrich', 'x-y-z')
     assert out is None and 'news' in err
