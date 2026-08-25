@@ -193,6 +193,15 @@ const Entry = styled.button`
   small { color: #94a3b8; font-size: 0.6875rem; display: block; }
 `;
 
+const Moved = styled.span`
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #0f766e;
+  background: #f0fdfa;
+  border-radius: 0.25rem;
+  padding: 0 0.1875rem;
+`;
+
 const Mark = styled.span`
   display: inline-flex;
   vertical-align: -0.1em;
@@ -356,11 +365,6 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
     return out;
   }, [rows, sectors, stageIndex, span, PAD_A]);
 
-  const movedRecently = (t) => {
-    if (!t.stage_changed_at) return false;
-    const d = (Date.now() - new Date(t.stage_changed_at).getTime()) / 86400000;
-    return d >= 0 && d <= MOVED_DAYS;
-  };
 
   // ── 확대·축소·이동 ────────────────────────────────────────────────────────
   const toSvg = useCallback((cx, cy) => {
@@ -474,6 +478,15 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
 
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="기술 레이더"
              onPointerDown={onPointerDown} onDoubleClick={reset}>
+          <defs>
+            {STAGES.map((st) => (
+              <marker key={st.key} id={`arw-${st.key}`} viewBox="0 0 10 10"
+                      refX="9" refY="5" markerWidth="5" markerHeight="5"
+                      orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={st.color} opacity="0.55" />
+              </marker>
+            ))}
+          </defs>
           <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
             {[3, 2, 1, 0].map((i) => (
               <circle key={STAGES[i].key} cx={CX} cy={CY} r={RINGS[i]}
@@ -530,10 +543,39 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
                  `/ k` 로 되돌리면 화면상 크기가 고정된다 — 자리는 벌어지고 점은
                  그대로라 그제서야 분해가 된다.
             */}
+            {/*
+              ⚠️⚠️ **어디서 왔는지를 그린다.** 예전에는 「움직였다」만 테두리로
+                 표시했는데, 레이더의 값은 **무엇이 안쪽으로 들어왔나**에 있다 —
+                 ThoughtWorks 가 매 판마다 이동을 표시하는 이유가 그것이다.
+              ⚠️ 화살표는 **점보다 먼저** 그린다. 나중에 그리면 점을 덮어 번호가 안 읽힌다.
+            */}
+            {blips.map((b) => {
+              const fromIdx = stageIndex[b.tech.movedFrom];
+              if (fromIdx === undefined || fromIdx === b.ri) return null;
+              // 출발 고리의 한가운데. 각도는 지금 자리와 같게 둔다 — 부채꼴(분류)은
+              // 안 바뀌었으므로 반지름만 움직인 것이 사실에 맞다.
+              const a = Math.atan2(b.y - CY, b.x - CX);
+              const rFrom = fromIdx === 0 ? RINGS[0] / 2
+                : (RINGS[fromIdx] + RINGS[fromIdx - 1]) / 2;
+              const rTo = Math.hypot(b.x - CX, b.y - CY);
+              const gap = (BLIP_R + 4) / view.k;
+              const dir = rTo > rFrom ? 1 : -1;
+              const [x1, y1] = polar(a, rFrom + dir * gap * 0.4);
+              const [x2, y2] = polar(a, rTo - dir * gap);
+              return (
+                <line key={`mv-${b.tech.uuid}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                      stroke={STAGES[b.ri].color} strokeWidth={1.6 / view.k}
+                      opacity="0.5" strokeDasharray={`${4 / view.k} ${3 / view.k}`}
+                      markerEnd={`url(#arw-${STAGES[b.ri].key})`} />
+              );
+            })}
+
             {blips.map((b) => {
               const st = STAGES[b.ri];
               const on = hot === b.tech.uuid;
-              const moved = movedRecently(b.tech);
+              // ⚠️ 화살표와 **같은 값**을 본다. 둘이 다른 데서 오면 「테는 있는데
+              //    화살표가 없는 줄」이 생기고, 그러면 둘 다 못 믿게 된다.
+              const moved = Boolean(b.tech.movedFrom);
               const k = view.k;
               const rr = BLIP_R / k;
               return (
@@ -544,15 +586,15 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
                   <title>
                     {`${b.tech.name} · ${b.tech.stage}`
                      + `${b.tech.isStale ? ' · 근거 낡음' : ''}`
-                     + `${moved ? ' · 최근 이동' : ''}`}
+                     + `${b.tech.movedFrom ? ` · ${b.tech.movedFrom}에서 옮겨옴` : ''}`}
                   </title>
                   {on && <circle cx={b.x} cy={b.y} r={(BLIP_R + 7) / k}
                                  fill={st.color} opacity="0.16" />}
                   {/*
                     ⚠️ **모양은 전부 원으로 통일한다.** 예전엔 최근 이동을 삼각형으로
                        갈랐는데 촌스럽고, 모양이 섞이면 밀집 구간에서 더 어지럽다.
-                       최근 이동은 **바깥에 얇은 테**를 하나 두르는 것으로 표시한다 —
-                       실루엣을 안 건드리면서 눈에는 걸린다.
+                       옮겨온 것은 **바깥에 얇은 테**를 두른다 — 화살표는 「어디서」를
+                       말하고 테는 **멀리서도 찾게** 해 준다. 둘은 같은 값을 본다.
                   */}
                   {moved && (
                     <circle cx={b.x} cy={b.y} r={(BLIP_R + 3.5) / k} fill="none"
@@ -578,11 +620,12 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
         <Legend>
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#64748b" /></svg> 기술</span>
           <span>
-            <svg width="14" height="14">
-              <circle cx="7" cy="7" r="6" fill="none" stroke="#64748b" strokeWidth="1.2" opacity="0.55" />
-              <circle cx="7" cy="7" r="3.6" fill="#64748b" />
+            <svg width="22" height="12">
+              <line x1="1" y1="6" x2="14" y2="6" stroke="#64748b" strokeWidth="1.4"
+                    strokeDasharray="3 2" opacity="0.6" />
+              <path d="M14 3 L20 6 L14 9 z" fill="#64748b" opacity="0.6" />
             </svg>
-            최근 {MOVED_DAYS}일 내 단계 이동
+            최근 {MOVED_DAYS}일 내 옮겨온 자리
           </span>
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="#64748b" stroke="#b45309" strokeWidth="2" /></svg> 근거 낡음</span>
           <span>안쪽일수록 이미 쓰는 것</span>
@@ -604,6 +647,11 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector })
                       <b>{b.no}</b>
                       <span>
                         {b.tech.name}
+                        {b.tech.movedFrom && (
+                          <> <Moved title={`${b.tech.movedFrom} 에서 옮겨왔습니다`}>
+                            {b.tech.movedFrom}→
+                          </Moved></>
+                        )}
                         {b.tech.isStale && (
                           <> <Mark $color="#b45309" title="근거가 오래 없습니다">
                             <AlertTriangle size={11} />

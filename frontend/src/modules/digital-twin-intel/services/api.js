@@ -105,6 +105,17 @@ class DtIntelApi {
                         '기술을 지우지 못했습니다.');
   }
 
+  /** 같은 소식에 함께 걸린 기술과 그 횟수. */
+  relatedTech(uuid) {
+    return this.request(`${this.baseUrl}/tech/${uuid}/related`, {},
+                        '함께 나온 기술을 불러오지 못했습니다.');
+  }
+
+  /** 화면 맨 위의 「오늘 뭘 봐야 하나」. */
+  overview() {
+    return this.request(`${this.baseUrl}/overview`, {}, '요약을 불러오지 못했습니다.');
+  }
+
   techEvidence(uuid) {
     return this.request(`${this.baseUrl}/tech/${uuid}/evidence`, {},
                         '근거를 불러오지 못했습니다.');

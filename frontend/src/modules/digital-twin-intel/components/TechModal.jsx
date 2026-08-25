@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil, History, Merge }
-  from 'lucide-react';
+import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil, History, Merge,
+  Columns } from 'lucide-react';
 
 import api from '../services/api';
 import AssistPanel from './AssistPanel';
@@ -123,6 +123,31 @@ const Facts = styled.ul`
   a:hover { text-decoration: underline; }
 `;
 
+const Together = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3125rem;
+
+  button {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3125rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 0.4375rem;
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover { border-color: #a5b4fc; background: #eef2ff; }
+  b { font-size: 0.75rem; color: #0f172a; }
+  em { font-style: normal; font-size: 0.625rem; color: #6366f1; }
+  small { font-size: 0.625rem; color: #94a3b8; }
+`;
+
 const Body2 = styled.p`
   margin: 0;
   font-size: 0.8125rem;
@@ -211,10 +236,11 @@ const LinkList = ({ rows, onRemove }) => {
 };
 
 const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
-                    canCurate, showError }) => {
+                    onOpenTech, onCompare, canCurate, showError }) => {
   const [evidence, setEvidence] = useState(null);
   const [links, setLinks] = useState([]);
   const [changes, setChanges] = useState(null);
+  const [related, setRelated] = useState([]);
   const [stage, setStage] = useState(tech?.stage || '관찰');
   const [reason, setReason] = useState(tech?.stage_reason || '');
   const [busy, setBusy] = useState(false);
@@ -228,6 +254,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
       .then(setEvidence)
       .catch(() => setEvidence([]));
     api.listLinks('tech', tech.uuid).then(setLinks).catch(() => setLinks([]));
+    api.relatedTech(tech.uuid).then(setRelated).catch(() => setRelated([]));
   }, [tech]);
 
   const reloadLinks = () =>
@@ -327,6 +354,28 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
               </li>
             )}
           </Facts>
+
+          {/*
+            ⚠️ 레이더는 기술을 **하나씩 따로** 보여준다. 그런데 실제 판단은 「이걸
+               하려면 저것도 필요한가」다 — OpenUSD 없이 Omniverse 를 말할 수 없다.
+               그 정보는 근거 표에 **이미 있었는데 아무 데도 안 보였다.**
+          */}
+          {related.length > 0 && (
+            <Field>
+              <span>자주 함께 나오는 기술</span>
+              <Together>
+                {related.map((r) => (
+                  <li key={r.uuid}>
+                    <button type="button" onClick={() => onOpenTech && onOpenTech(r)}>
+                      <b>{r.name}</b>
+                      <em>{r.stage}</em>
+                      <small>소식 {r.together}건에 같이</small>
+                    </button>
+                  </li>
+                ))}
+              </Together>
+            </Field>
+          )}
 
           {tech.description && (
             <Field>
@@ -456,6 +505,12 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           {canCurate && onMerge && (
             <GhostBtn onClick={() => onMerge(tech)} title="이 기술을 다른 기술에 합칩니다">
               <Merge size={13} /> 합치기
+            </GhostBtn>
+          )}
+          {onCompare && (
+            <GhostBtn onClick={() => onCompare(tech)}
+                      title="다른 기술과 나란히 놓고 봅니다">
+              <Columns size={13} /> 견주기
             </GhostBtn>
           )}
           {/* 고치기는 **누구나** — 설명을 채우는 것은 판단이 아니라 기여다. */}

@@ -24,6 +24,10 @@ from app.shared.utils import get_request_json
 
 MODULE_NAME = 'digital_twin_intel'
 
+# 레이더에 「어디서 왔는지」 화살표를 그리는 기간. 화면의 「최근 이동」 표시와
+# **같은 값이어야 한다** — 갈리면 화살표는 있는데 표시가 없는 줄이 생긴다.
+MOVED_WINDOW_DAYS = 90
+
 # 분류 목록의 초기값. **설정에서 늘린다** — 코드에 박으면 조직이 바뀔 때 화면이
 # 조용히 틀어진다(투자 모듈의 `category2Options` 와 같은 방식).
 DEFAULT_SETTINGS = {
@@ -112,9 +116,13 @@ def list_news():
         q = q.filter(IntelNews.status == request.args['status'])
     if request.args.get('q'):
         like = f"%{request.args['q'].strip()}%"
+        # ⚠️ **원문(`body`)까지 찾는다.** 담는 이유가 「나중에 읽으려고」인데
+        #    못 찾으면 안 읽는다. 3천 자짜리 본문을 넣어 두고 제목으로만 찾던 것을
+        #    2026-08-25 에 고쳤다.
         q = q.filter(db.or_(IntelNews.title.ilike(like),
                             IntelNews.summary.ilike(like),
-                            IntelNews.source.ilike(like)))
+                            IntelNews.source.ilike(like),
+                            IntelNews.body.ilike(like)))
     if request.args.get('techUuid'):
         subs = db.session.query(IntelEvidence.news_uuid).filter(
             IntelEvidence.tech_uuid == request.args['techUuid'])
@@ -122,8 +130,17 @@ def list_news():
 
     rows = q.order_by(IntelNews.published_at.desc().nullslast(),
                       IntelNews.id.desc()).limit(500).all()
-    ev = S.evidence_for_news([r.uuid for r in rows])
-    return success_response([r.to_dict(evidence=ev.get(r.uuid, [])) for r in rows])
+    uuids = [r.uuid for r in rows]
+    ev = S.evidence_for_news(uuids)
+    # ⚠️ 「아직 우리 것과 안 이어진 소식」을 목록에서 거르려면 **셈이 함께 와야 한다.**
+    #    없으면 화면이 소식마다 연결을 따로 물어봐야 하고, 수백 건이면 그만큼 왕복한다.
+    links = S.links_for('news', uuids)
+    out = []
+    for r in rows:
+        d = r.to_dict(evidence=ev.get(r.uuid, []))
+        d['linkCount'] = len(links.get(r.uuid, []))
+        out.append(d)
+    return success_response(out)
 
 
 @bp.route('/news/<uuid>', methods=['GET'])
@@ -248,16 +265,26 @@ def list_tech():
         like = f"%{request.args['q'].strip()}%"
         q = q.filter(db.or_(IntelTech.name.ilike(like),
                             IntelTech.vendor.ilike(like),
-                            IntelTech.summary.ilike(like)))
+                            IntelTech.summary.ilike(like),
+                            IntelTech.description.ilike(like)))
     if request.args.get('includeArchived') not in ('1', 'true', 'yes'):
         q = q.filter(IntelTech.is_archived.is_(False))
 
     rows = q.order_by(IntelTech.name.asc()).all()
-    stats = S.evidence_stats([r.uuid for r in rows])
+    uuids = [r.uuid for r in rows]
+    stats = S.evidence_stats(uuids)
+    # ⚠️ 「움직였다」만이 아니라 **어디서 왔는지**를 함께 준다. 레이더의 값은
+    #    「무엇이 안쪽으로 들어왔나」에 있다.
+    moves = S.recent_moves(uuids, days=MOVED_WINDOW_DAYS)
     out = []
     for r in rows:
         cnt, last = stats.get(r.uuid, (0, None))
-        out.append(r.to_dict(last_evidence_at=last, evidence_count=cnt))
+        d = r.to_dict(last_evidence_at=last, evidence_count=cnt)
+        mv = moves.get(r.uuid)
+        if mv and mv[0] and mv[0] != r.stage:
+            d['movedFrom'] = mv[0]
+            d['movedAt'] = mv[1].isoformat() if mv[1] else None
+        out.append(d)
 
     # ⚠️ **낡음 판정은 서버가 한다.** 단계마다 기준 일수가 다르고, 그 표가 화면에
     #    복제되면 갈린다. 그래서 거르기도 여기서 한다.
@@ -416,6 +443,36 @@ def remove_evidence():
     if not S.unlink_evidence(news_uuid, tech_uuid):
         return not_found_response('그 근거를 찾을 수 없습니다.')
     return success_response(message='근거를 끊었습니다.')
+
+
+@bp.route('/tech/<uuid>/related', methods=['GET'])
+@jwt_required()
+def related_tech(uuid):
+    """**같은 소식에 함께 걸린 기술**과 그 횟수.
+
+    ⚠️ 레이더는 기술을 하나씩 따로 보여준다. 그런데 실제 판단은 「이걸 하려면 저것도
+       필요한가」다. 그 정보는 근거 표에 **이미 있었는데 아무 데도 안 보였다.**
+    """
+    actor = _actor()
+    denied = _deny_read(actor)
+    if denied is not None:
+        return denied
+    return success_response(S.co_occurring(uuid))
+
+
+@bp.route('/overview', methods=['GET'])
+@jwt_required()
+def overview():
+    """화면 맨 위의 **「오늘 뭘 봐야 하나」**.
+
+    ⚠️ 열면 기술 100여 개가 깔린다. 무엇을 봐야 하는지가 없으면 사람은 훑다가 닫는다.
+       전부 이미 계산되는 값이라 세기만 한다.
+    """
+    actor = _actor()
+    denied = _deny_read(actor)
+    if denied is not None:
+        return denied
+    return success_response(S.overview(actor))
 
 
 @bp.route('/tech/<uuid>/merge', methods=['POST'])

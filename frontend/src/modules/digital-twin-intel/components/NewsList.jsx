@@ -8,6 +8,29 @@ const Wrap = styled.div`
   gap: 0.625rem;
 `;
 
+/* 달 구분선. 목록이 길어지면 어디까지가 최근인지가 안 보인다. */
+const MonthLine = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+
+  &:first-child { margin-top: 0; }
+
+  span {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e2e8f0;
+  }
+`;
+
 const Card = styled.article`
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -152,6 +175,18 @@ const OriginMark = ({ origin }) => {
   return <span title={it.label} style={{ display: 'inline-flex', color: '#94a3b8' }}><Icon size={13} /></span>;
 };
 
+/**
+ * 발표일의 「2026년 8월」. 날짜를 모르면 맨 뒤로 모은다.
+ *
+ * ⚠️ 목록이 길어지면 **어디까지가 최근인지**가 안 보인다. 달 구분선 하나로
+ *    「이번 달에 뭐가 있었나」를 훑을 수 있게 된다.
+ */
+const monthOf = (d) => {
+  if (!d) return '날짜 미상';
+  const [y, m] = String(d).split('-');
+  return (y && m) ? `${y}년 ${Number(m)}월` : '날짜 미상';
+};
+
 const NewsList = ({ rows, onTechClick, onDelete, onOpen, canCurate }) => {
   if (!rows.length) {
     return (
@@ -162,10 +197,18 @@ const NewsList = ({ rows, onTechClick, onDelete, onOpen, canCurate }) => {
     );
   }
 
+  let lastMonth = null;
+
   return (
     <Wrap>
-      {rows.map((n) => (
-        <Card key={n.uuid}>
+      {rows.map((n) => {
+        const m = monthOf(n.published_at);
+        const head = m !== lastMonth ? m : null;
+        lastMonth = m;
+        return (
+        <React.Fragment key={n.uuid}>
+        {head && <MonthLine><span>{head}</span></MonthLine>}
+        <Card>
           <Top>
             <Title onClick={() => onOpen(n)}>{n.title}</Title>
             {/* 발표일이 없으면 '날짜 미상' — 등록일로 채우지 않는다.
@@ -207,7 +250,9 @@ const NewsList = ({ rows, onTechClick, onDelete, onOpen, canCurate }) => {
             )}
           </Chips>
         </Card>
-      ))}
+        </React.Fragment>
+        );
+      })}
     </Wrap>
   );
 };

@@ -5,7 +5,7 @@
     HTTP 를 한 번 더 타거나 규칙을 복제하게 되고, 복제하는 순간 갈린다.
 """
 import uuid as uuidlib
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func
 
@@ -71,6 +71,97 @@ def log_change(kind, uuid, name, field, before, after, *,
         source=source if source in ORIGINS else 'ui')
     db.session.add(row)
     return row
+
+
+def recent_moves(tech_uuids, days=90):
+    """기술마다 **최근에 어느 단계에서 왔는지**. `{uuid: (before, when)}`.
+
+    ⚠️ 지금까지는 「움직였다」만 테두리로 표시했다. 그런데 레이더의 값은 **어디서
+       어디로 갔나**에 있다 — ThoughtWorks 가 매 판마다 이동을 표시하는 이유가
+       그것이다. 「관찰에 뭐가 있나」보다 **「무엇이 안쪽으로 들어왔나」**가 판단에 쓰인다.
+
+    ⚠️ 같은 기술이 여러 번 움직였으면 **가장 오래된 출발점**을 쓴다. 관찰→시험→도입 을
+       두 화살표로 그리면 어지럽고, 사람이 알고 싶은 것은 「그 사이에 어디서
+       여기까지 왔나」다.
+    """
+    if not tech_uuids:
+        return {}
+    since = datetime.utcnow() - timedelta(days=days)
+    rows = (IntelChange.query
+            .filter(IntelChange.subject_kind == 'tech',
+                    IntelChange.field == 'stage',
+                    IntelChange.subject_uuid.in_(list(tech_uuids)),
+                    IntelChange.created_at >= since)
+            .order_by(IntelChange.id.asc()).all())
+    out = {}
+    for r in rows:
+        # 먼저 온 것(가장 오래된 출발점)만 남긴다.
+        if r.subject_uuid not in out:
+            out[r.subject_uuid] = (r.before_value, r.created_at)
+    return out
+
+
+def co_occurring(tech_uuid, limit=8):
+    """**같은 소식에 함께 걸린 기술**과 그 횟수.
+
+    ⚠️ 레이더는 기술을 하나씩 따로 보여준다. 그런데 실제 판단은 「이걸 하려면 저것도
+       필요한가」다 — OpenUSD 없이 Omniverse 를 말할 수 없다. 그 정보는 `IntelEvidence`
+       에 **이미 있는데 아무 데도 안 보였다.**
+    """
+    mine = [e.news_uuid for e in
+            IntelEvidence.query.filter_by(tech_uuid=tech_uuid).all()]
+    if not mine:
+        return []
+    rows = (db.session.query(IntelEvidence.tech_uuid, func.count(IntelEvidence.id))
+            .filter(IntelEvidence.news_uuid.in_(mine),
+                    IntelEvidence.tech_uuid != tech_uuid)
+            .group_by(IntelEvidence.tech_uuid)
+            .order_by(func.count(IntelEvidence.id).desc()).limit(limit).all())
+    if not rows:
+        return []
+    techs = {t.uuid: t for t in IntelTech.query.filter(
+        IntelTech.uuid.in_([r[0] for r in rows])).all()}
+    out = []
+    for uuid, n in rows:
+        t = techs.get(uuid)
+        if t is None:
+            continue
+        out.append({'uuid': t.uuid, 'name': t.name, 'stage': t.stage,
+                    'category': t.category, 'summary': t.summary, 'together': n})
+    return out
+
+
+def overview(actor=None):
+    """화면 맨 위에 띄울 **「오늘 뭘 봐야 하나」**.
+
+    ⚠️ 지금은 열면 기술 100여 개가 깔린다. 무엇을 봐야 하는지가 없으면 사람은
+       **훑다가 닫는다.** 전부 이미 계산되는 값이라 세기만 하면 된다.
+    """
+    unread = IntelNews.query.filter_by(status='신규').count()
+    techs = IntelTech.query.filter(IntelTech.is_archived.is_(False)).all()
+    stats = evidence_stats([t.uuid for t in techs])
+    stale = no_evidence = 0
+    for t in techs:
+        cnt, last = stats.get(t.uuid, (0, None))
+        if cnt == 0:
+            no_evidence += 1
+        if t.is_stale(last):
+            stale += 1
+    moved = len(recent_moves([t.uuid for t in techs], days=30))
+    # 링크가 안 걸린 소식 — 「그래서 우리한테 뭔데」가 아직 안 붙은 것
+    linked = {l.subject_uuid for l in IntelLink.query.filter_by(
+        subject_kind='news').all()}
+    unlinked_news = IntelNews.query.filter(
+        ~IntelNews.uuid.in_(linked) if linked else True).count()
+    return {
+        'unreadNews': unread,
+        'staleTech': stale,
+        'noEvidenceTech': no_evidence,
+        'movedIn30d': moved,
+        'unlinkedNews': unlinked_news,
+        'totalNews': IntelNews.query.count(),
+        'totalTech': len(techs),
+    }
 
 
 def changes_for(kind, uuid, limit=50):

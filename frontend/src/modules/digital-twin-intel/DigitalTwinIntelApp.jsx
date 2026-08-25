@@ -30,6 +30,8 @@ import TechFormModal from './components/TechFormModal';
 import RadarChart from './components/RadarChart';
 import NewsDetailModal from './components/NewsDetailModal';
 import NewsEditModal from './components/NewsEditModal';
+import OverviewBar from './components/OverviewBar';
+import CompareModal from './components/CompareModal';
 import api from './services/api';
 
 const Container = styled.div`
@@ -247,6 +249,12 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [newsEdit, setNewsEdit] = useState(null);
   // 합칠 대상을 고르는 중인 기술. null 이면 안 고르는 중.
   const [merging, setMerging] = useState(null);
+  const [overview, setOverview] = useState(null);
+  // 「무엇을 봐야 하나」에서 고른 것. 목록 거르기와 맞물린다.
+  const [focus, setFocus] = useState('');
+  // 견줄 기술 두 개. 하나만 고른 상태로 기다린다.
+  const [compareA, setCompareA] = useState(null);
+  const [compareB, setCompareB] = useState(null);
 
   const say = useCallback((msg) => {
     setToast(msg);
@@ -257,12 +265,13 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     setLoading(true);
     setError(null);
     try {
-      const [n, t, s] = await Promise.all([
-        api.listNews(), api.listTech(), api.getSettings(),
+      const [n, t, s, o] = await Promise.all([
+        api.listNews(), api.listTech(), api.getSettings(), api.overview(),
       ]);
       setNews(n || []);
       setTech(t || []);
       setSettings(s || {});
+      setOverview(o || null);
     } catch (e) {
       setError(e.message || '불러오지 못했습니다.');
     } finally {
@@ -276,17 +285,22 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const shownNews = useMemo(() => {
     const key = q.trim().toLowerCase();
     return news.filter((n) => {
+      // ⚠️ 숫자를 보여만 주고 찾아가게 하면 아무도 안 간다. 누르면 **그 줄만** 남는다.
+      if (focus === 'unread' && n.status !== '신규') return false;
+      if (focus === 'unlinked' && (n.linkCount || 0) > 0) return false;
       if (category && n.category !== category) return false;
       if (status && n.status !== status) return false;
       if (!key) return true;
       return [n.title, n.summary, n.source]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [news, q, category, status]);
+  }, [news, q, category, status, focus]);
 
   const shownTech = useMemo(() => {
     const key = q.trim().toLowerCase();
     return tech.filter((t) => {
+      if (focus === 'stale' && !t.isStale) return false;
+      if (focus === 'moved' && !t.movedFrom) return false;
       if (staleOnly && !t.isStale) return false;
       if (stage && t.stage !== stage) return false;
       if (category && t.category !== category) return false;
@@ -296,7 +310,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       return [t.name, t.vendor, t.summary, ...(t.tags || []), ...(t.cpt || [])]
         .some((v) => (v || '').toLowerCase().includes(key));
     });
-  }, [tech, q, category, stage, staleOnly]);
+  }, [tech, q, category, stage, staleOnly, focus]);
 
   const saveNews = async (body) => {
     setSaving(true);
@@ -379,10 +393,32 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     }
   };
 
+  /*
+    「무엇을 봐야 하나」에서 고르면 **탭까지 옮겨 준다.** 소식 셈은 소식 탭에서,
+    기술 셈은 레이더에서만 뜻이 있다 — 안 옮기면 눌러도 아무 일이 안 일어난 것처럼
+    보인다.
+  */
+  const pickFocus = (key) => {
+    setFocus(key);
+    if (!key) return;
+    setTab(['unread', 'unlinked'].includes(key) ? 'news' : 'tech');
+    setStaleOnly(false);
+  };
+
   const openTechByRef = (ref) => {
     const full = tech.find((t) => t.uuid === ref.uuid);
     setTab('tech');
     setSelected(full || ref);
+  };
+
+  /*
+    견주기. 하나를 고르면 두 번째를 고르게 한다.
+    ⚠️ 같은 것을 두 번 고르면 아무 뜻이 없으므로 그냥 취소한다.
+  */
+  const pickCompare = (t) => {
+    if (!compareA) { setSelected(null); setCompareA(t); return; }
+    if (compareA.uuid === t.uuid) { setCompareA(null); return; }
+    setCompareB(t);
   };
 
   const removeNews = async (n) => {
@@ -431,6 +467,17 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
       <Scroller $fixed={fixed}>
         <Shell>
+          <OverviewBar data={overview} active={focus} onPick={pickFocus} />
+
+          {compareA && !compareB && (
+            <MergeBar>
+              <span>
+                <b>「{compareA.name}」 와 견줄 기술</b>을 하나 더 고르세요.
+              </span>
+              <button type="button" onClick={() => setCompareA(null)}>그만두기</button>
+            </MergeBar>
+          )}
+
           <Toolbar>
             <SearchBox>
               <Search size={15} color="#94a3b8" />
@@ -502,14 +549,17 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           {fixed && (
             <RadarSlot>
               <RadarChart rows={shownTech} categories={settings.techCategories}
-                          onSelect={merging ? doMerge : setSelected}
+                          onSelect={merging ? doMerge
+                            : compareA && !compareB ? pickCompare : setSelected}
                           activeSector={category}
                           onSectorClick={setCategory} />
             </RadarSlot>
           )}
 
           {!loading && !error && tab === 'tech' && techView === 'board' && (
-            <RadarBoard rows={shownTech} onSelect={merging ? doMerge : setSelected} />
+            <RadarBoard rows={shownTech}
+                        onSelect={merging ? doMerge
+                          : compareA && !compareB ? pickCompare : setSelected} />
           )}
         </Shell>
       </Scroller>
@@ -522,7 +572,15 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                  onDelete={removeTech}
                  onEdit={(t) => { setSelected(null); setTechForm(t); }}
                  onMerge={(t) => { setSelected(null); setMerging(t); }}
+                 onOpenTech={(r) => openTechByRef(r)}
+                 onCompare={pickCompare}
                  canCurate={canCurate} showError={say} />
+
+      <CompareModal a={compareA} b={compareB}
+                    onClose={() => { setCompareA(null); setCompareB(null); }}
+                    onOpen={(t) => {
+                      setCompareA(null); setCompareB(null); openTechByRef(t);
+                    }} />
 
       {/* `key` 로 초기값을 다시 잡는다 — 없으면 다른 기술을 열어도 앞엣것이 남는다. */}
       {techForm && (
