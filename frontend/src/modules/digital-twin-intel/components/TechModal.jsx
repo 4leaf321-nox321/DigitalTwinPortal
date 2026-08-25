@@ -366,6 +366,12 @@ const LinkList = ({ rows, onRemove }) => {
   );
 };
 
+const FootNote = styled.small`
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  align-self: center;
+`;
+
 const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                     division, onDivisionChanged,
                     onOpenTech, onCompare, canCurate, showError }) => {
@@ -375,13 +381,20 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
   const [related, setRelated] = useState([]);
   // ⚠️ 도구일 때만 묻는다. 역량은 자기 밑 도구를 이미 들고 있다.
   const [usedBy, setUsedBy] = useState([]);
-  const [stage, setStage] = useState(tech?.stage || '관찰');
+  /*
+    ⚠️⚠️ 여기 담는 것은 **기본 설정의 단계**다 — `tech.stage` 가 아니다.
+       사업부 눈으로 보면 서버가 `stage` 에 **그 사업부가 푼 값**을 넣어 보낸다
+       (`companyStage` 가 원래 값). 그걸 그대로 담으면 MX 의 「도입」이 골라진
+       채로 뜨고, 저장하면 **기본 설정을 MX 값으로 덮어쓴다** — 아무도 안 시킨
+       일이 조용히 벌어진다(2026-08-25 「단계 저장이 왜 꺼져 있나」로 잡힘).
+  */
+  const [stage, setStage] = useState(tech?.companyStage || tech?.stage || '감지');
   const [reason, setReason] = useState(tech?.stage_reason || '');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!tech) return;
-    setStage(tech.stage);
+    setStage(tech.companyStage || tech.stage);
     setReason(tech.stage_reason || '');
     setEvidence(null);
     api.techEvidence(tech.uuid)
@@ -419,7 +432,9 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
 
   if (!tech) return null;
 
-  const stageChanged = stage !== tech.stage || (reason || '') !== (tech.stage_reason || '');
+  // 사업부 눈이 아니면 companyStage 가 없다 — 그때는 stage 가 곧 기본 설정이다.
+  const baseStage = tech.companyStage || tech.stage;
+  const stageChanged = stage !== baseStage || (reason || '') !== (tech.stage_reason || '');
   // ⚠️ 서버와 **같은 규칙**이다. 여기서만 막으면 서버가 400 을 내고, 서버에만 있으면
   //    사용자가 눌러 보고서야 안다. 둘 다 있어야 한다.
   const needReason = stage === '보류' && !reason.trim();
@@ -743,7 +758,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           </Field>
 
           <Field>
-            <span>레이더 단계</span>
+            <span>레이더 단계{division ? ' — 기본 설정' : ''}</span>
             <StageRow>
               {STAGES.map((st) => (
                 <StageBtn key={st.key} type="button" $on={stage === st.key} $color={st.color}
@@ -755,6 +770,21 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
               ))}
             </StageRow>
           </Field>
+
+          {/*
+            ⚠️ 사업부 눈일 때 **이 칸이 무엇을 고치는지 반드시 적는다.** 화면에는
+               그 사업부 값이 떠 있는데 단추는 기본 설정을 바꾸니, 안 적으면
+               고친 사람도 무엇을 고쳤는지 모른다.
+          */}
+          {division && (
+            <Hint>
+              여기서 바꾸는 것은 <b>{division} 이 아니라 기본 설정</b>입니다.
+              {baseStage === tech.stage
+                ? ` 지금 ${division} 는 기본 설정을 그대로 따릅니다.`
+                : ` 지금 ${division} 는 「${tech.stage}」로 봅니다 — 그건 아래
+                    「사업부별로 어디까지 왔나」에서 바꿉니다.`}
+            </Hint>
+          )}
 
           {!canCurate && (
             <Hint>
@@ -820,6 +850,14 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           </GhostBtn>
           <Spacer />
           <GhostBtn onClick={onClose}>닫기</GhostBtn>
+          {/*
+            ⚠️ **꺼진 단추는 이유를 달고 있어야 한다.** 「왜 단계 저장이 비활성인가」
+               라는 물음이 실제로 나왔다(2026-08-25). 눌러도 안 되는 것만 보이고
+               무엇을 해야 켜지는지가 화면에 없었다.
+          */}
+          {canCurate && !busy && !stageChanged && (
+            <FootNote>위에서 단계를 고르면 저장할 수 있습니다</FootNote>
+          )}
           {canCurate && (
             <PrimaryBtn onClick={applyStage} disabled={!stageChanged || needReason || busy}>
               {busy ? '바꾸는 중…' : '단계 저장'}
