@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { X, Radar, AlertTriangle, Plus } from 'lucide-react';
+import { X, Radar, AlertTriangle, Plus, Layers } from 'lucide-react';
 
 import { STAGES } from './RadarBoard';
+import CapabilityPicker from './CapabilityPicker';
 import {
   Overlay, Panel, Head, CloseBtn, Body, Foot, Field, TwoCol, Hint, Warn,
   PrimaryBtn, GhostBtn, Spacer,
@@ -74,6 +75,28 @@ const KindBtn = styled.button`
 
   b { font-size: 0.8125rem; color: ${(p) => (p.$on ? '#3730a3' : '#0f172a')}; }
   small { font-size: 0.6875rem; color: #64748b; line-height: 1.45; }
+`;
+
+/* 역량 고르기 단추. ⚠️ **고른 것이 이름으로 보여야** 한다 — 「고르기」만 있으면
+   눌러 보기 전에는 무엇이 골라졌는지 알 수 없다. */
+const PickBtn = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.4375rem 0.5625rem;
+  border-radius: 0.4375rem;
+  cursor: pointer;
+  border: 1px solid ${(p) => (p.$set ? '#818cf8' : '#cbd5e1')};
+  background: ${(p) => (p.$set ? '#eef2ff' : '#fff')};
+  color: ${(p) => (p.$set ? '#3730a3' : '#64748b')};
+
+  &:hover { border-color: #a5b4fc; }
+
+  b { flex: 1; min-width: 0; font-size: 0.8125rem; font-weight: ${(p) => (p.$set ? 600 : 400)};
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  em { font-style: normal; font-size: 0.6875rem; color: #6366f1; flex-shrink: 0; }
 `;
 
 const CptGrid = styled.div`
@@ -166,6 +189,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
        부채꼴에 안 서는데 116개가 전부 분류를 들고 있었고, 그중 3개는 상위 역량과
        **다른 부채꼴**이었다. 안 그려지니 어긋난 줄도 몰랐다.
   */
+  const [pickerOpen, setPickerOpen] = useState(false);
   const isCap = kind === 'capability';
   const showVendor = !isCap;
   const showSector = isCap || !parentUuid;
@@ -262,17 +286,21 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
             </KindRow>
           </Field>
 
+          {/*
+            ⚠️⚠️ **드롭다운으로 두면 못 고른다.** 역량이 수십 개인데 한 줄로 늘어놓으면
+               「어떤 걸 골라야 하지」가 되고, 그러면 아무거나 고르거나 그냥 안 고른다 —
+               안 고른 도구는 미아가 되어 **어느 사업부 표에도 안 나온다**
+               (2026-08-25 신고). 분야로 묶어 보여주는 창을 따로 띄운다.
+          */}
           {kind === 'tool' && (
             <Field>
               <span>어느 역량에 속하나</span>
-              <select value={parentUuid} onChange={(e) => setParentUuid(e.target.value)}>
-                <option value="">아직 안 정함 — 레이더에 혼자 섭니다</option>
-                {(capabilities || [])
-                  .filter((c) => c.uuid !== initial?.uuid)
-                  .map((c) => (
-                    <option key={c.uuid} value={c.uuid}>{c.name}</option>
-                  ))}
-              </select>
+              <PickBtn type="button" $set={Boolean(parentUuid)}
+                       onClick={() => setPickerOpen(true)}>
+                <Layers size={14} />
+                <b>{parentName || '아직 안 정함 — 눌러서 고르세요'}</b>
+                <em>{parentUuid ? '바꾸기' : '고르기'}</em>
+              </PickBtn>
             </Field>
           )}
           {kind === 'tool' && (
@@ -501,6 +529,19 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
             </Hint>
           )}
         </Body>
+
+        {/*
+          ⚠️ **Panel 안에 둔다.** 바깥 Overlay 밑에 두면 고르기 창을 누른 클릭이
+             거기까지 올라가 **폼이 통째로 닫힌다.** Panel 이 이미 막고 있다.
+        */}
+        <CapabilityPicker
+          isOpen={pickerOpen}
+          capabilities={(capabilities || []).filter((c) => c.uuid !== initial?.uuid)}
+          categories={categories}
+          value={parentUuid}
+          noneLabel="아직 안 정함 — 레이더에 혼자 섭니다"
+          onPick={(uuid) => { setParentUuid(uuid); setPickerOpen(false); }}
+          onClose={() => setPickerOpen(false)} />
 
         <Foot>
           <Spacer />

@@ -769,6 +769,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                     }} />
 
       <ToolManagerModal isOpen={toolsOpen} tech={tech}
+                        categories={settings.techCategories}
                         canWrite={canWrite} canCurate={canCurate}
                         onClose={() => setToolsOpen(false)}
                         onChanged={async (msg) => { await load(); if (msg) say(msg); }}

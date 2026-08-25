@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import {
   X, Wrench, Plus, Search, Loader2, Unlink, Trash2, AlertTriangle, CornerDownRight,
+  Layers,
 } from 'lucide-react';
 
 import api from '../services/api';
 import { Overlay, Panel, Head, CloseBtn, Body, Foot, Hint, GhostBtn } from './modalStyles';
+import CapabilityPicker from './CapabilityPicker';
 
 /**
  * **도구 관리** — 역량마다 「무엇으로 하나」에서 고를 수 있는 S/W 목록을 정의한다.
@@ -56,6 +58,15 @@ const Left = styled.div`
   max-height: min(32rem, 56vh);
   overflow-y: auto;
   padding-right: 0.25rem;
+`;
+
+/* ⚠️ 역량 39개를 한 줄로 늘어놓으면 눈이 미끄러진다. 분야로 묶어 **범위를 줄인다.** */
+const SectorHead = styled.h4`
+  margin: 0.375rem 0 0.125rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #6366f1;
+  letter-spacing: 0.02em;
 `;
 
 const CapBtn = styled.button`
@@ -185,6 +196,23 @@ const Item = styled.li`
   }
 `;
 
+const MoveBtn = styled.button`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  border-radius: 0.3125rem;
+  padding: 0.25rem 0.4375rem;
+  font-size: 0.6875rem;
+  cursor: pointer;
+
+  &:hover { border-color: #a5b4fc; color: #4f46e5; }
+  &:disabled { opacity: 0.4; cursor: default; }
+`;
+
 const Mini = styled.button`
   flex-shrink: 0;
   display: inline-flex;
@@ -207,9 +235,11 @@ const Empty = styled.p`
   text-align: center;
 `;
 
-const ToolManagerModal = ({ isOpen, tech, canWrite, canCurate,
+const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                             onClose, onChanged, showError }) => {
   const [pick, setPick] = useState(null);
+  // 옮길 도구. null 이면 고르기 창이 안 떠 있다.
+  const [moving, setMoving] = useState(null);
   const [q, setQ] = useState('');
   const [name, setName] = useState('');
   const [vendor, setVendor] = useState('');
@@ -220,6 +250,22 @@ const ToolManagerModal = ({ isOpen, tech, canWrite, canCurate,
   const tools = useMemo(
     () => (tech || []).filter((t) => t.kind !== 'capability'), [tech]);
   const orphans = useMemo(() => tools.filter((t) => !t.parentUuid), [tools]);
+
+  /*
+    왼쪽 목록을 **분야(부채꼴)로 묶는다.** 차례는 설정을 따르되 설정에 없는 분야도
+    뒤에 붙인다 — 안 붙이면 그 역량이 통째로 안 보이고 「왜 안 나오지」가 된다.
+  */
+  const sectors = useMemo(() => {
+    const by = new Map();
+    caps.forEach((c) => {
+      const g = c.category || '분류 없음';
+      if (!by.has(g)) by.set(g, []);
+      by.get(g).push(c);
+    });
+    const ordered = (categories || []).filter((g) => by.has(g));
+    [...by.keys()].forEach((g) => { if (!ordered.includes(g)) ordered.push(g); });
+    return ordered.map((g) => [g, by.get(g)]);
+  }, [caps, categories]);
 
   if (!isOpen) return null;
 
@@ -307,16 +353,21 @@ const ToolManagerModal = ({ isOpen, tech, canWrite, canCurate,
 
           <Split>
             <Left>
-              {caps.map((c) => {
-                const n = tools.filter((t) => t.parentUuid === c.uuid).length;
-                return (
-                  <CapBtn key={c.uuid} type="button" $on={current === c.uuid}
-                          onClick={() => { setPick(c.uuid); setQ(''); }}>
-                    <b title={c.name}>{c.name}</b>
-                    <em>{n}</em>
-                  </CapBtn>
-                );
-              })}
+              {sectors.map(([g, rows]) => (
+                <React.Fragment key={g}>
+                  <SectorHead>{g}</SectorHead>
+                  {rows.map((c) => {
+                    const n = tools.filter((t) => t.parentUuid === c.uuid).length;
+                    return (
+                      <CapBtn key={c.uuid} type="button" $on={current === c.uuid}
+                              onClick={() => { setPick(c.uuid); setQ(''); }}>
+                        <b title={c.name}>{c.name}</b>
+                        <em>{n}</em>
+                      </CapBtn>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
 
               {/*
                 ⚠️ **셈이 0이어도 보인다.** 여기 쌓이는 것이 곧 할 일이라, 0일 때만
@@ -376,17 +427,18 @@ const ToolManagerModal = ({ isOpen, tech, canWrite, canCurate,
 
                     {busy === t.uuid && <Loader2 size={12} />}
 
-                    {/* 옮기기. ⚠️ 한 도구는 역량 하나에만 매달린다. */}
+                    {/*
+                      옮기기. ⚠️ 한 도구는 역량 하나에만 매달린다.
+                      ⚠️⚠️ 여기도 드롭다운이었다 — 좁은 줄 안에 역량 수십 개를
+                         욱여넣으면 **고를 수가 없다.** 기술 추가 창과 같은
+                         고르기 창을 띄운다(분야로 묶여 나온다).
+                    */}
                     {canWrite && (
-                      <select value={t.parentUuid || ORPHAN}
-                              disabled={busy === t.uuid}
-                              title="다른 역량으로 옮깁니다"
-                              onChange={(e) => move(t, e.target.value)}>
-                        <option value={ORPHAN}>— 안 매달림 —</option>
-                        {caps.map((c) => (
-                          <option key={c.uuid} value={c.uuid}>{c.name}</option>
-                        ))}
-                      </select>
+                      <MoveBtn type="button" disabled={busy === t.uuid}
+                               onClick={() => setMoving(t)}
+                               title="다른 역량으로 옮깁니다">
+                        <Layers size={11} /> 옮기기
+                      </MoveBtn>
                     )}
 
                     {canWrite && t.parentUuid && (
@@ -415,6 +467,17 @@ const ToolManagerModal = ({ isOpen, tech, canWrite, canCurate,
             </Right>
           </Split>
         </Body>
+
+        {/* ⚠️ Panel 안에 둔다 — 바깥 Overlay 로 클릭이 새면 관리 창이 통째로 닫힌다. */}
+        <CapabilityPicker
+          isOpen={Boolean(moving)}
+          capabilities={caps}
+          categories={categories}
+          value={moving?.parentUuid || ''}
+          title={moving ? `「${moving.name}」 을 어느 역량으로` : ''}
+          noneLabel="안 매달림 — 사업부 표에서 안 보이게 됩니다"
+          onPick={(uuid) => { const t = moving; setMoving(null); move(t, uuid || ORPHAN); }}
+          onClose={() => setMoving(null)} />
 
         <Foot>
           <GhostBtn type="button" onClick={onClose}>닫기</GhostBtn>
