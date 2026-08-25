@@ -292,6 +292,25 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [division, setDivision] = useState('');
 
   const [toolsOpen, setToolsOpen] = useState(false);
+  /*
+    레이더가 「최근 며칠」의 이동을 볼지.
+
+    ⚠️⚠️ **이 값은 서버가 쥐고 세므로 여기서 들고 다시 물어야 한다** — 사업부 눈과
+       같은 모양이다. 화면이 따로 재면 화살표ㆍ테ㆍ범례가 서로 다른 기간을 말하게
+       되고, 그 순간 셋 다 못 믿게 된다.
+    ⚠️ 0 이면 「아직 서버 기본값을 모른다」는 뜻이다 — 설정을 받고 나서 채운다.
+       처음부터 90 을 박으면 서버가 기본을 바꿔도 화면만 옛 값으로 물어보게 된다.
+    ⚠️ 고른 값은 기억한다(브라우저별ㆍ사람별 취향이라 서버에 둘 것이 아니다).
+  */
+  const MOVED_KEY = 'dtIntel.radarMovedDays';
+  const [movedDays, setMovedDays] = useState(() => {
+    try {
+      const v = Number(window.localStorage.getItem(MOVED_KEY));
+      return Number.isFinite(v) && v > 0 ? v : 0;
+    } catch {
+      return 0;
+    }
+  });
   const [techView, setTechView] = useState('radar');   // radar | board
   // 목록에서 층을 걸러 본다. '' 면 둘 다. ⚠️ 레이더에는 안 건다 — 레이더가 그리는
   // 것은 이미 「역량 + 안 매달린 도구」로 정해져 있다.
@@ -327,9 +346,11 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
            되고, 낡음 기준(단계마다 다르다)과 이동 화살표까지 갈린다. 낡음 판정을
            서버에 둔 것과 **같은 이유**다 — 고르는 일은 한 곳에서 한 번만.
       */
+      const q = {};
+      if (division) q.division = division;
+      if (movedDays) q.movedDays = movedDays;
       const [n, t, s, o] = await Promise.all([
-        api.listNews(), api.listTech(division ? { division } : {}),
-        api.getSettings(), api.overview(),
+        api.listNews(), api.listTech(q), api.getSettings(), api.overview(),
       ]);
       setNews(n || []);
       setTech(t || []);
@@ -340,7 +361,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     } finally {
       setLoading(false);
     }
-  }, [division]);
+  }, [division, movedDays]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -732,11 +753,17 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           {fixed && (
             <RadarSlot>
               <RadarChart rows={shownTech} categories={settings.techCategories}
+                          onMovedWindowChange={(d) => {
+                            // ⚠️ 기억해 둔다. 못 써도 그냥 넘어간다(시크릿 창 등).
+                            try { window.localStorage.setItem(MOVED_KEY, String(d)); }
+                            catch { /* 못 써도 그만 */ }
+                            setMovedDays(d);
+                          }}
                           onSelect={merging ? doMerge
                             : compareA && !compareB ? pickCompare : setSelected}
                           activeSector={category}
                           onSectorClick={setCategory}
-                          movedWindowDays={settings.movedWindowDays} />
+                          movedWindowDays={movedDays || settings.movedWindowDays} />
             </RadarSlot>
           )}
 

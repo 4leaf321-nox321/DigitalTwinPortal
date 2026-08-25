@@ -30,6 +30,26 @@ MODULE_NAME = 'digital_twin_intel'
 #    여기만 바꾸면 범례가 「최근 90일」이라 말하면서 실제로는 다른 기간을 그린다.
 #    설정 응답(`movedWindowDays`)으로 내려보내 **화면이 서버 값을 읽게** 한다.
 MOVED_WINDOW_DAYS = 90
+# 보는 사람이 고칠 수 있는 범위. ⚠️ **너무 짧으면 아무것도 안 뜨고, 너무 길면 전부
+#    움직인 것처럼 보여** 어느 쪽이든 신호가 아니게 된다. 일주일~3년으로 물린다.
+MOVED_WINDOW_MIN, MOVED_WINDOW_MAX = 7, 1095
+
+
+def _moved_days(args):
+    """레이더가 「최근 며칠」을 볼지. 안 주면 기본값.
+
+    ⚠️⚠️ **이 값은 서버가 쥔다.** 화면이 따로 재면 화살표ㆍ테ㆍ범례가 서로 다른
+       기간을 말하게 되고, 그 순간 셋 다 못 믿게 된다 — 낡음 판정을 서버에 둔 것과
+       같은 이유다. 화면은 「며칠로 볼지」만 말하고, 무엇이 움직였는지는 서버가 센다.
+    """
+    raw = (args.get('movedDays') or '').strip()
+    if not raw:
+        return MOVED_WINDOW_DAYS
+    try:
+        n = int(raw)
+    except ValueError:
+        return MOVED_WINDOW_DAYS
+    return max(MOVED_WINDOW_MIN, min(MOVED_WINDOW_MAX, n))
 
 # 분류 목록의 초기값. **설정에서 늘린다** — 코드에 박으면 조직이 바뀔 때 화면이
 # 조용히 틀어진다(투자 모듈의 `category2Options` 와 같은 방식).
@@ -302,7 +322,8 @@ def list_tech():
     #    「무엇이 안쪽으로 들어왔나」에 있다.
     # ⚠️ 이동 화살표도 **그 사업부의 이력**만 본다. 안 나누면 화면은 「MX 기준」이라
     #    써 놓고 화살표는 전사 이동을 그린다 — 거짓말하는 화살표는 없느니만 못하다.
-    moves = S.recent_moves(uuids, days=MOVED_WINDOW_DAYS, scope=division or None)
+    moves = S.recent_moves(uuids, days=_moved_days(request.args),
+                           scope=division or None)
     # 상위 이름. ⚠️ 걸러 본 목록에는 그 역량이 없을 수 있으므로 따로 물어 온다.
     parents = S.names_of([r.parent_uuid for r in rows if r.parent_uuid])
     dstages = S.division_stages(uuids, division) if division else {}
@@ -874,6 +895,8 @@ def get_settings():
     out['newsStatuses'] = list(NEWS_STATUSES)
     # 화면 범례가 이 값을 읽는다. 숫자를 두 곳에 두지 않는다.
     out['movedWindowDays'] = MOVED_WINDOW_DAYS
+    # 화면의 「최근 며칠」 고르개가 이 범위 안에서만 고르게 한다.
+    out['movedWindowRange'] = [MOVED_WINDOW_MIN, MOVED_WINDOW_MAX]
     out['techKinds'] = list(TECH_KINDS)
 
     # ⚠️ 사업부 이름을 여기 박지 않는다. 조직이 바뀌면 화면이 조용히 틀어진다 —

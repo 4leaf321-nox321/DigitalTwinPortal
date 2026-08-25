@@ -124,6 +124,21 @@ const ToolBtn = styled.button`
   `}
 `;
 
+/* 기간 고르개. ⚠️ 도구 상자 안에 두어 **스위치 바로 밑**에 오게 한다 — 멀리 두면
+   그 둘이 한 가지 일이라는 것이 안 보인다. */
+const DaySel = styled.select`
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  background: #fff;
+  color: #4338ca;
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.0625rem;
+  text-align: center;
+  cursor: pointer;
+`;
+
 const ZoomTag = styled.div`
   position: absolute;
   right: 0.625rem;
@@ -365,8 +380,11 @@ const writePref = (key, on) => {
   try { window.localStorage.setItem(key, on ? '1' : '0'); } catch { /* 못 써도 그만 */ }
 };
 
+// ⚠️ 서버가 물리는 범위(7~1095일) 안에서 고른다. 사람이 실제로 쓰는 눈금만 둔다.
+const DAY_CHOICES = [30, 90, 180, 365, 730];
+
 const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
-                     movedWindowDays = 90 }) => {
+                     movedWindowDays = 90, onMovedWindowChange }) => {
   // 범례에 「◆ 전사와 다르게 봄」을 띄울지. ⚠️ 전사 기준으로 볼 때 이 줄을 띄우면
   //    있지도 않은 표시를 설명하는 꼴이 된다.
   const divisionLens = rows.some((t) => t.division);
@@ -375,14 +393,15 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
   /*
     시간에 따른 변화(단계 이동)를 그릴지.
 
-    ⚠️ **기본은 켜짐이다.** 지금까지 늘 그리던 것이라, 기본을 끄면 있던 것이 말없이
-       사라진 것으로 보인다. 새로 생긴 것은 「끌 수 있다」는 쪽이다.
+    ⚠️ **기본은 꺼짐이다**(2026-08-25 요청). 레이더를 여는 대부분의 까닭은 「지금
+       어디까지 왔나」이고, 화살표와 테는 그 위에 덧그리는 것이다 — 늘 켜 두면
+       처음 여는 사람에게는 그림이 어지럽기만 하다. 볼 사람이 켜서 본다.
 
-    ⚠️⚠️ 화살표ㆍ테ㆍ옆 목록의 「관찰→」ㆍ범례가 **한 스위치로 같이** 움직인다.
-       하나라도 남으면 「테는 있는데 화살표가 없는 줄」이 생기고, 그러면 둘 다
-       못 믿게 된다 — 그 셋이 같은 값을 보게 맞춰 둔 이유가 그것이다.
+    ⚠️⚠️ 화살표ㆍ테ㆍ옆 목록의 「관찰→」ㆍ범례ㆍ기간 고르개가 **한 스위치로 같이**
+       움직인다. 하나라도 남으면 「테는 있는데 화살표가 없는 줄」이 생기고, 그러면
+       둘 다 못 믿게 된다 — 그 셋이 같은 값을 보게 맞춰 둔 이유가 그것이다.
   */
-  const [moves, setMoves] = useState(() => readPref(MOVE_KEY, true));
+  const [moves, setMoves] = useState(() => readPref(MOVE_KEY, false));
   const [view, setView] = useState({ k: 1, x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const svgRef = useRef(null);
@@ -527,9 +546,24 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
           <ToolBtn $on={moves} onClick={toggleMoves}
                    title={moves
                      ? `시간에 따른 변화 끄기 (최근 ${movedWindowDays}일 이동)`
-                     : `최근 ${movedWindowDays}일 안에 단계가 옮겨온 자리를 화살표로 그립니다`}>
+                     : '최근 얼마 안에 단계가 옮겨온 자리를 화살표로 그립니다'}>
             <History size={14} />
           </ToolBtn>
+          {/*
+            ⚠️ **켰을 때만 보인다.** 꺼 놓고 기간만 고르게 두면 골라도 아무 일이
+               안 일어나고, 그러면 고장으로 읽힌다.
+            ⚠️ 고르면 **서버에 다시 묻는다** — 무엇이 움직였는지는 서버가 센다.
+               화면이 따로 재면 화살표ㆍ테ㆍ범례가 서로 다른 기간을 말하게 된다.
+          */}
+          {moves && onMovedWindowChange && (
+            <DaySel value={movedWindowDays}
+                    title="최근 며칠 안의 이동을 볼지"
+                    onChange={(e) => onMovedWindowChange(Number(e.target.value))}>
+              {DAY_CHOICES.map((d) => (
+                <option key={d} value={d}>{d >= 365 ? `${d / 365}년` : `${d}일`}</option>
+              ))}
+            </DaySel>
+          )}
           <ToolBtn $on={labels} onClick={toggleLabels}
                    title={labels
                      ? '이름표 끄기'

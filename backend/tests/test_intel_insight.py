@@ -180,3 +180,47 @@ def test_읽은_것은_안_읽은_수에서_빠진다(db, client, auth, admin):
                  headers=auth(admin))
     r = client.get(f'{BASE}/overview', headers=auth(admin))
     assert (r.get_json() or {}).get('data', {}).get('unreadNews') == 0
+
+
+# ── 「최근 며칠」을 보는 사람이 고른다 ───────────────────────────────────────
+
+def test_최근_며칠로_볼지_고를_수_있다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **이 값은 서버가 쥔다.** 화면이 따로 재면 화살표ㆍ테ㆍ범례가 서로 다른
+       기간을 말하게 되고, 그 순간 셋 다 못 믿게 된다.
+    """
+    from app.modules.digital_twin_intel.models import IntelChange
+
+    t, _ = S.create_tech(actor_id=admin.id, name='반년 전에 움직인 기술')
+    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '시험'},
+               headers=auth(admin))
+    row = IntelChange.query.filter_by(subject_uuid=t.uuid).first()
+    row.created_at = datetime.utcnow() - timedelta(days=150)
+    _db.session.commit()
+
+    def moved(qs=''):
+        r = client.get(f'{BASE}/tech{qs}', headers=auth(admin))
+        got = next(x for x in (r.get_json() or {}).get('data') or []
+                   if x['name'] == '반년 전에 움직인 기술')
+        return got.get('movedFrom')
+
+    assert moved() is None, '기본 90일로는 안 보인다'
+    assert moved('?movedDays=200') == '관찰', '200일로 보면 보인다'
+    assert moved('?movedDays=30') is None, '30일로 좁히면 다시 안 보인다'
+
+
+def test_말도_안_되는_기간은_물린다(db, client, auth, admin):
+    """
+    ⚠️ 너무 길면 **전부 움직인 것처럼 보여** 아무 신호도 아니게 된다. 0ㆍ음수ㆍ글자도
+       기본값으로 되돌린다 — 화면이 잘못 보내도 표가 거짓말하면 안 된다.
+    """
+    for bad in ('0', '-5', '99999', 'abc', ''):
+        r = client.get(f'{BASE}/tech?movedDays={bad}', headers=auth(admin))
+        assert r.status_code == 200, bad
+
+
+def test_고를_수_있는_범위를_알려준다(db, client, auth, admin):
+    r = client.get(f'{BASE}/settings', headers=auth(admin))
+    d = (r.get_json() or {}).get('data') or {}
+    assert d['movedWindowDays'] == 90
+    assert d['movedWindowRange'] == [7, 1095]
