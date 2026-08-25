@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { X, Search, Check, Layers } from 'lucide-react';
 
-import { Overlay, Panel, Head, CloseBtn, Body, Hint } from './modalStyles';
+import {
+  Overlay, Panel, Head, CloseBtn, Body, Foot, Hint, Spacer, GhostBtn, PrimaryBtn,
+} from './modalStyles';
 
 /**
  * **역량 고르기** — 분야(부채꼴)로 묶어서 보여준다.
@@ -231,8 +233,17 @@ const ALL = '__all__';
   바로 거기다 — **다른 갈래에 있는 것을 찾았을 때 빈 화면이 되면** 찾는 사람은
   「없다」고 읽고 그만둔다. 검사가 그 상태를 그려 볼 수 있게 낸 자리다.
 */
+/*
+  ⚠️⚠️ **여러 개 고를 수 있다**(`multi`). 한 도구가 여러 역량에 걸리기 때문이다 —
+     자료로 세어 보니 546개 중 58개(11%)가 그랬다. 하나만 고르게 두면 나머지는
+     적을 데가 없다.
+
+  ⚠️ 여러 개 고를 때는 **누를 때마다 닫히지 않는다.** 닫히면 두 번째를 고르려고
+     매번 다시 열어야 한다 — 그 자체로 「여러 개」를 안 쓰게 만든다.
+*/
 const CapabilityPicker = ({ isOpen, capabilities, categories, value,
                             allowNone = true, noneLabel, title, onPick, onClose,
+                            multi = false, values = null, onDone,
                             initialQuery = '', initialTab = null }) => {
   const [q, setQ] = useState(initialQuery);
   /*
@@ -244,6 +255,13 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
     const cur = (capabilities || []).find((c) => c.uuid === value);
     return cur ? (cur.category || UNCATEGORIZED) : ALL;
   });
+  // 여러 개 고를 때의 고른 것. ⚠️ 창 안에서 쥐고 있다가 「다 골랐다」에서 한 번에 낸다.
+  const [picked, setPicked] = useState(() => (values || []).slice());
+  const on = (uuid) => (multi ? picked.includes(uuid) : value === uuid);
+  const hit = (uuid) => {
+    if (!multi) { onPick(uuid); return; }
+    setPicked((p) => (p.includes(uuid) ? p.filter((x) => x !== uuid) : [...p, uuid]));
+  };
 
   const groups = useMemo(() => {
     const key = q.trim().toLowerCase();
@@ -321,9 +339,10 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
 
           <Scroll>
           {allowNone && (
-            <None type="button" $on={!value} onClick={() => onPick('')}>
+            <None type="button" $on={multi ? picked.length === 0 : !value}
+                  onClick={() => (multi ? setPicked([]) : onPick(''))}>
               <b>
-                {!value && <Check size={13} />}
+                {(multi ? picked.length === 0 : !value) && <Check size={13} />}
                 {noneLabel || '아직 안 정함'}
               </b>
               <q>
@@ -360,10 +379,10 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
                 {rows.map((c) => {
                   const kids = (c.children || []).map((k) => k.name);
                   return (
-                    <Pick key={c.uuid} type="button" $on={value === c.uuid}
-                          onClick={() => onPick(c.uuid)}>
+                    <Pick key={c.uuid} type="button" $on={on(c.uuid)}
+                          onClick={() => hit(c.uuid)}>
                       <b>
-                        {value === c.uuid && <Check size={13} />}
+                        {on(c.uuid) && <Check size={13} />}
                         {c.name}
                       </b>
                       {c.summary && <q>{c.summary}</q>}
@@ -384,8 +403,26 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
           <Hint>
             <b>이미 매달린 도구</b>가 함께 보입니다 — 비슷한 것이 어디 들어 있는지가
             가장 확실한 힌트입니다. 찾기는 그 도구 이름으로도 됩니다.
+            {multi && ' 여러 역량에 걸치면 걸치는 대로 고르세요 — 한 도구가 여러 곳에 속할 수 있습니다.'}
           </Hint>
         </Body>
+
+        {/*
+          ⚠️ 여러 개 고를 때만 아래 단추가 있다. 하나만 고를 때는 누르는 순간
+             정해지므로 「다 골랐다」가 군더더기가 된다.
+        */}
+        {multi && (
+          <Foot>
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+              {picked.length ? `${picked.length}개 골랐습니다` : '아직 안 골랐습니다 — 레이더에 혼자 섭니다'}
+            </span>
+            <Spacer />
+            <GhostBtn type="button" onClick={onClose}>그만두기</GhostBtn>
+            <PrimaryBtn type="button" onClick={() => onDone(picked)}>
+              다 골랐습니다
+            </PrimaryBtn>
+          </Foot>
+        )}
       </Box>
     </Above>
   );

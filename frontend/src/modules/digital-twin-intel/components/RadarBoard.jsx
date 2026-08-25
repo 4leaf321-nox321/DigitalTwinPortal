@@ -175,7 +175,9 @@ const RadarBoard = ({ rows, onSelect }) => (
                 {t.vendor ? `${t.vendor} · ` : ''}
                 {t.category || '분류 없음'} · 근거 {t.evidenceCount ?? 0}건
                 {(t.children || []).length > 0 && ` · 도구 ${t.children.length}개`}
-                {t.parentName && ` · ${t.parentName} 아래`}
+                {/* ⚠️ 여러 역량에 걸칠 수 있다 — 하나만 적으면 나머지가 숨는다. */}
+                {(t.capabilities || []).length > 0
+                  && ` · ${t.capabilities.map((c) => c.name).join(' · ')} 아래`}
                 {/* ⚠️ 사업부 눈일 때는 **무엇으로 하는지**가 단계보다 먼저 궁금하다. */}
                 {(t.divisionTools || []).length > 0
                   && ` · ${t.division}: ${t.divisionTools.join(' · ')}`}

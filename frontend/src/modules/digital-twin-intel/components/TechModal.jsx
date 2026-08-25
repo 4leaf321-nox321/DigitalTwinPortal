@@ -551,18 +551,23 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             </Field>
           )}
 
-          {tech.kind !== 'capability' && tech.parentUuid && (
+          {/*
+            ⚠️⚠️ **여럿일 수 있다.** 한 도구가 여러 역량에 걸린다(546개 중 58개).
+               하나만 보여 주면 나머지 역량에서 찾는 사람은 그 사실을 못 본다.
+          */}
+          {tech.kind !== 'capability' && (tech.capabilities || []).length > 0 && (
             <Field>
-              <span>어느 역량인가</span>
+              <span>어느 역량인가 ({tech.capabilities.length})</span>
               <Kids>
-                <li>
-                  <button type="button"
-                          onClick={() => onOpenTech
-                            && onOpenTech({ uuid: tech.parentUuid })}>
-                    <b>{tech.parentName || '상위 역량'}</b>
-                    <em>레이더에는 이쪽이 섭니다</em>
-                  </button>
-                </li>
+                {tech.capabilities.map((c) => (
+                  <li key={c.uuid}>
+                    <button type="button"
+                            onClick={() => onOpenTech && onOpenTech({ uuid: c.uuid })}>
+                      <b>{c.name}</b>
+                      <em>레이더에는 이쪽이 섭니다</em>
+                    </button>
+                  </li>
+                ))}
               </Kids>
             </Field>
           )}
@@ -581,7 +586,8 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             {tech.kind !== 'capability' && (
               <li><b>공급사</b><span>{tech.vendor || '—'}</span></li>
             )}
-            {(tech.kind === 'capability' || !tech.parentUuid) && (
+            {(tech.kind === 'capability'
+              || !(tech.capabilityUuids || []).length) && (
               <li><b>분류</b><span>{tech.category || '—'}</span></li>
             )}
             {/* ⚠️ 「어디서 왔나」만 있고 「언제」가 없으면 못 믿는다. */}
@@ -614,11 +620,11 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             )}
             {/* 부채꼴은 하나뿐이라 **얽힌 갈래는 여기서만 읽힌다.** 분류와 한 몸이라
                 분류가 없는 자리(매달린 도구)에는 같이 없다. */}
-            {(tech.kind === 'capability' || !tech.parentUuid)
+            {(tech.kind === 'capability' || !(tech.capabilityUuids || []).length)
               && (tech.tags || []).length > 0 && (
               <li><b>얽힌 갈래</b><span>{tech.tags.join(' · ')}</span></li>
             )}
-            {(tech.kind === 'capability' || !tech.parentUuid)
+            {(tech.kind === 'capability' || !(tech.capabilityUuids || []).length)
               && (tech.cpt || []).length > 0 && (
               <li>
                 <b>DTC 능력</b>

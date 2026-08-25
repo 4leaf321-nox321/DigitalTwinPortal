@@ -21,9 +21,9 @@ import CapabilityPicker from './CapabilityPicker';
  *    해석을 Grafana 로 한다」가 조용히 생긴다). 안 매달린 도구는 레이더에는 혼자
  *    서지만 **어느 사업부 표에도 안 나온다** — 그래서 이 화면이 필요하다.
  *
- * ⚠️ **한 도구는 역량 하나에만 매달린다**(`parent_uuid` 가 한 칸이다). 같은 S/W 를
- *    두 역량에서 쓰면 지금은 각 역량 밑에 한 줄씩 두어야 한다. 짝 표로 바꾸면
- *    한 도구의 소식이 여러 역량으로 중복 셈되는 문제부터 정해야 해서 미뤄 뒀다.
+ * ⚠️⚠️ **한 도구가 여러 역량에 걸린다.** 자료로 세어 보니 546개 중 58개(11%)가
+ *    그랬다 — MATLAB/Simulink 는 1D 시스템ㆍ제어 검증ㆍ대리모델에 함께 걸린다.
+ *    그래서 왼쪽에서 어느 역량을 보든 **같은 도구가 여러 곳에 나온다.** 맞는 그림이다.
  */
 const ORPHAN = '__orphan__';
 
@@ -251,7 +251,8 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
     () => (tech || []).filter((t) => t.kind === 'capability'), [tech]);
   const tools = useMemo(
     () => (tech || []).filter((t) => t.kind !== 'capability'), [tech]);
-  const orphans = useMemo(() => tools.filter((t) => !t.parentUuid), [tools]);
+  const orphans = useMemo(
+    () => tools.filter((t) => !(t.capabilityUuids || []).length), [tools]);
 
   /*
     왼쪽 목록을 **분야(부채꼴)로 묶는다.** 차례는 설정을 따르되 설정에 없는 분야도
@@ -274,7 +275,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
   const current = pick || (caps[0] ? caps[0].uuid : ORPHAN);
   const showing = current === ORPHAN
     ? orphans
-    : tools.filter((t) => t.parentUuid === current);
+    : tools.filter((t) => (t.capabilityUuids || []).includes(current));
   const key = q.trim().toLowerCase();
   const rows = key
     ? showing.filter((t) => `${t.name} ${t.vendor || ''}`.toLowerCase().includes(key))
@@ -305,29 +306,32 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
         name: n,
         vendor: vendor.trim() || undefined,
         kind: 'tool',
-        parentUuid: current === ORPHAN ? '' : current,
+        capabilityUuids: current === ORPHAN ? [] : [current],
       });
       setName('');
       setVendor('');
     }, `「${n}」 을 넣었습니다.`);
   };
 
-  const move = (t, parentUuid) => run(t.uuid,
-    () => api.setTechParent(t.uuid, parentUuid === ORPHAN ? '' : parentUuid),
-    parentUuid === ORPHAN
-      ? `「${t.name}」 을 떼어 냈습니다. 사업부 표에서는 이제 안 보입니다.`
-      : `「${t.name}」 을 옮겼습니다.`);
+  // ⚠️ 「옮기기」가 아니라 **속한 역량들을 정하는 것**이 됐다.
+  const setCaps = (t, list, msg) => run(t.uuid,
+    () => api.setTechCapabilities(t.uuid, list), msg);
 
   const detach = (t) => {
     /*
-      ⚠️ **떼어 내면 그 역량의 「무엇으로 하나」에서도 빠진다**(서버가 지운다).
-         적어 둔 사업부가 있으면 그 말이 사라지는 것이므로 먼저 묻는다.
+      ⚠️⚠️ **지금 보고 있는 역량에서만 뗀다.** 여러 역량에 걸쳐 있으면 나머지는
+         그대로 남는다 — 한 번에 다 떼면 「여기서 빼려던 것」이 딴 데까지 지운다.
+      ⚠️ 떼면 그 역량의 「무엇으로 하나」에서도 빠진다(서버가 지운다). 적어 둔
+         사업부가 있으면 그 말이 사라지는 것이므로 먼저 묻는다.
     */
+    const rest = (t.capabilityUuids || []).filter((u) => u !== current);
     if (!window.confirm(
       `「${t.name}」 을 「${currentCap ? currentCap.name : '이 역량'}」 에서 떼어 냅니다.\n\n`
       + '이 역량의 사업부 표에 「무엇으로 하나」로 적혀 있었다면 거기서도 빠집니다.\n'
-      + '레이더에는 혼자 서지만, 어느 사업부 표에서도 고를 수 없게 됩니다.')) return;
-    move(t, ORPHAN);
+      + (rest.length
+        ? `다른 역량 ${rest.length}곳에는 그대로 남습니다.`
+        : '어느 역량에도 안 남아 레이더에 혼자 서게 되고, 어느 사업부 표에서도 고를 수 없습니다.'))) return;
+    setCaps(t, rest, `「${t.name}」 을 떼어 냈습니다.`);
   };
 
   const remove = (t) => {
@@ -359,7 +363,8 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                 <React.Fragment key={g}>
                   <SectorHead>{g}</SectorHead>
                   {rows.map((c) => {
-                    const n = tools.filter((t) => t.parentUuid === c.uuid).length;
+                    const n = tools.filter(
+                      (t) => (t.capabilityUuids || []).includes(c.uuid)).length;
                     return (
                       <CapBtn key={c.uuid} type="button" $on={current === c.uuid}
                               onClick={() => { setPick(c.uuid); setQ(''); }}>
@@ -438,12 +443,12 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                     {canWrite && (
                       <MoveBtn type="button" disabled={busy === t.uuid}
                                onClick={() => setMoving(t)}
-                               title="다른 역량으로 옮깁니다">
-                        <Layers size={11} /> 옮기기
+                               title="이 도구가 속한 역량들을 고칩니다">
+                        <Layers size={11} /> 역량 {(t.capabilityUuids || []).length}
                       </MoveBtn>
                     )}
 
-                    {canWrite && t.parentUuid && (
+                    {canWrite && current !== ORPHAN && (
                       <Mini type="button" onClick={() => detach(t)}
                             title="이 역량에서 떼어 냅니다">
                         <Unlink size={12} />
@@ -475,10 +480,15 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
           isOpen={Boolean(moving)}
           capabilities={caps}
           categories={categories}
-          value={moving?.parentUuid || ''}
-          title={moving ? `「${moving.name}」 을 어느 역량으로` : ''}
-          noneLabel="안 매달림 — 사업부 표에서 안 보이게 됩니다"
-          onPick={(uuid) => { const t = moving; setMoving(null); move(t, uuid || ORPHAN); }}
+          multi
+          values={moving?.capabilityUuids || []}
+          title={moving ? `「${moving.name}」 은 어느 역량에 속하나` : ''}
+          noneLabel="어디에도 안 매달림 — 사업부 표에서 안 보이게 됩니다"
+          onDone={(list) => {
+            const t = moving;
+            setMoving(null);
+            setCaps(t, list, `「${t.name}」 의 역량을 ${list.length}곳으로 정했습니다.`);
+          }}
           onClose={() => setMoving(null)} />
 
         <Foot>

@@ -176,7 +176,8 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
        역량 목록이 곧바로 잡동사니가 된다.
   */
   const [kind, setKind] = useState(initial?.kind || 'tool');
-  const [parentUuid, setParentUuid] = useState(initial?.parentUuid || '');
+  // ⚠️ **여럿이다.** 한 도구가 여러 역량에 걸린다(546개 중 58개).
+  const [capUuids, setCapUuids] = useState(initial?.capabilityUuids || []);
 
   /*
     ⚠️⚠️ **칸마다 어느 층의 사실인지 다르다.** 둘 다에 다 보여 주면 「역량의 공급사」
@@ -194,8 +195,9 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
   const [pickerOpen, setPickerOpen] = useState(false);
   const isCap = kind === 'capability';
   const showVendor = !isCap;
-  const showSector = isCap || !parentUuid;
-  const parentName = (capabilities || []).find((c) => c.uuid === parentUuid)?.name;
+  const showSector = isCap || capUuids.length === 0;
+  const capNames = (capabilities || [])
+    .filter((c) => capUuids.includes(c.uuid)).map((c) => c.name);
   // 새로 만들 때만 단계를 여기서 고른다. 편집은 전용 길(권한이 다르다)로 간다.
   const [stage, setStage] = useState(initial?.stage || '관찰');
   const [stageReason, setStageReason] = useState('');
@@ -242,7 +244,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
     }
     body.aliases = aliases;
     // ⚠️ 역량은 다른 것 밑에 못 매단다. 층을 바꿔 놓고 상위가 남으면 서버가 물린다.
-    body.parentUuid = kind === 'capability' ? '' : parentUuid;
+    body.capabilityUuids = kind === 'capability' ? [] : capUuids;
     if (!edit) {
       body.stage = stage;
       if (stageReason.trim()) body.stageReason = stageReason.trim();
@@ -296,12 +298,15 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           */}
           {kind === 'tool' && (
             <Field>
-              <span>어느 역량에 속하나</span>
-              <PickBtn type="button" $set={Boolean(parentUuid)}
+              <span>어느 역량에 속하나 (여럿 고를 수 있습니다)</span>
+              <PickBtn type="button" $set={capUuids.length > 0}
                        onClick={() => setPickerOpen(true)}>
                 <Layers size={14} />
-                <b>{parentName || '아직 안 정함 — 눌러서 고르세요'}</b>
-                <em>{parentUuid ? '바꾸기' : '고르기'}</em>
+                {/* ⚠️ 고른 것을 **전부** 적는다 — 하나만 적으면 나머지가 숨는다. */}
+                <b>{capNames.length
+                  ? capNames.join(' · ')
+                  : '아직 안 정함 — 눌러서 고르세요'}</b>
+                <em>{capUuids.length ? `바꾸기 (${capUuids.length})` : '고르기'}</em>
               </PickBtn>
             </Field>
           )}
@@ -381,7 +386,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           {!showSector && (
             <Hint>
               <b>분류ㆍ얽힌 갈래ㆍDTC 능력은 여기에 없습니다.</b> 이 도구는 역량
-              「{parentName || '상위'}」 밑에 매달려 있어 <b>레이더에 따로 서지
+              「{capNames.join(' · ') || '상위'}」 밑에 매달려 있어 <b>레이더에 따로 서지
               않습니다</b> — 부채꼴은 그 역량의 것을 따릅니다. 따로 두면 서로
               어긋나도 아무 데도 안 보여서 모르고 지나갑니다.
             </Hint>
@@ -540,9 +545,10 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           isOpen={pickerOpen}
           capabilities={(capabilities || []).filter((c) => c.uuid !== initial?.uuid)}
           categories={categories}
-          value={parentUuid}
+          multi
+          values={capUuids}
           noneLabel="아직 안 정함 — 레이더에 혼자 섭니다"
-          onPick={(uuid) => { setParentUuid(uuid); setPickerOpen(false); }}
+          onDone={(list) => { setCapUuids(list); setPickerOpen(false); }}
           onClose={() => setPickerOpen(false)} />
 
         <Foot>

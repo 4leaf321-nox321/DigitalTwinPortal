@@ -110,9 +110,13 @@ def shows_vendor(kind):
     return kind != 'capability'
 
 
-def shows_sector(kind, parent_uuid):
-    """분류ㆍ얽힌 갈래ㆍCPT 를 보여줄 자리인가 — **레이더에 서는 줄에만.**"""
-    return kind == 'capability' or not parent_uuid
+def shows_sector(kind, linked):
+    """분류ㆍ얽힌 갈래ㆍCPT 를 보여줄 자리인가 — **레이더에 서는 줄에만.**
+
+    ⚠️ `linked` 는 「어느 역량엔가 매달렸나」다. 예전엔 `parent_uuid` 였는데, 이제는
+       연결이 여럿일 수 있어 **있냐 없냐**로 본다.
+    """
+    return kind == 'capability' or not linked
 
 # 근거가 이만큼 없으면 낡은 것으로 본다. 단계별로 다르다 —
 # '도입'ㆍ'시험' 은 쓰고 있는 것이라 조용해도 이상하지 않지만,
@@ -274,9 +278,17 @@ class IntelTech(BaseModel):
 
     # capability | tool. 기본은 tool — 들어오는 것의 대부분이 제품이다.
     kind = db.Column(db.String(16), nullable=False, default='tool', index=True)
-    # 도구가 속한 역량. ⚠️ FK 를 안 건다 — 역량이 지워져도 도구는 남아야 하고,
-    #    그때는 부모 없는 도구로 레이더에 그대로 선다(사라지면 안 된다).
-    parent_uuid = db.Column(db.String(36), index=True)
+    """
+    ⚠️⚠️ **도구가 속한 역량은 여기 없다.** 한때 `parent_uuid` 칸 하나였는데, 실제로는
+       **한 도구가 여러 역량에 걸친다** — 자료로 세어 보니 546개 중 58개(11%)가
+       그랬다(MATLAB/Simulink 는 1D 시스템ㆍ제어 검증ㆍ대리모델ㆍ예지보전에 걸친다).
+       `dt_intel_tech_capability` 연결 표가 정본이다.
+
+    ⚠️ 「중복 셈이 문제」라고 미뤄 뒀던 걱정은 **코드를 훑어 보니 없었다** — 근거 셈은
+       역량마다 따로 세고 **어디에서도 합치지 않으며**, 낡음 판정은 건수가 아니라
+       **마지막 시각(MAX)** 을 본다. 같은 소식이 세 역량을 함께 떠받치는 것은
+       사실이고, 셋이 각각 「3건」이라 말하는 것이 맞다.
+    """
 
     origin = db.Column(db.String(20), nullable=False, default='ui', index=True)
     is_archived = db.Column(db.Boolean, nullable=False, default=False, index=True)
@@ -306,16 +318,20 @@ class IntelTech(BaseModel):
         return (now - base) > timedelta(days=self.stale_after_days(stage))
 
     def to_dict(self, last_evidence_at=None, evidence_count=None, now=None,
-                children=None, parent_name=None, division=None,
+                children=None, capabilities=None, division=None,
                 division_stage=None, division_tools=None):
         d = super().to_dict()
         d['uuid'] = self.uuid
-        # ⚠️ 상위는 **이름까지** 함께 준다. uuid 만 주면 화면이 「어느 역량인가」를
-        #    보여주려고 기술 목록 전체를 뒤져야 하고, 걸러 본 목록에는 그 역량이
-        #    아예 없을 수도 있다 — 그러면 빈칸이 뜬다.
-        d['parentUuid'] = self.parent_uuid
-        if parent_name is not None:
-            d['parentName'] = parent_name
+        """
+        ⚠️ 속한 역량은 **이름까지** 함께 준다. uuid 만 주면 화면이 「어느 역량인가」를
+           보여주려고 기술 목록 전체를 뒤져야 하고, 걸러 본 목록에는 그 역량이 아예
+           없을 수도 있다 — 그러면 빈칸이 뜬다.
+        ⚠️ **여럿일 수 있다.** 하나만 골라 보내면 「MATLAB 은 1D 시스템」이라고만
+           말하게 되고, 제어 검증 쪽에서 찾는 사람은 못 찾는다.
+        """
+        if capabilities is not None:
+            d['capabilities'] = capabilities
+            d['capabilityUuids'] = [c['uuid'] for c in capabilities]
         if children is not None:
             d['children'] = children
         """
@@ -419,6 +435,33 @@ class IntelChange(BaseModel):
     def __repr__(self):
         return (f'<IntelChange {self.subject_kind}:{self.subject_uuid[:8]} '
                 f'{self.field} {self.before_value}→{self.after_value}>')
+
+
+class IntelTechCapability(BaseModel):
+    """**도구 ↔ 역량 연결.** 한 도구가 여러 역량에 걸칠 수 있다.
+
+    ⚠️⚠️ 이 표가 정본이다. 예전의 `dt_intel_tech.parent_uuid` 를 갈음한다 —
+       칸 하나로는 「MATLAB 은 1D 시스템이면서 제어 검증이기도 하다」를 적을 수 없었다.
+
+    ⚠️ **연결이 하나도 없는 도구는 「미아」**다. 레이더에 혼자 서지만 어느 사업부
+       표에도 안 나온다 — 그 성질은 그대로다(예전에는 `parent_uuid IS NULL`).
+
+    ⚠️ FK 를 안 건다. 나머지 표와 같은 이유이고, 지우는 자리에서 손으로 추스른다
+       (`remove_tech` · `merge_tech`).
+    """
+    __tablename__ = 'dt_intel_tech_capability'
+    __table_args__ = (
+        # ⚠️ 같은 짝이 두 줄이면 「도구 3개」가 4개로 세어진다.
+        db.UniqueConstraint('tech_uuid', 'capability_uuid',
+                            name='uq_intel_tech_capability'),
+    )
+
+    tech_uuid = db.Column(db.String(36), nullable=False, index=True)
+    capability_uuid = db.Column(db.String(36), nullable=False, index=True)
+
+    def __repr__(self):
+        return (f'<IntelTechCapability {self.tech_uuid[:8]}'
+                f'→{self.capability_uuid[:8]}>')
 
 
 class IntelDivisionStage(BaseModel):

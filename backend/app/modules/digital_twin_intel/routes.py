@@ -16,7 +16,7 @@ from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
     CPT_GROUPS, DEFAULT_SECTORS, MOVED_WINDOW_DAYS, MOVED_WINDOW_MAX,
     MOVED_WINDOW_MIN, NEWS_STATUSES, ORIGINS, STAGES, TECH_KINDS,
-    IntelEvidence, IntelNews, IntelTech, shows_vendor,
+    IntelEvidence, IntelNews, IntelTech, IntelTechCapability, shows_vendor,
 )
 from app.shared.responses import (
     created_response, error_response, not_found_response, success_response,
@@ -296,8 +296,11 @@ def list_tech():
         q = q.filter(IntelTech.is_archived.is_(False))
     if request.args.get('kind') in TECH_KINDS:
         q = q.filter(IntelTech.kind == request.args['kind'])
-    if request.args.get('parentUuid'):
-        q = q.filter(IntelTech.parent_uuid == request.args['parentUuid'])
+    if request.args.get('capabilityUuid') or request.args.get('parentUuid'):
+        want = request.args.get('capabilityUuid') or request.args['parentUuid']
+        q = q.filter(IntelTech.uuid.in_(
+            db.session.query(IntelTechCapability.tech_uuid)
+            .filter(IntelTechCapability.capability_uuid == want)))
 
     """
     ⚠️ **레이더에 그리는 것은 「역량 + 부모 없는 도구」다**(`radar=1`).
@@ -305,8 +308,10 @@ def list_tech():
        역량 정의가 안 끝나도 돌아야 하므로 **부모 없는 도구는 그대로 뜬다.**
     """
     if request.args.get('radar') in ('1', 'true', 'yes'):
-        q = q.filter(db.or_(IntelTech.kind == 'capability',
-                            IntelTech.parent_uuid.is_(None)))
+        # ⚠️ 「어느 역량에도 안 걸린 도구」 = 미아. 예전 `parent_uuid IS NULL` 자리다.
+        q = q.filter(db.or_(
+            IntelTech.kind == 'capability',
+            ~IntelTech.uuid.in_(db.session.query(IntelTechCapability.tech_uuid))))
 
     rows = q.order_by(IntelTech.name.asc()).all()
     uuids = [r.uuid for r in rows]
@@ -320,7 +325,9 @@ def list_tech():
     moves = S.recent_moves(uuids, days=_moved_days(request.args),
                            scope=division or None)
     # 상위 이름. ⚠️ 걸러 본 목록에는 그 역량이 없을 수 있으므로 따로 물어 온다.
-    parents = S.names_of([r.parent_uuid for r in rows if r.parent_uuid])
+    # ⚠️ 도구가 **여러 역량**에 걸린다. 걸러 본 목록에 그 역량이 없을 수 있으므로
+    #    이름까지 따로 물어 온다.
+    caps_of = S.capabilities_of([r.uuid for r in rows if r.kind != 'capability'])
     dstages = S.division_stages(uuids, division) if division else {}
     # ⚠️ 도구 이름을 목록에 함께 싣는다. 화면이 줄마다 따로 물으면 수십 번 왕복한다.
     dtools = S.tools_of(list(dstages.values())) if dstages else {}
@@ -328,7 +335,8 @@ def list_tech():
     for r in rows:
         cnt, last = stats.get(r.uuid, (0, None))
         d = r.to_dict(last_evidence_at=last, evidence_count=cnt,
-                      parent_name=parents.get(r.parent_uuid),
+                      capabilities=(caps_of.get(r.uuid, [])
+                                    if r.kind != 'capability' else None),
                       division=division or None,
                       division_stage=dstages.get(r.uuid),
                       division_tools=(dtools.get(dstages[r.uuid].id)
@@ -367,7 +375,9 @@ def create_tech():
     tech, err = S.create_tech(actor_id=actor.id, origin=origin, **data)
     if err:
         return error_response(err, status_code=400)
-    return created_response(tech.to_dict())
+    return created_response(tech.to_dict(
+        capabilities=(S.capabilities_of([tech.uuid]).get(tech.uuid, [])
+                      if tech.kind != 'capability' else None)))
 
 
 @bp.route('/tech/<uuid>', methods=['PATCH'])
@@ -651,10 +661,14 @@ def overview():
         S.overview(actor, moved_days=_moved_days(request.args)))
 
 
-@bp.route('/tech/<uuid>/parent', methods=['PUT'])
+@bp.route('/tech/<uuid>/capabilities', methods=['PUT'])
+@bp.route('/tech/<uuid>/parent', methods=['PUT'])   # 옛 이름 — 그대로 받는다
 @jwt_required()
-def set_parent(uuid):
-    """도구를 역량 밑에 매단다. 본문 `parentUuid` (비우면 떼어 낸다).
+def set_capabilities(uuid):
+    """도구가 **어느 역량들에** 속하는지 정한다. 본문 `capabilityUuids` (빈 목록이면 전부 뗀다).
+
+    ⚠️ 예전에는 `parentUuid` 하나였다 — 도구 546개 중 58개(11%)가 두 역량 이상에
+       걸쳐, 칸 하나로는 그 중 하나만 적을 수 있었다. 옛 이름도 그대로 받는다.
 
     ⚠️ 매다는 것은 **판단이 아니라 정리**라 누구나 할 수 있다. 단계와 다르다 —
        거기서 막으면 도구가 영영 부모 없이 남는다.
@@ -665,7 +679,12 @@ def set_parent(uuid):
         return denied
 
     data = get_request_json() or {}
-    t, err = S.set_parent(uuid, data.get('parentUuid'), actor=actor)
+    want = data.get('capabilityUuids')
+    if want is None:
+        # 옛 길로 부르는 곳(예전 화면ㆍMCP)이 있으면 그대로 받아 준다.
+        one = (data.get('parentUuid') or '').strip()
+        want = [one] if one else []
+    t, err = S.set_capabilities(uuid, want, actor=actor)
     if err:
         code = 404 if '찾을 수 없' in err else 400
         return error_response(err, status_code=code)

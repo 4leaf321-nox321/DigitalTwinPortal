@@ -42,9 +42,14 @@ def _cap(admin, name):
 
 def _tool(admin, name, parent=None):
     t, err = S.create_tech(actor_id=admin.id, name=name,
-                           parentUuid=(parent.uuid if parent else None))
+                           capabilityUuids=([parent.uuid] if parent else []))
     assert err is None, err
     return t
+
+
+def _caps_of(t):
+    """그 도구가 걸린 역량 uuid 들. ⚠️ 이제 **여럿일 수 있다.**"""
+    return sorted(c['uuid'] for c in S.capabilities_of([t.uuid]).get(t.uuid, []))
 
 
 def _news(client, auth, user, url, techs):
@@ -155,33 +160,35 @@ def test_누구나_매달_수_있다(db, client, auth, plain, admin):
     """
     cap = _cap(admin, 'CFD')
     tool = _tool(admin, 'OpenFOAM')
-    r = client.put(f'{BASE}/tech/{tool.uuid}/parent',
-                   json={'parentUuid': cap.uuid}, headers=auth(plain))
+    r = client.put(f'{BASE}/tech/{tool.uuid}/capabilities',
+                   json={'capabilityUuids': [cap.uuid]}, headers=auth(plain))
     assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
     _db.session.expire_all()
-    assert IntelTech.query.filter_by(uuid=tool.uuid).first().parent_uuid == cap.uuid
+    assert _caps_of(tool) == [cap.uuid]
 
 
 def test_떼어_낼_수_있다(db, client, auth, admin):
     cap = _cap(admin, 'CFD')
     tool = _tool(admin, 'OpenFOAM', cap)
-    client.put(f'{BASE}/tech/{tool.uuid}/parent', json={'parentUuid': ''},
-               headers=auth(admin))
+    client.put(f'{BASE}/tech/{tool.uuid}/capabilities',
+               json={'capabilityUuids': []}, headers=auth(admin))
     _db.session.expire_all()
-    assert IntelTech.query.filter_by(uuid=tool.uuid).first().parent_uuid is None
+    assert _caps_of(tool) == []
 
 
 def test_자기_자신을_상위로_못_둔다(db, client, auth, admin):
     """고리가 생기면 근거를 굴려 올릴 때 무한히 돈다."""
     t = _tool(admin, 'X')
-    r = client.put(f'{BASE}/tech/{t.uuid}/parent', json={'parentUuid': t.uuid},
-                   headers=auth(admin))
+    r = client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+                   json={'capabilityUuids': [t.uuid]}, headers=auth(admin))
     assert r.status_code == 400
 
 
 def test_도구_밑에_도구를_못_매단다(db, client, auth, admin):
     a = _tool(admin, 'A')
     b = _tool(admin, 'B')
+    # ⚠️ 옛 길(`/parent` + `parentUuid`)로 불러도 같은 검사가 걸린다 — 배포 중에
+    #    옛 화면이 잠깐 살아 있을 수 있어 그 길을 남겨 뒀다.
     r = client.put(f'{BASE}/tech/{b.uuid}/parent', json={'parentUuid': a.uuid},
                    headers=auth(admin))
     assert r.status_code == 400
@@ -213,34 +220,39 @@ def test_자식이_달린_역량은_도구로_못_내린다(db, client, auth, ad
 def test_자식을_뗀_뒤에는_내릴_수_있다(db, client, auth, admin):
     cap = _cap(admin, 'CFD')
     tool = _tool(admin, 'OpenFOAM', cap)
-    client.put(f'{BASE}/tech/{tool.uuid}/parent', json={'parentUuid': ''},
-               headers=auth(admin))
+    client.put(f'{BASE}/tech/{tool.uuid}/capabilities',
+               json={'capabilityUuids': []}, headers=auth(admin))
     r = client.patch(f'{BASE}/tech/{cap.uuid}', json={'kind': 'tool'},
                      headers=auth(admin))
     assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
 
 
-def test_도구는_상위_이름까지_함께_온다(db, client, auth, admin):
+def test_도구는_속한_역량을_이름까지_함께_받는다(db, client, auth, admin):
     """
     ⚠️ uuid 만 주면 화면이 「어느 역량인가」를 보여주려고 목록 전체를 뒤져야 하는데,
        **걸러 본 목록에는 그 역량이 아예 없을 수 있다** — 그러면 빈칸이 뜬다.
     """
-    cap = _cap(admin, 'explicit 해석')
-    _tool(admin, 'LS-DYNA', cap)
+    a = _cap(admin, 'explicit 해석')
+    b = _cap(admin, '공정 성형 해석')
+    t = _tool(admin, 'LS-DYNA', a)
+    client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+               json={'capabilityUuids': [a.uuid, b.uuid]}, headers=auth(admin))
 
     r = client.get(f'{BASE}/tech?kind=tool', headers=auth(admin))
     row = next(x for x in (r.get_json() or {}).get('data') or [] if x['name'] == 'LS-DYNA')
-    assert row['parentUuid'] == cap.uuid
-    assert row['parentName'] == 'explicit 해석'
+    # ⚠️ **여럿이 온다.** 하나만 보내면 「LS-DYNA 는 explicit」이라고만 말하게 되고,
+    #    성형 쪽에서 찾는 사람은 못 찾는다.
+    assert sorted(c['name'] for c in row['capabilities'])         == ['explicit 해석', '공정 성형 해석']
+    assert sorted(row['capabilityUuids']) == sorted([a.uuid, b.uuid])
 
 
-def test_안_매달린_도구는_상위가_비어_온다(db, client, auth, admin):
+def test_안_매달린_도구는_빈_목록으로_온다(db, client, auth, admin):
     _tool(admin, '혼자 선 도구')
     r = client.get(f'{BASE}/tech', headers=auth(admin))
     row = next(x for x in (r.get_json() or {}).get('data') or []
                if x['name'] == '혼자 선 도구')
-    assert row['parentUuid'] is None
-    assert row.get('parentName') is None
+    assert row['capabilities'] == []
+    assert row['capabilityUuids'] == []
 
 
 # ── 만들면서 매다는 길 (MCP 가 쓰는 길) ──────────────────────────────────────
@@ -249,10 +261,10 @@ def test_만들면서_매달_수_있다(db, client, auth, admin):
     """MCP 는 조사해 온 도구를 넣으면서 바로 매단다 — 두 번 왕복할 이유가 없다."""
     cap = _cap(admin, 'CFD')
     r = client.post(f'{BASE}/tech',
-                    json={'name': 'OpenFOAM', 'parentUuid': cap.uuid},
+                    json={'name': 'OpenFOAM', 'capabilityUuids': [cap.uuid]},
                     headers=auth(admin))
     assert r.status_code == 201, f'{r.status_code} · {r.get_json()}'
-    assert (r.get_json() or {})['data']['parentUuid'] == cap.uuid
+    assert (r.get_json() or {})['data']['capabilityUuids'] == [cap.uuid]
 
 
 def test_만들면서_매다는_길도_같은_규칙을_받는다(db, client, auth, admin):
@@ -264,19 +276,21 @@ def test_만들면서_매다는_길도_같은_규칙을_받는다(db, client, au
     tool = _tool(admin, '그냥 도구')
     cap = _cap(admin, 'CFD')
 
-    # 도구 밑에 도구
+    # 도구 밑에 도구 (옛 이름 `parentUuid` 로도 막혀야 한다)
     r = client.post(f'{BASE}/tech', json={'name': 'X', 'parentUuid': tool.uuid},
                     headers=auth(admin))
     assert r.status_code == 400 and '역량이어야' in (r.get_json() or {}).get('message', '')
 
     # 역량을 다른 것 밑에
     r = client.post(f'{BASE}/tech',
-                    json={'name': 'Y', 'kind': 'capability', 'parentUuid': cap.uuid},
+                    json={'name': 'Y', 'kind': 'capability',
+                          'capabilityUuids': [cap.uuid]},
                     headers=auth(admin))
     assert r.status_code == 400 and '층은 둘까지' in (r.get_json() or {}).get('message', '')
 
     # 없는 상위
-    r = client.post(f'{BASE}/tech', json={'name': 'Z', 'parentUuid': 'no-such'},
+    r = client.post(f'{BASE}/tech', json={'name': 'Z',
+                                         'capabilityUuids': ['no-such']},
                     headers=auth(admin))
     assert r.status_code == 400
 
@@ -329,3 +343,100 @@ def test_도구를_역량으로_올리면_공급사가_지워진다(db, client, 
     assert r.status_code == 200
     d = (r.get_json() or {})['data']
     assert d['vendor'] is None and d['url'] is None
+
+
+# ── 한 도구가 여러 역량에 걸친다 (연결 표로 바꾼 이유) ───────────────────────
+#
+# ⚠️⚠️ 자료로 세어 보니 도구 546개 중 **58개(11%)** 가 두 역량 이상에 걸쳤다 —
+#    MATLAB/Simulink 는 1D 시스템이면서 제어 검증이고 대리모델이기도 하다.
+#    칸 하나(`parent_uuid`)로는 그 중 하나만 적을 수 있었다.
+
+def test_한_도구가_여러_역량에_걸린다(db, client, auth, admin):
+    a = _cap(admin, '1D 시스템 시뮬레이션')
+    b = _cap(admin, '제어 설계ㆍ검증')
+    c = _cap(admin, '대리모델')
+    t = _tool(admin, 'MATLAB / Simulink')
+
+    r = client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+                   json={'capabilityUuids': [a.uuid, b.uuid, c.uuid]},
+                   headers=auth(admin))
+    assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
+    assert _caps_of(t) == sorted([a.uuid, b.uuid, c.uuid])
+
+    # 세 역량 모두의 「무엇으로 하나」 후보에 나온다.
+    for cap in (a, b, c):
+        kids = S.children_of([cap.uuid]).get(cap.uuid, [])
+        assert [k['name'] for k in kids] == ['MATLAB / Simulink']
+
+
+def test_근거가_걸친_역량_모두로_굴러_올라간다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **이게 중복 셈 걱정의 답이다.** 같은 소식이 세 역량을 함께 떠받치는 것은
+       사실이고, 셋이 각각 「1건」이라 말하는 것이 맞다. 어디에서도 합치지 않으므로
+       부풀 총합이 없다 — 낡음 판정도 건수가 아니라 **마지막 시각**을 본다.
+    """
+    a = _cap(admin, '충돌ㆍ고속 비선형 해석')
+    b = _cap(admin, '공정 성형 해석')
+    t = _tool(admin, 'LS-DYNA')
+    client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+               json={'capabilityUuids': [a.uuid, b.uuid]}, headers=auth(admin))
+
+    _news(client, auth, admin, 'https://e.test/dyna', [{'name': 'LS-DYNA'}])
+
+    st = S.evidence_stats([a.uuid, b.uuid, t.uuid])
+    assert st[t.uuid][0] == 1
+    assert st[a.uuid][0] == 1, '충돌도 이 소식이 떠받친다'
+    assert st[b.uuid][0] == 1, '성형도 같은 소식이 떠받친다'
+
+
+def test_하나만_떼어도_나머지는_남는다(db, client, auth, admin):
+    a = _cap(admin, 'A 역량')
+    b = _cap(admin, 'B 역량')
+    t = _tool(admin, '걸친 도구')
+    client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+               json={'capabilityUuids': [a.uuid, b.uuid]}, headers=auth(admin))
+
+    client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+               json={'capabilityUuids': [b.uuid]}, headers=auth(admin))
+    assert _caps_of(t) == [b.uuid]
+
+
+def test_어디에도_안_걸린_도구만_레이더에_선다(db, client, auth, admin):
+    """
+    ⚠️ 예전 `parent_uuid IS NULL` 자리다. 여러 곳에 걸릴 수 있게 됐어도 **하나라도
+       걸렸으면 레이더에는 안 선다** — 그 역량이 대신 서기 때문이다.
+    """
+    a = _cap(admin, 'A 역량')
+    b = _cap(admin, 'B 역량')
+    t = _tool(admin, '걸친 도구')
+    orphan = _tool(admin, '아무 데도 안 걸린 도구')
+    client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+               json={'capabilityUuids': [a.uuid, b.uuid]}, headers=auth(admin))
+
+    r = client.get(f'{BASE}/tech?radar=1', headers=auth(admin))
+    names = sorted(x['name'] for x in (r.get_json() or {}).get('data') or [])
+    assert names == ['A 역량', 'B 역량', '아무 데도 안 걸린 도구'], names
+    assert orphan.uuid
+
+
+def test_같은_짝을_두_번_적어도_한_줄이다(db, client, auth, admin):
+    """⚠️ 두 줄이 되면 「도구 3개」가 4개로 세어진다."""
+    from app.modules.digital_twin_intel.models import IntelTechCapability
+
+    cap = _cap(admin, 'CFD')
+    t = _tool(admin, 'OpenFOAM')
+    client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+               json={'capabilityUuids': [cap.uuid, cap.uuid]}, headers=auth(admin))
+    assert IntelTechCapability.query.filter_by(tech_uuid=t.uuid).count() == 1
+
+
+def test_역량으로_걸러_볼_수_있다(db, client, auth, admin):
+    a = _cap(admin, 'A 역량')
+    b = _cap(admin, 'B 역량')
+    t = _tool(admin, '걸친 도구')
+    _tool(admin, '딴 도구', b)
+    client.put(f'{BASE}/tech/{t.uuid}/capabilities',
+               json={'capabilityUuids': [a.uuid]}, headers=auth(admin))
+
+    r = client.get(f'{BASE}/tech?capabilityUuid={a.uuid}', headers=auth(admin))
+    assert [x['name'] for x in (r.get_json() or {}).get('data') or []] == ['걸친 도구']

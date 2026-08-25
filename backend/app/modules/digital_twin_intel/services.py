@@ -13,7 +13,7 @@ from app.extensions import db
 from app.modules.digital_twin_intel.models import (
     CPT_KEYS, MOVED_WINDOW_DAYS, ORIGINS, STAGES, TECH_KINDS, IntelChange,
     IntelDivisionStage, IntelEvidence, IntelLink, IntelNews, IntelTech,
-    shows_vendor,
+    IntelTechCapability, shows_vendor,
 )
 
 
@@ -157,7 +157,9 @@ def overview(actor=None, moved_days=MOVED_WINDOW_DAYS):
     unread = IntelNews.query.filter_by(status='신규').count()
     every = IntelTech.query.filter(IntelTech.is_archived.is_(False)).all()
     # 레이더가 그리는 것과 **같은 규칙**이다(routes 의 `radar=1` 과 한 몸).
-    techs = [t for t in every if t.kind == 'capability' or not t.parent_uuid]
+    linked = linked_tech_uuids()
+    techs = [t for t in every
+             if t.kind == 'capability' or t.uuid not in linked]
 
     stats = evidence_stats([t.uuid for t in techs])
     stale = no_evidence = 0
@@ -248,22 +250,25 @@ def create_tech(actor_id=None, origin='ui', **data):
     #    역량으로 두면 역량 목록이 곧바로 잡동사니가 된다.
     kind = data.get('kind') if data.get('kind') in TECH_KINDS else 'tool'
 
-    parent_uuid = (data.get('parentUuid') or data.get('parent_uuid') or '').strip()
-    if parent_uuid:
-        """
-        ⚠️⚠️ **만들면서 매다는 길에도 같은 검사를 건다.** 안 걸면 여기가
-           `set_parent` 의 층 규칙을 통째로 우회하는 뒷문이 된다 — MCP 는 만들기와
-           매달기를 한 번에 하므로 이 길로만 들어오는 줄이 실제로 생긴다.
-        """
-        p = IntelTech.query.filter_by(uuid=parent_uuid).first()
-        if p is None:
-            return None, '상위 역량을 찾을 수 없습니다.'
-        if p.kind != 'capability':
-            return None, '상위는 역량이어야 합니다. 도구 밑에 도구를 매달 수 없습니다.'
+    """
+    ⚠️⚠️ **만들면서 매다는 길에도 같은 검사를 건다.** 안 걸면 여기가 `set_capabilities`
+       의 층 규칙을 통째로 우회하는 뒷문이 된다 — MCP 는 만들기와 매달기를 한 번에
+       하므로 이 길로만 들어오는 줄이 실제로 생긴다.
+    """
+    want = data.get('capabilityUuids') or data.get('parentUuid') or []
+    if isinstance(want, str):
+        want = [want] if want.strip() else []
+    want = [str(u).strip() for u in want if str(u or '').strip()]
+    if want:
         if kind == 'capability':
             return None, '역량은 다른 것 밑에 매달 수 없습니다. 층은 둘까지입니다.'
-    else:
-        parent_uuid = None
+        found = {c.uuid: c for c in IntelTech.query
+                 .filter(IntelTech.uuid.in_(want)).all()}
+        for u in want:
+            if u not in found:
+                return None, '상위 역량을 찾을 수 없습니다.'
+            if found[u].kind != 'capability':
+                return None, '상위는 역량이어야 합니다. 도구 밑에 도구를 매달 수 없습니다.'
 
     t = IntelTech(
         uuid=_uuid(), name=name,
@@ -286,11 +291,13 @@ def create_tech(actor_id=None, origin='ui', **data):
         # ⚠️ 기본은 **도구**다. MCPㆍ소식으로 들어오는 것의 대부분이 제품이라,
         #    기본을 역량으로 두면 역량 목록이 곧바로 잡동사니가 된다.
         kind=kind,
-        parent_uuid=parent_uuid,
         origin=origin if origin in ORIGINS else 'ui',
         created_by=actor_id,
     )
     db.session.add(t)
+    db.session.flush()          # uuid 를 연결 표가 써야 한다
+    for u in want:
+        db.session.add(IntelTechCapability(tech_uuid=t.uuid, capability_uuid=u))
     db.session.commit()
     return t, None
 
@@ -341,9 +348,11 @@ def evidence_stats(tech_uuids, rollup=True):
     # 자식까지 한 번에 모으려면 (역량 → 도구) 표가 필요하다.
     kids = {}
     if rollup:
-        for uuid, parent in (db.session.query(IntelTech.uuid, IntelTech.parent_uuid)
-                             .filter(IntelTech.parent_uuid.in_(want)).all()):
-            kids.setdefault(parent, []).append(uuid)
+        for tech_uuid, cap in (db.session.query(
+                    IntelTechCapability.tech_uuid,
+                    IntelTechCapability.capability_uuid)
+                .filter(IntelTechCapability.capability_uuid.in_(want)).all()):
+            kids.setdefault(cap, []).append(tech_uuid)
 
     lookup = set(want)
     for v in kids.values():
@@ -500,8 +509,8 @@ def _clean_tools(tools, parent=None):
     want = [str(u).strip() for u in (tools or []) if str(u or '').strip()]
     if not want or parent is None or parent.kind != 'capability':
         return []
-    allowed = {t.uuid for t in IntelTech.query
-               .filter(IntelTech.parent_uuid == parent.uuid).all()}
+    allowed = {r.tech_uuid for r in IntelTechCapability.query
+               .filter_by(capability_uuid=parent.uuid).all()}
     out = []
     for u in want:
         if u in allowed and u not in out:
@@ -596,11 +605,21 @@ def remove_tech(tech_uuid, actor=None):
     if t is None:
         return None, '기술을 찾을 수 없습니다.'
 
+    """
+    ⚠️ 역량을 지우면 그 연결 줄이 사라지고, 다른 역량에 안 걸린 도구는 **미아**가
+       되어 레이더에 그대로 선다 — 화면에서 사라지면 안 된다는 성질은 그대로다.
+    """
     freed = 0
     if t.kind == 'capability':
-        for kid in IntelTech.query.filter_by(parent_uuid=t.uuid).all():
-            kid.parent_uuid = None
-            freed += 1
+        rows = IntelTechCapability.query.filter_by(capability_uuid=t.uuid).all()
+        for r in rows:
+            _drop_from_division_tools(r.tech_uuid, t.uuid)
+            db.session.delete(r)
+        others = {x.tech_uuid for x in IntelTechCapability.query.filter(
+            IntelTechCapability.tech_uuid.in_([r.tech_uuid for r in rows] or ['-']),
+            IntelTechCapability.capability_uuid != t.uuid).all()}
+        freed = len([r for r in rows if r.tech_uuid not in others])
+    IntelTechCapability.query.filter_by(tech_uuid=t.uuid).delete()
 
     IntelDivisionStage.query.filter_by(tech_uuid=t.uuid).delete()
     for r in IntelDivisionStage.query.filter(
@@ -625,62 +644,103 @@ def names_of(uuids):
     return {u: n for u, n in rows}
 
 
-def children_of(parent_uuids):
-    """역량 밑에 달린 도구들. 화면이 「무엇으로 하나」를 보여줄 때 쓴다."""
-    if not parent_uuids:
+def children_of(capability_uuids):
+    """역량에 매달린 도구들. 화면이 「무엇으로 하나」를 보여줄 때 쓴다.
+
+    ⚠️ 한 도구가 **여러 역량에 나온다** — 그게 연결 표로 바꾼 이유다.
+    """
+    if not capability_uuids:
         return {}
-    rows = (IntelTech.query
-            .filter(IntelTech.parent_uuid.in_(list(parent_uuids)))
+    rows = (db.session.query(IntelTechCapability.capability_uuid, IntelTech)
+            .join(IntelTech, IntelTech.uuid == IntelTechCapability.tech_uuid)
+            .filter(IntelTechCapability.capability_uuid.in_(list(capability_uuids)))
             .order_by(IntelTech.name.asc()).all())
     out = {}
-    for t in rows:
-        out.setdefault(t.parent_uuid, []).append({
+    for cap, t in rows:
+        out.setdefault(cap, []).append({
             'uuid': t.uuid, 'name': t.name, 'stage': t.stage,
             'vendor': t.vendor, 'summary': t.summary,
         })
     return out
 
 
-def set_parent(tech_uuid, parent_uuid, actor=None):
-    """도구를 역량 밑에 매단다. `parent_uuid` 가 비면 떼어 낸다.
+def capabilities_of(tech_uuids):
+    """도구마다 **속한 역량들**. `{tech_uuid: [{uuid, name}…]}`.
 
-    ⚠️ **자기 자신ㆍ자기 자식을 부모로 삼을 수 없다.** 고리가 생기면 근거를 굴려
-       올릴 때 무한히 돈다.
-    ⚠️ **역량을 다른 것 밑에 매달지 않는다.** 층은 둘까지다 — 셋이 되면 「어디까지
-       굴려 올릴 것인가」가 사람마다 달라진다.
+    ⚠️ 이름까지 함께 준다 — uuid 만 주면 화면이 목록 전체를 뒤져야 하고, 걸러 본
+       목록에는 그 역량이 아예 없을 수도 있다.
+    """
+    if not tech_uuids:
+        return {}
+    rows = (db.session.query(IntelTechCapability.tech_uuid, IntelTech.uuid,
+                             IntelTech.name)
+            .join(IntelTech, IntelTech.uuid == IntelTechCapability.capability_uuid)
+            .filter(IntelTechCapability.tech_uuid.in_(list(tech_uuids)))
+            .order_by(IntelTech.name.asc()).all())
+    out = {}
+    for tech_uuid, cap_uuid, cap_name in rows:
+        out.setdefault(tech_uuid, []).append({'uuid': cap_uuid, 'name': cap_name})
+    return out
+
+
+def linked_tech_uuids():
+    """어느 역량엔가 매달린 도구의 uuid 들. 레이더가 **미아만** 그리는 데 쓴다."""
+    return {r[0] for r in db.session.query(IntelTechCapability.tech_uuid).all()}
+
+
+def set_capabilities(tech_uuid, capability_uuids, actor=None):
+    """도구가 **어느 역량들에** 속하는지 정한다. 빈 목록이면 전부 떼어 낸다.
+
+    ⚠️⚠️ 예전에는 부모 칸 하나였다. 자료로 세어 보니 도구 546개 중 **58개(11%)** 가
+       두 역량 이상에 걸쳤다 — MATLAB/Simulink 는 1D 시스템이면서 제어 검증이고
+       대리모델이기도 하다. 칸 하나로는 그 중 하나만 적을 수 있었다.
+
+    ⚠️ **역량은 다른 것에 못 매단다.** 층은 둘까지다 — 셋이 되면 「어디까지 굴려
+       올릴 것인가」가 사람마다 달라진다.
+    ⚠️ **자기 자신을 상위로 둘 수 없다.** 고리가 생기면 근거를 굴려 올릴 때 무한히 돈다.
     """
     t = IntelTech.query.filter_by(uuid=tech_uuid).first()
     if t is None:
         return None, '기술을 찾을 수 없습니다.'
 
-    parent_uuid = (parent_uuid or '').strip()
-    if not parent_uuid:
-        _drop_from_division_tools(t.uuid, t.parent_uuid)
-        t.parent_uuid = None
-        db.session.commit()
-        return t, None
+    want = []
+    for u in (capability_uuids or []):
+        u = (u or '').strip()
+        if u and u not in want:
+            want.append(u)
 
-    if parent_uuid == tech_uuid:
-        return None, '자기 자신을 상위로 둘 수 없습니다.'
-    p = IntelTech.query.filter_by(uuid=parent_uuid).first()
-    if p is None:
-        return None, '상위 역량을 찾을 수 없습니다.'
-    if p.kind != 'capability':
-        return None, '상위는 역량이어야 합니다. 도구 밑에 도구를 매달 수 없습니다.'
-    if t.kind == 'capability':
+    if want and t.kind == 'capability':
         return None, '역량은 다른 것 밑에 매달 수 없습니다. 층은 둘까지입니다.'
-    if p.parent_uuid == tech_uuid:
-        return None, '서로를 상위로 두면 고리가 생깁니다.'
+    if tech_uuid in want:
+        return None, '자기 자신을 상위로 둘 수 없습니다.'
+    if want:
+        caps = IntelTech.query.filter(IntelTech.uuid.in_(want)).all()
+        found = {c.uuid: c for c in caps}
+        for u in want:
+            if u not in found:
+                return None, '상위 역량을 찾을 수 없습니다.'
+            if found[u].kind != 'capability':
+                return None, '상위는 역량이어야 합니다. 도구 밑에 도구를 매달 수 없습니다.'
 
-    _drop_from_division_tools(t.uuid, t.parent_uuid)
-    t.parent_uuid = parent_uuid
+    have = {r.capability_uuid: r for r in IntelTechCapability.query.filter_by(
+        tech_uuid=tech_uuid).all()}
+    for u in want:
+        if u not in have:
+            db.session.add(IntelTechCapability(tech_uuid=tech_uuid,
+                                               capability_uuid=u))
+    for u, row in have.items():
+        if u not in want:
+            """
+            ⚠️⚠️ 뗀 역량의 「무엇으로 하나」에서 이 도구를 함께 뺀다. 안 빼면
+               「MX 는 explicit 해석을 LS-DYNA 로 한다」가 **거짓말이 된다** —
+               LS-DYNA 가 더는 그 역량에 속하지 않는 상태이기 때문이다.
+            """
+            _drop_from_division_tools(tech_uuid, u)
+            db.session.delete(row)
+
     db.session.commit()
     return t, None
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 소식
-# ─────────────────────────────────────────────────────────────────────────────
 
 def find_news_by_url(url):
     """같은 원문이 이미 있나. 같은 기사를 두 번 넣는 것을 막는다."""
@@ -885,8 +945,23 @@ def merge_tech(loser_uuid, winner_uuid, actor=None):
        그리므로 그 도구들이 화면에서 통째로 사라진다. 역량 층을 넣으면서 생긴
        구멍이다 — 합치기는 원래 근거와 연결만 옮기고 있었다.
     """
-    for kid in IntelTech.query.filter_by(parent_uuid=loser.uuid).all():
-        kid.parent_uuid = winner.uuid
+    # 지는 역량에 매달렸던 도구를 이기는 역량으로. 이미 있으면 버린다(유니크 제약).
+    have_c = {r.tech_uuid for r in IntelTechCapability.query.filter_by(
+        capability_uuid=winner.uuid).all()}
+    for r in IntelTechCapability.query.filter_by(
+            capability_uuid=loser.uuid).all():
+        if r.tech_uuid in have_c:
+            db.session.delete(r)
+        else:
+            r.capability_uuid = winner.uuid
+    # 지는 **도구**가 걸려 있던 역량들도 이기는 도구로 옮긴다.
+    have_t = {r.capability_uuid for r in IntelTechCapability.query.filter_by(
+        tech_uuid=winner.uuid).all()}
+    for r in IntelTechCapability.query.filter_by(tech_uuid=loser.uuid).all():
+        if r.capability_uuid in have_t:
+            db.session.delete(r)
+        else:
+            r.tech_uuid = winner.uuid
     have_d = {d.division for d in IntelDivisionStage.query.filter_by(
         tech_uuid=winner.uuid).all()}
     for d in IntelDivisionStage.query.filter_by(tech_uuid=loser.uuid).all():

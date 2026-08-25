@@ -21,7 +21,8 @@ from app import create_app                                    # noqa: E402
 from app.extensions import db                                 # noqa: E402
 from app.modules.digital_twin_intel import services as S      # noqa: E402
 from app.modules.digital_twin_intel.models import (           # noqa: E402
-    CPT_KEYS, DEFAULT_SECTORS, IntelDivisionStage, IntelTech)
+    CPT_KEYS, DEFAULT_SECTORS, IntelDivisionStage, IntelTech,
+    IntelTechCapability)
 from seed_intel_taxonomy_data import TAXONOMY                                 # noqa: E402
 
 
@@ -94,19 +95,25 @@ def main():
                 t = S.find_tech_by_name(tn)
                 if t is None:
                     t, err = S.create_tech(actor_id=None, name=tn, kind='tool',
-                                           parentUuid=cap.uuid)
+                                           capabilityUuids=[cap.uuid])
                     if err:
                         print('  도구 실패', tn, err)
                     else:
                         created += 1
                     continue
                 if t.kind == 'capability':
-                    # 옛 역량 이름이 이제 도구로 간다 — 자식이 있으면 먼저 떼어 낸다.
-                    for kid in IntelTech.query.filter_by(parent_uuid=t.uuid).all():
-                        kid.parent_uuid = None
+                    # 옛 역량 이름이 이제 도구로 간다 — 매달린 것을 먼저 떼어 낸다.
+                    IntelTechCapability.query.filter_by(
+                        capability_uuid=t.uuid).delete()
                     t.kind = 'tool'
-                if t.parent_uuid != cap.uuid:
-                    t.parent_uuid = cap.uuid
+                """
+                ⚠️ **이미 있는 연결은 안 건드린다.** 표에 적힌 것을 더할 뿐이다 —
+                   사람이 손으로 더 매달아 둔 역량을 씨뿌리기가 지우면 안 된다.
+                """
+                if not IntelTechCapability.query.filter_by(
+                        tech_uuid=t.uuid, capability_uuid=cap.uuid).first():
+                    db.session.add(IntelTechCapability(
+                        tech_uuid=t.uuid, capability_uuid=cap.uuid))
                     moved += 1
         db.session.commit()
 
@@ -123,8 +130,8 @@ def main():
         for r in IntelDivisionStage.query.all():
             keep = []
             for u in (r.tools or []):
-                t = IntelTech.query.filter_by(uuid=u).first()
-                if t is not None and t.parent_uuid == r.tech_uuid:
+                if IntelTechCapability.query.filter_by(
+                        tech_uuid=u, capability_uuid=r.tech_uuid).first():
                     keep.append(u)
             if keep != (r.tools or []):
                 r.tools = keep
@@ -141,7 +148,10 @@ def main():
         listed = {t for _n, _s2, _sm, _c, _tg, tools in TAXONOMY for t in tools}
         strays = []
         for c in IntelTech.query.filter_by(kind='capability').all():
-            for t in IntelTech.query.filter_by(parent_uuid=c.uuid).all():
+            links = IntelTechCapability.query.filter_by(
+                capability_uuid=c.uuid).all()
+            for t in IntelTech.query.filter(
+                    IntelTech.uuid.in_([x.tech_uuid for x in links] or ['-'])).all():
                 names = [t.name] + list(t.aliases or [])
                 if not any(n in listed for n in names):
                     strays.append((c.name, t.name))
@@ -149,7 +159,8 @@ def main():
         # ── 5. 보고 ────────────────────────────────────────────────────────
         caps = IntelTech.query.filter_by(kind='capability').all()
         tools = IntelTech.query.filter_by(kind='tool').all()
-        orph = [t for t in tools if not t.parent_uuid]
+        linked = {r.tech_uuid for r in IntelTechCapability.query.all()}
+        orph = [t for t in tools if t.uuid not in linked]
         print()
         print('역량 새로 %d · 고쳐 씀 %d · 지움 %d' % (made, updated, len(dropped)))
         print('도구 새로 %d · 부모 옮김 %d' % (created, moved))
@@ -170,7 +181,8 @@ def main():
         print()
         for sec in DEFAULT_SECTORS:
             rows = [c for c in caps if c.category == sec]
-            n = sum(len([t for t in tools if t.parent_uuid == c.uuid]) for c in rows)
+            n = sum(IntelTechCapability.query.filter_by(
+                capability_uuid=c.uuid).count() for c in rows)
             print('   %-14s 역량 %2d · 도구 %3d' % (sec, len(rows), n))
         print()
         from app.modules.digital_twin_intel.models import CPT_GROUPS

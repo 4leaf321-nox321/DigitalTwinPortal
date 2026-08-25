@@ -1102,8 +1102,8 @@ async def list_intel_tech(
 
     응답에 함께 오는 것
         kind           capability(역량) / tool(도구)
-        parentUuid     이 도구가 매달린 역량. 비어 있으면 **아직 안 매달렸다**
-        parentName     그 역량 이름
+        capabilities   이 도구가 속한 역량들 `[{uuid, name}…]`. **여럿일 수 있다.**
+                       빈 목록이면 아직 어디에도 안 매달렸다
         children       역량 밑에 매달린 도구들 (역량일 때만)
         companyStage   전사 단계. `division` 을 줬을 때 `stage` 와 다를 수 있다
         isDivisionOverride  그 사업부가 전사와 **다르게** 보고 있다는 표시
@@ -1126,9 +1126,13 @@ async def list_intel_tech(
 
 
 @mcp.tool()
-async def set_intel_tech_parent(uuid: str, ctx: Context,
-                                parent_uuid: str = "") -> dict:
-    """도구를 **역량 밑에 매단다.** `parent_uuid` 를 비우면 떼어 낸다.
+async def set_intel_tech_capabilities(uuid: str, ctx: Context,
+                                     capability_uuids: list | None = None) -> dict:
+    """도구가 **어느 역량들에** 속하는지 정한다. 빈 목록이면 전부 떼어 낸다.
+
+    ⚠️⚠️ **여럿이다.** 한 도구가 여러 역량에 걸친다 — 자료로 세어 보니 546개 중
+       58개(11%)가 그랬다(MATLAB/Simulink 는 1D 시스템ㆍ제어 검증ㆍ대리모델에
+       함께 걸린다). 걸치는 대로 다 적는다.
 
     ⚠️⚠️ **기술을 넣었으면 여기까지가 한 벌이다.** 안 매달면 레이더에 혼자 서고,
        같은 일을 하는 제품이 서너 줄로 늘어난다 — 그러면 「우리 explicit 해석은
@@ -1136,7 +1140,7 @@ async def set_intel_tech_parent(uuid: str, ctx: Context,
        함께 셈해진다.**
 
     쓰는 차례
-        1. `list_intel_tech(kind="capability")` 로 알맞은 역량을 찾는다
+        1. `list_intel_tech(kind="capability")` 로 알맞은 역량들을 찾는다
         2. 없으면 `add_intel_tech` 로 역량을 만든다 — 다만 **역량은 조직의 말이라
            함부로 늘리지 않는다.** 비슷한 것이 있으면 그것을 쓴다
         3. 여기서 매단다
@@ -1144,8 +1148,8 @@ async def set_intel_tech_parent(uuid: str, ctx: Context,
     ⚠️ 막히는 것 — 자기 자신ㆍ도구 밑에 도구ㆍ역량을 다른 것 밑에(층은 둘까지).
        전부 400 이 나고, 무엇이 틀렸는지 메시지로 온다.
     """
-    return await _intel(ctx, "PUT", f"/tech/{uuid}/parent",
-                        json_body={"parentUuid": parent_uuid or ""})
+    return await _intel(ctx, "PUT", f"/tech/{uuid}/capabilities",
+                        json_body={"capabilityUuids": capability_uuids or []})
 
 
 @mcp.tool()
@@ -1167,7 +1171,7 @@ async def add_intel_tech(
     tags: list | None = None,
     cpt: list | None = None,
     kind: str = "tool",
-    parent_uuid: str = "",
+    capability_uuids: list | None = None,
 ) -> dict:
     """기술을 레이더에 올린다. **소식 없이 기술만 따로 넣을 때** 쓴다.
 
@@ -1182,7 +1186,7 @@ async def add_intel_tech(
        것은 조직의 판단이라 관리자·사무국만 할 수 있다(화면에서 한다).
 
     ⚠️⚠️ **`kind` 는 그냥 두면 「도구」다. 그게 맞다** — 네가 조사해 오는 것은 거의
-       다 제품이다. `parent_uuid` 로 알맞은 역량에 **매다는 데까지** 하라
+       다 제품이다. `capability_uuids` 로 알맞은 역량들에 **매다는 데까지** 하라
        (`list_intel_tech(kind="capability")` 로 먼저 찾는다). 안 매달면 레이더에
        혼자 서고, 같은 일을 하는 제품이 서너 줄로 늘어난다.
        역량(`kind="capability"`)을 새로 만드는 것은 **조직의 말을 늘리는 일**이라
@@ -1202,8 +1206,8 @@ async def add_intel_tech(
                  값이 고정이라 모르는 값은 **조용히 버려진다**
     """
     body_json = {"name": name, "origin": "mcp", "kind": kind or "tool"}
-    if parent_uuid:
-        body_json["parentUuid"] = parent_uuid
+    if capability_uuids:
+        body_json["capabilityUuids"] = capability_uuids
     for k, v in (("summary", summary), ("vendor", vendor), ("category", category),
                  ("url", url), ("description", description)):
         if v:

@@ -45,9 +45,14 @@ def _cap(admin, name, stage='관찰'):
 
 def _tool(admin, name, parent=None):
     t, err = S.create_tech(actor_id=admin.id, name=name,
-                           parentUuid=(parent.uuid if parent else None))
+                           capabilityUuids=([parent.uuid] if parent else []))
     assert err is None, err
     return t
+
+
+def _caps_of(t):
+    """그 도구가 걸린 역량 uuid 들. ⚠️ 이제 **여럿일 수 있다.**"""
+    return sorted(c['uuid'] for c in S.capabilities_of([t.uuid]).get(t.uuid, []))
 
 
 def _put(client, auth, user, t, division, **body):
@@ -218,8 +223,7 @@ def test_역량을_합치면_매달린_도구가_따라간다(db, client, auth, 
     assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
     _db.session.expire_all()
 
-    assert IntelTech.query.filter_by(uuid=dyna.uuid).first().parent_uuid \
-        == keep.uuid
+    assert _caps_of(dyna) == [keep.uuid]
 
     r2 = client.get(f'{BASE}/tech?radar=1', headers=auth(admin))
     names = sorted(x['name'] for x in (r2.get_json() or {}).get('data') or [])
@@ -274,7 +278,7 @@ def test_역량을_지우면_밑의_도구는_떼어져_살아남는다(db, clie
 
     left = IntelTech.query.filter_by(uuid=dyna.uuid).first()
     assert left is not None, '도구까지 지워지면 안 된다'
-    assert left.parent_uuid is None, '미아로 돌아야 한다'
+    assert _caps_of(left) == [], '미아로 돌아야 한다'
 
     r2 = client.get(f'{BASE}/tech?radar=1', headers=auth(admin))
     names = [x['name'] for x in (r2.get_json() or {}).get('data') or []]
@@ -317,8 +321,8 @@ def test_도구를_떼어_내면_그_역량의_무엇으로_하나에서_빠진�
     _put(client, auth, admin, cap, 'MX', stage='도입', reason='쓴다',
          tools=[dyna.uuid])
 
-    client.put(f'{BASE}/tech/{dyna.uuid}/parent', json={'parentUuid': ''},
-               headers=auth(admin))
+    client.put(f'{BASE}/tech/{dyna.uuid}/capabilities',
+               json={'capabilityUuids': []}, headers=auth(admin))
     _db.session.expire_all()
 
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
@@ -332,11 +336,10 @@ def test_다른_역량으로_옮겨도_옛_역량에서_빠진다(db, client, au
     _put(client, auth, admin, cap, 'MX', stage='도입', reason='쓴다',
          tools=[dyna.uuid])
 
-    client.put(f'{BASE}/tech/{dyna.uuid}/parent',
-               json={'parentUuid': other.uuid}, headers=auth(admin))
+    client.put(f'{BASE}/tech/{dyna.uuid}/capabilities',
+               json={'capabilityUuids': [other.uuid]}, headers=auth(admin))
     _db.session.expire_all()
 
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
     assert mx.get('divisionTools', []) == []
-    assert IntelTech.query.filter_by(uuid=dyna.uuid).first().parent_uuid \
-        == other.uuid
+    assert _caps_of(dyna) == [other.uuid]

@@ -11,9 +11,10 @@ import { STAGES } from './RadarBoard';
  *    도구가 나란히 섞여 서고, 관계는 「⋯ 아래」라는 작은 글씨 하나뿐이다 —
  *    609줄에서 그건 안 읽힌다.
  *
- * ⚠️ **관계는 역량 1 : 도구 N 이다.** `parent_uuid` 가 칸 하나라서, 한 도구는
- *    역량 하나에만 매달린다. 같은 S/W 를 두 역량에서 쓰면 지금은 각 역량 밑에
- *    한 줄씩 두어야 한다 — 그래서 이 화면은 **나무**지 그물이 아니다.
+ * ⚠️⚠️ **관계는 여럿 대 여럿이다.** 한 도구가 여러 역량에 걸린다 — 자료로 세어
+ *    보니 546개 중 58개(11%)가 그랬다(MATLAB/Simulink 는 1D 시스템ㆍ제어 검증ㆍ
+ *    대리모델에 함께 걸린다). 그래서 **같은 도구가 여러 자리에 나온다.** 그것이
+ *    맞는 그림이다 — 한 번만 보이면 나머지 역량에서 찾는 사람은 못 찾는다.
  */
 const UNCATEGORIZED = '분류 없음';
 
@@ -188,7 +189,9 @@ const TechTree = ({ rows, all, categories, onSelect }) => {
 
     const nodes = [];
     caps.forEach((c) => {
-      const mine = tools.filter((t) => t.parentUuid === c.uuid);
+      // ⚠️ 한 도구가 **여러 역량에 나온다** — 그게 연결 표로 바꾼 이유다.
+      const mine = tools.filter(
+        (t) => (t.capabilityUuids || []).includes(c.uuid));
       const hitKids = mine.filter((t) => shown.has(t.uuid));
       const capHit = shown.has(c.uuid);
       if (!capHit && hitKids.length === 0) return;
@@ -200,7 +203,8 @@ const TechTree = ({ rows, all, categories, onSelect }) => {
     });
 
     // 아직 안 매단 도구. ⚠️ 0이어도 자리를 두지는 않는다 — 없으면 조용한 게 맞다.
-    const orphans = tools.filter((t) => !t.parentUuid && shown.has(t.uuid));
+    const orphans = tools.filter(
+      (t) => !(t.capabilityUuids || []).length && shown.has(t.uuid));
 
     const by = new Map();
     nodes.forEach((n) => {
@@ -271,7 +275,9 @@ const TechTree = ({ rows, all, categories, onSelect }) => {
       {groups.map(([g, nodes]) => (
         <Sector key={g}>
           <h3>
-            {g} <em>역량 {nodes.length} · 도구 {nodes.reduce((n, x) => n + x.kids.length, 0)}</em>
+            {/* ⚠️ 「도구 N」은 **연결 수**다 — 같은 도구가 여러 역량에 걸리면
+                여러 번 세어진다. 줄 수와 다를 수 있어 그렇게 적는다. */}
+            {g} <em>역량 {nodes.length} · 연결 {nodes.reduce((n, x) => n + x.kids.length, 0)}</em>
             <span />
           </h3>
           {nodes.map(line)}

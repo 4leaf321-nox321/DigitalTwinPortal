@@ -395,7 +395,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
            것을 거를 수 있지만, 목록 보기와 자료를 한 벌만 들고 있으려고 여기서
            거른다 — 두 번 불러오면 두 화면의 셈이 갈린다.
       */
-      if (radar && t.kind !== 'capability' && t.parentUuid) return false;
+      // ⚠️ **하나라도 걸렸으면 레이더에 안 선다** — 그 역량이 대신 서기 때문이다.
+      if (radar && t.kind !== 'capability'
+          && (t.capabilityUuids || []).length) return false;
       if (!radar && kind && t.kind !== kind) return false;
       /*
         ⚠️ 여기서 사업부로 **거르지 않는다.** 서버가 이미 그 사업부 눈으로 풀어
@@ -431,7 +433,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     사실이 안 보이면 아무도 안 매달고, 「무엇으로 하나」는 영영 빈칸으로 남는다.
   */
   const orphanCount = useMemo(
-    () => tech.filter((t) => t.kind !== 'capability' && !t.parentUuid).length,
+    () => tech.filter((t) => t.kind !== 'capability'
+                             && !(t.capabilityUuids || []).length).length,
     [tech]);
 
   // 도구를 매달 곳. 이름 차례는 서버가 준 그대로다.
@@ -469,11 +472,13 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
            거기 붙어 있어서, 일반 수정에 얹으면 그 검사를 우회하는 길이 하나 더
            생긴다. 만들기(POST)는 상위를 함께 받으므로 그때는 안 보낸다.
       */
-      const { parentUuid, ...rest } = body;
+      const { capabilityUuids, ...rest } = body;
       if (editing) {
         await api.updateTech(techForm.uuid, rest);
-        if ((parentUuid || '') !== (techForm.parentUuid || '')) {
-          await api.setTechParent(techForm.uuid, parentUuid);
+        const before = (techForm.capabilityUuids || []).slice().sort().join();
+        const after = (capabilityUuids || []).slice().sort().join();
+        if (before !== after) {
+          await api.setTechCapabilities(techForm.uuid, capabilityUuids);
         }
       } else {
         await api.createTech(body);
