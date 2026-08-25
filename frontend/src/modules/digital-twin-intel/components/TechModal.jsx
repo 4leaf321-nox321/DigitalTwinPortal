@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil, History, Merge,
   Columns } from 'lucide-react';
@@ -7,6 +7,7 @@ import api from '../services/api';
 import AssistPanel from './AssistPanel';
 import { STAGES } from './RadarBoard';
 import DivisionStages from './DivisionStages';
+import { baseStageOf, baseNeedsReason, saveLabel } from '../utils/stageSave';
 import {
   Overlay, Panel, Head, CloseBtn, Body, Foot, Field, Hint, Warn,
   PrimaryBtn, GhostBtn, Spacer,
@@ -392,6 +393,22 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
   const [reason, setReason] = useState(tech?.stage_reason || '');
   const [busy, setBusy] = useState(false);
 
+  /*
+    ⚠️⚠️ **저장 단추는 창에 하나뿐이다.** 사업부 칸 안에도 저장이 하나 더 있었는데,
+       사업부만 바꾼 사람에게는 아래 큰 「단계 저장」이 죽은 채로 남아 고장으로
+       읽혔다(2026-08-26 신고). 이제 사업부 칸은 적어 둔 것을 위로 알리기만 하고,
+       보내는 것은 여기서 한다.
+  */
+  const divRef = useRef(null);
+  const [div, setDiv] = useState({ division: '', dirty: false, needReason: false });
+  /*
+    ⚠️ **같은 값이면 그대로 둔다.** 매번 새 객체를 담으면 알림 → 다시 그림 →
+       알림이 끝없이 돈다. useCallback 으로 신원도 고정해야 한다.
+  */
+  const onDivDraft = useCallback((n) => setDiv((p) => (
+    p.division === n.division && p.dirty === n.dirty && p.needReason === n.needReason
+      ? p : n)), []);
+
   useEffect(() => {
     if (!tech) return;
     setStage(tech.companyStage || tech.stage);
@@ -433,17 +450,29 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
   if (!tech) return null;
 
   // 사업부 눈이 아니면 companyStage 가 없다 — 그때는 stage 가 곧 기본 설정이다.
-  const baseStage = tech.companyStage || tech.stage;
+  const baseStage = baseStageOf(tech);
   const stageChanged = stage !== baseStage || (reason || '') !== (tech.stage_reason || '');
+  // 기본 설정을 그대로 두고 **사업부 하나만** 바꿔도 저장할 것이 있는 것이다.
+  const changed = stageChanged || div.dirty;
   // ⚠️ 서버와 **같은 규칙**이다. 여기서만 막으면 서버가 400 을 내고, 서버에만 있으면
   //    사용자가 눌러 보고서야 안다. 둘 다 있어야 한다.
-  const needReason = stage === '보류' && !reason.trim();
+  const needReason = baseNeedsReason(stage, reason);
 
+  /*
+    ⚠️⚠️ **보낼 것을 다 보낸 뒤에 알린다.** `onChanged` 는 창을 닫는다
+       (DigitalTwinIntelApp 에서 `setSelected(null)`). 기본 설정을 먼저 알리면
+       사업부 쪽 저장이 그대로 날아간다.
+  */
   const applyStage = async () => {
     setBusy(true);
     try {
-      const updated = await api.setStage(tech.uuid, stage, reason.trim() || undefined);
-      onChanged(updated);
+      let updated = null;
+      if (stageChanged) {
+        updated = await api.setStage(tech.uuid, stage, reason.trim() || undefined);
+      }
+      if (div.dirty && divRef.current) await divRef.current.save();
+      if (updated) onChanged(updated);
+      else if (div.dirty && onDivisionChanged) onDivisionChanged();
     } catch (e) {
       showError(e.message);
     } finally {
@@ -815,7 +844,8 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             ⚠️ **단계를 바꾸는 자리 가까이 둔다.** 멀리 두면 전사만 바꾸고 사업부는
                안 건드리게 되고, 그러면 사업부 값이 조용히 옛것으로 남는다.
           */}
-          <DivisionStages tech={tech} canCurate={canCurate}
+          <DivisionStages ref={divRef} tech={tech} canCurate={canCurate}
+                          onDraftState={onDivDraft}
                           onChanged={onDivisionChanged} showError={showError} />
 
           <LinkList rows={links} onRemove={dropLink} />
@@ -855,11 +885,19 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                라는 물음이 실제로 나왔다(2026-08-25). 눌러도 안 되는 것만 보이고
                무엇을 해야 켜지는지가 화면에 없었다.
           */}
-          {canCurate && !busy && !stageChanged && (
-            <FootNote>위에서 단계를 고르면 저장할 수 있습니다</FootNote>
+          {canCurate && !busy && !changed && (
+            <FootNote>단계를 고치면 저장할 수 있습니다</FootNote>
+          )}
+          {/* 두 가지가 함께 걸릴 수 있어, **무엇이 나가는지** 이름을 대 준다. */}
+          {canCurate && !busy && changed && (
+            <FootNote>
+              {saveLabel({ stageChanged, divisionDirty: div.dirty,
+                           division: div.division })} 을(를) 저장합니다
+            </FootNote>
           )}
           {canCurate && (
-            <PrimaryBtn onClick={applyStage} disabled={!stageChanged || needReason || busy}>
+            <PrimaryBtn onClick={applyStage}
+                        disabled={!changed || needReason || div.needReason || busy}>
               {busy ? '바꾸는 중…' : '단계 저장'}
             </PrimaryBtn>
           )}

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect,
+                useImperativeHandle, useState } from 'react';
 import styled from 'styled-components';
 import { RotateCcw, Loader2, Pencil, AlertTriangle } from 'lucide-react';
 
@@ -23,7 +24,8 @@ import { Field, Hint } from './modalStyles';
  *    우리도 도입, 우리는 LS-DYNA」인데, 예외를 만들어야만 도구를 적을 수 있으면
  *    그 경우를 아예 못 적는다.
  */
-const FOLLOW = '';                       // 「전사를 따름」
+import { FOLLOW, asDraft, divisionDirty, divisionNeedsReason }
+  from '../utils/stageSave';
 
 const Grid = styled.ul`
   list-style: none;
@@ -154,14 +156,6 @@ const Buttons = styled.div`
   }
 `;
 
-const Save = styled.button`
-  border: none;
-  background: #4f46e5;
-  color: #fff;
-
-  &:disabled { background: #c7d2fe; cursor: not-allowed; }
-`;
-
 const Cancel = styled.button`
   border: 1px solid #e2e8f0;
   background: #fff;
@@ -194,21 +188,17 @@ const Need = styled.p`
 
   ⚠️ 나중에 「그 사업부 칸을 바로 펴서 열기」가 필요해지면 이 자리를 그대로 쓴다.
 */
-const DivisionStages = ({ tech, canCurate, onChanged, showError,
-                          initialData = null, initialOpen = '' }) => {
+const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
+                                    onDraftState,
+                                    initialData = null, initialOpen = '' }, ref) => {
   const [data, setData] = useState(initialData);
   const [failed, setFailed] = useState(null);
   const [open, setOpen] = useState(initialOpen);   // 펴 놓은 사업부
-  const [draft, setDraft] = useState(() => {
-    if (!initialOpen || !initialData) return null;
-    const o = (initialData.overrides || [])
-      .find((x) => x.division === initialOpen);
-    return {
-      stage: o && !o.followsCompany ? o.stage : FOLLOW,
-      reason: (o && o.reason) || '',
-      tools: (o && o.tools) || [],
-    };
-  });
+  const [draft, setDraft] = useState(() => (
+    initialOpen && initialData
+      ? asDraft((initialData.overrides || [])
+          .find((x) => x.division === initialOpen))
+      : null));
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -220,6 +210,41 @@ const DivisionStages = ({ tech, canCurate, onChanged, showError,
   }, [tech?.uuid]);
 
   useEffect(() => { load(); }, [load]);
+
+  /*
+    ⚠️⚠️ **저장은 창 아래 「단계 저장」 한 곳에서만 한다.** 여기 안에도 저장 단추를
+       두었더니, 사업부만 바꾼 사람에게는 아래 큰 단추가 죽은 채로 남아 고장으로
+       읽혔다(2026-08-26 신고). 이 칸은 **무엇을 적어 놨는지 위로 알리기만** 하고,
+       실제로 보내는 일은 창이 한다.
+
+    ⚠️ 그래서 아래 훅과 파생값은 전부 `if (!data)` **위**에 있어야 한다 — 밑으로
+       내리면 못 불러온 동안 훅 수가 달라져 React 가 터진다.
+  */
+  // ⚠️ 규칙 자체는 `utils/stageSave` 에 있다 — 시험이 붙어 있는 쪽이 정본이다.
+  const storedOf = (d) => (data?.overrides || []).find((x) => x.division === d) || null;
+  const needReason = divisionNeedsReason(draft);
+  const dirty = Boolean(open) && divisionDirty(storedOf(open), draft);
+
+  // ⚠️ 오류와 알림은 **부르는 쪽**이 맡는다 — 기본 설정과 함께 보내야 하기 때문이다.
+  const save = async () => {
+    if (!draft || !open) return;
+    setBusy(true);
+    try {
+      await api.setDivisionStage(tech.uuid, open, draft.stage,
+                                 draft.reason.trim(), draft.tools);
+      setOpen('');
+      setDraft(null);
+      load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (onDraftState) onDraftState({ division: open, dirty, needReason });
+  }, [open, dirty, needReason, onDraftState]);
+
+  useImperativeHandle(ref, () => ({ save }));
 
   /*
     ⚠️ **못 불러왔을 때 조용히 사라지면 안 된다.** 이 칸이 없어진 것인지 못 불러온
@@ -244,13 +269,8 @@ const DivisionStages = ({ tech, canCurate, onChanged, showError,
   const diffCount = (data.overrides || []).filter((o) => !o.followsCompany).length;
 
   const edit = (d) => {
-    const o = byDivision[d];
     setOpen(d);
-    setDraft({
-      stage: o && !o.followsCompany ? o.stage : FOLLOW,
-      reason: (o && o.reason) || '',
-      tools: (o && o.tools) || [],
-    });
+    setDraft(asDraft(byDivision[d]));
   };
 
   const toggleTool = (uuid) => setDraft((p) => ({
@@ -259,31 +279,6 @@ const DivisionStages = ({ tech, canCurate, onChanged, showError,
       ? p.tools.filter((u) => u !== uuid)
       : [...p.tools, uuid],
   }));
-
-  /*
-    예외를 만들 때만 이유가 필요하다. 「전사를 따름」은 주장이 아니다.
-
-    ⚠️ **이 규칙은 서버가 정본이다**(400 을 낸다). 여기 있는 것은 헛걸음을 막는
-       손잡이일 뿐이라, 어긋나면 서버 쪽이 맞다 — 낡음 판정을 서버에만 둔 것과
-       달리 이건 화면에도 있어야 「저장」이 꺼진 이유를 그 자리에서 볼 수 있다.
-  */
-  const needReason = draft && draft.stage !== FOLLOW && !draft.reason.trim();
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      await api.setDivisionStage(tech.uuid, open, draft.stage,
-                                 draft.reason.trim(), draft.tools);
-      setOpen('');
-      setDraft(null);
-      load();
-      if (onChanged) onChanged();
-    } catch (e) {
-      if (showError) showError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const revert = async (d) => {
     setBusy(true);
@@ -410,9 +405,8 @@ const DivisionStages = ({ tech, canCurate, onChanged, showError,
                   )}
 
                   <Buttons>
-                    <Save type="button" disabled={busy || needReason} onClick={save}>
-                      {busy ? '저장 중…' : '저장'}
-                    </Save>
+                    {/* ⚠️ 저장은 **창 아래 「단계 저장」 하나뿐**이다. 여기 또
+                        두면 어느 것이 무엇을 보내는지 아무도 모른다. */}
                     <Cancel type="button"
                             onClick={() => { setOpen(''); setDraft(null); }}>
                       그만두기
@@ -446,6 +440,8 @@ const DivisionStages = ({ tech, canCurate, onChanged, showError,
       )}
     </Field>
   );
-};
+});
+
+DivisionStages.displayName = 'DivisionStages';
 
 export default DivisionStages;
