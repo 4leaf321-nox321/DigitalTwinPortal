@@ -454,7 +454,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   /*
     아직 어느 역량에도 안 매달린 도구. ⚠️ **이 수가 곧 할 일이다** — 그 도구들은
     레이더에는 혼자 서지만 **어느 사업부 표에도 안 나온다.** 화면 어디에도 그
-    사실이 안 보이면 아무도 안 매달고, 「무엇으로 하나」는 영영 빈칸으로 남는다.
+    사실이 안 보이면 아무도 안 매달고, 사업부 단계의 도구는 영영 빈칸으로 남는다.
   */
   const orphanCount = useMemo(
     () => tech.filter((t) => t.kind !== 'capability'
@@ -709,7 +709,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
             </SearchBox>
 
             <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">분류 전체</option>
+              <option value="">{tab === 'tech' ? '분야 전체' : '분류 전체'}</option>
               {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
 

@@ -84,7 +84,7 @@ const StageOf = ({ t }) => {
   if (t.stage) return <Pill $color={stageColor(t.stage)}>{t.stage}</Pill>;
   const marks = t.divisionMarks || [];
   if (!marks.length) {
-    return <Pill $color="#94a3b8">아직 안 적힘</Pill>;
+    return <Pill $color="#94a3b8">미기록</Pill>;
   }
   return marks.map((m) => (
     <Pill key={m.division} $color={stageColor(m.stage)}>
@@ -106,14 +106,13 @@ const CompareModal = ({ a, b, onClose, onOpen }) => {
   if (!a || !b) return null;
 
   const rows = [
-    ['한 줄 요약', a.summary, b.summary],
+    ['요약', a.summary, b.summary],
     ['공급사', a.vendor, b.vendor],
-    ['분류', a.category, b.category],
-    ['얽힌 갈래', listOf(a.tags), listOf(b.tags)],
-    ['DTC 능력', listOf(a.cpt), listOf(b.cpt)],
+    ['분야', a.category, b.category],
+    ['태그', listOf(a.tags), listOf(b.tags)],
+    ['DTC 분류', listOf(a.cpt), listOf(b.cpt)],
     ['근거', `${a.evidenceCount ?? 0}건`, `${b.evidenceCount ?? 0}건`],
-    ['그 단계로 정한 이유', a.stage_reason, b.stage_reason],
-    ['우리한테 쓸 만한가', a.description, b.description],
+    ['용도', a.description, b.description],
   ];
 
   const head = (t) => (

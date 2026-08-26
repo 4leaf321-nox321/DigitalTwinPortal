@@ -288,7 +288,7 @@ const Failed = styled.ul`
      짜 두었더니 상세 창의 사업부 칸과 이 화면이 서로 다른 것을 막을 뻔했다.
 */
 const ALL = '전체';
-const NONE = '아직 안 정함';
+const NONE = '미정';
 
 const dirtyOf = (r, d) => divisionDirty(r, d);
 const needWhy = divisionNeedsReason;
@@ -387,13 +387,13 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
     <Overlay onClick={onClose}>
       <Panel onClick={(e) => e.stopPropagation()}>
         <Head>
-          <h2>우리 사업부 한 판에 적기</h2>
+          <h2>사업부 적기</h2>
           <select value={division} onChange={(e) => setDivision(e.target.value)}>
             {(divisions || []).map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
           {data && (
             <Fill title="이 사업부가 무엇이라도 적어 둔 역량의 수">
-              <b>{filled}</b> / {total} 적음
+              작성 <b>{filled}</b> / {total}
               <i><u style={{ width: `${total ? (filled / total) * 100 : 0}%` }} /></i>
             </Fill>
           )}

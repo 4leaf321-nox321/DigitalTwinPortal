@@ -655,7 +655,7 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
                   </Field>
                   {(cptGroups || []).length > 0 && (
                     <Field as="div">
-                      <span>DTC 역량 분류</span>
+                      <span>DTC 분류</span>
                       <Chips>
                         {(cptGroups || []).map((g) => (
                           <CptBtn key={g.key} type="button" disabled={!canWrite}

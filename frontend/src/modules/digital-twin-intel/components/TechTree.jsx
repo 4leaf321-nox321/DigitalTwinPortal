@@ -256,7 +256,7 @@ const TechTree = ({ rows, all, categories, onSelect }) => {
           {marks.length === 0 && (
             <Badge $color="#94a3b8" $bg="#f8fafc"
                    title="어느 사업부도 아직 어디까지 왔는지 안 적었습니다">
-              아직 안 적힘
+              미기록
             </Badge>
           )}
           {cap.isStale && (
@@ -313,7 +313,7 @@ const TechTree = ({ rows, all, categories, onSelect }) => {
       {orphans.length > 0 && (
         <Sector>
           <h3>
-            아직 안 매단 도구 <em>{orphans.length}개 — 어느 사업부 표에도 안 나옵니다</em>
+            미연결 도구 <em>{orphans.length}개 — 어느 사업부 표에도 안 나옵니다</em>
             <span />
           </h3>
           <Node>

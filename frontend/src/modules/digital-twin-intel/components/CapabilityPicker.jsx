@@ -305,7 +305,7 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
       <Box onClick={(e) => e.stopPropagation()}>
         <Head>
           <Layers size={17} color="#4f46e5" />
-          <h2>{title || '어느 역량에 속하나'}</h2>
+          <h2>{title || '소속 역량'}</h2>
           <CloseBtn onClick={onClose}><X size={18} /></CloseBtn>
         </Head>
 
@@ -343,7 +343,7 @@ const CapabilityPicker = ({ isOpen, capabilities, categories, value,
                   onClick={() => (multi ? setPicked([]) : onPick(''))}>
               <b>
                 {(multi ? picked.length === 0 : !value) && <Check size={13} />}
-                {noneLabel || '아직 안 정함'}
+                {noneLabel || '소속 없음'}
               </b>
               <q>
                 레이더에 이 도구가 혼자 섭니다. 다만 <b>어느 사업부 표에서도 고를 수

@@ -209,7 +209,7 @@ const AssistPanel = ({ kind, uuid, onLinked, showError }) => {
 
           {(out.projects || []).length > 0 && (
             <Field>
-              <span>관련 있어 보이는 과제</span>
+              <span>관련 과제</span>
               {out.projects.map((p) => {
                 const st = state[`project:${p.uuid}`];
                 return (
@@ -233,7 +233,7 @@ const AssistPanel = ({ kind, uuid, onLinked, showError }) => {
 
           {(out.kpis || []).length > 0 && (
             <Field>
-              <span>움직일 만한 DX KPI</span>
+              <span>관련 DX KPI</span>
               {out.kpis.map((k) => {
                 const st = state[`kpi:${k.id}`];
                 return (

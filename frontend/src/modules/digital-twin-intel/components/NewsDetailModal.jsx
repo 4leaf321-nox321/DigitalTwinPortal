@@ -150,7 +150,7 @@ const LinkList = ({ rows, onRemove }) => {
   const label = { project: '과제', kpi: 'KPI', sw: '보유 SW' };
   return (
     <Field>
-      <span>이어 둔 우리 것 ({rows.length})</span>
+      <span>내부 연결 ({rows.length})</span>
       <Links>
         {rows.map((l) => (
           <li key={l.id}>
@@ -272,7 +272,7 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
 
           {(n.technologies || []).length > 0 && (
             <Field>
-              <span>이 소식이 말하는 기술</span>
+              <span>관련 기술</span>
               <Chips>
                 {n.technologies.map((t) => (
                   <Chip key={t.uuid}>
@@ -301,7 +301,7 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
 
           {full !== null && !editing && hasBody && (
             <Field>
-              <span>보관된 원문</span>
+              <span>원문</span>
               <Article>{n.body}</Article>
             </Field>
           )}
@@ -332,7 +332,7 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
 
           {editing && (
             <Field>
-              <span>원문 붙여넣기</span>
+              <span>원문</span>
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
                         rows={14}
                         placeholder="기사 본문을 그대로 붙여넣으세요" />

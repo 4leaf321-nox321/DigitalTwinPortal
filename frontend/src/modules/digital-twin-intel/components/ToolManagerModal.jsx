@@ -10,13 +10,13 @@ import { Overlay, Panel, Head, CloseBtn, Body, Foot, Hint, GhostBtn } from './mo
 import CapabilityPicker from './CapabilityPicker';
 
 /**
- * **도구 관리** — 역량마다 「무엇으로 하나」에서 고를 수 있는 S/W 목록을 정의한다.
+ * **도구 관리** — 역량마다 사업부가 고를 수 있는 S/W 목록을 정의한다.
  *
  * ⚠️⚠️ **도구는 따로 저장되는 곳이 없다.** 역량과 같은 표(`dt_intel_tech`)에 있고,
  *    `kind='tool'` 과 `parent_uuid` 두 칸이 다를 뿐이다. 그래서 이 화면이 하는 일은
  *    새 표를 만드는 것이 아니라 **어느 역량 밑에 매다느냐를 정하는 것**이다.
  *
- * ⚠️⚠️ **매달려야 고를 수 있다.** 사업부가 「무엇으로 하나」에서 고를 수 있는 것은
+ * ⚠️⚠️ **매달려야 고를 수 있다.** 사업부가 사업부 단계의 도구로 고를 수 있는 것은
  *    그 역량의 자식뿐이다(서버가 그렇게만 받는다 — 아무거나 받으면 「explicit
  *    해석을 Grafana 로 한다」가 조용히 생긴다). 안 매달린 도구는 레이더에는 혼자
  *    서지만 **어느 사업부 표에도 안 나온다** — 그래서 이 화면이 필요하다.
@@ -384,13 +384,13 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
     /*
       ⚠️⚠️ **지금 보고 있는 역량에서만 뗀다.** 여러 역량에 걸쳐 있으면 나머지는
          그대로 남는다 — 한 번에 다 떼면 「여기서 빼려던 것」이 딴 데까지 지운다.
-      ⚠️ 떼면 그 역량의 「무엇으로 하나」에서도 빠진다(서버가 지운다). 적어 둔
+      ⚠️ 떼면 그 역량의 사업부 단계에 적힌 도구에서도 빠진다(서버가 지운다). 적어 둔
          사업부가 있으면 그 말이 사라지는 것이므로 먼저 묻는다.
     */
     const rest = (t.capabilityUuids || []).filter((u) => u !== current);
     if (!window.confirm(
       `「${t.name}」 을 「${currentCap ? currentCap.name : '이 역량'}」 에서 떼어 냅니다.\n\n`
-      + '이 역량의 사업부 표에 「무엇으로 하나」로 적혀 있었다면 거기서도 빠집니다.\n'
+      + '이 역량의 사업부 단계에 도구로 적혀 있었다면 거기서도 빠집니다.\n'
       + (rest.length
         ? `다른 역량 ${rest.length}곳에는 그대로 남습니다.`
         : '어느 역량에도 안 남아 레이더에 혼자 서게 되고, 어느 사업부 표에서도 고를 수 없습니다.'))) return;
@@ -400,7 +400,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
   const remove = (t) => {
     if (!window.confirm(
       `「${t.name}」 을 아주 지웁니다. 되돌릴 수 없습니다.\n\n`
-      + '이 도구에 걸린 근거 소식과, 사업부들이 적어 둔 「무엇으로 하나」에서도 함께 사라집니다.')) return;
+      + '이 도구에 걸린 근거 소식과, 사업부들이 사업부 단계에 적어 둔 도구에서도 함께 사라집니다.')) return;
     run(t.uuid, () => api.deleteTech(t.uuid), `「${t.name}」 을 지웠습니다.`);
   };
 
@@ -415,7 +415,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
 
         <Body>
           <Hint>
-            사업부가 「무엇으로 하나」에서 고를 수 있는 것은 <b>그 역량에 매달린
+            사업부가 사업부 단계에서 고를 수 있는 도구는 <b>그 역량에 매달린
             도구뿐</b>입니다. 왼쪽에서 역량을 고르고, 그 밑에 쓰는 S/W 를 넣으세요.
             <b> 안 매달린 도구는 레이더에는 서지만 어느 사업부 표에도 안 나옵니다.</b>
           </Hint>
@@ -464,7 +464,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                       $warn={orphans.length > 0}
                       onClick={() => { setPick(ORPHAN); setQ(''); }}>
                 {orphans.length > 0 && <AlertTriangle size={11} />}
-                <b>아직 안 매단 도구</b>
+                <b>미연결 도구</b>
                 <em>{orphans.length}</em>
               </Orphan>
               </Left>
@@ -500,7 +500,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                       ? '찾는 도구가 없습니다.'
                       : current === ORPHAN
                         ? '안 매단 도구가 없습니다. 전부 어느 역량엔가 들어 있습니다.'
-                        : '이 역량에 매달린 도구가 없습니다. 위에서 넣어 주세요 — 없으면 사업부가 「무엇으로 하나」를 못 고릅니다.'}
+                        : '이 역량에 매달린 도구가 없습니다. 위에서 넣어 주세요 — 없으면 사업부가 쓸 도구를 못 고릅니다.'}
                   </Empty>
                 )}
 
@@ -512,7 +512,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                       {/* ⚠️ 도구에는 단계가 없다 — 자리는 **누가 쓴다고 적었나**다. */}
                       {(t.divisionMarks || []).length
                         ? t.divisionMarks.map((m) => `${m.division} ${m.stage}`).join(' · ')
-                        : '아직 아무 사업부도 안 적음'}
+                        : '미기록'}
                       {' · 근거 '}{t.evidenceCount ?? 0}건
                       {t.summary ? ` · ${t.summary}` : ''}
                     </small>
@@ -567,7 +567,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
              것을 `useState` 초기값으로 **한 번만** 잡는다. 늘 트리에 남겨 두면 그
              한 번이 `moving === null` 인 순간이라, 창은 **아무것도 안 골라진 채로**
              뜨고 「다 골랐습니다」를 누르면 걸려 있던 역량이 통째로 떨어져 나갔다
-             (그 도구는 미아가 되고, 사업부들이 적어 둔 「무엇으로 하나」에서도
+             (그 도구는 미아가 되고, 사업부들이 적어 둔 도구에서도
              지워진다). 두 번째부터는 **앞 도구에서 고른 것**이 남아 엉뚱한 역량으로
              덮어썼다.
         */}
@@ -579,7 +579,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
           categories={categories}
           multi
           values={moving?.capabilityUuids || []}
-          title={moving ? `「${moving.name}」 은 어느 역량에 속하나` : ''}
+          title={moving ? `「${moving.name}」 소속 역량` : ''}
           noneLabel="어디에도 안 매달림 — 사업부 표에서 안 보이게 됩니다"
           onDone={(list) => {
             const t = moving;

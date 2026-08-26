@@ -269,7 +269,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
   if (!data) {
     return (
       <Field>
-        <span>사업부별로 어디까지 왔나</span>
+        <span>사업부 단계</span>
         <Hint>{failed ? `불러오지 못했습니다 — ${failed}` : '불러오는 중…'}</Hint>
       </Field>
     );
@@ -312,10 +312,10 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
 
   return (
     <Field>
-      <span>사업부별로 어디까지 · 왜 · 무엇으로</span>
+      <span>사업부 단계</span>
       <Head>
         {saidCount > 0
-          ? <>적은 사업부 <b>{saidCount}</b> / {divisions.length}</>
+          ? <>작성 사업부 <b>{saidCount}</b> / {divisions.length}</>
           : '아직 어느 사업부도 안 적었습니다'}
       </Head>
 
@@ -328,7 +328,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
             <Row key={d} $diff={diff}>
               <Line>
                 <b>{d}</b>
-                <Stage $diff={diff}>{diff ? o.stage : '아직 안 적음'}</Stage>
+                <Stage $diff={diff}>{diff ? o.stage : '미기록'}</Stage>
 
                 {/*
                   ⚠️ **적어 둔 것을 한 줄로 보여준다.** 단계만 보이면 「왜」와
@@ -362,9 +362,9 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                     단계
                     <select value={draft.stage}
                             onChange={(e) => setDraft((p) => ({ ...p, stage: e.target.value }))}>
-                      {/* ⚠️ 「아직 안 정함」을 고르고 저장하면 이 줄이 사라진다 —
-                          빈 줄을 남기면 「적은 사업부」 셈이 부풀고 못 믿게 된다. */}
-                      <option value={FOLLOW}>아직 안 정함</option>
+                      {/* ⚠️ 「미정」을 고르고 저장하면 이 줄이 사라진다 —
+                          빈 줄을 남기면 「작성 사업부」 셈이 부풀고 못 믿게 된다. */}
+                      <option value={FOLLOW}>미정</option>
                       {STAGES.map((st) => (
                         <option key={st.key} value={st.key}>{st.key} — {st.desc}</option>
                       ))}
@@ -379,7 +379,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                   */}
                   {draft.stage !== FOLLOW && (
                     <label>
-                      왜 그렇게 보는지{draft.stage === '보류' ? ' *' : ''}
+                      이유{draft.stage === '보류' ? ' *' : ''}
                       <input value={draft.reason} autoFocus
                              onChange={(e) => setDraft((p) => ({ ...p, reason: e.target.value }))}
                              placeholder={draft.stage === '보류'
@@ -389,7 +389,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                   )}
 
                   <label>
-                    무엇으로 하나
+                    도구
                     {choices.length === 0
                       ? (
                         <Hint>

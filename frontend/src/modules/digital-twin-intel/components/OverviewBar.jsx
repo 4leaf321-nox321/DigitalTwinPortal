@@ -54,7 +54,7 @@ const Quiet = styled.div`
  *    되고, 진짜로 1이 됐을 때도 안 보인다.
  *
  * ⚠️⚠️ **지금 탭에서 볼 수 있는 것만 띄운다**(2026-08-25 신고: 「레이더 탭의 소식
- *    버튼이 애매하다」). 레이더를 보는 중에 「안 읽은 소식」을 눌러 봐야 **소식 탭으로
+ *    버튼이 애매하다」). 레이더를 보는 중에 「신규 소식」을 눌러 봐야 **소식 탭으로
  *    튀어 나간다** — 지금 화면과 상관없는 단추가 섞여 있으면 이 막대가 무엇을
  *    말하는 것인지부터 흐려진다.
  *
@@ -68,7 +68,7 @@ const OverviewBar = ({ data, active, onPick, tab = 'news' }) => {
   const isNews = tab === 'news';
   const items = [
     { key: 'unread', on: isNews, n: data.unreadNews, icon: Newspaper,
-      label: '안 읽은 소식', color: '#4f46e5', bg: '#eef2ff',
+      label: '신규 소식', color: '#4f46e5', bg: '#eef2ff',
       why: '아직 아무도 안 읽은 소식입니다. 읽고 「확인됨」으로 옮겨 주세요' },
     { key: 'stale', on: !isNews, n: data.staleTech, icon: AlertTriangle,
       label: '낡은 기술', color: '#b45309', bg: '#fffbeb',
@@ -80,7 +80,7 @@ const OverviewBar = ({ data, active, onPick, tab = 'news' }) => {
          거르기는 그 시간 단추 밑으로 옮겼다 — 지운 것이 아니다.
     */
     { key: 'unlinked', on: isNews, n: data.unlinkedNews, icon: Unlink,
-      label: '우리 것과 안 이어진 소식', color: '#7c3aed', bg: '#f5f3ff',
+      label: '미연결 소식', color: '#7c3aed', bg: '#f5f3ff',
       why: '아직 과제·지표와 안 이어졌습니다. AI 정리로 후보를 받아 보세요' },
   ].filter((it) => it.on && (it.n || 0) > 0);
 
@@ -121,7 +121,7 @@ const OverviewBar = ({ data, active, onPick, tab = 'news' }) => {
         {isNews
           ? `소식 ${data.totalNews}건`
           : `레이더 ${data.totalTech}개 (역량 ${data.capabilityCount}`
-            + ` · 안 매단 도구 ${data.orphanToolCount ?? 0})`
+            + ` · 미연결 도구 ${data.orphanToolCount ?? 0})`
             + ` · 도구 전체 ${data.toolCount}`}
       </Quiet>
     </Bar>

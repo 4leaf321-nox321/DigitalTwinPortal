@@ -181,8 +181,8 @@ const Kids = styled.ul`
 
      화면의 80% 를 쓰고 **두 칸으로 가른다.**
 
-         왼쪽  무엇인가   요약 · 층 · 분류 · 함께 나오는 것 · 근거 소식
-         오른쪽 무엇을 정하나  단계 · 사업부별 · 연결 · 이력
+         왼쪽  개요   요약 · 층 · 분야 · 연관 기술 · 근거 소식
+         오른쪽 판단   사업부 단계 · 내부 연결 · 이력
 
   ⚠️ 칸마다 **따로 굴린다.** 하나로 굴리면 두 칸으로 가른 뜻이 없다 — 오른쪽을
      보려고 왼쪽 끝까지 내려가야 하는 것은 똑같다.
@@ -329,7 +329,7 @@ const LinkList = ({ rows, onRemove }) => {
   const label = { project: '과제', kpi: 'KPI', sw: '보유 SW' };
   return (
     <Field>
-      <span>이어 둔 우리 것 ({rows.length})</span>
+      <span>내부 연결 ({rows.length})</span>
       <Links>
         {rows.map((l) => (
           <li key={l.id}>
@@ -497,7 +497,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
 
         <Two>
           <Col>
-            <ColHead>무엇인가</ColHead>
+            <ColHead>개요</ColHead>
           {/*
             ⚠️ **지금 보고 있는 것이 누구의 답인지 먼저 말한다.** 사업부 눈으로 연
                창에서 그냥 「도입」이라고만 쓰여 있으면 회사 전체가 도입인 줄 안다 —
@@ -519,8 +519,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
               {/* ⚠️ 도구일 수도 있다 — 「이 역량」이라 못 박으면 도구 상세에서 틀린다. */}
               <b>{division}</b> 는 {isCap ? '이 역량' : '이 도구'}에 대해
               <b> 아직 아무것도 안 적었습니다.</b>
-              아래 「사업부별로 어디까지 · 왜 · 무엇으로」에서 적으면 레이더에
-              점이 생깁니다.
+              아래 「사업부 단계」에서 적으면 레이더에 점이 생깁니다.
             </Lens>
           )}
 
@@ -548,13 +547,13 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           {tech.kind === 'capability' && (
             <Field>
               <span>
-                무엇으로 하나 {(tech.children || []).length > 0
+                도구 {(tech.children || []).length > 0
                   ? `(${tech.children.length}개)` : ''}
               </span>
               {(tech.children || []).length === 0
                 ? <Hint>
-                    아직 매달린 도구가 없습니다. 도구를 고칠 때 「어느 역량에 속하나」
-                    에서 이 역량을 고르면 여기에 모이고, <b>그 도구의 소식이 이 역량의
+                    아직 매달린 도구가 없습니다. 도구를 고칠 때 「소속 역량」에서
+                    이 역량을 고르면 여기에 모이고, <b>그 도구의 소식이 이 역량의
                     근거로 함께 셉니다.</b>
                   </Hint>
                 : (
@@ -574,13 +573,13 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           )}
 
           {/*
-            ⚠️⚠️ **되짚는 쪽이 없으면 적을 이유가 절반으로 준다.** 「무엇으로 하나」를
+            ⚠️⚠️ **되짚는 쪽이 없으면 적을 이유가 절반으로 준다.** 사업부 단계의 도구를
                채워도 「LS-DYNA 를 누가 쓰나」에 답이 안 나오면, 채운 사람이 그게
                어디에 쓰이는지 못 본다 — 그러면 다음부터 안 채운다.
           */}
           {usedBy.length > 0 && (
             <Field>
-              <span>이 도구를 쓰는 사업부 ({usedBy.length})</span>
+              <span>사용 사업부 ({usedBy.length})</span>
               <Kids>
                 {usedBy.map((u) => (
                   <li key={`${u.division}-${u.capabilityUuid}`}>
@@ -605,7 +604,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           */}
           {tech.kind !== 'capability' && (tech.capabilities || []).length > 0 && (
             <Field>
-              <span>어느 역량인가 ({tech.capabilities.length})</span>
+              <span>소속 역량 ({tech.capabilities.length})</span>
               <Kids>
                 {tech.capabilities.map((c) => (
                   <li key={c.uuid}>
@@ -624,7 +623,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             ⚠️⚠️ **칸마다 어느 층의 사실인지 다르다** (models.py 의 규칙과 같다).
 
                 공급사 · 제품 주소       도구에만. 역량은 파는 회사가 없다
-                분류 · 얽힌 갈래 · CPT   레이더에 서는 줄에만
+                분야 · 태그 · DTC 분류   레이더에 서는 줄에만
                                          (= 역량이거나, 아직 안 매단 도구)
 
             ⚠️ 빈 값을 「—」로 늘어놓으면 **안 채운 칸처럼 보인다.** 채울 수 없는
@@ -636,7 +635,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             )}
             {(tech.kind === 'capability'
               || !(tech.capabilityUuids || []).length) && (
-              <li><b>분류</b><span>{tech.category || '—'}</span></li>
+              <li><b>분야</b><span>{tech.category || '—'}</span></li>
             )}
             {/* ⚠️ 「어디서 왔나」만 있고 「언제」가 없으면 못 믿는다. */}
             {tech.movedFrom && (
@@ -666,11 +665,11 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             {(tech.divisions || []).length > 0 && (
               <li><b>관련 사업부</b><span>{tech.divisions.join(' · ')}</span></li>
             )}
-            {/* 부채꼴은 하나뿐이라 **얽힌 갈래는 여기서만 읽힌다.** 분류와 한 몸이라
-                분류가 없는 자리(매달린 도구)에는 같이 없다. */}
+            {/* 부채꼴은 하나뿐이라 **태그는 여기서만 읽힌다.** 분야와 한 몸이라
+                분야가 없는 자리(매달린 도구)에는 같이 없다. */}
             {(tech.kind === 'capability' || !(tech.capabilityUuids || []).length)
               && (tech.tags || []).length > 0 && (
-              <li><b>얽힌 갈래</b><span>{tech.tags.join(' · ')}</span></li>
+              <li><b>태그</b><span>{tech.tags.join(' · ')}</span></li>
             )}
             {(tech.kind === 'capability' || !(tech.capabilityUuids || []).length)
               && (tech.cpt || []).length > 0 && (
@@ -690,7 +689,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           */}
           {related.length > 0 && (
             <Field>
-              <span>자주 함께 나오는 기술</span>
+              <span>연관 기술</span>
               <Together>
                 {related.map((r) => (
                   <li key={r.uuid}>
@@ -708,18 +707,18 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
 
           {tech.description && (
             <Field>
-              <span>우리한테 어디에 쓸 만한가</span>
+              <span>용도</span>
               <Body2>{tech.description}</Body2>
             </Field>
           )}
 
 
           {/*
-            ⚠️ **근거는 읽는 쪽이다.** 「왜 이 단계인가」에 답하는 자리라 무엇인가와
+            ⚠️ **근거는 읽는 쪽이다.** 「왜 이 단계인가」에 답하는 자리라 개요와
                함께 둔다 — 정하는 칸에 섞으면 그 칸이 길어져 입력이 다시 아래로 밀린다.
           */}
           <Field>
-            <span>근거가 된 소식 {evidence ? `(${evidence.length}건)` : ''}</span>
+            <span>근거 소식 {evidence ? `(${evidence.length}건)` : ''}</span>
             {evidence === null && <Hint>불러오는 중…</Hint>}
             {evidence !== null && evidence.length === 0 && (
               <Hint>
@@ -756,14 +755,14 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                하는지가 안 보이고, 한참 굴려 내려가야 닿는다.
           */}
           <Col $right>
-            <ColHead>무엇을 정하나</ColHead>
+            <ColHead>판단</ColHead>
           {/*
             ⚠️ 단계를 「조직의 판단」이라며 좁혀 놓고 기록이 없으면 좁힌 의미가 절반이다.
                「왜 작년에 도입이었다가 보류로 내려갔지」에 답할 수 있어야 한다.
           */}
           <Field>
             <span>
-              단계가 바뀐 기록
+              단계 이력
               {changes === null && (
                 <HistBtn onClick={loadChanges}><History size={11} /> 보기</HistBtn>
               )}
@@ -805,10 +804,10 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           <Hint>
             {isCap
               ? <>역량에는 <b>단계가 없습니다.</b> 단계는 사업부마다 답이 달라서,
-                  아래 「사업부별로 어디까지 · 왜 · 무엇으로」에만 적습니다.</>
+                  아래 「사업부 단계」에만 적습니다.</>
               : <>도구에도 <b>단계가 없습니다.</b> 「우리가 이걸 쓰나」는 사업부마다
-                  답이 달라서, <b>이 도구를 쓰는 역량</b>의 사업부 칸에서
-                  「무엇으로 하나」로 적습니다.</>}
+                  답이 달라서, <b>이 도구를 쓰는 역량</b>의 「사업부 단계」에
+                  도구로 적습니다.</>}
           </Hint>
 
           {/*

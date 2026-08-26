@@ -185,7 +185,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
        규칙은 두 줄이다 (서버도 같은 규칙을 본다 — models.py 참고).
 
            공급사 · 제품 주소       **도구에만.** 역량은 파는 회사가 없다
-           분류 · 얽힌 갈래 · CPT   **레이더에 서는 줄에만**
+           분야 · 태그 · DTC 분류   **레이더에 서는 줄에만**
                                     (= 역량이거나, 아직 안 매단 도구)
 
     ⚠️ 자료로 확인 — 역량 39개 중 공급사ㆍ주소가 적힌 것 0개. 반대로 매달린 도구는
@@ -282,7 +282,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
                누가 앞섰는지 읽을 수 없다.
           */}
           <Field>
-            <span>무엇으로 넣나 *</span>
+            <span>층 *</span>
             <KindRow>
               <KindBtn type="button" $on={kind === 'tool'}
                        disabled={hasChildren}
@@ -310,14 +310,14 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           */}
           {kind === 'tool' && (
             <Field>
-              <span>어느 역량에 속하나 (여럿 고를 수 있습니다)</span>
+              <span>소속 역량</span>
               <PickBtn type="button" $set={capUuids.length > 0}
                        onClick={() => setPickerOpen(true)}>
                 <Layers size={14} />
                 {/* ⚠️ 고른 것을 **전부** 적는다 — 하나만 적으면 나머지가 숨는다. */}
                 <b>{capNames.length
                   ? capNames.join(' · ')
-                  : '아직 안 정함 — 눌러서 고르세요'}</b>
+                  : '소속 없음 — 눌러서 고르세요'}</b>
                 <em>{capUuids.length ? `바꾸기 (${capUuids.length})` : '고르기'}</em>
               </PickBtn>
             </Field>
@@ -361,7 +361,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           )}
 
           <Field>
-            <span>한 줄 요약</span>
+            <span>요약</span>
             <input value={form.summary} onChange={set('summary')}
                    placeholder="이게 무엇인지 한 문장으로" />
           </Field>
@@ -375,7 +375,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
             <TwoCol>
               {showSector && (
                 <Field>
-                  <span>분류 (레이더 부채꼴)</span>
+                  <span>분야</span>
                   <select value={form.category} onChange={set('category')}>
                     <option value="">고르지 않음</option>
                     {(categories || []).map((c) => <option key={c} value={c}>{c}</option>)}
@@ -397,7 +397,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           */}
           {!showSector && (
             <Hint>
-              <b>분류ㆍ얽힌 갈래ㆍDTC 능력은 여기에 없습니다.</b> 이 도구는 역량
+              <b>분야ㆍ태그ㆍDTC 분류는 여기에 없습니다.</b> 이 도구는 역량
               「{capNames.join(' · ') || '상위'}」 밑에 매달려 있어 <b>레이더에 따로 서지
               않습니다</b> — 부채꼴은 그 역량의 것을 따릅니다. 따로 두면 서로
               어긋나도 아무 데도 안 보여서 모르고 지나갑니다.
@@ -405,7 +405,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           )}
 
           <Field>
-            <span>다른 이름 (별칭)</span>
+            <span>별칭</span>
             <AliasRow>
               <input value={aliasInput} onChange={(e) => setAliasInput(e.target.value)}
                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAlias(); } }}
@@ -439,7 +439,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           */}
           {showSector && (
           <Field>
-            <span>얽힌 다른 갈래 (태그)</span>
+            <span>태그</span>
             <AliasRow>
               <input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
@@ -474,7 +474,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           */}
           {showSector && (
           <Field>
-            <span>DTC 능력 분류 (CPT v1.1)</span>
+            <span>DTC 분류</span>
             <CptGrid>
               {(cptGroups || []).map((g) => (
                 <CptBtn key={g.key} type="button" $on={cpt.includes(g.key)}
@@ -497,7 +497,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           )}
 
           <Field>
-            <span>우리한테 어디에 쓸 만한가</span>
+            <span>용도</span>
             <textarea value={form.description} onChange={set('description')}
                       placeholder="어느 과제·공정에 닿는지, 무엇이 걸림돌인지" />
           </Field>
@@ -554,7 +554,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           categories={categories}
           multi
           values={capUuids}
-          noneLabel="아직 안 정함 — 레이더에 혼자 섭니다"
+          noneLabel="소속 없음 — 레이더에 혼자 섭니다"
           onDone={(list) => { setCapUuids(list); setPickerOpen(false); }}
           onClose={() => setPickerOpen(false)} />
         )}

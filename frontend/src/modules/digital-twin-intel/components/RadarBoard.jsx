@@ -36,7 +36,7 @@ const STAGES = [
 
 const Board = styled.div`
   display: grid;
-  /* ⚠️ 다섯 단계 + 「아직 안 적힘」 = 여섯 칸이다. 숫자가 어긋나면 마지막 칸이
+  /* ⚠️ 다섯 단계 + 「미기록」 = 여섯 칸이다. 숫자가 어긋나면 마지막 칸이
      조용히 줄바꿈되어 다른 줄로 내려간다. */
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.75rem;
@@ -164,7 +164,7 @@ const Empty = styled.div`
      없으면 아직 아무 사업부도 안 적은 역량이 다섯 칸 어디에도 안 들어가 **목록에서
      통째로 사라진다.** 레이더는 일부러 안 그리지만, 목록은 전부 보는 자리다.
 */
-const NOBODY = { key: '', label: '아직 안 적힘', color: '#64748b', bg: '#f8fafc',
+const NOBODY = { key: '', label: '미기록', color: '#64748b', bg: '#f8fafc',
                  border: '#e2e8f0',
                  desc: '어느 사업부도 아직 어디까지 왔는지 안 적었습니다' };
 
@@ -172,7 +172,7 @@ const NOBODY = { key: '', label: '아직 안 적힘', color: '#64748b', bg: '#f8
  * 그 칸에 설 줄들. `{tech, divisions}`.
  *
  * ⚠️⚠️ **레이더와 같은 규칙으로 세운다**(2026-08-26). 역량은 단계를 안 갖는다 —
- *    `t.stage` 로만 나누면 사업부를 안 골랐을 때 **역량 63개가 죄다 「아직 안 적힘」
+ *    `t.stage` 로만 나누면 사업부를 안 골랐을 때 **역량 63개가 죄다 「미기록」
  *    으로 몰린다.** MX 가 「도입」이라 적어 둔 역량도 거기 간다. 레이더는 도입
  *    고리에 점을 찍고 있는데 목록은 안 적혔다고 말하는 꼴이었다.
  *
@@ -188,7 +188,7 @@ const inColumn = (rows, key) => {
       if (mine.length) out.push({ tech: t, divisions: mine.map((m) => m.division) });
       return;
     }
-    // 사업부 눈이거나 도구 — 자기 단계를 들고 있다. 없으면 「아직 안 적힘」.
+    // 사업부 눈이거나 도구 — 자기 단계를 들고 있다. 없으면 「미기록」.
     if ((t.stage || '') === key) out.push({ tech: t, divisions: [] });
   });
   return out;

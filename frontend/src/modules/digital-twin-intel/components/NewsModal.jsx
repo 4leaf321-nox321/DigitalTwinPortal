@@ -154,7 +154,7 @@ const NewsModal = ({ isOpen, onClose, onSave, categories, saving }) => {
           </Field>
 
           <Field>
-            <span>원문 보관</span>
+            <span>원문</span>
             <textarea value={form.body} onChange={set('body')} rows={5}
                       placeholder="원문을 여기 붙여넣으면 시스템에 남습니다" />
           </Field>
@@ -166,7 +166,7 @@ const NewsModal = ({ isOpen, onClose, onSave, categories, saving }) => {
           </Hint>
 
           <Field>
-            <span>이 소식이 말하는 기술</span>
+            <span>관련 기술</span>
             <TechRow>
               <input value={techName} onChange={(e) => setTechName(e.target.value)}
                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTech(); } }}
