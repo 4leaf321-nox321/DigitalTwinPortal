@@ -71,6 +71,15 @@ def main():
             print('  … 그리고 %d개 더' % (len(strays) - 15))
         print()
 
+        # ⚠️ 씨뿌리기가 **바로잡을** 줄. 역량은 단계가 없고 도구는 있어야 한다.
+        odd_c = [c.name for c in caps if c.stage or c.stage_reason]
+        odd_t = [t.name for t in tools if not t.stage]
+        print('규칙에 어긋난 단계: 역량 %d개 · 도구 %d개 (씨뿌리기가 바로잡습니다)'
+              % (len(odd_c), len(odd_t)))
+        for n in (odd_c + odd_t)[:10]:
+            print('  ·', n)
+        print()
+
         add_c = sorted(wanted - {c.name for c in caps})
         print('새로 생길 역량: %d개' % len(add_c))
         for n in add_c[:15]:

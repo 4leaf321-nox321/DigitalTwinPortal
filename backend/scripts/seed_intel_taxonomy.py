@@ -21,7 +21,7 @@ from app import create_app                                    # noqa: E402
 from app.extensions import db                                 # noqa: E402
 from app.modules.digital_twin_intel import services as S      # noqa: E402
 from app.modules.digital_twin_intel.models import (           # noqa: E402
-    CPT_KEYS, DEFAULT_SECTORS, IntelDivisionStage, IntelTech,
+    CPT_KEYS, DEFAULT_SECTORS, STAGE_NEW, IntelDivisionStage, IntelTech,
     IntelTechCapability)
 from seed_intel_taxonomy_data import TAXONOMY                                 # noqa: E402
 
@@ -65,9 +65,17 @@ def main():
                     continue
                 made += 1
             else:
-                # 도구로 있던 이름이면 역량으로 올린다(공급사ㆍ주소는 규칙대로 비운다).
+                """
+                도구로 있던 이름이면 역량으로 올린다(공급사ㆍ주소는 규칙대로 비운다).
+
+                ⚠️⚠️ **단계도 함께 비운다**(2026-08-26). 역량은 단계를 안 갖는다.
+                   안 비우면 **단계를 든 역량**이 생기는데, 상세 창에 역량용 칸이
+                   없어 화면 어디에서도 지울 길이 없다. 목록에서는 그 역량만 엉뚱한
+                   칸에 선다. 운영처럼 이름이 겹치는 DB 에서만 터지는 구멍이었다.
+                """
                 c.kind = 'capability'
-                c.parent_uuid = None
+                c.stage = None
+                c.stage_reason = None
                 c.vendor = None
                 c.url = None
                 c.category = sector
@@ -102,10 +110,17 @@ def main():
                         created += 1
                     continue
                 if t.kind == 'capability':
-                    # 옛 역량 이름이 이제 도구로 간다 — 매달린 것을 먼저 떼어 낸다.
+                    """
+                    옛 역량 이름이 이제 도구로 간다 — 매달린 것을 먼저 떼어 낸다.
+
+                    ⚠️⚠️ **단계를 채워 준다**(2026-08-26). 역량은 단계가 비어 있는데,
+                       도구는 갖는 것이 규칙이다. 안 채우면 **단계 없는 도구**가 되어
+                       목록의 「아직 안 적힘」 칸으로 빠지고 단계 거르기에 안 걸린다.
+                    """
                     IntelTechCapability.query.filter_by(
                         capability_uuid=t.uuid).delete()
                     t.kind = 'tool'
+                    t.stage = t.stage or STAGE_NEW
                 """
                 ⚠️ **이미 있는 연결은 안 건드린다.** 표에 적힌 것을 더할 뿐이다 —
                    사람이 손으로 더 매달아 둔 역량을 씨뿌리기가 지우면 안 된다.
@@ -156,6 +171,28 @@ def main():
                 if not any(n in listed for n in names):
                     strays.append((c.name, t.name))
 
+        # ── 4.6 규칙에 어긋난 줄 바로잡기 ──────────────────────────────────
+        """
+        ⚠️⚠️ **역량은 단계가 없고 도구는 있다.** 층을 옮기다, 또는 MCPㆍ소식으로
+           들어오다 어긋난 줄이 생기면 **화면 어디에서도 고칠 길이 없다** — 역량의
+           단계를 지우는 칸이 없고, 단계 없는 도구는 목록의 「아직 안 적힘」으로
+           빠져 단계 거르기에 아예 안 걸린다.
+
+        ⚠️ 표 안팎을 안 가린다. 어긋난 줄은 어디서 왔든 못 쓰는 줄이다.
+        """
+        mended = 0
+        for c in IntelTech.query.filter_by(kind='capability').all():
+            if c.stage is not None or c.stage_reason:
+                c.stage = None
+                c.stage_reason = None
+                mended += 1
+        for t in IntelTech.query.filter(IntelTech.kind != 'capability').all():
+            if not t.stage:
+                t.stage = STAGE_NEW
+                mended += 1
+        if mended:
+            db.session.commit()
+
         # ── 5. 보고 ────────────────────────────────────────────────────────
         caps = IntelTech.query.filter_by(kind='capability').all()
         tools = IntelTech.query.filter_by(kind='tool').all()
@@ -165,6 +202,8 @@ def main():
         print('역량 새로 %d · 고쳐 씀 %d · 지움 %d' % (made, updated, len(dropped)))
         print('도구 새로 %d · 부모 옮김 %d' % (created, moved))
         print('사업부 줄에서 어긋난 도구 정리 %d줄' % fixed)
+        if mended:
+            print('규칙에 어긋난 단계 바로잡음 %d줄' % mended)
         if dropped:
             print('  지운 옛 역량:', ', '.join(dropped))
         if strays:
@@ -175,6 +214,22 @@ def main():
         print()
         print('== 지금 ==')
         print('역량 %d · 도구 %d (안 매달린 것 %d)' % (len(caps), len(tools), len(orph)))
+
+        """
+        ⚠️⚠️ **규칙에 안 맞는 줄이 생기면 보고에 뜬다**(2026-08-26). 역량은 단계가
+           없어야 하고 도구는 있어야 한다. 층을 옮기다 어긋나면 화면 어디에서도
+           고칠 길이 없는 줄이 되는데, 여기 안 적으면 **다음에도 모른다.**
+           0 이면 조용하다 — 늘 떠 있으면 눈이 지나친다.
+        """
+        odd_c = [c.name for c in caps if c.stage]
+        odd_t = [t.name for t in tools if not t.stage]
+        if odd_c or odd_t:
+            print()
+            print('  !! 규칙에 안 맞는 줄')
+            for n in odd_c:
+                print('     단계를 든 역량:', n)
+            for n in odd_t:
+                print('     단계 없는 도구:', n)
         if orph:
             for o in orph:
                 print('     미아:', o.name)
