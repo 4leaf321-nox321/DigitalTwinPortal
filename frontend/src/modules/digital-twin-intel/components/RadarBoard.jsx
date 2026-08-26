@@ -29,7 +29,9 @@ const STAGES = [
 
 const Board = styled.div`
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* ⚠️ 다섯 단계 + 「아직 안 적힘」 = 여섯 칸이다. 숫자가 어긋나면 마지막 칸이
+     조용히 줄바꿈되어 다른 줄로 내려간다. */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.75rem;
   align-items: start;
 
@@ -136,29 +138,29 @@ const Kind = styled.span`
   color: ${(p) => (p.$cap ? '#4338ca' : '#64748b')};
 `;
 
-/* ⚠️ 기본 설정과 다르게 본 줄. 레이더의 ◆ 와 **같은 표시**여야 한다 — 두 화면이
-      다른 기호를 쓰면 같은 것인지 알 수 없다. */
-const Diff = styled.span`
-  flex-shrink: 0;
-  color: #4f46e5;
-  font-size: 0.6875rem;
-  font-weight: 700;
-`;
-
 const Empty = styled.div`
   font-size: 0.75rem;
   color: #94a3b8;
   padding: 0.5rem 0.25rem;
 `;
 
+/*
+  ⚠️⚠️ **단계가 없는 줄을 위한 칸.** 역량은 단계를 안 갖는다(2026-08-26) — 이 칸이
+     없으면 아직 아무 사업부도 안 적은 역량이 다섯 칸 어디에도 안 들어가 **목록에서
+     통째로 사라진다.** 레이더는 일부러 안 그리지만, 목록은 전부 보는 자리다.
+*/
+const NOBODY = { key: '', label: '아직 안 적힘', color: '#64748b', bg: '#f8fafc',
+                 border: '#e2e8f0',
+                 desc: '어느 사업부도 아직 어디까지 왔는지 안 적었습니다' };
+
 const RadarBoard = ({ rows, onSelect }) => (
   <Board>
-    {STAGES.map((st) => {
-      const items = rows.filter((t) => t.stage === st.key);
+    {[...STAGES, NOBODY].map((st) => {
+      const items = rows.filter((t) => (t.stage || '') === st.key);
       return (
         <Column key={st.key} $bg={st.bg} $border={st.border}>
           <ColHead $color={st.color}>
-            <b>{st.key} <Count>{items.length}</Count></b>
+            <b>{st.label || st.key} <Count>{items.length}</Count></b>
             <span>{st.desc}</span>
           </ColHead>
 
@@ -171,9 +173,6 @@ const RadarBoard = ({ rows, onSelect }) => (
                 <Kind $cap={t.kind === 'capability'}>
                   {t.kind === 'capability' ? '역량' : '도구'}
                 </Kind>
-                {t.isDivisionOverride && (
-                  <Diff title={`기본 설정은 「${t.companyStage}」 입니다`}>◆</Diff>
-                )}
                 {t.isStale && (
                   <Stale title={`근거가 ${t.staleAfterDays}일 넘게 없습니다. 아직 유효한지 확인이 필요합니다`}>
                     <AlertTriangle size={11} /> 낡음

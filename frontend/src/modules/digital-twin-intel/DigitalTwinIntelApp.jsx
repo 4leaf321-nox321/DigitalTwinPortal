@@ -678,7 +678,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                       title={tab === 'tech'
                         ? '그 사업부 눈으로 다시 그립니다 (거르지 않습니다)'
                         : '그 사업부와 관련 있다고 적힌 것만 봅니다'}>
-                <option value="">{tab === 'tech' ? '기본 설정 기준' : '사업부 전체'}</option>
+                {/* ⚠️ 「기본 설정 기준」이 아니다 — 그런 것이 없어졌다. 사업부를 안
+              고르면 **모든 사업부의 점**이 함께 보인다. */}
+          <option value="">{tab === 'tech' ? '사업부 전체' : '사업부 전체'}</option>
                 {divisionOptions.map((d) => <option key={d} value={d}>{d}</option>)}
               </Select>
             )}
@@ -741,19 +743,19 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           {/*
             ⚠️ **고르기의 뜻이 바뀌었다는 것을 말해 준다.** 안 말하면 「걸러진 줄
                알았는데 전부 그대로 있네」로 읽히고, 그러면 이 기능을 안 쓴다.
-            ⚠️ 기본 설정과 다른 것이 **몇 개인지**가 이 화면의 답이다 — 그 숫자가 곧
-               「우리 사업부가 기본 설정과 얼마나 다른가」다.
+            ⚠️ **몇 개를 적었는지**가 이 화면의 답이다 — 그 숫자가 곧 「우리 사업부가
+               어디까지 정리했나」다.
           */}
           {tab === 'tech' && division && !loading && !error && (
             <LensBar>
               <span>
-                <b>{division}</b> 눈으로 봅니다 — 단계ㆍ낡음ㆍ이동 화살표가 모두 이
-                사업부 기준입니다. 기본 설정과 다르게 정한 것은 <em>◆</em> 로 표시됩니다
+                <b>{division}</b> 눈으로 봅니다 — 단계ㆍ낡음ㆍ이동이 모두 이 사업부가
+                적은 것입니다
                 {overrideCount > 0
-                  ? ` (${overrideCount}개).`
-                  : '. 아직 하나도 없어 전부 기본 설정 값 그대로입니다.'}
+                  ? ` (${overrideCount}개 적었습니다).`
+                  : '. 아직 하나도 안 적어 레이더가 비어 있습니다 — 「사업부 적기」에서 적으세요.'}
               </span>
-              <button type="button" onClick={() => setDivision('')}>기본 설정으로</button>
+              <button type="button" onClick={() => setDivision('')}>전체로</button>
             </LensBar>
           )}
 

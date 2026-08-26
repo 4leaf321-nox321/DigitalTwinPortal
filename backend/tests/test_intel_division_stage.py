@@ -69,56 +69,71 @@ def _row(client, auth, user, url, name):
 
 # ── 정본과 예외 ──────────────────────────────────────────────────────────────
 
-def test_안_정했으면_기본설정_값을_쓴다(db, client, auth, admin, divs):
+def test_안_적었으면_단계가_아예_없다(db, client, auth, admin, divs):
     """
-    ⚠️ **이게 이 설계의 뼈대다.** 312칸을 채우게 하면 아무도 안 채운다. 비어 있는
-       것이 곧 「기본 설정을 따른다」여야 한다.
+    ⚠️⚠️ **이게 이 설계의 뼈대다.** 역량 자체는 단계를 안 갖는다 — 「우리 회사가
+       이 역량에서 어디까지 왔나」에는 하나의 답이 없다. 아무도 안 적었으면
+       비어 있는 것이 맞다. 예전에는 여기에 「기본 설정」을 두었는데, 아무도 안
+       적은 역량 48개가 죄다 그 값 하나로 레이더에 뭉쳤다.
     """
-    _cap(admin, 'CFD', stage='시험')
+    _cap(admin, 'CFD')
     row = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'CFD')
-    assert row['stage'] == '시험'
-    assert row['companyStage'] == '시험'
+    assert row['stage'] is None
+    assert row['companyStage'] is None
     assert row['isDivisionOverride'] is False
-    assert IntelDivisionStage.query.count() == 0, '예외가 아니면 한 줄도 안 남는다'
+    assert IntelDivisionStage.query.count() == 0
 
 
 def test_사업부마다_다르게_선다(db, client, auth, admin, divs):
     """레이더가 사업부 눈으로 **다시 그려진다** — 거르는 것이 아니다."""
-    cap = _cap(admin, 'explicit 해석', stage='관찰')
+    cap = _cap(admin, 'explicit 해석')
     assert _put(client, auth, admin, cap, 'MX', '도입').status_code == 200
     assert _put(client, auth, admin, cap, 'VD', '시험').status_code == 200
 
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
     vd = _row(client, auth, admin, f'{BASE}/tech?division=VD', 'explicit 해석')
-    assert (mx['stage'], mx['companyStage'], mx['isDivisionOverride']) \
-        == ('도입', '관찰', True)
-    assert (vd['stage'], vd['companyStage'], vd['isDivisionOverride']) \
-        == ('시험', '관찰', True)
+    assert (mx['stage'], mx['isDivisionOverride']) == ('도입', True)
+    assert (vd['stage'], vd['isDivisionOverride']) == ('시험', True)
+    assert mx['companyStage'] is None, '역량에는 기준 단계가 없다'
 
-    # 사업부를 안 고르면 기본 설정 값 그대로다.
+    # 사업부를 안 고르면 **아무 단계도 아니다** — 누가 어디 있는지만 따로 온다.
     all_ = _row(client, auth, admin, f'{BASE}/tech', 'explicit 해석')
-    assert all_['stage'] == '관찰'
-    assert 'isDivisionOverride' not in all_
+    assert all_['stage'] is None
+    assert all_['divisionMarks'] == [{'division': 'MX', 'stage': '도입'},
+                                     {'division': 'VD', 'stage': '시험'}]
 
 
-def test_기본설정과_같게_맞추면_예외를_지운다(db, client, auth, admin, divs):
+def test_비우면_그_사업부_줄이_사라진다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ 같은 값을 굳이 한 줄로 남겨 두면, 나중에 **기본 설정이 움직였을 때 이 사업부만
-       옛 값에 붙박여** 따라가지 않는다. 그게 표를 못 믿게 만드는 방식이다.
+    ⚠️ 「아직 안 정했다」는 **줄이 없는 것**으로 적는다. 빈 줄을 남기면 「적은
+       사업부」 셈이 부풀고, 그 숫자가 이 화면의 답이라 곧바로 못 믿게 된다.
     """
-    cap = _cap(admin, 'CFD', stage='관찰')
+    cap = _cap(admin, 'CFD')
     _put(client, auth, admin, cap, 'MX', '도입')
     assert IntelDivisionStage.query.count() == 1
 
-    # 기본 설정과 같아졌다 → 「따름」. 담아 둔 것이 없으면 줄까지 사라진다.
-    _put(client, auth, admin, cap, 'MX', '관찰', reason='')
+    _put(client, auth, admin, cap, 'MX', '', reason='')
     assert IntelDivisionStage.query.count() == 0
+    assert _row(client, auth, admin, f'{BASE}/tech?division=MX', 'CFD')['stage']         is None
 
-    # 기본 설정이 움직이면 MX 도 따라간다.
-    client.put(f'{BASE}/tech/{cap.uuid}/stage', json={'stage': '시험'},
-               headers=auth(admin))
-    assert _row(client, auth, admin, f'{BASE}/tech?division=MX', 'CFD')['stage'] \
-        == '시험'
+
+def test_도구만_적을_수는_없다(db, client, auth, admin, divs):
+    """
+    ⚠️⚠️ 예전에는 단계를 비운 채 도구만 적을 수 있었고, 그 줄은 「기본 설정을
+       따른다」는 뜻이었다. 기본 설정이 없어진 지금 그런 줄은 **어디에 있는지를
+       말하지 않는 줄**이라 레이더에 찍을 자리가 없다.
+    """
+    cap = _cap(admin, 'CFD')
+    tool, err = S.create_tech(actor_id=admin.id, name='OpenFOAM', kind='tool')
+    assert err is None, err
+    S.set_capabilities(tool.uuid, [cap.uuid], actor=admin)
+
+    r = client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
+                   json={'division': 'MX', 'tools': [tool.uuid]},
+                   headers=auth(admin))
+    assert r.status_code == 400
+    assert '단계' in (r.get_json() or {}).get('message', '')
+    assert IntelDivisionStage.query.count() == 0
 
 
 def test_예외를_지우면_기본설정을_따른다(db, client, auth, admin, divs):
@@ -134,42 +149,50 @@ def test_예외를_지우면_기본설정을_따른다(db, client, auth, admin, 
 
 def test_낡음_기준이_그_사업부의_단계를_따른다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ 단계마다 기준 일수가 다르다(도입 540 · 관찰 180). 기본 설정이 「도입」인데 우리
-       사업부는 「관찰」이면 **우리한테는 벌써 낡은 것**이다. 기본 설정 단계로 재면
-       화면은 「관찰」이라 써 놓고 낡음은 540일로 재게 되고, 그 순간 표가 거짓말한다.
+    ⚠️⚠️ 단계마다 기준 일수가 다르다(도입 540 · 관찰 180). 사업부가 「관찰」이라
+       적었으면 그 사업부한테는 180일이 기준이다.
+
+    ⚠️ **아무도 안 적은 역량은 낡을 것이 없다.** 「여기 있다」고 말한 적이 없는데
+       「그 말이 낡았다」고 할 수는 없다. 기본값 270일을 물리면 역량 63개가
+       만들자마자 죄다 「낡음」이 된다.
     """
-    cap = _cap(admin, '느린 것', stage='도입')
+    cap = _cap(admin, '느린 것')
     cap.stage_changed_at = datetime.utcnow() - timedelta(days=300)
     cap.created_at = cap.stage_changed_at
     _db.session.commit()
     _put(client, auth, admin, cap, 'MX', '관찰')
 
-    company = _row(client, auth, admin, f'{BASE}/tech', '느린 것')
-    assert company['staleAfterDays'] == 540 and company['isStale'] is False
+    nobody = _row(client, auth, admin, f'{BASE}/tech', '느린 것')
+    assert nobody['staleAfterDays'] is None
+    assert nobody['isStale'] is False
 
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', '느린 것')
-    assert mx['staleAfterDays'] == 180, '그 사업부의 단계로 재야 한다'
+    assert mx['staleAfterDays'] == 180, '그 사업부의 단계로 잰다'
     assert mx['isStale'] is True
 
 
-# ── 이동 화살표 ──────────────────────────────────────────────────────────────
-
 def test_이동_화살표가_그_사업부_이력만_본다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ 안 나누면 화면은 「MX 기준」이라 써 놓고 화살표는 **기본 설정 이동**을 그린다.
+    ⚠️⚠️ 안 나누면 화면은 「MX 기준」이라 써 놓고 화살표는 **남의 이동**을 그린다.
        거짓말하는 화살표는 없는 화살표보다 나쁘다.
+
+    ⚠️ **처음 적은 것은 이동이 아니다.** 없던 자리에서 생긴 것이라 「어디서 왔는지」가
+       없다 — 그때 화살표를 그리면 오지도 않은 길을 그린다.
     """
-    cap = _cap(admin, '움직인 역량', stage='관찰')
-    client.put(f'{BASE}/tech/{cap.uuid}/stage', json={'stage': '시험'},
-               headers=auth(admin))                       # 기본 설정: 관찰 → 시험
-    _put(client, auth, admin, cap, 'MX', '도입')            # MX:  시험 → 도입
+    cap = _cap(admin, '움직인 역량')
+    _put(client, auth, admin, cap, 'MX', '시험')           # 처음 적음
+    first = _row(client, auth, admin, f'{BASE}/tech?division=MX', '움직인 역량')
+    assert 'movedFrom' not in first, '처음 적은 것은 이동이 아니다'
 
-    company = _row(client, auth, admin, f'{BASE}/tech', '움직인 역량')
-    assert company['movedFrom'] == '관찰' and company['stage'] == '시험'
-
+    _put(client, auth, admin, cap, 'MX', '도입')           # MX: 시험 → 도입
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', '움직인 역량')
     assert mx['stage'] == '도입'
-    assert mx['movedFrom'] == '시험', 'MX 의 이력만 봐야 한다'
+    assert mx['movedFrom'] == '시험'
+
+    # 옆 사업부는 안 움직였다 — 남의 이력을 끌어오면 안 된다.
+    _put(client, auth, admin, cap, 'VD', '관찰')
+    vd = _row(client, auth, admin, f'{BASE}/tech?division=VD', '움직인 역량')
+    assert 'movedFrom' not in vd
 
 
 def test_기본설정_이력에_사업부_판단이_안_섞인다(db, client, auth, admin, divs):
@@ -209,20 +232,26 @@ def test_아무나_못_옮긴다(db, client, auth, plain, admin, divs):
     assert _put(client, auth, plain, cap, 'MX', '도입').status_code == 403
 
 
-def test_이유_없이는_예외를_못_만든다(db, client, auth, admin, divs):
+def test_보류로_둘_때만_이유를_묻는다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ **이 시험이 이 판의 요점이다.** 예전에는 드롭다운으로 단계만 고르면
-       끝이었다. 그러면 이 표는 앞선 세 번의 시도와 똑같아진다 — 적혀는 있는데
-       아무도 왜인지 모르는 표. 「MX 도입」 네 글자는 6개월 뒤 아무 뜻도 아니다.
+    ⚠️⚠️ 예전에는 단계를 적는 것이 곧 「기본 설정과 다르게 본다」는 주장이라 늘
+       이유를 물었다. 기본 설정이 없어진 지금 단계는 주장이 아니라 **사실**이고,
+       63줄마다 이유를 쓰게 하면 아무도 안 적는다.
+
+    ⚠️ 다만 **안 쓰기로 한 판단**은 여전히 근거가 남아야 한다 — 그것만 6개월 뒤에
+       처음부터 되풀이된다.
     """
-    cap = _cap(admin, 'CFD')                       # 기본 설정 관찰
-    r = _put(client, auth, admin, cap, 'MX', '도입', reason='')
+    cap = _cap(admin, 'CFD')
+    assert _put(client, auth, admin, cap, 'MX', '도입',
+                reason='').status_code == 200, '사실을 적는 데는 이유가 필요 없다'
+
+    r = _put(client, auth, admin, cap, 'VD', '보류', reason='')
     assert r.status_code == 400
     assert '이유' in (r.get_json() or {}).get('message', '')
-    assert IntelDivisionStage.query.count() == 0, '막혔으면 줄도 안 남아야 한다'
+    assert IntelDivisionStage.query.filter_by(division='VD').count() == 0
 
-    assert _put(client, auth, admin, cap, 'MX', '도입',
-                '3년째 쓰는 중').status_code == 200
+    assert _put(client, auth, admin, cap, 'VD', '보류',
+                '라이선스가 과제 예산을 넘는다').status_code == 200
 
 
 def test_보류도_마찬가지다(db, client, auth, admin, divs):
@@ -249,16 +278,15 @@ def test_한_기술_한_사업부에_두_줄이_안_생긴다(db, client, auth, 
 
 
 def test_사업부별로_죽_펴서_본다(db, client, auth, admin, divs):
-    """상세 화면의 표. ⚠️ 예외가 걸린 사업부만 온다 — 나머지는 기본 설정을 따른다."""
-    cap = _cap(admin, 'explicit 해석', stage='관찰')
+    """상세 화면의 표. ⚠️ 적은 사업부만 온다 — 나머지는 아직 아무 말도 안 했다."""
+    cap = _cap(admin, 'explicit 해석')
     _put(client, auth, admin, cap, 'MX', '도입', '3년째 쓰는 중')
 
     r = client.get(f'{BASE}/tech/{cap.uuid}/division-stages', headers=auth(admin))
     d = (r.get_json() or {}).get('data') or {}
-    assert d['companyStage'] == '관찰'
+    assert d['companyStage'] is None, '역량에는 기준 단계가 없다'
     assert 'MX' in d['divisions']
     assert len(d['overrides']) == 1
     o = d['overrides'][0]
     assert (o['division'], o['stage'], o['reason']) == ('MX', '도입', '3년째 쓰는 중')
-    assert o['followsCompany'] is False
     assert o['changedAt']

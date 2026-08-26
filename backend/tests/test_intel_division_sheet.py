@@ -89,10 +89,9 @@ def test_역량만_담고_도구는_선택지로만_나온다(db, client, auth, 
 
 
 def test_아직_안_적힌_줄은_비어서_온다(db, client, auth, admin, divs, tree):
-    """⚠️ 빈 것이 곧 「기본 설정을 따른다」다 — 값을 채워 보내면 안 된다."""
+    """⚠️ 빈 것은 「아직 안 정했다」다 — 따를 기본 설정이 없다."""
     row = _of(_sheet(client, auth, admin), 'CFD')
     assert row['stage'] is None
-    assert row['companyStage'] == '시험'
     assert row['reason'] == '' and row['tools'] == []
 
 
@@ -106,19 +105,17 @@ def test_얼마나_찼는지_함께_온다(db, client, auth, admin, divs, tree):
     """⚠️ 이 숫자가 이 화면을 여는 이유다 — 안 보이면 아무도 안 연다."""
     s = _sheet(client, auth, admin)
     assert (s['filled'], s['total']) == (0, 2)
-    _save(client, auth, admin, [{'uuid': tree['cfd'].uuid,
+    _save(client, auth, admin, [{'uuid': tree['cfd'].uuid, 'stage': '시험',
                                  'tools': [tree['star'].uuid]}])
     assert _sheet(client, auth, admin)['filled'] == 1
 
 
-# ── 가장 싼 입력: 단계는 그대로, 도구만 ──────────────────────────────────────
-
-def test_단계는_그대로_두고_도구만_적을_수_있다(db, client, auth, admin, divs, tree):
+def test_단계와_도구를_한_줄에_적는다(db, client, auth, admin, divs, tree):
     """
-    ⚠️⚠️ **이유를 안 묻는다.** 「기본 설정도 시험, 우리도 시험, 우리는 STAR-CCM+ 를
-       쓴다」는 판단이 아니라 사실이다. 여기서 이유를 물으면 아무도 안 적는다.
+    ⚠️⚠️ **이유를 안 묻는다.** 「우리는 CFD 를 시험 단계에서 STAR-CCM+ 로 한다」는
+       판단이 아니라 사실이다. 여기서 이유를 물으면 63줄을 아무도 안 적는다.
     """
-    r = _save(client, auth, admin, [{'uuid': tree['cfd'].uuid, 'stage': None,
+    r = _save(client, auth, admin, [{'uuid': tree['cfd'].uuid, 'stage': '시험',
                                      'tools': [tree['star'].uuid,
                                                tree['of'].uuid]}])
     assert r.status_code == 200, r.get_json()
@@ -126,28 +123,41 @@ def test_단계는_그대로_두고_도구만_적을_수_있다(db, client, auth
     assert (d['saved'], d['failed']) == (1, [])
 
     row = _of(_sheet(client, auth, admin), 'CFD')
-    assert row['stage'] is None, '예외가 아니라 따르는 중이다'
+    assert row['stage'] == '시험'
     assert set(row['tools']) == {tree['star'].uuid, tree['of'].uuid}
 
 
+def test_도구만_적을_수는_없다(db, client, auth, admin, divs, tree):
+    """⚠️ 단계 없는 줄은 어디에 있는지를 말하지 않는다 — 레이더에 찍을 자리가 없다."""
+    r = _save(client, auth, admin, [{'uuid': tree['cfd'].uuid,
+                                     'tools': [tree['star'].uuid]}])
+    d = r.get_json()['data']
+    assert d['saved'] == 0
+    assert len(d['failed']) == 1 and '단계' in d['failed'][0]['error']
+
+
 def test_그_역량_밑에_없는_도구는_안_들어간다(db, client, auth, admin, divs, tree):
-    """⚠️ 「CFD 를 SimAI 로」는 되고 「대리모델을 OpenFOAM 으로」는 안 된다."""
-    _save(client, auth, admin, [{'uuid': tree['ai'].uuid,
-                                 'tools': [tree['of'].uuid]}])
+    """
+    ⚠️ 「CFD 를 SimAI 로」는 되고 「대리모델을 OpenFOAM 으로」는 안 된다.
+
+    ⚠️⚠️ **단계를 함께 줘야 이 시험이 뜻이 있다.** 안 주면 줄이 통째로 튕겨서
+       도구가 빈 것을 보고 통과한다 — 도구 거르기는 건드리지도 않는다.
+    """
+    r = _save(client, auth, admin, [{'uuid': tree['ai'].uuid, 'stage': '감지',
+                                     'tools': [tree['of'].uuid]}])
+    assert r.get_json()['data']['saved'] == 1, '줄 자체는 담겨야 한다'
     assert _of(_sheet(client, auth, admin), '대리모델')['tools'] == []
 
 
-# ── 예외에는 이유가 있어야 한다 ──────────────────────────────────────────────
-
-def test_이유_없는_예외는_그_줄만_튕기고_나머지는_담긴다(db, client, auth, admin,
-                                                    divs, tree):
+def test_틀린_줄만_튕기고_나머지는_담긴다(db, client, auth, admin, divs, tree):
     """
     ⚠️⚠️ **한 줄이 틀렸다고 나머지를 버리면 다시는 안 적는다.** 40줄 적고 한 줄
        때문에 전부 날아가는 화면을 사람은 두 번 열지 않는다.
     """
     r = _save(client, auth, admin, [
-        {'uuid': tree['cfd'].uuid, 'tools': [tree['star'].uuid]},   # 멀쩡한 줄
-        {'uuid': tree['ai'].uuid, 'stage': '도입', 'reason': ''},    # 이유 없음
+        {'uuid': tree['cfd'].uuid, 'stage': '시험',
+         'tools': [tree['star'].uuid]},                       # 멀쩡한 줄
+        {'uuid': tree['ai'].uuid, 'stage': '보류', 'reason': ''},  # 이유 없는 보류
     ])
     d = r.get_json()['data']
     assert d['saved'] == 1
@@ -168,26 +178,15 @@ def test_이유가_있으면_예외가_선다(db, client, auth, admin, divs, tre
     assert (row['stage'], row['reason']) == ('도입', '3년째 상시 사용')
 
 
-def test_기본설정과_같은_값을_보내면_따름으로_되돌린다(db, client, auth, admin,
-                                                  divs, tree):
-    """⚠️ 붙박아 두면 기본 설정이 움직였을 때 이 사업부만 옛 값에 남는다."""
+def test_비우면_줄이_사라진다(db, client, auth, admin, divs, tree):
+    """⚠️ 「아직 안 정했다」는 **줄이 없는 것**으로 적는다."""
     _save(client, auth, admin, [{'uuid': tree['cfd'].uuid, 'stage': '도입',
-                                 'reason': '쓴다'}])
-    _save(client, auth, admin, [{'uuid': tree['cfd'].uuid, 'stage': '시험',
-                                 'reason': '쓴다'}])   # 기본 설정과 같다
-    assert _of(_sheet(client, auth, admin), 'CFD')['stage'] is None
-
-
-def test_다_비우면_줄이_사라진다(db, client, auth, admin, divs, tree):
-    """⚠️ 빈 줄을 남기면 「다르게 보는 사업부」 셈이 부풀고 곧 못 믿게 된다."""
-    _save(client, auth, admin, [{'uuid': tree['cfd'].uuid,
                                  'tools': [tree['star'].uuid]}])
     assert IntelDivisionStage.query.filter_by(division='MX').count() == 1
-    _save(client, auth, admin, [{'uuid': tree['cfd'].uuid, 'tools': []}])
+    _save(client, auth, admin, [{'uuid': tree['cfd'].uuid, 'stage': None,
+                                 'tools': []}])
     assert IntelDivisionStage.query.filter_by(division='MX').count() == 0
 
-
-# ── 사업부는 갈려 있어야 한다 ────────────────────────────────────────────────
 
 def test_한_사업부에_적은_것이_옆_사업부에_안_샌다(db, client, auth, admin, divs,
                                               tree):

@@ -449,9 +449,15 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
 
   if (!tech) return null;
 
-  // 사업부 눈이 아니면 companyStage 가 없다 — 그때는 stage 가 곧 기본 설정이다.
+  /*
+    ⚠️⚠️ **역량은 단계를 안 갖는다**(2026-08-26) — 단계 칸도 「단계 저장」도 도구에만
+       뜬다. 역량의 단계는 사업부 줄에만 살고, 그건 아래 칸이 맡는다.
+  */
+  const isCap = tech.kind === 'capability';
+  // 사업부 눈일 때 `stage` 는 그 사업부 값이다 — 그대로 담으면 남의 값을 저장한다.
   const baseStage = baseStageOf(tech);
-  const stageChanged = stage !== baseStage || (reason || '') !== (tech.stage_reason || '');
+  const stageChanged = !isCap
+    && (stage !== baseStage || (reason || '') !== (tech.stage_reason || ''));
   // 기본 설정을 그대로 두고 **사업부 하나만** 바꿔도 저장할 것이 있는 것이다.
   const changed = stageChanged || div.dirty;
   // ⚠️ 서버와 **같은 규칙**이다. 여기서만 막으면 서버가 400 을 내고, 서버에만 있으면
@@ -496,27 +502,26 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           <Col>
             <ColHead>무엇인가</ColHead>
           {/*
-            ⚠️ **지금 보고 있는 단계가 어느 기준인지 먼저 말한다.** 사업부 눈으로
-               연 창에서 그냥 「도입」이라고만 쓰여 있으면 기본 설정이 도입인 줄 안다 —
+            ⚠️ **지금 보고 있는 것이 누구의 답인지 먼저 말한다.** 사업부 눈으로 연
+               창에서 그냥 「도입」이라고만 쓰여 있으면 회사 전체가 도입인 줄 안다 —
                그 오해가 그대로 회의에 들어간다.
           */}
-          {(tech.divisionTools || []).length > 0 && !tech.isDivisionOverride && (
+          {tech.isDivisionOverride && (
             <Lens>
-              <b>{tech.division}</b> 는 기본 설정 <b>{tech.companyStage}</b> 을 따르고,
-              이것을 <b>{tech.divisionTools.join(' · ')}</b> 로 합니다.
+              <b>{tech.division}</b> 기준으로 <b>{tech.stage}</b> 입니다
+              {tech.divisionStageAt
+                ? ` (${String(tech.divisionStageAt).slice(0, 10)}부터).` : '.'}
+              {(tech.divisionTools || []).length > 0
+                && <> 이것을 <b>{tech.divisionTools.join(' · ')}</b> 로 합니다.</>}
               {tech.divisionStageReason ? ` — ${tech.divisionStageReason}` : ''}
             </Lens>
           )}
 
-          {tech.isDivisionOverride && (
+          {division && !tech.isDivisionOverride && (
             <Lens>
-              <b>{tech.division}</b> 기준으로 <b>{tech.stage}</b> 입니다.
-              {(tech.divisionTools || []).length > 0
-                && <> 이것을 <b>{tech.divisionTools.join(' · ')}</b> 로 합니다.</>}
-              기본 설정은 <b>{tech.companyStage}</b> 입니다
-              {tech.divisionStageAt
-                ? ` (${String(tech.divisionStageAt).slice(0, 10)}부터).` : '.'}
-              {tech.divisionStageReason ? ` — ${tech.divisionStageReason}` : ''}
+              <b>{division}</b> 는 이 역량에 대해 <b>아직 아무것도 안 적었습니다.</b>
+              아래 「사업부별로 어디까지 · 왜 · 무엇으로」에서 적으면 레이더에
+              점이 생깁니다.
             </Lens>
           )}
 
@@ -786,8 +791,23 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             )}
           </Field>
 
+          {/*
+            ⚠️⚠️ **역량에는 단계 칸이 없다**(2026-08-26). 「우리 회사가 이 역량에서
+               어디까지 왔나」에는 하나의 답이 없다 — 사업부마다 다르고, 그게 이
+               모듈이 답하려는 물음이다. 서버도 역량한테는 이 길을 막는다.
+               도구는 그대로 갖는다: 도구의 단계는 「이 제품이 우리 손에 어디까지
+               들어와 있나」라 하나로 말이 된다.
+          */}
+          {isCap && (
+            <Hint>
+              역량에는 <b>단계가 없습니다.</b> 단계는 사업부마다 답이 달라서,
+              아래 「사업부별로 어디까지 · 왜 · 무엇으로」에만 적습니다.
+            </Hint>
+          )}
+
+          {!isCap && (
           <Field>
-            <span>레이더 단계{division ? ' — 기본 설정' : ''}</span>
+            <span>레이더 단계</span>
             <StageRow>
               {STAGES.map((st) => (
                 <StageBtn key={st.key} type="button" $on={stage === st.key} $color={st.color}
@@ -799,30 +819,16 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
               ))}
             </StageRow>
           </Field>
-
-          {/*
-            ⚠️ 사업부 눈일 때 **이 칸이 무엇을 고치는지 반드시 적는다.** 화면에는
-               그 사업부 값이 떠 있는데 단추는 기본 설정을 바꾸니, 안 적으면
-               고친 사람도 무엇을 고쳤는지 모른다.
-          */}
-          {division && (
-            <Hint>
-              여기서 바꾸는 것은 <b>{division} 이 아니라 기본 설정</b>입니다.
-              {baseStage === tech.stage
-                ? ` 지금 ${division} 는 기본 설정을 그대로 따릅니다.`
-                : ` 지금 ${division} 는 「${tech.stage}」로 봅니다 — 그건 아래
-                    「사업부별로 어디까지 왔나」에서 바꿉니다.`}
-            </Hint>
           )}
 
-          {!canCurate && (
+          {!isCap && !canCurate && (
             <Hint>
               단계는 <b>관리자·사무국만</b> 바꿉니다. 개인 의견이 아니라 조직이 어디까지
               왔는지의 표기라, 아무나 바꾸면 아무도 그 표기를 안 믿게 되기 때문입니다.
             </Hint>
           )}
 
-          {canCurate && (
+          {!isCap && canCurate && (
             <Field>
               <span>이 단계로 정한 이유{stage === '보류' ? ' *' : ''}</span>
               <textarea value={reason} onChange={(e) => setReason(e.target.value)}
@@ -830,7 +836,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             </Field>
           )}
 
-          {canCurate && needReason && (
+          {!isCap && canCurate && needReason && (
             <Warn>
               <AlertTriangle size={13} />
               <span>
@@ -886,7 +892,10 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                무엇을 해야 켜지는지가 화면에 없었다.
           */}
           {canCurate && !busy && !changed && (
-            <FootNote>단계를 고치면 저장할 수 있습니다</FootNote>
+            <FootNote>
+              {isCap ? '사업부 단계를 고치면 저장할 수 있습니다'
+                     : '단계를 고치면 저장할 수 있습니다'}
+            </FootNote>
           )}
           {/* 두 가지가 함께 걸릴 수 있어, **무엇이 나가는지** 이름을 대 준다. */}
           {canCurate && !busy && changed && (

@@ -450,10 +450,22 @@ def test_역량으로_걸러_볼_수_있다(db, client, auth, admin):
 #    나머지가 전부 「관찰」로 보였다.
 
 def test_새로_들어온_것은_감지다(db, client, auth, admin):
+    """
+    ⚠️ 도구는 **감지**로 들어온다 — 아직 아무도 안 봤다.
+    ⚠️⚠️ **역량은 단계가 아예 없다**(2026-08-26). 「우리 회사가 이 역량에서 어디까지
+       왔나」에는 하나의 답이 없다 — 사업부마다 다르고, 그게 이 모듈이 답하려는
+       물음이다. 값을 주더라도 조용히 버린다.
+    """
     t = _tool(admin, '방금 들어온 도구')
     assert t.stage == '감지'
+
     c = _cap(admin, '방금 만든 역량')
-    assert c.stage == '감지'
+    assert c.stage is None
+
+    forced, err = S.create_tech(actor_id=admin.id, name='억지로 넣은 역량',
+                                kind='capability', stage='도입')
+    assert err is None, err
+    assert forced.stage is None, '뒷문으로도 단계가 안 붙는다'
 
 
 def test_감지는_낡음을_아예_안_잰다(db, client, auth, admin):
@@ -462,7 +474,7 @@ def test_감지는_낡음을_아예_안_잰다(db, client, auth, admin):
        낡음 표시가 신호가 아니라 잡음이 된다 — 이 모듈의 자정 장치를 스스로
        망가뜨리는 셈이다.
     """
-    old = _cap(admin, '오래 방치된 감지')
+    old = _tool(admin, '오래 방치된 감지')
     old.created_at = datetime.utcnow() - timedelta(days=2000)
     old.stage_changed_at = old.created_at
     _db.session.commit()
@@ -485,6 +497,28 @@ def test_감지는_낡음을_아예_안_잰다(db, client, auth, admin):
     assert row2['staleAfterDays'] == 180 and row2['isStale'] is True
 
 
+def test_역량은_단계가_없어_낡지_않는다(db, client, auth, admin):
+    """
+    ⚠️⚠️ 「여기 있다」고 말한 적이 없는데 「그 말이 낡았다」고 할 수는 없다.
+       기본값 270일을 물리면 역량 63개가 만들자마자 죄다 「낡음」이 된다.
+
+    ⚠️ 옛 길(`PUT /stage`)로도 역량은 못 옮긴다 — 열어 두면 그 한 줄 때문에
+       화면이 두 규칙을 다 다뤄야 한다.
+    """
+    old = _cap(admin, '오래된 역량')
+    old.created_at = datetime.utcnow() - timedelta(days=2000)
+    _db.session.commit()
+
+    row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
+                           .get_json() or {})['data'] if x['name'] == '오래된 역량')
+    assert (row['stage'], row['staleAfterDays'], row['isStale'])         == (None, None, False)
+
+    r = client.put(f'{BASE}/tech/{old.uuid}/stage',
+                   json={'stage': '도입'}, headers=auth(admin))
+    assert r.status_code == 400
+    assert '사업부' in (r.get_json() or {}).get('message', '')
+
+
 def test_감지도_요약의_낡음_셈에_안_든다(db, client, auth, admin):
     for i in range(3):
         c = _cap(admin, '안 본 역량 %d' % i)
@@ -499,10 +533,8 @@ def test_감지도_요약의_낡음_셈에_안_든다(db, client, auth, admin):
 
 def test_사업부가_어디_있는지를_함께_보낸다(db, client, auth, admin):
     """
-    ⚠️⚠️ **레이더가 그리는 것이 이것뿐이다.** 예전에는 기본 설정 고리에 주점을
-       하나 놓고 갈리는 사업부만 위성으로 찍었는데, 아무도 안 적은 역량 48개가
-       전부 「감지」 고리에 뭉쳐 그림이 안 읽혔다(2026-08-26 신고). 이제 점은
-       **사업부가 적은 자리에만** 서고 기본 설정 점은 안 그린다.
+    ⚠️⚠️ **레이더가 그리는 것이 이것뿐이다.** 점은 사업부가 적은 자리에만 서고,
+       같은 단계의 사업부는 한 점으로 뭉친다. 역량 자체에는 단계가 없다.
     """
     from app.modules.digital_twin_dashboard.models import Division
     for i, nm in enumerate(['MX', 'VD']):
@@ -515,15 +547,14 @@ def test_사업부가_어디_있는지를_함께_보낸다(db, client, auth, adm
                json={'division': 'MX', 'stage': '도입', 'reason': '3년째'},
                headers=auth(admin))
     client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
-               json={'division': 'VD', 'stage': '시험', 'reason': '검토 중'},
+               json={'division': 'VD', 'stage': '시험'},
                headers=auth(admin))
 
     row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
                            .get_json() or {})['data'] if x['name'] == 'explicit 해석')
-    assert row['stage'] == '감지', '기본 설정 값은 그대로 온다 — 안 그릴 뿐이다'
-    assert row['divisionMarks'] == [
-        {'division': 'MX', 'stage': '도입', 'follows': False},
-        {'division': 'VD', 'stage': '시험', 'follows': False}]
+    assert row['stage'] is None, '역량 자체에는 단계가 없다'
+    assert row['divisionMarks'] == [{'division': 'MX', 'stage': '도입'},
+                                    {'division': 'VD', 'stage': '시험'}]
 
 
 def test_아무도_안_적은_역량은_점이_없다(db, client, auth, admin):
@@ -570,28 +601,30 @@ def test_사업부_눈일_때는_적었는지를_또렷이_말한다(db, client,
                 if x['uuid'] == quiet.uuid)['hasDivisionRow'] is False
 
 
-def test_도구만_적은_줄도_점이_된다(db, client, auth, admin):
+def test_도구만_적은_줄은_아예_안_받는다(db, client, auth, admin):
     """
-    ⚠️⚠️ **가장 싼 입력이 화면에 나타나야 한다.** 「우리도 그대로, 도구는
-       OpenFOAM」은 갈림은 아니지만 **어디에 있는지에 대한 답은 맞다.** 게다가
-       「사업부 적기」에서 제일 많이 적히는 것이 이 모양이라, 안 그리면 제일 많이
-       적은 것이 화면에 없고 — 그러면 적을 까닭이 사라진다.
-
-    ⚠️ 그래도 `follows` 로 갈라 둔다. 「같아서 여기 있다」와 「다르게 보기로 정해서
-       여기 있다」는 무게가 다르고, 화면이 그걸 달리 그려야 한다.
+    ⚠️⚠️ 예전에는 단계를 비운 채 도구만 적을 수 있었고, 그 줄은 「기본 설정을
+       따른다」는 뜻이었다. 기본 설정이 없어진 지금 그런 줄은 **어디에 있는지를
+       말하지 않는 줄**이라 레이더에 찍을 자리가 없다. 한 번 더 고르게 하는 대신
+       모든 줄이 스스로 답한다.
     """
     from app.modules.digital_twin_dashboard.models import Division
     if Division.query.filter_by(name='MX').first() is None:
         _db.session.add(Division(name='MX', order=0, is_active=True))
         _db.session.commit()
 
-    cap = _cap(admin, 'CFD')            # 기본 설정 「감지」
+    cap = _cap(admin, 'CFD')
     tool = _tool(admin, 'OpenFOAM', cap)
-    client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
-               json={'division': 'MX', 'tools': [tool.uuid]}, headers=auth(admin))
+    r = client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
+                   json={'division': 'MX', 'tools': [tool.uuid]}, headers=auth(admin))
+    assert r.status_code == 400
+    assert '단계' in (r.get_json() or {}).get('message', '')
 
+    # 단계를 함께 주면 담긴다.
+    ok = client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
+                    json={'division': 'MX', 'stage': '시험',
+                          'tools': [tool.uuid]}, headers=auth(admin))
+    assert ok.status_code == 200
     row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
                            .get_json() or {})['data'] if x['name'] == 'CFD')
-    # 기본 설정 단계로 풀어서 그 자리에 찍는다.
-    assert row['divisionMarks'] == [
-        {'division': 'MX', 'stage': '감지', 'follows': True}]
+    assert row['divisionMarks'] == [{'division': 'MX', 'stage': '시험'}]

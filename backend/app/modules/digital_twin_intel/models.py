@@ -285,7 +285,16 @@ class IntelTech(BaseModel):
     # 공식 문서·제품 주소. **레이더에서 가장 자주 눌리는 칸이다** — 목적이 참고인데
     # 이름과 요약만 있으면 더 알아보려고 결국 검색을 다시 해야 한다.
     url = db.Column(db.String(1000))
-    stage = db.Column(db.String(20), nullable=False, default='관찰', index=True)
+    """
+    ⚠️⚠️ **역량은 단계가 없다**(2026-08-26). 단계는 「누가 어디까지 왔나」인데
+       그건 사업부마다 다르고, 회사 전체의 답이라는 것이 없다. 예전에 「기본
+       설정」을 두었더니 아무도 안 적은 역량 48개가 전부 그 값 하나로 레이더에
+       뭉쳐 그림이 안 읽혔다. 이제 **역량은 비어 있고, 단계는 사업부 줄에만 산다.**
+
+    ⚠️ 도구는 그대로 값을 갖는다 — 도구의 단계는 「이 제품이 우리 손에 어디까지
+       들어와 있나」라 하나로 말이 된다.
+    """
+    stage = db.Column(db.String(20), nullable=True, index=True)
     # 그 단계로 정한 **이유**. 특히 '보류' 에서 비면 안 된다 — 왜 안 쓰기로 했는지가
     # 사라지면 6개월 뒤 같은 논의를 처음부터 다시 한다.
     stage_reason = db.Column(db.Text)
@@ -326,6 +335,13 @@ class IntelTech(BaseModel):
            우리 사업부는 「관찰」(180일)이면, 우리한테는 벌써 낡은 것이다.
         """
         key = stage or self.stage
+        """
+        ⚠️⚠️ **단계가 아예 없으면 낡을 것도 없다.** 역량이 그렇다 — 아무도 「여기
+           있다」고 말한 적이 없는데 「그 말이 낡았다」고 할 수는 없다. 기본값
+           270일을 물리면 역량 63개가 만들자마자 죄다 「낡음」이 된다.
+        """
+        if not key:
+            return None
         return STALE_DAYS[key] if key in STALE_DAYS else STALE_DAYS_DEFAULT
 
     def is_stale(self, last_evidence_at=None, now=None, stage=None):
@@ -369,12 +385,13 @@ class IntelTech(BaseModel):
            상세가 서로 다른 것을 그리게 된다 — 낡음 판정을 서버가 하는 것과 같은
            이유다. **고르는 일은 서버에서 한 번만 한다.**
         """
+        """
+        ⚠️ 역량이면 비어서 나간다 — 역량은 단계를 안 갖는다. 키 자체는 남긴다:
+           없애면 화면이 `undefined` 와 「아직 안 정함」을 구별 못 한다.
+        """
         d['companyStage'] = self.stage
         if division:
             d['division'] = division
-            # ⚠️⚠️ 사업부 줄이 있어도 **단계가 비어 있으면 예외가 아니다** — 도구나
-            #    메모만 적어 둔 줄이다. 여기서 안 가리면 기본 설정 값이 None 으로
-            #    지워지고, 레이더에서 그 점이 통째로 사라진다.
             d['isDivisionOverride'] = bool(division_stage and division_stage.stage)
             if division_stage:
                 if division_stage.stage:

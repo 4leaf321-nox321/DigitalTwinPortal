@@ -68,56 +68,58 @@ def _row(client, auth, user, url, name):
 
 # ── ① 이유 없이는 예외를 못 만든다 ───────────────────────────────────────────
 
-def test_이유_없이는_예외를_못_만든다(db, client, auth, admin, divs):
+def test_보류로_둘_때만_이유를_묻는다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ **이 시험이 이 판의 요점이다.** 예전에는 드롭다운으로 단계만 고르면
-       끝이었다. 한 번 누르면 「MX 도입」이 박히는데, 왜 그런지는 아무 데도 없었다.
+    ⚠️⚠️ 예전에는 단계를 적는 것이 곧 「기본 설정과 다르게 본다」는 주장이라 늘
+       이유를 물었다. 기본 설정이 없어진 지금 단계는 **사실**이고, 63줄마다 이유를
+       쓰게 하면 아무도 안 적는다. 다만 **안 쓰기로 한 판단**은 근거가 남아야 한다.
     """
-    cap = _cap(admin, 'CFD', stage='관찰')
-    r = _put(client, auth, admin, cap, 'MX', stage='도입')
+    cap = _cap(admin, 'CFD')
+    assert _put(client, auth, admin, cap, 'MX', stage='도입',
+                reason='').status_code == 200
+
+    r = _put(client, auth, admin, cap, 'VD', stage='보류', reason='')
     assert r.status_code == 400
     assert '이유' in (r.get_json() or {}).get('message', '')
-    assert IntelDivisionStage.query.count() == 0, '막혔으면 줄도 안 남아야 한다'
 
-    assert _put(client, auth, admin, cap, 'MX', stage='도입',
-                reason='3년째 쓰는 중').status_code == 200
+    assert _put(client, auth, admin, cap, 'VD', stage='보류',
+                reason='라이선스가 예산을 넘는다').status_code == 200
 
 
-# ── ② 기본 설정을 따르면서 도구만 ────────────────────────────────────────────────
-
-def test_기본설정을_따르면서_도구만_적을_수_있다(db, client, auth, admin, divs):
+def test_단계와_도구를_함께_적는다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ **가장 흔한 경우다** — 기본 설정도 도입, 우리도 도입, 우리는 LS-DYNA 를 쓴다.
-       예외를 만들어야만 도구를 적을 수 있으면 이 경우를 **아예 못 적는다.**
-       그래서 단계를 비운 줄을 허락한다: 기본 설정이 움직이면 **같이 움직인다.**
+    ⚠️⚠️ **가장 흔한 경우다** — 우리는 이걸 도입 단계에서 LS-DYNA 로 한다. 예전에는
+       단계를 비운 채 도구만 적을 수 있었고 그 줄은 「기본 설정을 따른다」는
+       뜻이었는데, 기본 설정이 없어진 지금은 **어디에 있는지를 말하지 않는 줄**이라
+       레이더에 찍을 자리가 없다. 한 번 더 고르는 대신 모든 줄이 스스로 답한다.
     """
-    cap = _cap(admin, 'explicit 해석', stage='도입')
+    cap = _cap(admin, 'explicit 해석')
     dyna = _tool(admin, 'LS-DYNA', cap)
 
-    r = _put(client, auth, admin, cap, 'MX', stage='', tools=[dyna.uuid])
+    r = _put(client, auth, admin, cap, 'MX', stage='도입', reason='',
+             tools=[dyna.uuid])
     assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
 
     mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
-    assert mx['isDivisionOverride'] is False, '예외가 아니다 — 기본 설정을 따른다'
+    assert mx['isDivisionOverride'] is True
     assert mx['stage'] == '도입'
     assert mx['divisionTools'] == ['LS-DYNA']
 
-    # 기본 설정이 움직이면 MX 도 따라간다. 적어 둔 도구는 그대로 남는다.
-    client.put(f'{BASE}/tech/{cap.uuid}/stage',
-               json={'stage': '보류', 'reason': '기본 설정 차원 중단'},
-               headers=auth(admin))
+    # 단계만 옮겨도 적어 둔 도구는 그대로 남는다.
+    _put(client, auth, admin, cap, 'MX', stage='시험', reason='',
+         tools=[dyna.uuid])
     mx2 = _row(client, auth, admin, f'{BASE}/tech?division=MX', 'explicit 해석')
-    assert mx2['stage'] == '보류', '붙박이면 안 된다'
-    assert mx2['divisionTools'] == ['LS-DYNA']
+    assert (mx2['stage'], mx2['divisionTools']) == ('시험', ['LS-DYNA'])
 
 
-def test_따르기만_할_땐_이유를_안_묻는다(db, client, auth, admin, divs):
-    """⚠️ 「우리도 기본 설정과 같다」는 주장이 아니다. 이유를 물을 자리가 아니다."""
-    cap = _cap(admin, 'CFD', stage='도입')
+def test_도구만_적을_수는_없다(db, client, auth, admin, divs):
+    """⚠️ 단계 없는 줄은 **어디에 있는지를 말하지 않는 줄**이다 — 찍을 자리가 없다."""
+    cap = _cap(admin, 'CFD')
     tool = _tool(admin, 'OpenFOAM', cap)
     r = _put(client, auth, admin, cap, 'MX', tools=[tool.uuid])
-    assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
-    assert IntelDivisionStage.query.count() == 1
+    assert r.status_code == 400
+    assert '단계' in (r.get_json() or {}).get('message', '')
+    assert IntelDivisionStage.query.count() == 0
 
 
 def test_아무것도_안_담긴_줄은_안_남는다(db, client, auth, admin, divs):

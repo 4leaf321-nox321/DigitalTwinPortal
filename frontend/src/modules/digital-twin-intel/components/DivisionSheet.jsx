@@ -4,6 +4,8 @@ import { X, Loader2, AlertTriangle, Check } from 'lucide-react';
 
 import api from '../services/api';
 import { STAGES } from './RadarBoard';
+import { FOLLOW, asDraft, divisionDirty, divisionNeedsReason, divisionNeedsStage }
+  from '../utils/stageSave';
 
 /**
  * **우리 사업부 한 판에 적기.**
@@ -281,26 +283,16 @@ const Failed = styled.ul`
   li b { font-weight: 600; }
 `;
 
-const FOLLOW = '';
+/*
+  ⚠️ 규칙은 `utils/stageSave` 가 정본이다 — 시험이 붙어 있는 쪽이다. 여기서 따로
+     짜 두었더니 상세 창의 사업부 칸과 이 화면이 서로 다른 것을 막을 뻔했다.
+*/
 const ALL = '전체';
+const NONE = '아직 안 정함';
 
-const stageOf = (key) => STAGES.find((s) => s.key === key) || STAGES[0];
-const sameSet = (a, b) => a.length === b.length && a.every((u) => b.includes(u));
-
-/** 서버가 준 줄을 「적을 것」 모양으로. */
-const asDraft = (r) => ({
-  stage: r.stage || FOLLOW,
-  reason: r.reason || '',
-  tools: r.tools || [],
-});
-
-const dirtyOf = (r, d) => !!d && (
-  d.stage !== (r.stage || FOLLOW)
-  || d.reason.trim() !== (r.reason || '').trim()
-  || !sameSet(d.tools, r.tools || []));
-
-/* 예외를 만들 때만 이유가 필요하다 — 「따름」은 주장이 아니다. 서버가 정본이다. */
-const needWhy = (d) => !!d && d.stage !== FOLLOW && !d.reason.trim();
+const dirtyOf = (r, d) => divisionDirty(r, d);
+const needWhy = divisionNeedsReason;
+const needStage = divisionNeedsStage;
 
 const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
                          onClose, onSaved, showError, initialData = null }) => {
@@ -339,7 +331,8 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
   // 바뀐 줄만 추린다. ⚠️ 열어만 보고 닫은 줄은 안 보낸다.
   const changed = useMemo(() => Object.keys(draft)
     .filter((u) => byUuid[u] && dirtyOf(byUuid[u], draft[u])), [draft, byUuid]);
-  const blocked = changed.filter((u) => needWhy(draft[u]));
+  // 이유가 빠졌거나(보류) 단계가 빠진(도구만) 줄. 둘 다 서버가 튕긴다.
+  const blocked = changed.filter((u) => needWhy(draft[u]) || needStage(draft[u]));
 
   if (!isOpen) return null;
 
@@ -431,7 +424,6 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
           {data && shown.map((r) => {
             const d = draft[r.uuid] || asDraft(r);
             const dirty = dirtyOf(r, draft[r.uuid]);
-            const st = stageOf(r.companyStage);
             const head = sector === ALL && r.category !== last
               ? (last = r.category) : null;
             return (
@@ -440,19 +432,16 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
                 <Row $dirty={dirty}>
                   <Line>
                     <b className="name">{r.name}</b>
-                    <Base $color={st.color}>
-                      기본 설정 <b>{r.companyStage}</b>
-                    </Base>
+                    {/*
+                      ⚠️⚠️ **역량에는 기준 단계가 없다**(2026-08-26). 예전에는 옆에
+                         「기본 설정 감지」가 붙어 있었는데 그 값이 없어졌다 —
+                         여기 고르는 것이 곧 우리 사업부의 답이다.
+                    */}
                     <select value={d.stage} disabled={!canCurate}
                             title={canCurate ? '' : '적는 것은 관리자ㆍ사무국만 할 수 있습니다'}
                             onChange={(e) => set(r.uuid, { stage: e.target.value })}>
-                      {/*
-                        ⚠️ 기본 설정과 **같은 값은 고를 거리가 아니다** — 그것이
-                           곧 「따름」이고, 굳이 붙박아 두면 기본 설정이 움직였을
-                           때 이 사업부만 옛 값에 남는다.
-                      */}
-                      <option value={FOLLOW}>우리도 그대로 ({r.companyStage})</option>
-                      {STAGES.filter((s) => s.key !== r.companyStage).map((s) => (
+                      <option value={FOLLOW}>{NONE}</option>
+                      {STAGES.map((s) => (
                         <option key={s.key} value={s.key}>{s.key}</option>
                       ))}
                     </select>
@@ -481,7 +470,9 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
                   {canCurate && d.stage !== FOLLOW && (
                     <Why value={d.reason} $need={needWhy(d)}
                          onChange={(e) => set(r.uuid, { reason: e.target.value })}
-                         placeholder={`기본 설정과 다르게 「${d.stage}」 로 보는 이유 — 예: 차체 충돌 해석이 본업이라 3년째 상시 사용`} />
+                         placeholder={d.stage === '보류'
+                           ? '「보류」로 둘 때는 이유를 적어야 합니다 — 예: 라이선스가 과제 예산을 넘는다'
+                           : '왜 그렇게 보는지 (안 적어도 됩니다)'} />
                   )}
                 </Row>
               </React.Fragment>
@@ -499,7 +490,8 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
           {canCurate && blocked.length > 0 && (
             <Note style={{ color: '#b91c1c', display: 'inline-flex', gap: '0.25rem' }}>
               <AlertTriangle size={13} />
-              기본 설정과 다르게 본 <b>{blocked.length}줄</b>에 이유가 비어 있습니다
+              <b>{blocked.length}줄</b>이 덜 적혔습니다 — 「보류」에는 이유가,
+              도구만 고른 줄에는 단계가 있어야 합니다
             </Note>
           )}
           {canCurate && blocked.length === 0 && (

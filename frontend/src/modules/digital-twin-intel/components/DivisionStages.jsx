@@ -266,7 +266,8 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
   if (!divisions.length) return null;
 
   const choices = data.toolChoices || [];
-  const diffCount = (data.overrides || []).filter((o) => !o.followsCompany).length;
+  // ⚠️ 이제 줄이 있다는 것이 곧 「적었다」이다 — 견줄 기본 설정이 없다.
+  const saidCount = (data.overrides || []).length;
 
   const edit = (d) => {
     setOpen(d);
@@ -298,24 +299,21 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
     <Field>
       <span>사업부별로 어디까지 · 왜 · 무엇으로</span>
       <Head>
-        기본 설정 <b>{data.companyStage}</b>
-        {diffCount > 0
-          ? <> · 다르게 보는 사업부 <b>{diffCount}</b></>
-          : ' · 아직 전부 기본 설정 값을 따릅니다'}
+        {saidCount > 0
+          ? <>적은 사업부 <b>{saidCount}</b> / {divisions.length}</>
+          : '아직 어느 사업부도 안 적었습니다'}
       </Head>
 
       <Grid>
         {divisions.map((d) => {
           const o = byDivision[d];
-          const diff = Boolean(o && !o.followsCompany);
+          const diff = Boolean(o && o.stage);
           const editing = open === d;
           return (
             <Row key={d} $diff={diff}>
               <Line>
                 <b>{d}</b>
-                <Stage $diff={diff}>
-                  {diff ? o.stage : `${data.companyStage} (기본 설정)`}
-                </Stage>
+                <Stage $diff={diff}>{diff ? o.stage : '아직 안 적음'}</Stage>
 
                 {/*
                   ⚠️ **적어 둔 것을 한 줄로 보여준다.** 단계만 보이면 「왜」와
@@ -327,7 +325,7 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                   {o && (o.toolNames || []).length > 0 && (o.reason ? ' · ' : '')}
                   {o && o.reason}
                   {(!o || (!(o.toolNames || []).length && !o.reason))
-                    && <i>{canCurate ? '아직 아무것도 안 적혔습니다' : '기본 설정 값을 따릅니다'}</i>}
+                    && <i>아직 아무것도 안 적혔습니다</i>}
                 </Said>
 
                 {o && o.changedAt && !editing && (
@@ -349,26 +347,29 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                     단계
                     <select value={draft.stage}
                             onChange={(e) => setDraft((p) => ({ ...p, stage: e.target.value }))}>
-                      <option value={FOLLOW}>
-                        기본 설정을 따름 ({data.companyStage}) — 기본 설정이 바뀌면 같이 바뀝니다
-                      </option>
-                      {STAGES.filter((st) => st.key !== data.companyStage).map((st) => (
+                      {/* ⚠️ 「아직 안 정함」을 고르고 저장하면 이 줄이 사라진다 —
+                          빈 줄을 남기면 「적은 사업부」 셈이 부풀고 못 믿게 된다. */}
+                      <option value={FOLLOW}>아직 안 정함</option>
+                      {STAGES.map((st) => (
                         <option key={st.key} value={st.key}>{st.key} — {st.desc}</option>
                       ))}
                     </select>
                   </label>
 
                   {/*
-                    ⚠️ **이유는 예외를 만들 때만 묻는다.** 「기본 설정을 따름」은 주장이
-                       아니라서 물을 자리가 아니다. 반대로 기본 설정과 다르게 본다면
-                       그것은 판단이고, 판단은 근거가 남아야 한다.
+                    ⚠️⚠️ **이유는 「보류」에만 묻는다**(2026-08-26). 예전에는 단계를
+                       적는 것이 곧 「기본 설정과 다르게 본다」는 주장이라 늘 물었다.
+                       이제 단계는 주장이 아니라 사실이다 — 다만 **안 쓰기로 한
+                       판단**은 근거가 남아야 한다.
                   */}
                   {draft.stage !== FOLLOW && (
                     <label>
-                      기본 설정과 다르게 보는 이유 *
+                      왜 그렇게 보는지{draft.stage === '보류' ? ' *' : ''}
                       <input value={draft.reason} autoFocus
                              onChange={(e) => setDraft((p) => ({ ...p, reason: e.target.value }))}
-                             placeholder="예: 차체 충돌 해석이 본업이라 3년째 상시 사용" />
+                             placeholder={draft.stage === '보류'
+                               ? '예: 라이선스가 과제 예산을 넘는다'
+                               : '예: 차체 충돌 해석이 본업이라 3년째 상시 사용 (안 적어도 됩니다)'} />
                     </label>
                   )}
 
@@ -399,8 +400,8 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                   {needReason && (
                     <Need>
                       <AlertTriangle size={11} />
-                      기본 설정과 다르게 보는 판단입니다. 이유 없는 줄은 6개월 뒤 아무
-                      뜻도 아닙니다.
+                      <b>안 쓰기로 한 판단</b>입니다. 이유 없는 줄은 6개월 뒤 아무
+                      뜻도 아니고, 그때 같은 논의를 처음부터 다시 합니다.
                     </Need>
                   )}
 
@@ -413,8 +414,9 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                     </Cancel>
                     {busy && <Loader2 size={12} />}
                     {/*
-                      ⚠️ **적어 둔 것을 통째로 무르는 자리다.** 단계만 되돌리려면
-                         위에서 「기본 설정을 따름」을 고르면 되고, 그때 도구는 남는다.
+                      ⚠️ **적어 둔 것을 통째로 무르는 자리다.** 위에서 「아직 안
+                         정함」을 골라도 같은 일이 일어난다 — 단계 없는 줄은 남길
+                         수 없기 때문이다.
                     */}
                     {o && (
                       <IconBtn type="button" style={{ marginLeft: 'auto' }}
@@ -433,9 +435,9 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
 
       {canCurate && (
         <Hint>
-          단계를 <b>기본 설정과 같게</b> 두면 예외가 사라지고 기본 설정을 따라갑니다 — 그때도
-          적어 둔 도구는 남습니다. 「기본 설정과 같다」와 「아직 안 정했다」는 같은 뜻이라,
-          굳이 붙박아 두면 기본 설정이 움직였을 때 그 사업부만 옛 값에 남습니다.
+          역량 자체에는 단계가 없습니다 — <b>단계는 사업부마다</b> 답이 다르기
+          때문입니다. 여기 적은 것이 레이더의 점이 되고, 안 적은 역량은 점이
+          없습니다. 도구를 고르려면 <b>단계도 함께</b> 골라야 합니다.
         </Hint>
       )}
     </Field>

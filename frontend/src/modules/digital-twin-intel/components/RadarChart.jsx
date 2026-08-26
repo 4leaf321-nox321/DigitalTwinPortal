@@ -486,11 +486,11 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
     const cells = new Map();
     let qc = 0;
     let qt = 0;
-    const put = (si, ri, tech, divisions, follows) => {
+    const put = (si, ri, tech, divisions) => {
       if (ri === undefined || ri < 0) return;
       const key = `${si}|${ri}`;
       if (!cells.has(key)) cells.set(key, []);
-      cells.get(key).push({ tech, si, ri, divisions, follows,
+      cells.get(key).push({ tech, si, ri, divisions,
                             key: `${tech.uuid}|${ri}` });
     };
 
@@ -504,7 +504,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
       */
       if (divisionLens) {
         if (!t.hasDivisionRow) { qc += 1; return; }
-        put(si, stageIndex[t.stage], t, [t.division], !t.isDivisionOverride);
+        put(si, stageIndex[t.stage], t, [t.division]);
         return;
       }
 
@@ -518,13 +518,10 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
       marks.forEach((m) => {
         const ri = stageIndex[m.stage];
         if (ri === undefined) return;
-        if (!g.has(ri)) g.set(ri, { divisions: [], follows: true });
-        const e = g.get(ri);
-        e.divisions.push(m.division);
-        // ⚠️ 한 사업부라도 **또렷이 정했으면** 그 무리는 「정한 자리」다.
-        if (!m.follows) e.follows = false;
+        if (!g.has(ri)) g.set(ri, []);
+        g.get(ri).push(m.division);
       });
-      g.forEach((e, ri) => put(si, ri, t, e.divisions, e.follows));
+      g.forEach((divisions, ri) => put(si, ri, t, divisions));
     });
 
     const out = [];
@@ -648,11 +645,10 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
           <ToolBtn onClick={reset} disabled={!zoomed && !view.x && !view.y}
                    title="처음 크기로"><Maximize2 size={14} /></ToolBtn>
           {/*
-            ⚠️⚠️ **사업부를 골라야 켤 수 있다.** 서버가 세어 주는 이동은 기본 설정의
-               이동인데, 이제 점은 사업부 자리다 — 그대로 그리면 「MX 가 관찰에서
-               왔다」고 말하지만 실제로 움직인 것은 기본 설정이다. **거짓말하는
-               화살표는 없느니만 못하다.** 사업부를 고르면 서버가 그 사업부의
-               이력만 세어 주므로 그때는 맞다.
+            ⚠️⚠️ **사업부를 골라야 켤 수 있다.** 점 하나에 사업부가 여럿 뭉쳐 있어,
+               「이 점이 어디서 왔나」에 답이 하나가 아니다 — DA 는 그대로인데 MX 만
+               옮겨 왔을 수 있다. 사업부를 고르면 점 하나에 사업부도 하나라 그때는
+               맞다. **거짓말하는 화살표는 없느니만 못하다.**
           */}
           <ToolBtn $on={moves} onClick={toggleMoves} disabled={!divisionLens}
                    title={!divisionLens
@@ -817,16 +813,12 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                    onMouseLeave={() => setHot(null)}>
                   <title>
                     {`${b.tech.name} · ${STAGES[b.ri].key} — ${b.divisions.join(' · ')}`
-                     + `${b.follows ? ' (기본 설정을 그대로 따름)' : ''}`
                      + `${b.tech.isStale ? ' · 근거 낡음' : ''}`
                      + `${(b.tech.divisionTools || []).length
                           ? ` · ${b.tech.division}: ${b.tech.divisionTools.join(' · ')}`
                           : ''}`
                      + `${(b.tech.divisionMarks || []).length
                           ? ` · ${b.tech.divisionMarks.map((m) => `${m.division} ${m.stage}`).join(' · ')}`
-                          : ''}`
-                     + `${b.tech.isDivisionOverride
-                          ? ` · 기본 설정은 ${b.tech.companyStage} — ${b.tech.division} 는 다르게 봅니다`
                           : ''}`
                      + `${(b.tech.children || []).length
                           ? ` · 도구 ${b.tech.children.length}개`
@@ -852,18 +844,12 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                     <circle cx={b.x} cy={b.y} r={rr + 3.5 / k} fill="none"
                             stroke={st.color} strokeWidth={1.5 / k} opacity="0.5" />
                   )}
-                  {/*
-                    ⚠️ **속이 빈 점은 「기본 설정을 그대로 따른다」는 뜻이다.** 도구만
-                       적은 줄이 여기 온다 — 어디 있는지에 대한 답은 맞지만 따로
-                       정한 것은 아니라, 채운 점과 같아 보이면 안 된다.
-                  */}
                   <circle cx={b.x} cy={b.y} r={rr}
-                          fill={b.follows ? '#fff' : st.color}
-                          stroke={b.tech.isStale ? '#b45309'
-                                                 : (b.follows ? st.color : '#fff')}
+                          fill={st.color}
+                          stroke={b.tech.isStale ? '#b45309' : '#fff'}
                           strokeWidth={(b.tech.isStale ? 2.5 : 1.5) / k} />
                   <text x={b.x} y={b.y} fontSize={10 / k}
-                        fill={b.follows ? st.color : '#fff'} fontWeight="700"
+                        fill="#fff" fontWeight="700"
                         textAnchor="middle" dominantBaseline="central"
                         style={{ pointerEvents: 'none' }}>
                     {b.no}
@@ -932,14 +918,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
 
       <Side>
         <Legend>
-          <span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#64748b" /></svg> 여기라고 정한 사업부</span>
-          {/* ⚠️ 속이 빈 점을 안 설명하면 「흐릿한 점」으로만 읽힌다. */}
-          <span>
-            <svg width="12" height="12">
-              <circle cx="6" cy="6" r="4.5" fill="#fff" stroke="#64748b" strokeWidth="1.5" />
-            </svg>
-            기본 설정을 그대로 따름
-          </span>
+          <span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#64748b" /></svg> 여기라고 적은 사업부</span>
           {/* ⚠️ 꺼 놓고 범례만 남기면 **있지도 않은 표시를 설명하는 꼴**이 된다. */}
           {moves && (
             <span>
@@ -1014,19 +993,6 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                             <> <Moved title={`${ymd(b.tech.movedAt)} 에 ${b.tech.movedFrom} 에서 옮겨왔습니다`}>
                               {b.tech.movedFrom}→ {ymd(b.tech.movedAt)}
                             </Moved></>
-                          )}
-                          {/*
-                            ⚠️ **기본 설정과 다르게 본 것을 표시한다.** 안 하면 사업부
-                               눈으로 그린 레이더가 기본 설정 레이더와 구별이 안 되고,
-                               그러면 「우리가 기본 설정과 어디서 갈리나」 — 이 화면을
-                               보는 단 하나의 이유 — 를 읽을 수 없다.
-                          */}
-                          {/* 「따로 정한 것은 아니고 기본 설정과 같아서 여기」. */}
-                          {b.follows && (
-                            <> <Mark $color="#94a3b8"
-                                     title={`기본 설정(${b.tech.companyStage})을 그대로 따릅니다`}>
-                              따름
-                            </Mark></>
                           )}
                           {b.tech.isStale && (
                             <> <Mark $color="#b45309" title="근거가 오래 없습니다">

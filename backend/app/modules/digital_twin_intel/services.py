@@ -102,6 +102,11 @@ def recent_moves(tech_uuids, days=90, scope=None):
                     IntelChange.field == 'stage',
                     IntelChange.scope == scope,
                     IntelChange.subject_uuid.in_(list(tech_uuids)),
+                    # ⚠️⚠️ **처음 적은 것은 이동이 아니다.** 없던 자리에서 생긴
+                    #    것이라 「어디서 왔는지」가 없다. 이 줄이 없으면 사업부가
+                    #    처음 적은 기록이 「가장 오래된 출발점」으로 잡혀, 그 뒤에
+                    #    진짜로 움직여도 화살표가 영영 안 그려진다.
+                    IntelChange.before_value.isnot(None),
                     IntelChange.created_at >= since)
             .order_by(IntelChange.id.asc()).all())
     out = {}
@@ -243,15 +248,25 @@ def create_tech(actor_id=None, origin='ui', **data):
         # 조용히 새로 만들면 레이더에 같은 기술이 두 줄이 된다. 있는 것을 돌려준다.
         return dup, None
 
-    # ⚠️ 새로 들어오는 것은 **감지** — 아직 아무도 안 봤다. 「관찰」이라 적으면
-    #    안 본 것을 「지켜보는 중」이라 말하는 셈이다.
-    stage = (data.get('stage') or STAGE_NEW).strip()
-    if stage not in STAGES:
-        return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
-
     # ⚠️ 기본은 **도구**다. MCPㆍ소식으로 들어오는 것의 대부분이 제품이라, 기본을
     #    역량으로 두면 역량 목록이 곧바로 잡동사니가 된다.
     kind = data.get('kind') if data.get('kind') in TECH_KINDS else 'tool'
+
+    """
+    ⚠️⚠️ **역량은 단계를 안 갖는다**(2026-08-26). 「우리 회사가 이 역량에서 어디까지
+       왔나」에는 하나의 답이 없다 — 사업부마다 다르고, 그게 이 모듈이 답하려는
+       물음이다. 값을 주더라도 조용히 버린다. 뒷문을 열어 두면 MCP 로 들어온 줄만
+       단계를 갖게 되고, 그 한 줄 때문에 화면이 두 규칙을 다 다뤄야 한다.
+
+    ⚠️ 도구는 **감지**로 들어온다 — 아직 아무도 안 봤다. 「관찰」이라 적으면 안 본
+       것을 「지켜보는 중」이라 말하는 셈이다.
+    """
+    if kind == 'capability':
+        stage = None
+    else:
+        stage = (data.get('stage') or STAGE_NEW).strip()
+        if stage not in STAGES:
+            return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
 
     """
     ⚠️⚠️ **만들면서 매다는 길에도 같은 검사를 건다.** 안 걸면 여기가 `set_capabilities`
@@ -316,6 +331,10 @@ def set_stage(tech_uuid, stage, reason=None, actor=None, source='ui'):
     t = IntelTech.query.filter_by(uuid=tech_uuid).first()
     if t is None:
         return None, '기술을 찾을 수 없습니다.'
+    # ⚠️ 역량은 단계를 안 갖는다 — 사업부별로 적는다. 옛 길로 들어오면 막는다.
+    if t.kind == 'capability':
+        return None, ('역량은 단계를 따로 두지 않습니다 — 사업부별로 적습니다. '
+                      '「사업부 적기」를 쓰세요.')
 
     reason = (reason or '').strip()
     if stage == '보류' and not reason:
@@ -389,30 +408,19 @@ def division_marks(tech_uuids):
        전부 「감지」 고리에 뭉쳐서 그림이 안 읽혔다(2026-08-26 신고). 이제 점은
        **사업부가 적은 자리에만** 서고, 기본 설정 점은 아예 안 그린다.
 
-    ⚠️⚠️ **단계를 안 정한 줄도 싣는다** — 기본 설정 단계로 풀어서. 「우리도 그대로,
-       도구는 STAR-CCM+」는 갈림은 아니지만 **어디에 있는지에 대한 답은 맞다.**
-       게다가 그게 「사업부 적기」에서 가장 싼 입력이라, 안 실으면 제일 많이 적히는
-       것이 화면에 안 나타난다 — 적을 까닭이 사라진다.
-
-    ⚠️ `follows` 로 갈라 둔다. 「기본 설정과 같아서 여기 있다」와 「다르게 보기로
-       정해서 여기 있다」는 무게가 다르고, 화면이 그걸 달리 그려야 한다.
+    ⚠️ 이제 **줄마다 자기 단계를 들고 있다.** 예전에는 비어 있는 줄을 기본 설정으로
+       풀어 줬는데, 기본 설정이 없어지면서 그럴 일도 없어졌다.
     """
     if not tech_uuids:
         return {}
-    uuids = list(tech_uuids)
-    base = dict(db.session.query(IntelTech.uuid, IntelTech.stage)
-                .filter(IntelTech.uuid.in_(uuids)).all())
     rows = (IntelDivisionStage.query
-            .filter(IntelDivisionStage.tech_uuid.in_(uuids))
+            .filter(IntelDivisionStage.tech_uuid.in_(list(tech_uuids)),
+                    IntelDivisionStage.stage.isnot(None))
             .order_by(IntelDivisionStage.division.asc()).all())
     out = {}
     for r in rows:
-        stage = r.stage or base.get(r.tech_uuid)
-        if not stage:
-            continue
         out.setdefault(r.tech_uuid, []).append(
-            {'division': r.division, 'stage': stage,
-             'follows': r.stage is None})
+            {'division': r.division, 'stage': r.stage})
     return out
 
 
@@ -482,22 +490,32 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
     stage = (stage or '').strip() or None
     if stage is not None and stage not in STAGES:
         return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
-    # 기본 설정과 같아졌다 → 예외가 아니라 「따름」이다.
-    if stage == t.stage:
-        stage = None
 
     reason = (reason or '').strip()
-    if stage is not None and not reason:
-        return None, ('기본 설정은 「%s」 입니다 — 다르게 「%s」 로 보는 이유를 '
-                      '적어야 합니다. 이유 없는 줄은 6개월 뒤 아무 뜻도 '
-                      '아닙니다.' % (t.stage, stage))
-
     tools = _clean_tools(tools, parent=t)
+
+    """
+    ⚠️⚠️ **적을 것이 있으면 단계를 골라야 한다**(2026-08-26). 예전에는 단계를 비운
+       채 도구만 적을 수 있었고, 그 줄은 「기본 설정을 따른다」는 뜻이었다. 기본
+       설정을 없앤 지금 그런 줄은 **어디에 있는지를 말하지 않는 줄**이라 레이더에
+       찍을 자리가 없다. 한 번 더 고르게 하는 대신 모든 줄이 스스로 답한다.
+
+    ⚠️ **이유는 「보류」에만 묻는다.** 예전에는 단계를 적는 것이 곧 「기본 설정과
+       다르게 본다」는 주장이라 늘 이유를 물었다. 이제 단계는 주장이 아니라 사실이고,
+       63줄마다 이유를 쓰게 하면 아무도 안 적는다. 다만 **안 쓰기로 한 판단**은
+       여전히 근거가 남아야 한다 — 그것만 6개월 뒤에 되풀이된다.
+    """
+    if stage is None and (reason or tools):
+        return None, '어느 단계인지 골라야 합니다 — 도구만 적을 수는 없습니다.'
+    if stage == '보류' and not reason:
+        return None, ("'보류' 로 둘 때는 이유를 적어야 합니다. "
+                      '안 쓰기로 한 판단이야말로 근거가 남아야 합니다.')
 
     row = IntelDivisionStage.query.filter_by(
         tech_uuid=tech_uuid, division=division).first()
-    before = (row.stage if row else None) or t.stage
-    after = stage or t.stage
+    # ⚠️ 견줄 기본값이 없다 — 없던 것에서 생기면 그것이 곧 「처음 적었다」이다.
+    before = row.stage if row else None
+    after = stage
 
     """
     ⚠️ **담을 것이 있는지 먼저 본다.** 넣고 나서 비었으면 지우는 식으로 짜면, 아직
@@ -1086,8 +1104,8 @@ def division_sheet(division):
             'name': c.name,
             'category': c.category or '',
             'summary': c.summary or '',
-            'companyStage': c.stage,
-            # ⚠️ 비어 있으면 **예외가 아니다** — 기본 설정을 따르는 것이다.
+            # ⚠️ 비어 있으면 **아직 안 정했다**는 뜻이다. 예전처럼 「기본 설정을
+            #    따른다」가 아니다 — 따를 기본 설정이 없다.
             'stage': r.stage if r else None,
             'reason': (r.reason if r else '') or '',
             'tools': (r.tools if r else None) or [],
