@@ -19,6 +19,13 @@ import { AlertTriangle } from 'lucide-react';
      뒤엣것은 **판단**이다. 안 갈려 있어서 검토하고 동의한 것과 한 번도 안 열어 본
      것이 같아 보였다(504칸 중 24칸만 차 있었는데 나머지가 전부 「관찰」로 보였다).
 */
+/**
+ * **새로 들어온 것이 놓이는 자리.** 서버의 `STAGE_NEW` 와 **같아야 한다** —
+ * 화면만 「관찰」로 두었더니 아무도 안 본 것이 「지켜보기로 정했다」로 들어갔다
+ * (2026-08-26 점검).
+ */
+const STAGE_NEW = '감지';
+
 const STAGES = [
   { key: '도입', desc: '이미 쓰고 있거나 바로 쓸 수 있다', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
   { key: '시험', desc: '과제 하나에 걸어 보는 중', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
@@ -235,5 +242,5 @@ const RadarBoard = ({ rows, onSelect }) => (
   </Board>
 );
 
-export { STAGES };
+export { STAGES, STAGE_NEW };
 export default RadarBoard;

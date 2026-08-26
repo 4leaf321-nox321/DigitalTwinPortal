@@ -86,7 +86,17 @@ const NewsModal = ({ isOpen, onClose, onSave, categories, saving }) => {
 
   const submit = () => {
     if (!form.title.trim()) return;
-    onSave({ ...form, technologies: techs });
+    /*
+      ⚠️ **적다 만 기술 이름을 버리지 않는다**(2026-08-26 점검). [추가] 를 안 누른
+         채 [등록] 하면 그 이름이 조용히 사라졌다 — 적어 놓고 사라지는 칸은 다음에
+         아무도 안 채운다.
+    */
+    const pending = techName.trim();
+    const all = pending && !techs.some(
+      (t) => t.name.toLowerCase() === pending.toLowerCase())
+      ? [...techs, { name: pending, note: techNote.trim() || undefined }]
+      : techs;
+    onSave({ ...form, technologies: all });
   };
 
   return (
@@ -185,7 +195,8 @@ const NewsModal = ({ isOpen, onClose, onSave, categories, saving }) => {
           <Warn>
             <AlertTriangle size={13} />
             <span>
-              여기 적은 기술은 <b>레이더에 자동으로 올라갑니다</b>(처음 보는 것은 「관찰」로).
+              {/* ⚠️ 서버는 「감지」로 만든다 — 화면만 「관찰」이라 적혀 있었다. */}
+              여기 적은 기술은 <b>레이더에 자동으로 올라갑니다</b>(처음 보는 것은 「감지」로).
               이미 있는 기술이면 별칭까지 맞춰 보고 <b>같은 줄에 이어 붙입니다</b> —
               같은 기술이 여러 줄이 되면 레이더가 잡동사니가 되기 때문입니다.
             </span>

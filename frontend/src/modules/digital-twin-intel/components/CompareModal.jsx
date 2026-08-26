@@ -75,6 +75,25 @@ const listOf = (v) => ((v || []).length ? v.join(' · ') : dash);
 const stageColor = (k) => (STAGES.find((s) => s.key === k) || {}).color || '#64748b';
 
 /**
+ * 그 줄이 **어디에 있나.**
+ *
+ * ⚠️⚠️ 역량은 제 단계가 없다 — 사업부가 적은 자리들이 곧 답이다. 하나로 뭉뚱그릴
+ *    수 없어 **여럿을 나란히** 놓는다. 아무도 안 적었으면 그렇다고 말한다.
+ */
+const StageOf = ({ t }) => {
+  if (t.stage) return <Pill $color={stageColor(t.stage)}>{t.stage}</Pill>;
+  const marks = t.divisionMarks || [];
+  if (!marks.length) {
+    return <Pill $color="#94a3b8">아직 안 적힘</Pill>;
+  }
+  return marks.map((m) => (
+    <Pill key={m.division} $color={stageColor(m.stage)}>
+      {m.division} {m.stage}
+    </Pill>
+  ));
+};
+
+/**
  * 두 기술을 나란히 놓고 본다.
  *
  * ⚠️ **칸이 비어 있으면 견줄 것이 없다.** 그래서 빈 칸은 「—」로 또렷하게 두고,
@@ -105,7 +124,8 @@ const CompareModal = ({ a, b, onClose, onOpen }) => {
               onClick={() => onOpen && onOpen(t)}>
         {t.name}
       </button>
-      <small>{t.vendor || '공급사 미상'}</small>
+      {/* ⚠️ 역량에는 공급사가 없다 — 「미상」이라 적으면 채워야 할 빈칸처럼 보인다. */}
+      <small>{t.kind === 'capability' ? '역량' : (t.vendor || '공급사 미상')}</small>
     </Th>
   );
 
@@ -124,14 +144,18 @@ const CompareModal = ({ a, b, onClose, onOpen }) => {
             {head(a)}
             {head(b)}
 
+            {/*
+              ⚠️⚠️ **역량에는 단계가 없다**(2026-08-26). 그대로 찍으면 **빈 회색
+                 알약**이 뜨고, 정작 답인 「누가 어디에 있나」는 어디에도 안 나온다.
+            */}
             <Label>단계</Label>
             <Cell $diff={a.stage !== b.stage}>
-              <Pill $color={stageColor(a.stage)}>{a.stage}</Pill>
+              <StageOf t={a} />
               {a.isStale && <Stale><AlertTriangle size={11} /> 낡음</Stale>}
               {a.movedFrom && <Stale style={{ color: '#0f766e' }}>{a.movedFrom}→</Stale>}
             </Cell>
             <Cell $diff={a.stage !== b.stage}>
-              <Pill $color={stageColor(b.stage)}>{b.stage}</Pill>
+              <StageOf t={b} />
               {b.isStale && <Stale><AlertTriangle size={11} /> 낡음</Stale>}
               {b.movedFrom && <Stale style={{ color: '#0f766e' }}>{b.movedFrom}→</Stale>}
             </Cell>

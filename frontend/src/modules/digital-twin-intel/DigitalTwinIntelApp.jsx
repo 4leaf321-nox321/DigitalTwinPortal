@@ -482,15 +482,23 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
         if (before !== after) {
           await api.setTechCapabilities(techForm.uuid, capabilityUuids);
         }
-      } else {
-        await api.createTech(body);
+      }
+      let made = null;
+      if (!editing) {
+        /*
+          ⚠️⚠️ **이미 있는 이름이면 서버가 있던 줄을 돌려준다** — 새로 안 만든다.
+             예전에는 그때도 「레이더에 올렸습니다」라고 해서, 적어 넣은 것이
+             전부 버려졌는데 올라간 줄 알게 했다(2026-08-26 점검).
+        */
+        made = await api.createTech(body);
       }
       setTechForm(null);
       setSelected(null);
       await load();
-      say(editing
-        ? '고쳤습니다.'
-        : `「${body.name}」 을 레이더에 올렸습니다.`);
+      if (editing) say('고쳤습니다.');
+      else if (made && made.created === false) {
+        say(`「${body.name}」 은 이미 레이더에 있습니다 — 적은 것은 안 담겼습니다.`);
+      } else say(`「${body.name}」 을 레이더에 올렸습니다.`);
     } catch (e) {
       say(e.message);
     } finally {
@@ -627,7 +635,14 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     <Container>
       <Header
         tab={tab}
-        onTab={(t) => { setTab(t); setCategory(''); setStage(''); }}
+        /*
+          ⚠️⚠️ **사업부도 함께 푼다**(2026-08-26 점검). 탭마다 고를 수 있는 사업부가
+             다르다 — 소식 쪽은 **자료에 실제로 적힌 것**만 목록에 세운다. 기술 탭에서
+             고른 사업부를 들고 소식 탭으로 넘어가면, 그 사업부가 목록에 없어
+             **고르개에서 그 값을 되돌릴 수가 없고** 소식은 0건이 된다. 분류ㆍ단계와
+             같은 잣대로 함께 푼다.
+        */
+        onTab={(t) => { setTab(t); setCategory(''); setStage(''); setDivision(''); }}
         newsCount={news.length}
         techCount={tech.length}
         onAdd={() => (tab === 'news' ? setAddOpen(true) : setTechForm({}))}
@@ -812,8 +827,12 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
         </Shell>
       </Scroller>
 
-      <NewsModal isOpen={addOpen} onClose={() => setAddOpen(false)} onSave={saveNews}
-                 categories={settings.newsCategories} saving={saving} />
+      {/* ⚠️ 닫으면 트리에서 뺀다 — 안 그러면 방금 등록한 내용이 그대로 남아,
+          다시 열었을 때 채워져 있는 것을 새로 적는 줄 알고 또 등록하게 된다. */}
+      {addOpen && (
+        <NewsModal isOpen onClose={() => setAddOpen(false)} onSave={saveNews}
+                   categories={settings.newsCategories} saving={saving} />
+      )}
 
       <TechModal tech={selected} onClose={() => setSelected(null)}
                  division={division} divisions={settings.divisions || []}

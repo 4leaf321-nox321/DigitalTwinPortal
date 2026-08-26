@@ -24,7 +24,7 @@ import { Field, Hint } from './modalStyles';
  *    우리도 도입, 우리는 LS-DYNA」인데, 예외를 만들어야만 도구를 적을 수 있으면
  *    그 경우를 아예 못 적는다.
  */
-import { FOLLOW, asDraft, divisionDirty, divisionNeedsReason }
+import { FOLLOW, asDraft, divisionDirty, divisionNeedsReason, divisionNeedsStage }
   from '../utils/stageSave';
 
 const Grid = styled.ul`
@@ -222,8 +222,23 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
   */
   // ⚠️ 규칙 자체는 `utils/stageSave` 에 있다 — 시험이 붙어 있는 쪽이 정본이다.
   const storedOf = (d) => (data?.overrides || []).find((x) => x.division === d) || null;
-  const needReason = divisionNeedsReason(draft);
+  /*
+    ⚠️⚠️ **단계 없이 도구만 고른 줄도 막아야 한다**(2026-08-26 점검). 서버는 400 을
+       내는데 여기서는 안 봐서, 화면은 저장을 허락하고 누르면 오류가 났다. 「사업부
+       적기」 쪽에는 걸어 두고 이쪽만 빠져 있었다 — 같은 규칙을 두 곳이 다르게 보면
+       그중 한 곳은 반드시 거짓말한다.
+  */
+  const noWhy = divisionNeedsReason(draft);
+  const noStage = divisionNeedsStage(draft);
+  const needReason = noWhy || noStage;   // 위로 알리는 「아직 덜 적혔다」
   const dirty = Boolean(open) && divisionDirty(storedOf(open), draft);
+
+  /*
+    ⚠️⚠️ **기술을 갈아타면 적던 것을 버린다**(2026-08-26 점검). 상세 창은 기술이
+       바뀌어도 이 칸을 그대로 두므로, MX 를 펴 놓고 적던 초안이 **다음 기술의 MX
+       줄에 그대로** 얹혔다. 그 상태로 저장하면 남의 줄에 앞엣것이 박힌다.
+  */
+  useEffect(() => { setOpen(''); setDraft(null); }, [tech?.uuid]);
 
   // ⚠️ 오류와 알림은 **부르는 쪽**이 맡는다 — 기본 설정과 함께 보내야 하기 때문이다.
   const save = async () => {
@@ -397,11 +412,20 @@ const DivisionStages = forwardRef(({ tech, canCurate, onChanged, showError,
                       )}
                   </label>
 
-                  {needReason && (
+                  {/* ⚠️ 무엇이 모자란지 **갈라서** 말한다 — 한 문구로 뭉치면
+                      단계를 안 골랐는데 「이유를 적으라」고 하게 된다. */}
+                  {noWhy && (
                     <Need>
                       <AlertTriangle size={11} />
                       <b>안 쓰기로 한 판단</b>입니다. 이유 없는 줄은 6개월 뒤 아무
                       뜻도 아니고, 그때 같은 논의를 처음부터 다시 합니다.
+                    </Need>
+                  )}
+                  {noStage && (
+                    <Need>
+                      <AlertTriangle size={11} />
+                      <b>어느 단계인지 골라야 합니다.</b> 단계 없는 줄은 어디에
+                      있는지를 말하지 않아 레이더에 찍을 자리가 없습니다.
                     </Need>
                   )}
 

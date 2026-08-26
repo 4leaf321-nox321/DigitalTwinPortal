@@ -365,8 +365,18 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
     }
   };
 
-  const shown = sector === ALL ? rows : rows.filter((r) => r.category === sector);
-  const sectors = data?.sectors || [];
+  /*
+    ⚠️⚠️ **분야가 비어 있는 역량도 어딘가에는 서야 한다**(2026-08-26 점검). 서버가
+       주는 `sectors` 에는 빈 분야가 안 들어가므로, 그런 역량은 **탭 어디에도 없고**
+       「전체」에서는 바로 앞 분야 머리글 밑에 붙어 그 분야인 것처럼 보였다.
+  */
+  const NOSECT = '분류 없음';
+  const sectorOf = (r) => r.category || NOSECT;
+  const shown = sector === ALL ? rows : rows.filter((r) => sectorOf(r) === sector);
+  const sectors = [...(data?.sectors || [])];
+  if (rows.some((r) => !r.category) && !sectors.includes(NOSECT)) {
+    sectors.push(NOSECT);
+  }
   const filled = data ? data.filled : 0;
   const total = data ? data.total : 0;
 
@@ -400,7 +410,7 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
             {sectors.map((g) => (
               <Tab key={g} type="button" $on={sector === g}
                    onClick={() => setSector(g)}>
-                {g}<em>{rows.filter((r) => r.category === g).length}</em>
+                {g}<em>{rows.filter((r) => sectorOf(r) === g).length}</em>
               </Tab>
             ))}
           </Tabs>
@@ -418,14 +428,24 @@ const DivisionSheet = ({ isOpen, divisions, initial = '', canCurate,
         )}
 
         <Body>
-          {!data && <Msg>{failed ? `불러오지 못했습니다 — ${failed}` : '불러오는 중…'}</Msg>}
+          {/* ⚠️ 사업부가 하나도 없으면 부를 것이 없다 — 그대로 두면 영영
+              「불러오는 중…」에서 안 벗어난다. */}
+          {!division && (
+            <Msg>
+              포털에 사업부가 하나도 없습니다 — 사업부를 먼저 등록해야 적을 수
+              있습니다.
+            </Msg>
+          )}
+          {division && !data && (
+            <Msg>{failed ? `불러오지 못했습니다 — ${failed}` : '불러오는 중…'}</Msg>
+          )}
           {data && shown.length === 0 && <Msg>이 분야에는 역량이 없습니다.</Msg>}
 
           {data && shown.map((r) => {
             const d = draft[r.uuid] || asDraft(r);
             const dirty = dirtyOf(r, draft[r.uuid]);
-            const head = sector === ALL && r.category !== last
-              ? (last = r.category) : null;
+            const head = sector === ALL && sectorOf(r) !== last
+              ? (last = sectorOf(r)) : null;
             return (
               <React.Fragment key={r.uuid}>
                 {head && <Sector>{head}<span /></Sector>}

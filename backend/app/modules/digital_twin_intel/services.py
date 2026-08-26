@@ -201,7 +201,14 @@ def overview(actor=None, moved_days=MOVED_WINDOW_DAYS, division=None):
         'totalNews': IntelNews.query.count(),
         # ⚠️ **레이더에 서는 수**다. 매달린 도구까지 세면 화면과 안 맞는다.
         'totalTech': len(techs),
-        'capabilityCount': sum(1 for t in every if t.kind == 'capability'),
+        # ⚠️⚠️ **괄호 안은 레이더 수의 내역이어야 한다**(2026-08-26 점검). 예전에는
+        #    `totalTech` 만 레이더 기준이고 역량ㆍ도구 셈은 **전부**를 셌다 — 화면에
+        #    「레이더 63개 (역량 63 · 도구 546)」이 떠서 더해도 안 맞았다.
+        # ⚠️ dict 안에서는 `"""…"""` 를 쓰면 안 된다 — 바로 뒤 키 문자열과 **이어
+        #    붙어** 그 키가 통째로 사라진다(여기서 실제로 그랬고 시험이 잡았다).
+        'capabilityCount': sum(1 for t in techs if t.kind == 'capability'),
+        'orphanToolCount': sum(1 for t in techs if t.kind != 'capability'),
+        # 매달린 것까지 **전부**. 레이더에는 안 서지만 「도구 관리」가 다룬다.
         'toolCount': sum(1 for t in every if t.kind != 'capability'),
     }
 

@@ -217,7 +217,17 @@ const Right = styled.div`
   gap: 0.75rem;
 `;
 
-const Field = styled.label`
+/*
+  ⚠️⚠️ **`label` 이 아니라 `div` 다**(2026-08-26 점검). `label` 은 눌리면 그 안의
+     **첫 단추를 대신 누른다**(button 도 labelable 이다). 그래서 이름표 글자만 눌러도
+     — 「이어 둔 우리 것」을 누르면 첫 연결이 묻지도 않고 끊기고, 「이 소식이 말하는
+     기술」을 누르면 창이 닫히며 엉뚱한 기술로 튀고, 「처리 상태」를 누르면 골라 둔
+     상태가 되돌아갔다. 스무 곳이 그랬다.
+
+  ⚠️ `htmlFor` 로 묶어 둔 자리는 한 곳도 없었으므로 잃는 것은 「글자를 눌러 칸에
+     초점 주기」뿐이다. 값을 지우는 이름표보다는 낫다.
+*/
+const Field = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -404,8 +414,15 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
     ⚠️ 고른 분야는 **목록만** 줄인다 — 오른쪽에 열어 둔 역량은 그대로 둔다. 분야를
        바꿀 때마다 고른 것이 튀면 「어디 갔지」가 된다.
   */
+  /*
+    ⚠️ **보던 분야가 없어질 수 있다**(고치다 분류를 바꾸거나 마지막 하나를 지우면).
+       그대로 두면 목록이 통째로 빈 칸이 되고 안내도 안 떠서 고장으로 읽힌다.
+       없으면 **전체**로 되돌린다.
+  */
+  const has = (g) => sectors.some(([k]) => k === g);
   const curSector = sector === null
-    ? (sectors[0] ? sectors[0][0] : ALL_SECTORS) : sector;
+    ? (sectors[0] ? sectors[0][0] : ALL_SECTORS)
+    : (sector === ALL_SECTORS || has(sector) ? sector : ALL_SECTORS);
   const shownSectors = curSector === ALL_SECTORS
     ? sectors : sectors.filter(([g]) => g === curSector);
   const quietIn = (items) =>

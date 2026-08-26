@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import {
   Sparkles, AlertTriangle, Check, Loader2, Target, BarChart3, Info,
@@ -130,6 +130,15 @@ const AssistPanel = ({ kind, uuid, onLinked, showError }) => {
   const [out, setOut] = useState(null);
   const [state, setState] = useState({});   // key → 'saving' | 'done'
   const [off, setOff] = useState(false);    // LLM 이 꺼져 있음
+
+  /*
+    ⚠️⚠️ **보던 것이 바뀌면 앞엣것을 버린다**(2026-08-26 점검). 상세 창은 기술이
+       바뀌어도 이 칸을 그대로 두므로, 앞 기술에 대해 뽑아 둔 정리가 **다음 기술
+       화면에 그대로** 남았다. 거기서 [연결]을 누르면 새 기술 uuid 에 **앞 기술의
+       제안**이 저장된다 — 아무도 안 시킨 연결이 생기고, 나중에 왜 걸렸는지 아무도
+       못 밝힌다.
+  */
+  useEffect(() => { setOut(null); setState({}); setOff(false); }, [kind, uuid]);
 
   const run = async () => {
     setBusy(true);

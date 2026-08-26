@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { X, Radar, AlertTriangle, Plus, Layers } from 'lucide-react';
 
-import { STAGES } from './RadarBoard';
+import { STAGES, STAGE_NEW } from './RadarBoard';
 import CapabilityPicker from './CapabilityPicker';
 import {
   Overlay, Panel, Head, CloseBtn, Body, Foot, Field, TwoCol, Hint, Warn,
@@ -198,8 +198,13 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
   const showSector = isCap || capUuids.length === 0;
   const capNames = (capabilities || [])
     .filter((c) => capUuids.includes(c.uuid)).map((c) => c.name);
-  // 새로 만들 때만 단계를 여기서 고른다. 편집은 전용 길(권한이 다르다)로 간다.
-  const [stage, setStage] = useState(initial?.stage || '관찰');
+  /*
+    새로 만들 때만 단계를 여기서 고른다. 편집은 전용 길(권한이 다르다)로 간다.
+
+    ⚠️⚠️ **기본값은 서버와 같아야 한다**(2026-08-26 점검). 여기만 「관찰」이라
+       아무도 안 본 것이 「지켜보기로 정했다」로 들어갔다. 서버는 「감지」로 만든다.
+  */
+  const [stage, setStage] = useState(initial?.stage || STAGE_NEW);
   const [stageReason, setStageReason] = useState('');
 
   if (!isOpen) return null;
@@ -215,7 +220,12 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
     setAliasInput('');
   };
 
-  const needReason = !edit && stage === '보류' && !stageReason.trim();
+  /*
+    ⚠️⚠️ **역량은 단계를 안 갖는다**(2026-08-26). 역량인데 「보류」를 골라 두면
+       서버가 버릴 값 때문에 「추가」 단추가 **영영 안 켜졌다.** 아래에서 칸 자체를
+       안 그리므로 여기서도 안 묻는다.
+  */
+  const needReason = !edit && !isCap && stage === '보류' && !stageReason.trim();
 
   const addTag = () => {
     const v = tagInput.trim();
@@ -245,7 +255,11 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
     body.aliases = aliases;
     // ⚠️ 역량은 다른 것 밑에 못 매단다. 층을 바꿔 놓고 상위가 남으면 서버가 물린다.
     body.capabilityUuids = kind === 'capability' ? [] : capUuids;
-    if (!edit) {
+    /*
+      ⚠️ **역량은 단계를 안 보낸다.** 서버도 버리지만, 보내면 「그런 것이 있나 보다」로
+         읽히고 다음 사람이 칸을 만든다. 단계는 사업부 줄에만 산다.
+    */
+    if (!edit && !isCap) {
       body.stage = stage;
       if (stageReason.trim()) body.stageReason = stageReason.trim();
     }
@@ -490,7 +504,19 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
                       placeholder="어느 과제·공정에 닿는지, 무엇이 걸림돌인지" />
           </Field>
 
-          {!edit && canCurate && (
+          {/*
+            ⚠️⚠️ **역량에는 단계 칸이 없다**(2026-08-26). 그려 두면 골라도 서버가
+               버리는, 아무 일도 안 하는 칸이 된다 — 그것이 있는 줄 알고 고르는
+               사람이 생긴다.
+          */}
+          {!edit && canCurate && isCap && (
+            <Hint>
+              역량에는 <b>단계가 없습니다.</b> 단계는 사업부마다 답이 달라서
+              사업부별로만 적습니다 — 만든 뒤 「사업부 적기」에서 적으세요.
+            </Hint>
+          )}
+
+          {!edit && canCurate && !isCap && (
             <Field>
               <span>처음 놓을 단계</span>
               <StageRow>
@@ -505,7 +531,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
             </Field>
           )}
 
-          {!edit && canCurate && stage !== '관찰' && (
+          {!edit && canCurate && !isCap && stage !== STAGE_NEW && (
             <Field>
               <span>그 단계로 놓는 이유{stage === '보류' ? ' *' : ''}</span>
               <textarea value={stageReason} onChange={(e) => setStageReason(e.target.value)}

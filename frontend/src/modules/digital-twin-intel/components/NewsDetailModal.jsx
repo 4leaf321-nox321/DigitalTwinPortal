@@ -175,14 +175,22 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  /*
+    ⚠️⚠️ **못 불러온 것과 원문이 없는 것을 갈라야 한다**(2026-08-26 점검). 예전에는
+       못 불러오면 `body: ''` 로 채워 두었는데, 그러면 화면이 「원문이 보관돼 있지
+       않습니다」라고 **거짓말**하고, 그 말을 믿고 [원문 담기] 에 붙여넣어 저장하면
+       **서버에 있던 원문을 통째로 덮어쓴다.**
+  */
+  const [failed, setFailed] = useState(null);
 
   useEffect(() => {
     if (!news) return;
     setFull(null);
+    setFailed(null);
     setEditing(false);
     api.getNews(news.uuid)
       .then((d) => { setFull(d); setDraft(d.body || ''); })
-      .catch((e) => { showError(e.message); setFull({ ...news, body: '' }); });
+      .catch((e) => { setFailed(e.message || '불러오지 못했습니다.'); });
     api.listLinks('news', news.uuid).then(setLinks).catch(() => setLinks([]));
   }, [news]);   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -199,8 +207,19 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
   const dropTech = async (techUuid) => {
     try {
       await api.removeEvidence(news.uuid, techUuid);
-      setFull((p) => ({ ...p,
-        technologies: (p.technologies || []).filter((t) => t.uuid !== techUuid) }));
+      /*
+        ⚠️ `full` 이 아직 null 일 수 있다(불러오는 중). 그대로 펴면 `{}` 가 되어
+           제목이 사라지고 uuid 가 undefined 인 창이 남는다.
+        ⚠️ **목록에도 알린다.** 안 알리면 근거를 끊었는데 뒤 카드에는 그 기술
+           딱지가 그대로 남아, 끊긴 것인지 아닌지 알 수 없다.
+      */
+      setFull((p) => {
+        const base = p || news;
+        return { ...base,
+          technologies: (base.technologies || [])
+            .filter((t) => t.uuid !== techUuid) };
+      });
+      onSaved();
     } catch (e) { showError(e.message); }
   };
 
@@ -258,7 +277,8 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
                 {n.technologies.map((t) => (
                   <Chip key={t.uuid}>
                     <button type="button" onClick={() => onTechClick(t)}>
-                      {t.name} <em>{t.stage}</em>
+                      {/* ⚠️ 역량에는 단계가 없다 — 그대로 찍으면 **빈 자리**가 뜬다. */}
+                      {t.name}{t.stage ? <> <em>{t.stage}</em></> : ''}
                     </button>
                     {/* 잘못 걸린 기술을 뺀다. 기술 자체는 안 지워진다. */}
                     <button type="button" onClick={() => dropTech(t.uuid)}
@@ -274,7 +294,8 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
           <LinkList rows={links} onRemove={dropLink} />
 
           <AssistPanel kind="news" uuid={n.uuid}
-                       onLinked={reloadLinks} showError={showError} />
+                       onLinked={() => { reloadLinks(); onSaved(); }}
+                       showError={showError} />
 
           {full === null && <Hint>원문을 불러오는 중…</Hint>}
 
@@ -285,7 +306,20 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
             </Field>
           )}
 
-          {full !== null && !editing && !hasBody && (
+          {/* ⚠️ **못 불러온 것을 「없다」고 하지 않는다.** 담으라고 시키면 있던
+              원문을 덮어쓰게 된다. */}
+          {failed && (
+            <Warn>
+              <AlertTriangle size={13} />
+              <span>
+                <b>원문을 못 불러왔습니다 — {failed}</b> 보관된 원문이 있는지 없는지
+                여기서는 알 수 없습니다. 창을 닫았다 다시 열어 보세요.
+                <b> 지금 붙여넣어 담으면 있던 원문을 덮어씁니다.</b>
+              </span>
+            </Warn>
+          )}
+
+          {!failed && full !== null && !editing && !hasBody && (
             <Warn>
               <AlertTriangle size={13} />
               <span>

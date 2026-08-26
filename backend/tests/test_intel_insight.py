@@ -242,8 +242,11 @@ def test_요약은_레이더에_서는_것만_센다(db, client, auth, admin):
 
     d = (client.get(f'{BASE}/overview', headers=auth(admin)).get_json() or {})['data']
     assert d['totalTech'] == 2, '역량 + 안 매달린 도구만 (매달린 LS-DYNA 는 뺀다)'
+    # ⚠️ 괄호 안은 **레이더 수의 내역**이다 — 더해서 totalTech 가 나와야 한다.
     assert d['capabilityCount'] == 1
-    assert d['toolCount'] == 2, '도구 수는 따로, 전부 센다'
+    assert d['orphanToolCount'] == 1, '안 매단 도구만'
+    assert d['capabilityCount'] + d['orphanToolCount'] == d['totalTech']
+    assert d['toolCount'] == 2, '도구 전체는 따로 — 매달린 것까지 센다'
 
     # 눌렀을 때 보이는 것과 같은지 — 레이더 목록과 맞춰 본다.
     r = client.get(f'{BASE}/tech?radar=1', headers=auth(admin))

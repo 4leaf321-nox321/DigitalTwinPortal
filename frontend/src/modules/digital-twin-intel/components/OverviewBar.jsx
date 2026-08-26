@@ -114,11 +114,15 @@ const OverviewBar = ({ data, active, onPick, tab = 'news' }) => {
         ⚠️ 「기술 322」는 거짓말이었다 — 레이더에는 63개만 선다. 레이더에 서는 수를
            적고, 접힌 도구는 **따로** 말한다.
       */}
-      <Quiet title={isNews ? '전체 소식' : '레이더에 서는 수 · 그 밑에 매달린 도구 수'}>
+      {/* ⚠️ **괄호 안은 앞 숫자의 내역이다.** 안 맞으면 둘 다 못 믿게 된다. */}
+      <Quiet title={isNews ? '전체 소식'
+        : '레이더에 서는 수 = 역량 + 아직 어느 역량에도 안 매단 도구'}>
         <HelpCircle size={11} style={{ verticalAlign: '-0.1em' }} />{' '}
         {isNews
           ? `소식 ${data.totalNews}건`
-          : `레이더 ${data.totalTech}개 (역량 ${data.capabilityCount} · 도구 ${data.toolCount})`}
+          : `레이더 ${data.totalTech}개 (역량 ${data.capabilityCount}`
+            + ` · 안 매단 도구 ${data.orphanToolCount ?? 0})`
+            + ` · 도구 전체 ${data.toolCount}`}
       </Quiet>
     </Bar>
   );

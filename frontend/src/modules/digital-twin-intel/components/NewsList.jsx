@@ -239,7 +239,8 @@ const NewsList = ({ rows, onTechClick, onDelete, onOpen, canCurate }) => {
             {(n.technologies || []).map((t) => (
               <TechChip key={t.uuid} onClick={() => onTechClick(t)}
                         title="이 기술의 레이더 항목으로 갑니다">
-                {t.name} <em>{t.stage}</em>
+                {/* ⚠️ 역량에는 단계가 없다 — 그대로 찍으면 **빈 자리**가 뜬다. */}
+                {t.name}{t.stage ? <> <em>{t.stage}</em></> : ''}
               </TechChip>
             ))}
             {(n.tags || []).map((t) => <Tag key={t}>#{t}</Tag>)}
