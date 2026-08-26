@@ -23,6 +23,7 @@ sys.path.insert(0, _HERE)                    # 옆의 분류 자료
 logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
 
 from app import create_app                                    # noqa: E402
+from app.modules.digital_twin_intel import services as S      # noqa: E402
 from app.modules.digital_twin_intel.models import (           # noqa: E402
     IntelDivisionStage, IntelTech, IntelTechCapability)
 from seed_intel_taxonomy_data import TAXONOMY                 # noqa: E402
@@ -78,6 +79,53 @@ def main():
               % (len(odd_c), len(odd_t)))
         for n in (odd_c + odd_t)[:10]:
             print('  ·', n)
+        print()
+
+        """
+        ⚠️⚠️ **부딪히는 이름** — 여기가 제일 조용히 망가지는 자리다.
+
+        씨뿌리기는 역량을 **딱 맞는 이름**으로만 찾지만(`filter_by(name=)`), 못 찾아
+        새로 만들 때 `create_tech` 가 **별칭까지** 보고 찾는다(`find_tech_by_name`).
+        그래서 표의 역량 이름이 **다른 줄의 별칭**에 물려 있으면:
+
+          · 그 줄이 도구면 → 층이 달라 **「역량 실패」로 건너뛴다.** 그 역량이 안
+            생기고, 그러면 **그 밑 도구도 통째로 안 들어간다**(`caps.get` 이 None).
+          · 표의 도구 이름이 **역량**에 물려 있으면 → 그 역량을 **도구로 내리고
+            매달림을 지운다.** 되돌릴 길이 없다.
+
+        ⚠️ 씨뿌리기와 **같은 함수**로 본다. 여기서 따로 맞대 보면 확인이 거짓말한다.
+        """
+        by_name = {c.name for c in caps} | {t.name for t in tools}
+        clash_cap, clash_tool = [], []
+        for name in sorted(wanted):
+            if name in by_name:
+                continue                      # 딱 맞는 이름이 있으면 그 줄을 쓴다
+            hit = S.find_tech_by_name(name)
+            if hit is not None and hit.kind != 'capability':
+                clash_cap.append((name, hit.name))
+        for tn in sorted(listed):
+            hit = S.find_tech_by_name(tn)
+            if hit is not None and hit.kind == 'capability':
+                kids = IntelTechCapability.query.filter_by(
+                    capability_uuid=hit.uuid).count()
+                clash_tool.append((tn, hit.name, kids))
+
+        print('부딪히는 이름')
+        if clash_cap:
+            print('  !! 이 역량들은 **안 만들어지고 그 밑 도구도 통째로 빠집니다** '
+                  '(%d개)' % len(clash_cap))
+            for name, other in clash_cap:
+                n_tools = len(next(c[5] for c in TAXONOMY if c[0] == name))
+                print('     · 「%s」 ← 도구 「%s」 의 별칭에 물림 (도구 %d개가 함께 빠짐)'
+                      % (name, other, n_tools))
+        if clash_tool:
+            print('  !! 이 역량들이 **도구로 내려가고 매달림이 지워집니다** (%d개)'
+                  % len(clash_tool))
+            for tn, cap_name, kids in clash_tool:
+                print('     · 역량 「%s」 ← 표의 도구 「%s」 에 물림 (매달린 도구 %d개가 떨어짐)'
+                      % (cap_name, tn, kids))
+        if not clash_cap and not clash_tool:
+            print('  없음')
         print()
 
         add_c = sorted(wanted - {c.name for c in caps})
