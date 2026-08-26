@@ -168,6 +168,31 @@ const Side = styled.div`
   @media (max-width: 1000px) { height: auto; max-height: 28rem; }
 `;
 
+/*
+  안 그린 것의 수. ⚠️ **범례 바로 밑, 목록보다 위**에 둔다 — 목록 끝에 두면
+  63줄 밑이라 아무도 못 본다.
+*/
+const Quiet = styled.p`
+  margin: 0 0 0.625rem;
+  padding: 0.4375rem 0.5625rem;
+  border: 1px dashed #c7d2fe;
+  border-radius: 0.375rem;
+  background: #f8faff;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: #64748b;
+
+  b { color: #4338ca; }
+`;
+
+/** 그 점에 있는 사업부들. ⚠️ 이 화면이 답하는 물음이 이것이라 이름 바로 뒤다. */
+const Who = styled.em`
+  font-style: normal;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #4338ca;
+`;
+
 const Group = styled.section`
   h4 {
     margin: 0 0 0.1875rem;
@@ -419,7 +444,13 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
        움직인다. 하나라도 남으면 「테는 있는데 화살표가 없는 줄」이 생기고, 그러면
        둘 다 못 믿게 된다 — 그 셋이 같은 값을 보게 맞춰 둔 이유가 그것이다.
   */
-  const [moves, setMoves] = useState(() => readPref(MOVE_KEY, false));
+  const [movesOn, setMoves] = useState(() => readPref(MOVE_KEY, false));
+  /*
+    ⚠️ 스위치가 켜진 채로 사업부를 풀 수 있다(기억해 두는 값이라 다음에 열 때도).
+       **그리는 쪽에서 한 번 더 막는다** — 단추만 막으면 그 틈으로 거짓말하는
+       화살표가 되살아난다.
+  */
+  const moves = movesOn && divisionLens;
   const [view, setView] = useState({ k: 1, x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const svgRef = useRef(null);
@@ -439,14 +470,61 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
   const span = (Math.PI * 2) / sectors.length;
   const PAD_A = Math.min(span * 0.08, 0.06);
 
-  const blips = useMemo(() => {
+  /*
+    ⚠️⚠️ **점 하나는 「역량 × 단계 × 거기 있는 사업부들」이다.** 예전에는 기본 설정
+       고리에 주점을 하나 놓고 갈리는 사업부만 위성으로 찍었는데, 아무도 안 적은
+       역량 48개가 전부 「감지」 고리에 뭉쳐 그림이 안 읽혔다(2026-08-26 신고).
+
+       이제 **기본 설정 점은 아예 안 그린다.** 점은 사업부가 적은 자리에만 서고,
+       **같은 단계에 있는 사업부는 한 점으로 뭉친다** — 그래서 사업부 수만큼
+       쪼개져 63개가 504개가 되는 일도 없다. 지금 자료로 85점 → 23점이다.
+
+    ⚠️ 아무도 안 적은 역량은 **셈만 하고 안 그린다.** 그 수를 화면에 적어야
+       「비었다」가 아니라 「아직 안 적었다」로 읽힌다.
+  */
+  const { blips, quietCaps, quietTools } = useMemo(() => {
     const cells = new Map();
-    rows.forEach((t) => {
-      const si = Math.max(0, sectors.indexOf(t.category || UNCATEGORIZED));
-      const ri = stageIndex[t.stage] ?? 2;
+    let qc = 0;
+    let qt = 0;
+    const put = (si, ri, tech, divisions, follows) => {
+      if (ri === undefined || ri < 0) return;
       const key = `${si}|${ri}`;
       if (!cells.has(key)) cells.set(key, []);
-      cells.get(key).push({ tech: t, si, ri });
+      cells.get(key).push({ tech, si, ri, divisions, follows,
+                            key: `${tech.uuid}|${ri}` });
+    };
+
+    rows.forEach((t) => {
+      const si = Math.max(0, sectors.indexOf(t.category || UNCATEGORIZED));
+      /*
+        사업부 눈일 때는 서버가 이미 그 사업부 값으로 풀어 보낸다 — 점 하나면
+        된다. ⚠️ 적었는지는 `hasDivisionRow` 로 **서버에 묻는다.** 화면이
+        `isDivisionOverride` 나 `divisionTools` 로 짐작하면 「단계만 적고 도구는
+        안 적은 줄」에서 조용히 어긋난다.
+      */
+      if (divisionLens) {
+        if (!t.hasDivisionRow) { qc += 1; return; }
+        put(si, stageIndex[t.stage], t, [t.division], !t.isDivisionOverride);
+        return;
+      }
+
+      const marks = t.divisionMarks || [];
+      if (!marks.length) {
+        if (t.kind === 'capability') qc += 1; else qt += 1;
+        return;
+      }
+      // 같은 단계에 있는 사업부는 **뭉친다** — 그게 이 그림의 뜻이다.
+      const g = new Map();
+      marks.forEach((m) => {
+        const ri = stageIndex[m.stage];
+        if (ri === undefined) return;
+        if (!g.has(ri)) g.set(ri, { divisions: [], follows: true });
+        const e = g.get(ri);
+        e.divisions.push(m.division);
+        // ⚠️ 한 사업부라도 **또렷이 정했으면** 그 무리는 「정한 자리」다.
+        if (!m.follows) e.follows = false;
+      });
+      g.forEach((e, ri) => put(si, ri, t, e.divisions, e.follows));
     });
 
     const out = [];
@@ -461,8 +539,8 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
 
     out.sort((p, q) => (p.ri - q.ri) || p.tech.name.localeCompare(q.tech.name));
     out.forEach((b, i) => { b.no = i + 1; });
-    return out;
-  }, [rows, sectors, stageIndex, span, PAD_A]);
+    return { blips: out, quietCaps: qc, quietTools: qt };
+  }, [rows, sectors, stageIndex, span, PAD_A, divisionLens]);
 
 
   // ── 확대·축소·이동 ────────────────────────────────────────────────────────
@@ -569,10 +647,19 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                    title="축소"><Minus size={15} /></ToolBtn>
           <ToolBtn onClick={reset} disabled={!zoomed && !view.x && !view.y}
                    title="처음 크기로"><Maximize2 size={14} /></ToolBtn>
-          <ToolBtn $on={moves} onClick={toggleMoves}
-                   title={moves
-                     ? `시간에 따른 변화 끄기 (최근 ${movedWindowDays}일 이동)`
-                     : '최근 얼마 안에 단계가 옮겨온 자리를 화살표로 그립니다'}>
+          {/*
+            ⚠️⚠️ **사업부를 골라야 켤 수 있다.** 서버가 세어 주는 이동은 기본 설정의
+               이동인데, 이제 점은 사업부 자리다 — 그대로 그리면 「MX 가 관찰에서
+               왔다」고 말하지만 실제로 움직인 것은 기본 설정이다. **거짓말하는
+               화살표는 없느니만 못하다.** 사업부를 고르면 서버가 그 사업부의
+               이력만 세어 주므로 그때는 맞다.
+          */}
+          <ToolBtn $on={moves} onClick={toggleMoves} disabled={!divisionLens}
+                   title={!divisionLens
+                     ? '사업부를 고르면 볼 수 있습니다 — 점이 사업부 자리라, 기본 설정의 이동은 그릴 자리가 없습니다'
+                     : (moves
+                       ? `시간에 따른 변화 끄기 (최근 ${movedWindowDays}일 이동)`
+                       : '최근 얼마 안에 단계가 옮겨온 자리를 화살표로 그립니다')}>
             <History size={14} />
           </ToolBtn>
           {/*
@@ -713,46 +800,6 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
               );
             })}
 
-            {/*
-              ⚠️⚠️ **사업부가 다르게 보는 자리를 위성으로 찍는다.** 점을 사업부 수만큼
-                 쪼개면 63개가 최대 504개가 되어 밀도가 무너지고, 「이 역량이 어디
-                 있나」가 하나로 안 읽힌다. 주점은 기본 설정 고리에 하나 두고,
-                 **갈리는 사업부만** 그 고리 쪽으로 작은 점을 찍어 선으로 잇는다
-                 (2026-08-26 요청).
-
-              ⚠️ 위성은 점보다 **먼저** 그린다 — 나중에 그리면 주점을 덮어 번호가
-                 안 읽힌다. 이동 화살표와 같은 이유, 같은 표현법이다.
-            */}
-            {blips.map((b) => {
-              const marks = b.tech.divisionMarks || [];
-              if (!marks.length) return null;
-              const a = Math.atan2(b.y - CY, b.x - CX);
-              return marks.map((m) => {
-                const ri = stageIndex[m.stage];
-                if (ri === undefined || ri === b.ri) return null;
-                // 그 고리의 한가운데 반지름 — 주점과 같은 각도에 놓는다.
-                const rIn = ri === 0 ? 0 : RINGS[ri - 1];
-                const r = (rIn + RINGS[ri]) / 2;
-                const [x, y] = polar(a, r);
-                return (
-                  <g key={`sat-${b.tech.uuid}-${m.division}`}
-                     style={{ pointerEvents: 'none' }}>
-                    <title>{`${m.division} — ${m.stage}`}</title>
-                    <line x1={b.x} y1={b.y} x2={x} y2={y}
-                          stroke={STAGES[ri].color} strokeWidth={1 / view.k}
-                          opacity="0.35" strokeDasharray={`${3 / view.k} ${2 / view.k}`} />
-                    <circle cx={x} cy={y} r={5 / view.k} fill={STAGES[ri].color}
-                            stroke="#fff" strokeWidth={1.2 / view.k} opacity="0.9" />
-                    <text x={x} y={y - 8 / view.k} fontSize={8.5 / view.k}
-                          fill={STAGES[ri].color} fontWeight="700" textAnchor="middle"
-                          stroke="#fff" strokeWidth={2.5 / view.k} paintOrder="stroke">
-                      {m.division}
-                    </text>
-                  </g>
-                );
-              });
-            })}
-
             {blips.map((b) => {
               const st = STAGES[b.ri];
               const on = hot === b.tech.uuid;
@@ -760,14 +807,17 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
               //    화살표가 없는 줄」이 생기고, 그러면 둘 다 못 믿게 된다.
               const moved = moves && Boolean(b.tech.movedFrom);
               const k = view.k;
-              const rr = BLIP_R / k;
+              /* ⚠️ 뭉친 사업부가 많을수록 점이 커진다 — 「여기 셋이 있다」가
+                 이름을 안 읽어도 보여야 한다. 무한정 키우지는 않는다. */
+              const rr = (BLIP_R + Math.min(4, (b.divisions.length - 1) * 2)) / k;
               return (
-                <g key={b.tech.uuid} style={{ cursor: 'pointer' }}
+                <g key={b.key} style={{ cursor: 'pointer' }}
                    onClick={clickIfNotDragged(() => onSelect(b.tech))}
                    onMouseEnter={() => setHot(b.tech.uuid)}
                    onMouseLeave={() => setHot(null)}>
                   <title>
-                    {`${b.tech.name} · ${b.tech.stage}`
+                    {`${b.tech.name} · ${STAGES[b.ri].key} — ${b.divisions.join(' · ')}`
+                     + `${b.follows ? ' (기본 설정을 그대로 따름)' : ''}`
                      + `${b.tech.isStale ? ' · 근거 낡음' : ''}`
                      + `${(b.tech.divisionTools || []).length
                           ? ` · ${b.tech.division}: ${b.tech.divisionTools.join(' · ')}`
@@ -790,7 +840,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                           ? ` · ${b.tech.movedFrom}에서 옮겨옴 (${ymd(b.tech.movedAt)})`
                           : ''}`}
                   </title>
-                  {on && <circle cx={b.x} cy={b.y} r={(BLIP_R + 7) / k}
+                  {on && <circle cx={b.x} cy={b.y} r={rr + 7 / k}
                                  fill={st.color} opacity="0.16" />}
                   {/*
                     ⚠️ **모양은 전부 원으로 통일한다.** 예전엔 최근 이동을 삼각형으로
@@ -799,17 +849,35 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                        말하고 테는 **멀리서도 찾게** 해 준다. 둘은 같은 값을 본다.
                   */}
                   {moved && (
-                    <circle cx={b.x} cy={b.y} r={(BLIP_R + 3.5) / k} fill="none"
+                    <circle cx={b.x} cy={b.y} r={rr + 3.5 / k} fill="none"
                             stroke={st.color} strokeWidth={1.5 / k} opacity="0.5" />
                   )}
+                  {/*
+                    ⚠️ **속이 빈 점은 「기본 설정을 그대로 따른다」는 뜻이다.** 도구만
+                       적은 줄이 여기 온다 — 어디 있는지에 대한 답은 맞지만 따로
+                       정한 것은 아니라, 채운 점과 같아 보이면 안 된다.
+                  */}
                   <circle cx={b.x} cy={b.y} r={rr}
-                          fill={st.color}
-                          stroke={b.tech.isStale ? '#b45309' : '#fff'}
+                          fill={b.follows ? '#fff' : st.color}
+                          stroke={b.tech.isStale ? '#b45309'
+                                                 : (b.follows ? st.color : '#fff')}
                           strokeWidth={(b.tech.isStale ? 2.5 : 1.5) / k} />
-                  <text x={b.x} y={b.y} fontSize={10 / k} fill="#fff" fontWeight="700"
+                  <text x={b.x} y={b.y} fontSize={10 / k}
+                        fill={b.follows ? st.color : '#fff'} fontWeight="700"
                         textAnchor="middle" dominantBaseline="central"
                         style={{ pointerEvents: 'none' }}>
                     {b.no}
+                  </text>
+                  {/*
+                    ⚠️⚠️ **사업부 이름은 이름표 스위치와 상관없이 늘 보인다.** 이
+                       그림이 답하는 물음이 「누가 어디에 있나」라서, 사업부가 안
+                       보이면 점이 아무 말도 안 한다. 역량 이름 쪽이 스위치다.
+                  */}
+                  <text x={b.x} y={b.y + rr + 8 / k} fontSize={8.5 / k}
+                        fill={st.color} fontWeight="700" textAnchor="middle"
+                        stroke="#fff" strokeWidth={2.5 / k} paintOrder="stroke"
+                        style={{ pointerEvents: 'none' }}>
+                    {b.divisions.join('·')}
                   </text>
                 </g>
               );
@@ -839,7 +907,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
               const right = b.x >= CX;      // 바깥쪽으로 눕혀야 테두리를 안 넘는다
               const on = hot === b.tech.uuid;
               return (
-                <text key={`lb-${b.tech.uuid}`}
+                <text key={`lb-${b.key}`}
                       x={b.x + (right ? 1 : -1) * (BLIP_R + 3.5) / k}
                       y={b.y}
                       fontSize={10.5 / k}
@@ -864,7 +932,14 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
 
       <Side>
         <Legend>
-          <span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#64748b" /></svg> 기술</span>
+          <span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#64748b" /></svg> 여기라고 정한 사업부</span>
+          {/* ⚠️ 속이 빈 점을 안 설명하면 「흐릿한 점」으로만 읽힌다. */}
+          <span>
+            <svg width="12" height="12">
+              <circle cx="6" cy="6" r="4.5" fill="#fff" stroke="#64748b" strokeWidth="1.5" />
+            </svg>
+            기본 설정을 그대로 따름
+          </span>
           {/* ⚠️ 꺼 놓고 범례만 남기면 **있지도 않은 표시를 설명하는 꼴**이 된다. */}
           {moves && (
             <span>
@@ -877,22 +952,35 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
             </span>
           )}
           <span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="#64748b" stroke="#b45309" strokeWidth="2" /></svg> 근거 낡음</span>
-          {blips.some((t) => (t.tech.divisionMarks || []).length) && (
+          {/* 같은 단계의 사업부는 한 점으로 뭉치고, 점은 그만큼 커진다. */}
+          {blips.some((b) => b.divisions.length > 1) && (
             <span>
-              <svg width="22" height="12">
-                <line x1="2" y1="9" x2="14" y2="4" stroke="#64748b" strokeWidth="1"
-                      strokeDasharray="3 2" opacity="0.5" />
-                <circle cx="3" cy="9" r="4" fill="#64748b" />
-                <circle cx="16" cy="4" r="3" fill="#64748b" opacity="0.9" />
-              </svg>
-              사업부가 다르게 보는 자리
+              <svg width="14" height="12"><circle cx="7" cy="6" r="6" fill="#64748b" /></svg>
+              큰 점 = 그 자리에 여럿
             </span>
-          )}
-          {divisionLens && (
-            <span><b style={{ color: '#4f46e5' }}>◆</b> 기본 설정과 다르게 봄</span>
           )}
           <span>안쪽일수록 이미 쓰는 것</span>
         </Legend>
+
+        {/*
+          ⚠️⚠️ **안 그린 것의 수를 말해 준다.** 점은 사업부가 적은 자리에만 서므로,
+             안 적힌 역량은 화면에서 사라진다. 그 수를 안 적으면 「자료가 없는
+             시스템」으로 읽히지 「아직 안 적었다」로는 안 읽힌다 — 그리고 그게
+             지금 이 화면에서 사람이 해야 할 단 하나의 일이다.
+        */}
+        {(quietCaps > 0 || quietTools > 0) && (
+          <Quiet>
+            {quietCaps > 0 && (
+              <>
+                아직 아무 사업부도 안 적은 역량 <b>{quietCaps}</b>개는 점이
+                없습니다 — 위 <b>「사업부 적기」</b>에서 적으면 나타납니다.
+              </>
+            )}
+            {quietTools > 0 && (
+              <> 어느 역량에도 안 매단 도구 <b>{quietTools}</b>개도 점이 없습니다.</>
+            )}
+          </Quiet>
+        )}
 
         {STAGES.map((st, si) => {
           const items = blips.filter((b) => b.ri === si);
@@ -909,7 +997,7 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                      둘을 **형제**로 펴고 감싸는 것은 div 로 둔다.
                 */}
                 {items.map((b) => (
-                  <li key={b.tech.uuid}>
+                  <li key={b.key}>
                     <Entry $hot={hot === b.tech.uuid}
                            onMouseEnter={() => setHot(b.tech.uuid)}
                            onMouseLeave={() => setHot(null)}>
@@ -918,6 +1006,9 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                         <b>{b.no}</b>
                         <span>
                           {b.tech.name}
+                          {/* ⚠️ **누가 여기 있나**가 이 줄의 알맹이다 — 이름
+                              바로 뒤에 붙인다. */}
+                          <> <Who>{b.divisions.join(' · ')}</Who></>
                           {/* ⚠️ **언제** 옮겼는지가 없으면 화살표를 못 믿는다. */}
                           {moves && b.tech.movedFrom && (
                             <> <Moved title={`${ymd(b.tech.movedAt)} 에 ${b.tech.movedFrom} 에서 옮겨왔습니다`}>
@@ -930,10 +1021,11 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                                그러면 「우리가 기본 설정과 어디서 갈리나」 — 이 화면을
                                보는 단 하나의 이유 — 를 읽을 수 없다.
                           */}
-                          {b.tech.isDivisionOverride && (
-                            <> <Mark $color="#4f46e5"
-                                     title={`기본 설정은 「${b.tech.companyStage}」 입니다`}>
-                              ◆
+                          {/* 「따로 정한 것은 아니고 기본 설정과 같아서 여기」. */}
+                          {b.follows && (
+                            <> <Mark $color="#94a3b8"
+                                     title={`기본 설정(${b.tech.companyStage})을 그대로 따릅니다`}>
+                              따름
                             </Mark></>
                           )}
                           {b.tech.isStale && (
@@ -955,13 +1047,6 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                              레이더가 갑자기 짧아진 것으로만 읽히고, 접힌 도구들이
                              어디 갔는지 알 수 없다.
                         */}
-                        {/* ⚠️ 점 옆 딱지만으로는 밀집 구간에서 안 읽힌다. 목록에도 적는다. */}
-                        {(b.tech.divisionMarks || []).map((m) => (
-                          <em key={m.division} title={`${m.division} 는 「${m.stage}」`}
-                              style={{ color: STAGES[stageIndex[m.stage]]?.color }}>
-                            · {m.division} {m.stage}
-                          </em>
-                        ))}
                         {(b.tech.divisionTools || []).length > 0 && (
                           <em title={`${b.tech.division} 가 이 역량을 하는 도구`}>
                             · {b.tech.divisionTools.join(' · ')}

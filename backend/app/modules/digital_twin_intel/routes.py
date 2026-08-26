@@ -351,6 +351,14 @@ def list_tech():
                       children=kids.get(r.uuid, []) if r.kind == 'capability' else None)
         if r.uuid in marks:
             d['divisionMarks'] = marks[r.uuid]
+        if division:
+            """
+            ⚠️ **이 사업부가 이 역량에 대해 무엇이라도 적었나.** 레이더는 이제
+               적은 자리에만 점을 찍는데, 화면이 이걸 `isDivisionOverride` 나
+               `divisionTools` 로 짐작하게 두면 「단계만 적고 도구는 안 적은 줄」
+               같은 경우에서 조용히 어긋난다. 서버가 또렷이 말해 준다.
+            """
+            d['hasDivisionRow'] = r.uuid in dstages
         mv = moves.get(r.uuid)
         # ⚠️ **푼 값과 견준다.** 컬럼 값과 견주면 사업부 눈에서 화살표가 사라진다 —
         #    기본 설정이 「시험」인데 MX 가 「도입」으로 갔으면 출발점(시험)이 컬럼과

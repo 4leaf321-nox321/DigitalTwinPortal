@@ -495,13 +495,14 @@ def test_감지도_요약의_낡음_셈에_안_든다(db, client, auth, admin):
     assert d['staleTech'] == 0, '아무도 안 본 것이 낡음으로 세어지면 안 된다'
 
 
-# ── 주점 + 위성 — 사업부가 다르게 볼 때 ─────────────────────────────────────
+# ── 점은 사업부가 적은 자리에만 선다 ────────────────────────────────────────
 
 def test_사업부가_어디_있는지를_함께_보낸다(db, client, auth, admin):
     """
-    ⚠️⚠️ **점을 사업부 수만큼 쪼개지 않는다.** 63개가 최대 504개가 되어 밀도가
-       무너지고 「이 역량이 어디 있나」가 하나로 안 읽힌다. 주점은 기본 설정 고리에
-       하나 두고, **다르게 보는 사업부만** 위성으로 찍는다 — 그 자료가 이것이다.
+    ⚠️⚠️ **레이더가 그리는 것이 이것뿐이다.** 예전에는 기본 설정 고리에 주점을
+       하나 놓고 갈리는 사업부만 위성으로 찍었는데, 아무도 안 적은 역량 48개가
+       전부 「감지」 고리에 뭉쳐 그림이 안 읽혔다(2026-08-26 신고). 이제 점은
+       **사업부가 적은 자리에만** 서고 기본 설정 점은 안 그린다.
     """
     from app.modules.digital_twin_dashboard.models import Division
     for i, nm in enumerate(['MX', 'VD']):
@@ -519,41 +520,78 @@ def test_사업부가_어디_있는지를_함께_보낸다(db, client, auth, adm
 
     row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
                            .get_json() or {})['data'] if x['name'] == 'explicit 해석')
-    assert row['stage'] == '감지', '주점은 기본 설정 자리에 그대로'
-    assert row['divisionMarks'] == [{'division': 'MX', 'stage': '도입'},
-                                    {'division': 'VD', 'stage': '시험'}]
+    assert row['stage'] == '감지', '기본 설정 값은 그대로 온다 — 안 그릴 뿐이다'
+    assert row['divisionMarks'] == [
+        {'division': 'MX', 'stage': '도입', 'follows': False},
+        {'division': 'VD', 'stage': '시험', 'follows': False}]
 
 
-def test_사업부_눈일_때는_위성을_안_보낸다(db, client, auth, admin):
-    """⚠️ 「내 사업부 눈」인데 남의 점이 널리면 지금 보는 것이 무엇인지 흐려진다."""
+def test_아무도_안_적은_역량은_점이_없다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **이것이 이번 바꿈의 핵심이다.** 63개 중 48개가 아무도 안 적은 것이었고,
+       그것들이 죄다 「감지」 고리에 뭉쳐 있었다. 줄은 그대로 오되(목록ㆍ계통이
+       쓴다) **찍을 자리가 없다는 것**이 자료에 드러나야 한다.
+    """
+    _cap(admin, '아무도 안 본 역량')
+    row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
+                           .get_json() or {})['data']
+               if x['name'] == '아무도 안 본 역량')
+    assert 'divisionMarks' not in row
+
+
+def test_사업부_눈일_때는_적었는지를_또렷이_말한다(db, client, auth, admin):
+    """
+    ⚠️ 「내 사업부 눈」인데 남의 점이 널리면 지금 보는 것이 무엇인지 흐려진다 —
+       그래서 위성 자료는 안 보낸다.
+
+    ⚠️⚠️ 대신 **적었는지 아닌지**를 서버가 말해 준다. 화면이 `isDivisionOverride`
+       나 `divisionTools` 로 짐작하게 두면 「단계만 적고 도구는 안 적은 줄」에서
+       조용히 어긋난다.
+    """
     from app.modules.digital_twin_dashboard.models import Division
     if Division.query.filter_by(name='MX').first() is None:
         _db.session.add(Division(name='MX', order=0, is_active=True))
         _db.session.commit()
 
     cap = _cap(admin, 'CFD')
+    quiet = _cap(admin, '아무도 안 본 역량2')
     client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
                json={'division': 'MX', 'stage': '도입', 'reason': '쓴다'},
                headers=auth(admin))
 
-    row = next(x for x in (client.get(f'{BASE}/tech?division=MX', headers=auth(admin))
-                           .get_json() or {})['data'] if x['name'] == 'CFD')
-    assert row['stage'] == '도입', '그 사업부 값이 주점이 된다'
+    rows = (client.get(f'{BASE}/tech?division=MX', headers=auth(admin))
+            .get_json() or {})['data']
+    row = next(x for x in rows if x['uuid'] == cap.uuid)
+    assert row['stage'] == '도입', '그 사업부 값이 점 자리가 된다'
     assert 'divisionMarks' not in row
+    assert row['hasDivisionRow'] is True
+
+    assert next(x for x in rows
+                if x['uuid'] == quiet.uuid)['hasDivisionRow'] is False
 
 
-def test_도구만_적은_줄은_위성이_아니다(db, client, auth, admin):
-    """⚠️ 단계를 안 정한 줄은 **갈림이 아니다** — 위성으로 찍으면 없는 판단을 그린다."""
+def test_도구만_적은_줄도_점이_된다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **가장 싼 입력이 화면에 나타나야 한다.** 「우리도 그대로, 도구는
+       OpenFOAM」은 갈림은 아니지만 **어디에 있는지에 대한 답은 맞다.** 게다가
+       「사업부 적기」에서 제일 많이 적히는 것이 이 모양이라, 안 그리면 제일 많이
+       적은 것이 화면에 없고 — 그러면 적을 까닭이 사라진다.
+
+    ⚠️ 그래도 `follows` 로 갈라 둔다. 「같아서 여기 있다」와 「다르게 보기로 정해서
+       여기 있다」는 무게가 다르고, 화면이 그걸 달리 그려야 한다.
+    """
     from app.modules.digital_twin_dashboard.models import Division
     if Division.query.filter_by(name='MX').first() is None:
         _db.session.add(Division(name='MX', order=0, is_active=True))
         _db.session.commit()
 
-    cap = _cap(admin, 'CFD')
+    cap = _cap(admin, 'CFD')            # 기본 설정 「감지」
     tool = _tool(admin, 'OpenFOAM', cap)
     client.put(f'{BASE}/tech/{cap.uuid}/division-stage',
                json={'division': 'MX', 'tools': [tool.uuid]}, headers=auth(admin))
 
     row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
                            .get_json() or {})['data'] if x['name'] == 'CFD')
-    assert 'divisionMarks' not in row
+    # 기본 설정 단계로 풀어서 그 자리에 찍는다.
+    assert row['divisionMarks'] == [
+        {'division': 'MX', 'stage': '감지', 'follows': True}]

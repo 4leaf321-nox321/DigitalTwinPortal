@@ -382,25 +382,37 @@ def evidence_stats(tech_uuids, rollup=True):
 
 
 def division_marks(tech_uuids):
-    """역량마다 **사업부들이 정한 단계**. `{tech_uuid: [{division, stage}…]}`.
+    """역량마다 **누가 어디에 있나**. `{tech_uuid: [{division, stage, follows}…]}`.
 
-    ⚠️⚠️ 레이더가 「주점 + 위성」을 그리는 데 쓴다. 주점은 기본 설정 고리에 하나,
-       **다르게 보는 사업부만** 그 고리에 작은 위성으로 찍는다 — 사업부 수만큼
-       점을 쪼개면 63개가 최대 504개가 되어 밀도가 무너지고, 「이 역량이 어디
-       있나」가 하나로 안 읽힌다.
+    ⚠️⚠️ **레이더가 그리는 것이 이것뿐이다.** 예전에는 기본 설정 고리에 주점을
+       하나 놓고 갈리는 사업부만 위성으로 찍었는데, 아무도 안 적은 역량 48개가
+       전부 「감지」 고리에 뭉쳐서 그림이 안 읽혔다(2026-08-26 신고). 이제 점은
+       **사업부가 적은 자리에만** 서고, 기본 설정 점은 아예 안 그린다.
 
-    ⚠️ 단계를 안 정한 줄(도구만 적어 둔 줄)은 안 싣는다 — 그건 갈림이 아니다.
+    ⚠️⚠️ **단계를 안 정한 줄도 싣는다** — 기본 설정 단계로 풀어서. 「우리도 그대로,
+       도구는 STAR-CCM+」는 갈림은 아니지만 **어디에 있는지에 대한 답은 맞다.**
+       게다가 그게 「사업부 적기」에서 가장 싼 입력이라, 안 실으면 제일 많이 적히는
+       것이 화면에 안 나타난다 — 적을 까닭이 사라진다.
+
+    ⚠️ `follows` 로 갈라 둔다. 「기본 설정과 같아서 여기 있다」와 「다르게 보기로
+       정해서 여기 있다」는 무게가 다르고, 화면이 그걸 달리 그려야 한다.
     """
     if not tech_uuids:
         return {}
+    uuids = list(tech_uuids)
+    base = dict(db.session.query(IntelTech.uuid, IntelTech.stage)
+                .filter(IntelTech.uuid.in_(uuids)).all())
     rows = (IntelDivisionStage.query
-            .filter(IntelDivisionStage.tech_uuid.in_(list(tech_uuids)),
-                    IntelDivisionStage.stage.isnot(None))
+            .filter(IntelDivisionStage.tech_uuid.in_(uuids))
             .order_by(IntelDivisionStage.division.asc()).all())
     out = {}
     for r in rows:
+        stage = r.stage or base.get(r.tech_uuid)
+        if not stage:
+            continue
         out.setdefault(r.tech_uuid, []).append(
-            {'division': r.division, 'stage': r.stage})
+            {'division': r.division, 'stage': stage,
+             'follows': r.stage is None})
     return out
 
 
