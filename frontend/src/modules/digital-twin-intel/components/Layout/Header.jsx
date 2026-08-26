@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Radar, Plus, Newspaper, Wrench, ClipboardList } from 'lucide-react';
+import { Radar, Plus, Newspaper, Wrench, ClipboardList, Layers } from 'lucide-react';
 import { CommonHeader } from '../../../../shared/components/Header';
 
 const Tabs = styled.div`
@@ -102,7 +102,7 @@ const AddButton = styled.button`
  * 소식에서 기술이 만들어지고, 기술에서 그 소식을 되짚는다.
  */
 const Header = ({ tab, onTab, newsCount, techCount, onAdd, onGoHome,
-                  onTools, onSheet, orphanCount = 0 }) => (
+                  onTools, onSheet, onCaps, orphanCount = 0 }) => (
   <CommonHeader
     logo={<Radar size={24} strokeWidth={2} />}
     title="디지털 트윈 기술정보"
@@ -129,6 +129,15 @@ const Header = ({ tab, onTab, newsCount, techCount, onAdd, onGoHome,
                        title="우리 사업부가 어느 역량을 무엇으로 하는지 한 판에 적습니다">
             <ClipboardList size={15} /> 사업부 적기
           </SheetButton>
+        )}
+        {/* ⚠️ 도구 관리와 **짝**으로 나란히 둔다 — 두 층이 있다는 것이 머리에서
+            보여야 한다. 역량만 관리할 자리가 없으면, 아무 사업부도 안 적어
+            레이더에 점이 없는 48개는 화면 어디에서도 못 찾는다. */}
+        {tab === 'tech' && onCaps && (
+          <ToolButton type="button" onClick={onCaps}
+                      title="역량 목록을 보고 고칩니다">
+            <Layers size={15} /> 역량 관리
+          </ToolButton>
         )}
         {tab === 'tech' && onTools && (
           <ToolButton type="button" onClick={onTools}

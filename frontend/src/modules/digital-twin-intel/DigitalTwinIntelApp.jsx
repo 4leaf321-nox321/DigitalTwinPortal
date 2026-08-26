@@ -29,6 +29,7 @@ import NewsModal from './components/NewsModal';
 import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
 import DivisionSheet from './components/DivisionSheet';
+import CapabilityManagerModal from './components/CapabilityManagerModal';
 import ToolManagerModal from './components/ToolManagerModal';
 import RadarChart from './components/RadarChart';
 import TechTree from './components/TechTree';
@@ -296,6 +297,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
   const [toolsOpen, setToolsOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [capsOpen, setCapsOpen] = useState(false);
   /*
     레이더가 「최근 며칠」의 이동을 볼지.
 
@@ -633,6 +635,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
         onAdd={() => (tab === 'news' ? setAddOpen(true) : setTechForm({}))}
         onTools={() => setToolsOpen(true)}
         onSheet={() => setSheetOpen(true)}
+        onCaps={() => setCapsOpen(true)}
         orphanCount={orphanCount}
         canCurate={canCurate}
         onGoHome={onGoHome}
@@ -845,6 +848,14 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                        if (n) say(`${n}줄 담았습니다.`);
                      }}
                      showError={say} />
+
+      <CapabilityManagerModal isOpen={capsOpen} tech={tech}
+                              categories={settings.techCategories}
+                              cptGroups={settings.cptGroups}
+                              canWrite={canWrite} canCurate={canCurate}
+                              onClose={() => setCapsOpen(false)}
+                              onChanged={async (msg) => { await load(); if (msg) say(msg); }}
+                              showError={say} />
 
       <ToolManagerModal isOpen={toolsOpen} tech={tech}
                         categories={settings.techCategories}
