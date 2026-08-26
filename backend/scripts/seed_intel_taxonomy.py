@@ -51,6 +51,33 @@ def main():
             return
 
         wanted = set(names)
+        """
+        ── 0.5 알려진 겹침 합치기 ──────────────────────────────────────────
+        ⚠️⚠️ 표에서 겹친 이름을 빼는 것만으로는 **모자란다** — 이미 그 이름으로
+           씨뿌려진 DB(운영)에는 두 줄이 그대로 남는다. 개발 DB 는 손으로 합쳤는데
+           (2026-08-27), 그건 스크립트가 아니라서 운영은 못 따라온다. 여기 적어야
+           어느 DB 든 같은 자리에 닿는다.
+
+        ⚠️ 합치면 진 쪽 이름이 이긴 쪽 **별칭**이 되어, 아래 걸음들이 그 이름을
+           다시 만들지 않는다. 진 쪽이 없으면 조용히 지나간다 — 몇 번을 돌려도 같다.
+        """
+        MERGES = [
+            # (진 쪽, 이긴 쪽) — 같은 것이 두 표기로 서 있던 줄들.
+            ('Asset Administration Shell', 'Asset Administration Shell (AAS)'),
+            ('ASME V&V 10 / 20 / 40', 'ASME V&V 10'),
+        ]
+        merged = 0
+        for loser_name, winner_name in MERGES:
+            loser = IntelTech.query.filter_by(name=loser_name).first()
+            winner = IntelTech.query.filter_by(name=winner_name).first()
+            if loser is None or winner is None or loser.uuid == winner.uuid:
+                continue
+            _, err = S.merge_tech(loser.uuid, winner.uuid, actor=None)
+            if err:
+                print('  !! 합치기 실패:', loser_name, '→', winner_name, '·', err)
+            else:
+                merged += 1
+
         made = updated = moved = created = 0
 
         # ── 1. 역량 ─────────────────────────────────────────────────────────
@@ -193,6 +220,8 @@ def main():
         linked = {r.tech_uuid for r in IntelTechCapability.query.all()}
         orph = [t for t in tools if t.uuid not in linked]
         print()
+        if merged:
+            print('겹친 줄 합침 %d건' % merged)
         print('역량 새로 %d · 고쳐 씀 %d · 지움 %d' % (made, updated, len(dropped)))
         print('도구 새로 %d · 부모 옮김 %d' % (created, moved))
         print('사업부 줄에서 어긋난 도구 정리 %d줄' % fixed)
