@@ -245,7 +245,7 @@ TAXONOMY = [
      ['FMI / FMU', 'SSP (System Structure & Parameterization)', 'DCP']),
     ('자산ㆍ설비 정보 표준', STD, '설비 정보를 기계가 읽게 규격화한다.',
      [DS, IN, TW], ['표준', '자산'],
-     ['Asset Administration Shell (AAS)', 'Asset Administration Shell',
+     ['Asset Administration Shell (AAS)',
       'AutomationML', 'MTConnect', 'QIF (Quality Information Framework)']),
     ('트윈 아키텍처 표준', STD, '트윈 시스템을 무엇으로 나눌지 정한다.',
      [MG, DS, IN], ['표준', '아키텍처'],
@@ -254,7 +254,7 @@ TAXONOMY = [
     ('해석 신뢰성 표준', STD, '해석을 얼마나 믿을 수 있다고 말하려면 무엇을 지켜야 하나.',
      [TW, MG], ['표준', 'V&V'],
      ['ASME V&V 10', 'ASME V&V 20', 'ASME V&V 40 (의료기기)', 'NAFEMS 인증',
-      'NASA-STD-7009', 'ASME V&V 10 / 20 / 40', 'NAFEMS 품질 지침']),
+      'NASA-STD-7009', 'NAFEMS 품질 지침']),
     ('보안ㆍ신뢰성 표준', STD, '트윈이 현장에 닿을수록 필요해진다.',
      [TW], ['표준', '보안'],
      ['IEC 62443', 'ISO/IEC 27001', 'NIST CSF']),
@@ -406,6 +406,111 @@ EXTRA = {
 }
 
 
+"""2026-08-27 조사분 — **기존 역량에 더 채워 넣는 도구들.**
+
+⚠️ 첫 판(`EXTRA`)과 같은 규칙이다: 한 도구는 한 역량에만, 이미 어딘가 있는 이름은
+   다시 안 적는다. 판을 따로 두는 이유도 같다 — 언제 무엇이 들어왔는지가 보인다.
+"""
+
+EXTRA_2 = {
+    # ── 시뮬레이션·해석 ─────────────────────────────────────────────────────
+    # GPU 세대 CFD — 판을 바꾸는 중이라 따로 눈에 띄어야 한다.
+    '유동 해석 (CFD)': ['FLOW-3D', 'Altair ultraFluidX', 'Flexcompute Flow360',
+                      'Luminary Cloud'],
+    '멀티피직스 연성': ['Ansys Discovery'],
+    '1D 시스템 시뮬레이션': ['PLECS', 'Altair PSIM'],
+    '로봇 시뮬레이션': ['Drake', 'PyBullet'],
+    '이산사건 공정 시뮬레이션': ['SimPy'],
+
+    # ── 모델 신뢰·운영 ──────────────────────────────────────────────────────
+    '불확실성 정량화 (UQ)': ['UQpy'],
+    '재료 물성 데이터': ['Materials Project', 'NIMS MatNavi'],
+    'HPCㆍ계산 자원': ['NVIDIA Run:ai'],
+
+    # ── 데이터·연결 ─────────────────────────────────────────────────────────
+    # ⚠️ SECS/GEM — 반도체ㆍ디스플레이 장비는 OPC UA 이전에 이 말로 말한다.
+    '설비 통신': ['SECS/GEM (SEMI E30)'],
+    '시계열 저장': ['TDengine'],
+    '트윈 상태 관리': ['Eclipse BaSyx', 'AASX Package Explorer'],
+    'OTㆍ데이터 보안': ['Dragos', 'Microsoft Defender for IoT'],
+    '현실 캡처 (3D 스캔)': ['Leica Cyclone', 'Trimble RealWorks',
+                        'Bentley iTwin Capture'],
+
+    # ── AI ──────────────────────────────────────────────────────────────────
+    '예지보전': ['Bently Nevada System 1', 'Emerson AMS Machine Works'],
+    '비전 검사': ['Ultralytics YOLO', 'Anomalib'],
+    # 에이전트 짜는 틀 — 2025년부터 실무에 들어온 것들.
+    'LLM 활용': ['LangGraph', 'Microsoft AutoGen', 'Semantic Kernel', 'CrewAI',
+              'GitHub Copilot'],
+    'AI 운영ㆍ신뢰 (MLOps)': ['Hugging Face', 'NVIDIA NIM', 'LiteLLM'],
+
+    # ── 플랫폼 ──────────────────────────────────────────────────────────────
+    'IIoT ㆍ운영 트윈 플랫폼': ['Inductive Automation Ignition',
+                          'Siemens WinCC Unified'],
+    '실시간 시각화ㆍXR': ['Twinmotion', 'NVIDIA CloudXR'],
+    '가상 시운전': ['Siemens NX MCD'],
+
+    # ── 표준화 ──────────────────────────────────────────────────────────────
+    '자산ㆍ설비 정보 표준': ['IEC 63278 (AAS)', 'IDTA 서브모델 템플릿'],
+    '보안ㆍ신뢰성 표준': ['ISO/IEC 42001 (AI 경영)', 'EU AI 법 (AI Act)'],
+}
+
+"""2026-08-27 조사분 — **새로 세우는 역량들.**
+
+⚠️ 도구 몇 개를 꽂을 데가 없어서 만드는 것이 아니라, **물음이 다른 곳**이라서
+   만든다 — 배터리ㆍ네트워크ㆍ전력ㆍ건물은 각각 다른 사업부의 본업이고, 후처리ㆍ
+   측정ㆍ최적화ㆍML 틀은 여러 역량이 딛고 서는 바탕이다.
+"""
+
+NEW_CAPS = [
+    ('배터리 해석', SIM,
+     '셀ㆍ팩의 전기화학ㆍ열ㆍ노화를 푼다. 충방전 곡선부터 열폭주까지.',
+     [IQ], ['배터리', '전기화학'],
+     ['PyBaMM', 'COMSOL Battery Design Module', 'Simcenter Battery Design Studio',
+      'GT-AutoLion', 'AVL CRUISE M']),
+    ('네트워크 시뮬레이션', SIM,
+     '5GㆍTSN 등 통신망의 지연ㆍ용량을 패킷 수준으로 푼다.',
+     [IQ], ['네트워크', '5G'],
+     ['ns-3', 'OMNeT++', 'Keysight EXata', 'Tetcos NetSim', 'MATLAB 5G Toolbox']),
+    ('전력 계통 시뮬레이션', SIM,
+     '수배전ㆍ계통의 조류ㆍ고장ㆍ보호협조를 푼다. 공장 전력과 ESS 가 이 위에 선다.',
+     [IQ], ['전력', '에너지'],
+     ['ETAP', 'DIgSILENT PowerFactory', 'PSCAD', 'OpenDSS', 'Siemens PSS/E']),
+    ('건물 에너지 시뮬레이션', SIM,
+     '건물의 부하ㆍ공조ㆍ에너지 소비를 시간 단위로 푼다. 건물 트윈의 해석 짝이다.',
+     [IQ], ['건물', '에너지'],
+     ['EnergyPlus', 'OpenStudio', 'TRNSYS', 'IES VE', 'DesignBuilder']),
+    ('화학ㆍ공정 플랜트 시뮬레이션', SIM,
+     '유틸리티ㆍ화학 공정의 물질ㆍ에너지 수지를 푼다. 팹의 가스ㆍ초순수 공급이 여기다.',
+     [IQ], ['공정', '화학'],
+     ['Aspen Plus', 'Aspen HYSYS', 'gPROMS', 'DWSIM', 'Ansys Chemkin-Pro']),
+    ('해석 후처리ㆍ가시화', TRUST,
+     '해석 결과를 자르고 겹쳐 보이게 만든다. 대용량 결과의 마지막 관문.',
+     [UX], ['후처리', '가시화'],
+     ['ParaView', 'Tecplot 360', 'Ansys EnSight', 'FieldView', 'VisIt']),
+    ('정밀 측정ㆍ검사', TRUST,
+     '측정 점군을 설계 형상과 맞대어 as-built 편차를 잰다. 트윈과 실물의 맞춤 검사.',
+     [TW], ['측정', '품질'],
+     ['PolyWorks', 'ZEISS Calypso', 'Hexagon PC-DMIS', 'GOM Inspect', 'Verisurf']),
+    ('수리 최적화 (OR)', AI,
+     '일정ㆍ배치ㆍ경로를 제약 아래에서 최적으로 푼다. 시뮬레이션이 재고 이것이 정한다.',
+     [IQ], ['최적화', '스케줄링'],
+     ['Gurobi', 'IBM CPLEX', 'Google OR-Tools', 'HiGHS', 'SCIP', 'Hexaly']),
+    ('머신러닝 프레임워크', AI,
+     '학습 모델을 만들고 굴리는 바탕. 대리모델ㆍ예지보전ㆍ비전이 이 위에 선다.',
+     [IQ], ['머신러닝', '프레임워크'],
+     ['PyTorch', 'TensorFlow', 'JAX', 'scikit-learn', 'XGBoost', 'LightGBM']),
+    ('데이터 레이크ㆍ웨어하우스', DATA,
+     '트윈이 쌓는 큰 자료를 한곳에 모아 분석하게 한다. 시계열 너머의 저장소.',
+     [DS], ['데이터', '분석'],
+     ['Databricks', 'Snowflake', 'Google BigQuery', 'Azure Synapse Analytics',
+      'MinIO', 'Dremio']),
+    ('워크플로 오케스트레이션', DATA,
+     '수집ㆍ학습ㆍ보고 파이프라인을 예약하고, 끊긴 자리부터 되돌린다.',
+     [IN], ['파이프라인', '자동화'],
+     ['Apache Airflow', 'Prefect', 'Dagster', 'Temporal', 'n8n']),
+]
+
 """
 ⚠️ 덧붙임을 본 표에 합친다. 여기서 합쳐 두면 쓰는 쪽(`seed_intel_taxonomy.py`)은
    `TAXONOMY` 하나만 보면 된다 — 「본 표와 덧붙임 중 어느 것을 봐야 하나」가
@@ -413,6 +518,11 @@ EXTRA = {
 """
 TAXONOMY = [
     (name, sector, summary, cpt, tags, tools + [
-        t for t in EXTRA.get(name, []) if t not in tools])
+        t for t in EXTRA.get(name, []) + EXTRA_2.get(name, [])
+        if t not in tools])
     for (name, sector, summary, cpt, tags, tools) in TAXONOMY
 ]
+
+# ⚠️ 새 역량은 덧붙임 판이 아니라 **표에 통째로 늘어선다** — 도구까지 한 줄에 들고
+#    있어서 접붙일 것이 없다. 접기(fold) 뒤에 이어 붙이는 이유다.
+TAXONOMY = TAXONOMY + NEW_CAPS
