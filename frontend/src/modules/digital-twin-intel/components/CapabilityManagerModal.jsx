@@ -18,6 +18,10 @@ import api from '../services/api';
  *
  * ⚠️ 공급사ㆍ제품 URL 같은 칸도 없다. 그건 도구의 것이다 — 역량은 「무엇을 할 수
  *    있어야 하는가」이지 제품이 아니다.
+ *
+ * ⚠️ **이름표는 명사로 짧게**(2026-08-26 요청). 「한 줄로 무엇인가」처럼 물으면
+ *    표가 아니라 설문지처럼 읽히고, 63줄을 훑을 때 눈이 매번 문장을 읽어야 한다.
+ *    적는 방법(쉼표 등)은 이름표가 아니라 **자리표시글**로 내린다.
  */
 const Overlay = styled.div`
   position: fixed;
@@ -517,31 +521,33 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
                     </select>
                   </Field>
                   <Field>
-                    <span>다르게 부르는 이름 (쉼표로)</span>
+                    <span>별칭</span>
                     <input value={d.aliases} disabled={!canWrite}
                            onChange={(e) => set({ aliases: e.target.value })}
-                           placeholder="예: CFD, 전산유체" />
+                           placeholder="쉼표로 나눕니다 — 예: CFD, 전산유체" />
                   </Field>
                 </Pair>
 
                 <Field>
-                  <span>한 줄로 무엇인가</span>
+                  <span>요약</span>
                   <input value={d.summary} disabled={!canWrite}
                          onChange={(e) => set({ summary: e.target.value })}
-                         placeholder="예: 유체의 흐름과 열을 수치로 푼다" />
+                         placeholder="한 줄로 — 예: 유체의 흐름과 열을 수치로 푼다" />
                 </Field>
 
                 <Field>
-                  <span>우리한테 어디에 쓸 만한가</span>
+                  <span>용도</span>
                   <textarea value={d.description} disabled={!canWrite}
-                            onChange={(e) => set({ description: e.target.value })} />
+                            onChange={(e) => set({ description: e.target.value })}
+                            placeholder="우리한테 어디에 쓸 만한지" />
                 </Field>
 
                 <Pair>
                   <Field>
-                    <span>태그 (쉼표로)</span>
+                    <span>태그</span>
                     <input value={d.tags} disabled={!canWrite}
-                           onChange={(e) => set({ tags: e.target.value })} />
+                           onChange={(e) => set({ tags: e.target.value })}
+                           placeholder="쉼표로 나눕니다 — 예: 열, 유동" />
                   </Field>
                   {(cptGroups || []).length > 0 && (
                     <Field as="div">
@@ -562,7 +568,7 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
 
                 <Pair>
                   <Box>
-                    <h4><Wrench size={12} /> 무엇으로 하나</h4>
+                    <h4><Wrench size={12} /> 도구</h4>
                     <Chips>
                       {(kidsOf[current.uuid] || []).map((t) => (
                         <span key={t.uuid}>{t.name}</span>
@@ -579,7 +585,7 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
                        있다는 것은 레이더에 점이 없다는 뜻이고, 그게 손댈 자리다.
                   */}
                   <Box>
-                    <h4><Users size={12} /> 누가 어디까지 왔나</h4>
+                    <h4><Users size={12} /> 사업부 단계</h4>
                     <Chips>
                       {(current.divisionMarks || []).map((m) => (
                         <Who key={m.division} $bg="#eef2ff" $color="#3730a3">
