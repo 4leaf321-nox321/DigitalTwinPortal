@@ -411,7 +411,16 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       if (focus === 'stale' && !t.isStale) return false;
       if (focus === 'moved' && !t.movedFrom) return false;
       if (staleOnly && !t.isStale) return false;
-      if (stage && t.stage !== stage) return false;
+      /*
+        ⚠️⚠️ **사업부를 안 골랐으면 역량의 `stage` 는 비어 있다**(2026-08-26). 단계는
+           사업부 줄에만 산다. 컬럼 값으로만 견주면 레이더에 「도입」 점이 버젓이
+           있는데 「도입」을 누르는 순간 그 역량이 통째로 사라진다 — 실제로 그렇게
+           신고됐다. **점을 만든 자료와 같은 것**을 봐야 한다.
+        ⚠️ 사업부 눈일 때는 서버가 `stage` 를 그 사업부 값으로 풀어 보내므로 그대로
+           맞는다. 도구도 자기 단계를 갖는다.
+      */
+      if (stage && t.stage !== stage
+          && !(t.divisionMarks || []).some((m) => m.stage === stage)) return false;
       if (category && t.category !== category) return false;
       if (!key) return true;
       // 태그ㆍCPT 도 찾을 수 있어야 한다 — 부채꼴은 하나뿐이라 얽힌 갈래는
@@ -426,6 +435,23 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
         .some((v) => (v || '').toLowerCase().includes(key));
     });
   }, [tech, q, category, stage, staleOnly, focus, kind, techView]);
+
+  /*
+    ⚠️⚠️ **단계를 골랐으면 그 단계의 사업부만 남긴다.** 안 그러면 「도입」을 눌러도
+       충돌 해석의 시험ㆍ보류 점까지 함께 그려진다 — 걸러 놓고 안 걸린 것을 보여주는
+       꼴이라 「거른 게 맞나」를 못 믿게 된다.
+
+    ⚠️ 여기서 **새 객체를 만든다.** 원본을 건드리면 도구 관리ㆍ역량 관리가 보는
+       목록(`tech`)까지 함께 좁아진다 — 그 화면들은 전부를 봐야 한다.
+  */
+  const lensedTech = useMemo(() => {
+    if (!stage) return shownTech;
+    return shownTech.map((t) => {
+      const all = t.divisionMarks || [];
+      const hit = all.filter((m) => m.stage === stage);
+      return hit.length === all.length ? t : { ...t, divisionMarks: hit };
+    });
+  }, [shownTech, stage]);
 
   // 기본 설정과 다르게 정한 것이 몇 개인가. **이 숫자가 사업부별 보기의 답이다.**
   const overrideCount = useMemo(
@@ -782,7 +808,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
           {fixed && (
             <RadarSlot>
-              <RadarChart rows={shownTech} categories={settings.techCategories}
+              <RadarChart rows={lensedTech} categories={settings.techCategories}
                           movedOnly={focus === 'moved'}
                           onMovedOnlyChange={(on) => pickFocus(on ? 'moved' : '')}
                           onMovedWindowChange={(d) => {
@@ -800,14 +826,14 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
           )}
 
           {!loading && !error && tab === 'tech' && techView === 'tree' && (
-            <TechTree rows={shownTech} all={tech}
+            <TechTree rows={lensedTech} all={tech}
                       categories={settings.techCategories}
                       onSelect={merging ? doMerge
                         : compareA && !compareB ? pickCompare : setSelected} />
           )}
 
           {!loading && !error && tab === 'tech' && techView === 'board' && (
-            <RadarBoard rows={shownTech}
+            <RadarBoard rows={lensedTech}
                         onSelect={merging ? doMerge
                           : compareA && !compareB ? pickCompare : setSelected} />
           )}
