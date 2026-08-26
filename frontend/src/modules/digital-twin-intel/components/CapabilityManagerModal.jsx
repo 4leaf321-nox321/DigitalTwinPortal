@@ -509,7 +509,6 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
       + (kids ? ` 매달린 도구 ${kids}개는 안 지워지고 떨어져 나옵니다 (미아가 됩니다).` : '')
       + (said ? ` 사업부 ${said}곳이 적어 둔 것도 함께 사라집니다.` : '')
       + ' 되돌릴 수 없습니다.';
-    // eslint-disable-next-line no-alert
     if (!window.confirm(warn)) return;
     run('del', () => api.deleteTech(current.uuid), `「${current.name}」 을 지웠습니다.`);
   };

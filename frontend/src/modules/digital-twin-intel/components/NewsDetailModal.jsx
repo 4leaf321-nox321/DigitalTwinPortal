@@ -192,7 +192,7 @@ const NewsDetailModal = ({ news, onClose, onSaved, onTechClick, onEdit, showErro
       .then((d) => { setFull(d); setDraft(d.body || ''); })
       .catch((e) => { setFailed(e.message || '불러오지 못했습니다.'); });
     api.listLinks('news', news.uuid).then(setLinks).catch(() => setLinks([]));
-  }, [news]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [news]);
 
   const reloadLinks = () =>
     api.listLinks('news', news.uuid).then(setLinks).catch(() => {});
