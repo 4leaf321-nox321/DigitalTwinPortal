@@ -29,6 +29,7 @@ import NewsModal from './components/NewsModal';
 import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
 import DivisionSheet from './components/DivisionSheet';
+import { keepTech, narrowMarks } from './utils/techFilter';
 import CapabilityManagerModal from './components/CapabilityManagerModal';
 import ToolManagerModal from './components/ToolManagerModal';
 import RadarChart from './components/RadarChart';
@@ -389,69 +390,20 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     });
   }, [news, q, category, status, focus, division]);
 
-  const shownTech = useMemo(() => {
-    const key = q.trim().toLowerCase();
-    const radar = techView === 'radar';
-    return tech.filter((t) => {
-      /*
-        ⚠️ **레이더는 「역량 + 안 매달린 도구」만 그린다.** 매달린 도구까지 그리면
-           같은 것이 두 번 서고 층을 나눈 뜻이 사라진다. 서버도 `radar=1` 로 같은
-           것을 거를 수 있지만, 목록 보기와 자료를 한 벌만 들고 있으려고 여기서
-           거른다 — 두 번 불러오면 두 화면의 셈이 갈린다.
-      */
-      // ⚠️ **하나라도 걸렸으면 레이더에 안 선다** — 그 역량이 대신 서기 때문이다.
-      if (radar && t.kind !== 'capability'
-          && (t.capabilityUuids || []).length) return false;
-      if (!radar && kind && t.kind !== kind) return false;
-      /*
-        ⚠️ 여기서 사업부로 **거르지 않는다.** 서버가 이미 그 사업부 눈으로 풀어
-           보냈고, 「관련된 것만」으로 좁히면 「우리 사업부는 어디까지 왔나」에
-           답할 수 없다 — 안 걸린 것이 기본 설정 값으로 서는 것도 답의 일부다.
-      */
-      if (focus === 'stale' && !t.isStale) return false;
-      if (focus === 'moved' && !t.movedFrom) return false;
-      if (staleOnly && !t.isStale) return false;
-      /*
-        ⚠️⚠️ **사업부를 안 골랐으면 역량의 `stage` 는 비어 있다**(2026-08-26). 단계는
-           사업부 줄에만 산다. 컬럼 값으로만 견주면 레이더에 「도입」 점이 버젓이
-           있는데 「도입」을 누르는 순간 그 역량이 통째로 사라진다 — 실제로 그렇게
-           신고됐다. **점을 만든 자료와 같은 것**을 봐야 한다.
-        ⚠️ 사업부 눈일 때는 서버가 `stage` 를 그 사업부 값으로 풀어 보내므로 그대로
-           맞는다. 도구도 자기 단계를 갖는다.
-      */
-      if (stage && t.stage !== stage
-          && !(t.divisionMarks || []).some((m) => m.stage === stage)) return false;
-      if (category && t.category !== category) return false;
-      if (!key) return true;
-      // 태그ㆍCPT 도 찾을 수 있어야 한다 — 부채꼴은 하나뿐이라 얽힌 갈래는
-      // 거기 들어 있다("표준화"로 찾으면 OPC UA 도 나와야 한다).
-      /*
-        ⚠️ **자식(도구) 이름으로도 그 역량이 걸린다.** 안 그러면 레이더에서
-           「LS-DYNA」를 찾았을 때 아무것도 안 나온다 — 매달린 도구는 안 그리니까.
-           찾는 사람은 도구 이름을 치지 역량 이름을 치지 않는다.
-      */
-      return [t.name, t.vendor, t.summary, ...(t.tags || []), ...(t.cpt || []),
-              ...(t.children || []).map((c) => c.name)]
-        .some((v) => (v || '').toLowerCase().includes(key));
-    });
-  }, [tech, q, category, stage, staleOnly, focus, kind, techView]);
-
   /*
-    ⚠️⚠️ **단계를 골랐으면 그 단계의 사업부만 남긴다.** 안 그러면 「도입」을 눌러도
-       충돌 해석의 시험ㆍ보류 점까지 함께 그려진다 — 걸러 놓고 안 걸린 것을 보여주는
-       꼴이라 「거른 게 맞나」를 못 믿게 된다.
-
-    ⚠️ 여기서 **새 객체를 만든다.** 원본을 건드리면 도구 관리ㆍ역량 관리가 보는
-       목록(`tech`)까지 함께 좁아진다 — 그 화면들은 전부를 봐야 한다.
+    ⚠️⚠️ **거르는 규칙은 `utils/techFilter` 가 정본이다.** 여기 박아 두었더니 검사가
+       규칙을 **복사해** 들고 있었고, 그러면 화면이 틀려도 검사는 자기 복사본을 보고
+       통과한다 — 실제로 「도입」을 눌러도 아무것도 안 남는 흠을 검사가 못 잡았다.
   */
-  const lensedTech = useMemo(() => {
-    if (!stage) return shownTech;
-    return shownTech.map((t) => {
-      const all = t.divisionMarks || [];
-      const hit = all.filter((m) => m.stage === stage);
-      return hit.length === all.length ? t : { ...t, divisionMarks: hit };
-    });
-  }, [shownTech, stage]);
+  const shownTech = useMemo(
+    () => tech.filter((t) => keepTech(t, {
+      q, category, stage, kind, staleOnly, focus, radar: techView === 'radar',
+    })),
+    [tech, q, category, stage, staleOnly, focus, kind, techView]);
+
+  // 고른 단계의 사업부만 남긴 것. 그리는 쪽은 이걸 본다.
+  const lensedTech = useMemo(
+    () => narrowMarks(shownTech, stage), [shownTech, stage]);
 
   // 기본 설정과 다르게 정한 것이 몇 개인가. **이 숫자가 사업부별 보기의 답이다.**
   const overrideCount = useMemo(
