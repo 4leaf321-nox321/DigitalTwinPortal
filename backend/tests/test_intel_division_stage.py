@@ -357,13 +357,13 @@ def test_층이_다르면_못_합친다(db, client, auth, admin, divs):
     assert err2 and '층' in err2, err2
 
 
-def test_층을_바꾸면_단계도_함께_손본다(db, client, auth, admin, divs):
+def test_층을_바꿔도_단계는_안_붙는다(db, client, auth, admin, divs):
     """
-    ⚠️⚠️ 역량은 단계를 안 갖고 도구는 갖는다. 안 건드리면 도구를 역량으로 올렸을 때
-       **단계를 든 역량**이 생기는데, 상세 창에 역량용 칸이 없어 지울 길이 없다.
+    ⚠️⚠️ 역량도 도구도 단계를 안 갖는다(2026-08-27). 층이 바뀌는 길에서 값이 붙으면
+       **화면 어디에서도 지울 길이 없다** — 상세 창에 그 칸이 아예 없기 때문이다.
     """
     tool, err = S.create_tech(actor_id=admin.id, name='어떤 도구', kind='tool')
-    assert err is None and tool.stage == '감지'
+    assert err is None and tool.stage is None
 
     r = client.patch(f'{BASE}/tech/{tool.uuid}', json={'kind': 'capability'},
                      headers=auth(admin))
@@ -372,8 +372,7 @@ def test_층을_바꾸면_단계도_함께_손본다(db, client, auth, admin, di
 
     r2 = client.patch(f'{BASE}/tech/{tool.uuid}', json={'kind': 'tool'},
                       headers=auth(admin))
-    assert (r2.get_json() or {})['data']['stage'] == '감지', '도구로 내리면 다시 갖는다'
-
+    assert (r2.get_json() or {})['data']['stage'] is None
 def test_사업부_단계는_역량에만_붙는다(db, client, auth, admin, divs):
     """
     ⚠️⚠️ 도구 단위로는 **원리적으로 비교가 안 된다** — MX 가 LS-DYNA 도입, VD 가

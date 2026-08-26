@@ -5,32 +5,13 @@ import { X, Radar, AlertTriangle, ExternalLink, Trash2, Pencil, History, Merge,
 
 import api from '../services/api';
 import AssistPanel from './AssistPanel';
-import { STAGES } from './RadarBoard';
 import DivisionStages from './DivisionStages';
-import { baseStageOf, baseNeedsReason, saveLabel } from '../utils/stageSave';
+import { saveLabel } from '../utils/stageSave';
 import {
   Overlay, Panel, Head, CloseBtn, Body, Foot, Field, Hint, Warn,
   PrimaryBtn, GhostBtn, Spacer,
 } from './modalStyles';
 
-const StageRow = styled.div`
-  display: flex;
-  gap: 0.375rem;
-  flex-wrap: wrap;
-`;
-
-const StageBtn = styled.button`
-  padding: 0.3125rem 0.75rem;
-  border: 1px solid ${(p) => (p.$on ? p.$color : '#cbd5e1')};
-  background: ${(p) => (p.$on ? p.$color : '#fff')};
-  color: ${(p) => (p.$on ? '#fff' : '#475569')};
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
-`;
 
 const Evidence = styled.ul`
   list-style: none;
@@ -394,15 +375,6 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
   const [related, setRelated] = useState([]);
   // ⚠️ 도구일 때만 묻는다. 역량은 자기 밑 도구를 이미 들고 있다.
   const [usedBy, setUsedBy] = useState([]);
-  /*
-    ⚠️⚠️ 여기 담는 것은 **기본 설정의 단계**다 — `tech.stage` 가 아니다.
-       사업부 눈으로 보면 서버가 `stage` 에 **그 사업부가 푼 값**을 넣어 보낸다
-       (`companyStage` 가 원래 값). 그걸 그대로 담으면 MX 의 「도입」이 골라진
-       채로 뜨고, 저장하면 **기본 설정을 MX 값으로 덮어쓴다** — 아무도 안 시킨
-       일이 조용히 벌어진다(2026-08-25 「단계 저장이 왜 꺼져 있나」로 잡힘).
-  */
-  const [stage, setStage] = useState(tech?.companyStage || tech?.stage || '감지');
-  const [reason, setReason] = useState(tech?.stage_reason || '');
   const [busy, setBusy] = useState(false);
 
   /*
@@ -423,8 +395,6 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
 
   useEffect(() => {
     if (!tech) return;
-    setStage(tech.companyStage || tech.stage);
-    setReason(tech.stage_reason || '');
     setEvidence(null);
     /*
       ⚠️ **이력도 함께 버린다**(2026-08-26 점검). 눌러서 불러오는 값이라 안 지우면
@@ -472,22 +442,13 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
        뜬다. 역량의 단계는 사업부 줄에만 살고, 그건 아래 칸이 맡는다.
   */
   const isCap = tech.kind === 'capability';
-  // 사업부 눈일 때 `stage` 는 그 사업부 값이다 — 그대로 담으면 남의 값을 저장한다.
-  const baseStage = baseStageOf(tech);
-  const stageChanged = !isCap
-    && (stage !== baseStage || (reason || '') !== (tech.stage_reason || ''));
-  // 기본 설정을 그대로 두고 **사업부 하나만** 바꿔도 저장할 것이 있는 것이다.
-  const changed = stageChanged || div.dirty;
+  /*
+    ⚠️⚠️ **이 창에서 보낼 단계가 없다**(2026-08-27). 역량도 도구도 제 단계를 안 갖고,
+       단계는 사업부 줄에만 산다. 저장할 것이 있느냐는 곧 **사업부 칸이 바뀌었느냐**다.
+  */
+  const changed = div.dirty;
   // ⚠️ 서버와 **같은 규칙**이다. 여기서만 막으면 서버가 400 을 내고, 서버에만 있으면
   //    사용자가 눌러 보고서야 안다. 둘 다 있어야 한다.
-  /*
-    ⚠️⚠️ **역량한테는 안 묻는다**(2026-08-26 점검). 역량은 제 단계가 없는데, 사업부
-       눈으로 열면 `stage` 에 그 사업부 값(예: 보류)이 실려 온다. 그걸 보고 이유를
-       물으면 **사업부만 바꿔도 저장이 영영 안 켜지고**, 설명하는 글도 `!isCap` 로
-       가려 놔서 왜 꺼졌는지 화면 어디에도 안 나온다.
-  */
-  const needReason = !isCap && baseNeedsReason(stage, reason);
-
   /*
     ⚠️⚠️ **보낼 것을 다 보낸 뒤에 알린다.** `onChanged` 는 창을 닫는다
        (DigitalTwinIntelApp 에서 `setSelected(null)`). 기본 설정을 먼저 알리면
@@ -496,15 +457,7 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
   const applyStage = async () => {
     setBusy(true);
     try {
-      let updated = null;
-      if (stageChanged) {
-        /*
-          ⚠️ **빈 이유도 보낸다**(2026-08-26 점검). `undefined` 로 보내면 서버가
-             「안 준 것」으로 보고 옛 이유를 그대로 둔다 — 지우고 저장했는데
-             「바꿨습니다」라고 하고는 안 지워졌다.
-        */
-        updated = await api.setStage(tech.uuid, stage, reason.trim());
-      }
+      const updated = null;
 
       /*
         ⚠️⚠️ **앞엣것이 담긴 뒤에 뒤엣것이 막힐 수 있다**(2026-08-26 점검). 예전에는
@@ -760,12 +713,6 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             </Field>
           )}
 
-          {tech.stage_reason && (
-            <Field>
-              <span>지금 단계로 정한 이유</span>
-              <Body2>{tech.stage_reason}</Body2>
-            </Field>
-          )}
 
           {/*
             ⚠️ **근거는 읽는 쪽이다.** 「왜 이 단계인가」에 답하는 자리라 무엇인가와
@@ -855,53 +802,14 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                도구는 그대로 갖는다: 도구의 단계는 「이 제품이 우리 손에 어디까지
                들어와 있나」라 하나로 말이 된다.
           */}
-          {isCap && (
-            <Hint>
-              역량에는 <b>단계가 없습니다.</b> 단계는 사업부마다 답이 달라서,
-              아래 「사업부별로 어디까지 · 왜 · 무엇으로」에만 적습니다.
-            </Hint>
-          )}
-
-          {!isCap && (
-          <Field>
-            <span>레이더 단계</span>
-            <StageRow>
-              {STAGES.map((st) => (
-                <StageBtn key={st.key} type="button" $on={stage === st.key} $color={st.color}
-                          disabled={!canCurate}
-                          title={canCurate ? st.desc : '단계 변경은 관리자·사무국만 할 수 있습니다'}
-                          onClick={() => setStage(st.key)}>
-                  {st.key}
-                </StageBtn>
-              ))}
-            </StageRow>
-          </Field>
-          )}
-
-          {!isCap && !canCurate && (
-            <Hint>
-              단계는 <b>관리자·사무국만</b> 바꿉니다. 개인 의견이 아니라 조직이 어디까지
-              왔는지의 표기라, 아무나 바꾸면 아무도 그 표기를 안 믿게 되기 때문입니다.
-            </Hint>
-          )}
-
-          {!isCap && canCurate && (
-            <Field>
-              <span>이 단계로 정한 이유{stage === '보류' ? ' *' : ''}</span>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)}
-                        placeholder="예: 라이선스 비용이 과제 예산을 넘는다" />
-            </Field>
-          )}
-
-          {!isCap && canCurate && needReason && (
-            <Warn>
-              <AlertTriangle size={13} />
-              <span>
-                <b>「보류」로 옮길 때는 이유를 적어야 합니다.</b> 안 쓰기로 한 판단이야말로
-                근거가 남아야 6개월 뒤 같은 논의를 처음부터 다시 하지 않습니다.
-              </span>
-            </Warn>
-          )}
+          <Hint>
+            {isCap
+              ? <>역량에는 <b>단계가 없습니다.</b> 단계는 사업부마다 답이 달라서,
+                  아래 「사업부별로 어디까지 · 왜 · 무엇으로」에만 적습니다.</>
+              : <>도구에도 <b>단계가 없습니다.</b> 「우리가 이걸 쓰나」는 사업부마다
+                  답이 달라서, <b>이 도구를 쓰는 역량</b>의 사업부 칸에서
+                  「무엇으로 하나」로 적습니다.</>}
+          </Hint>
 
           {/*
             ⚠️ **단계를 바꾸는 자리 가까이 둔다.** 멀리 두면 기본 설정만 바꾸고 사업부는
@@ -966,13 +874,13 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
           {/* 두 가지가 함께 걸릴 수 있어, **무엇이 나가는지** 이름을 대 준다. */}
           {canCurate && !busy && changed && (
             <FootNote>
-              {saveLabel({ stageChanged, divisionDirty: div.dirty,
+              {saveLabel({ divisionDirty: div.dirty,
                            division: div.division })} 을(를) 저장합니다
             </FootNote>
           )}
           {canCurate && (
             <PrimaryBtn onClick={applyStage}
-                        disabled={!changed || needReason || div.needReason || busy}>
+                        disabled={!changed || div.needReason || busy}>
               {busy ? '바꾸는 중…' : '단계 저장'}
             </PrimaryBtn>
           )}

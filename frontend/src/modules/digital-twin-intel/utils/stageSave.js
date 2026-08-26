@@ -17,17 +17,6 @@
 /** 사업부 칸에서 「기본 설정을 따름」. 값이 없는 것이 곧 따른다는 뜻이다. */
 export const FOLLOW = '';
 
-/**
- * 고르고 견줄 **그 기술 자신의** 단계.
- *
- * ⚠️⚠️ 역량은 단계를 안 갖는다(2026-08-26) — 늘 빈 값이 온다. 이 길은 이제
- *    **도구에만** 쓰인다.
- * ⚠️ `tech.stage` 가 아니다. 사업부 눈일 때 `stage` 는 그 사업부 값이라, 그대로
- *    담으면 남의 값을 저장하게 된다.
- */
-export const baseStageOf = (tech) =>
-  (tech && (tech.companyStage || tech.stage)) || '';
-
 /** 사업부 한 줄을 「적을 것」 모양으로. 없으면 「아직 안 정함」이다. */
 export const asDraft = (kept) => ({
   stage: (kept && kept.stage) || FOLLOW,
@@ -65,10 +54,6 @@ export const divisionDirty = (kept, draft) => {
 export const divisionNeedsReason = (draft) =>
   Boolean(draft) && draft.stage === '보류' && !(draft.reason || '').trim();
 
-/** 도구 쪽도 같은 규칙 — 「보류」로 옮기려면 이유가 있어야 한다. */
-export const baseNeedsReason = (stage, reason) =>
-  stage === '보류' && !(reason || '').trim();
-
 /**
  * 적을 것이 있는데 단계가 없으면 **찍을 자리가 없다.**
  *
@@ -85,5 +70,5 @@ export const divisionNeedsStage = (draft) =>
  * ⚠️ **이름을 대 준다.** 기본 설정과 사업부가 함께 걸릴 수 있어서, 안 적으면
  *    무엇을 저장하는지 모르고 누르게 된다.
  */
-export const saveLabel = ({ stageChanged, divisionDirty: dirty, division }) =>
-  [stageChanged && '기본 설정', dirty && division].filter(Boolean).join(' · ');
+export const saveLabel = ({ divisionDirty: dirty, division }) =>
+  (dirty && division) || '';

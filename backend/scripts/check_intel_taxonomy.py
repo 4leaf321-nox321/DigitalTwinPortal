@@ -73,11 +73,10 @@ def main():
         print()
 
         # ⚠️ 씨뿌리기가 **바로잡을** 줄. 역량은 단계가 없고 도구는 있어야 한다.
-        odd_c = [c.name for c in caps if c.stage or c.stage_reason]
-        odd_t = [t.name for t in tools if not t.stage]
-        print('규칙에 어긋난 단계: 역량 %d개 · 도구 %d개 (씨뿌리기가 바로잡습니다)'
-              % (len(odd_c), len(odd_t)))
-        for n in (odd_c + odd_t)[:10]:
+        # ⚠️ 역량도 도구도 단계를 안 갖는다 — 단계는 사업부 줄에만 산다.
+        odd = [t.name for t in caps + tools if t.stage or t.stage_reason]
+        print('단계를 든 줄: %d개 (씨뿌리기가 비웁니다)' % len(odd))
+        for n in odd[:10]:
             print('  ·', n)
         print()
 

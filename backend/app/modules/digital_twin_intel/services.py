@@ -316,20 +316,18 @@ def create_tech(actor_id=None, origin='ui', **data):
     kind = data.get('kind') if data.get('kind') in TECH_KINDS else 'tool'
 
     """
-    ⚠️⚠️ **역량은 단계를 안 갖는다**(2026-08-26). 「우리 회사가 이 역량에서 어디까지
-       왔나」에는 하나의 답이 없다 — 사업부마다 다르고, 그게 이 모듈이 답하려는
-       물음이다. 값을 주더라도 조용히 버린다. 뒷문을 열어 두면 MCP 로 들어온 줄만
-       단계를 갖게 되고, 그 한 줄 때문에 화면이 두 규칙을 다 다뤄야 한다.
+    ⚠️⚠️ **역량도 도구도 단계를 안 갖는다**(2026-08-27). 「우리가 이걸 어디까지
+       쓰나」에는 하나의 답이 없다 — 사업부마다 다르다. 역량은 2026-08-26 에
+       걷어냈고, 도구는 「제품이 우리 손에 어디까지 들어와 있나라 하나로 말이
+       된다」는 이유로 남겨 뒀는데 **자료가 그 말을 안 받쳐 줬다**: 도구 547개가
+       전부 「감지」였고(씨뿌리기 기본값) 사람이 옮긴 기록이 **0건**이었다.
+       MX 는 Ansys 계약이 있고 VD 는 없으면 「우리가 Ansys 를 도입했나」에 답이 없다 —
+       역량과 똑같은 흠이다.
 
-    ⚠️ 도구는 **감지**로 들어온다 — 아직 아무도 안 봤다. 「관찰」이라 적으면 안 본
-       것을 「지켜보는 중」이라 말하는 셈이다.
+    ⚠️ 값을 주더라도 조용히 버린다. 뒷문을 열어 두면 MCP 로 들어온 줄만 단계를 갖게
+       되고, 그 한 줄 때문에 화면이 두 규칙을 다 다뤄야 한다.
     """
-    if kind == 'capability':
-        stage = None
-    else:
-        stage = (data.get('stage') or STAGE_NEW).strip()
-        if stage not in STAGES:
-            return None, f'단계는 {" · ".join(STAGES)} 중 하나여야 합니다.'
+    stage = None
 
     """
     ⚠️⚠️ **만들면서 매다는 길에도 같은 검사를 건다.** 안 걸면 여기가 `set_capabilities`
@@ -390,10 +388,14 @@ def set_stage(tech_uuid, stage, reason=None, actor=None, source='ui'):
     t = IntelTech.query.filter_by(uuid=tech_uuid).first()
     if t is None:
         return None, '기술을 찾을 수 없습니다.'
-    # ⚠️ 역량은 단계를 안 갖는다 — 사업부별로 적는다. 옛 길로 들어오면 막는다.
-    if t.kind == 'capability':
-        return None, ('역량은 단계를 따로 두지 않습니다 — 사업부별로 적습니다. '
-                      '「사업부 적기」를 쓰세요.')
+    """
+    ⚠️⚠️ **이 길은 이제 아무한테도 안 열린다**(2026-08-27). 역량도 도구도 제 단계를
+       안 갖는다 — 단계는 사업부 줄에만 산다. 길 자체는 남겨 둔다: MCP 나 옛 화면이
+       부를 수 있고, 그때 **왜 안 되는지 말해 주는 편**이 조용히 404 를 내는 것보다
+       낫다.
+    """
+    return None, ('단계는 사업부별로 적습니다 — 「%s」 하나에 정할 값이 아닙니다. '
+                  '「사업부 적기」를 쓰세요.' % t.name)
 
     """
     ⚠️⚠️ **안 준 것과 빈 것을 갈라야 한다**(2026-08-26 점검). 예전에는 `if reason:`
@@ -475,19 +477,35 @@ def division_marks(tech_uuids):
        전부 「감지」 고리에 뭉쳐서 그림이 안 읽혔다(2026-08-26 신고). 이제 점은
        **사업부가 적은 자리에만** 서고, 기본 설정 점은 아예 안 그린다.
 
-    ⚠️ 이제 **줄마다 자기 단계를 들고 있다.** 예전에는 비어 있는 줄을 기본 설정으로
-       풀어 줬는데, 기본 설정이 없어지면서 그럴 일도 없어졌다.
+    ⚠️ 줄마다 자기 단계를 들고 있다. 예전에는 비어 있는 줄을 기본 설정으로 풀어
+       줬는데, 기본 설정이 없어지면서 그럴 일도 없어졌다.
+
+    ⚠️⚠️ **도구도 자리를 얻는다**(2026-08-27). 사업부 줄은 역량에 붙지만, 그 줄의
+       「무엇으로 하나」(`tools`)에 적힌 도구는 **그 사업부가 그 단계에서 쓰는
+       도구**다. 도구에서 제 단계를 걷어내면서 그 자리를 여기서 준다 — 도구도
+       목록ㆍ거르기에서 「누가 어디에서 쓰나」로 선다. 없던 자료를 만드는 것이
+       아니라 **이미 적혀 있는 것을 거꾸로 읽을 뿐**이다.
     """
     if not tech_uuids:
         return {}
+    want = set(tech_uuids)
     rows = (IntelDivisionStage.query
-            .filter(IntelDivisionStage.tech_uuid.in_(list(tech_uuids)),
-                    IntelDivisionStage.stage.isnot(None))
+            .filter(IntelDivisionStage.stage.isnot(None))
             .order_by(IntelDivisionStage.division.asc()).all())
     out = {}
     for r in rows:
-        out.setdefault(r.tech_uuid, []).append(
-            {'division': r.division, 'stage': r.stage})
+        if r.tech_uuid in want:
+            out.setdefault(r.tech_uuid, []).append(
+                {'division': r.division, 'stage': r.stage})
+        # ⚠️ 한 사업부가 한 도구를 여러 역량 밑에 적었으면 같은 딱지가 겹친다 —
+        #    한 번만 남긴다. 그 도구가 어디 있느냐는 물음에 답은 하나다.
+        for u in (r.tools or []):
+            if u not in want:
+                continue
+            mine = out.setdefault(u, [])
+            if not any(m['division'] == r.division and m['stage'] == r.stage
+                       for m in mine):
+                mine.append({'division': r.division, 'stage': r.stage})
     return out
 
 

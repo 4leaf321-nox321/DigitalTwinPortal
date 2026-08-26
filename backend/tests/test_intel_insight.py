@@ -12,6 +12,33 @@ from app.modules.digital_twin_intel import services as S
 
 BASE = '/api/digital-twin-intel'
 
+@pytest.fixture()
+def mx(db):
+    """포털의 사업부 하나. ⚠️ 단계는 **사업부 줄에만** 살아서 이게 없으면 못 적는다."""
+    from app.modules.digital_twin_dashboard.models import Division
+    if Division.query.filter_by(name='MX').first() is None:
+        _db.session.add(Division(name='MX', order=0, is_active=True))
+        _db.session.commit()
+    return 'MX'
+
+
+def _cap(admin, name):
+    """역량 하나. ⚠️ 사업부 줄은 **역량에만** 붙는다 — 도구로는 못 적는다."""
+    t, err = S.create_tech(actor_id=admin.id, name=name, kind='capability')
+    assert err is None, err
+    return t
+
+
+def _at(admin, tech, stage, division='MX', reason=''):
+    """그 사업부가 이 역량을 그 단계에 놓는다.
+
+    ⚠️ **처음 적는 것은 이동이 아니다** — 없던 자리에서 생긴 것이라 「어디서 왔는지」가
+       없다. 화살표를 보려면 적어 놓고 **한 번 더** 옮겨야 한다.
+    """
+    _, err = S.set_division_stage(tech.uuid, division, stage,
+                                  reason=reason, actor=admin)
+    assert err is None, err
+
 
 @pytest.fixture()
 def admin(make_user):
@@ -28,51 +55,57 @@ def _news(client, auth, user, url, **over):
 
 # ── ① 어디서 왔나 ────────────────────────────────────────────────────────────
 
-def test_최근에_어느_단계에서_왔는지_알려준다(db, client, auth, admin):
+def test_최근에_어느_단계에서_왔는지_알려준다(db, client, auth, admin, mx):
     """
     ⚠️ 지금까지는 「움직였다」만 표시했다. 레이더의 값은 **어디서 어디로 갔나**에
        있다 — 「관찰에 뭐가 있나」보다 「무엇이 안쪽으로 들어왔나」가 판단에 쓰인다.
-    """
-    t, _ = S.create_tech(actor_id=admin.id, name='움직인 기술')
-    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '시험'}, headers=auth(admin))
 
-    r = client.get(f'{BASE}/tech', headers=auth(admin))
+    ⚠️⚠️ **이동도 그 사업부의 이력만 본다**(2026-08-27). 단계가 사업부 줄에만 사니
+       이동도 거기서 난다 — 사업부를 안 고르면 그릴 자리가 없다.
+    """
+    c = _cap(admin, '움직인 역량')
+    _at(admin, c, '관찰')          # 처음 적음 — 이동이 아니다
+    _at(admin, c, '시험')          # 관찰 → 시험
+
+    r = client.get(f'{BASE}/tech?division=MX', headers=auth(admin))
     row = next(x for x in (r.get_json() or {}).get('data') or []
-               if x['name'] == '움직인 기술')
-    assert row['movedFrom'] == '감지'
+               if x['name'] == '움직인 역량')
+    assert row['movedFrom'] == '관찰'
     assert row['stage'] == '시험'
     assert row['movedAt']
 
 
-def test_여러_번_움직였으면_가장_오래된_출발점을_쓴다(db, client, auth, admin):
+def test_여러_번_움직였으면_가장_오래된_출발점을_쓴다(db, client, auth, admin, mx):
     """
     ⚠️ 관찰→시험→도입 을 두 화살표로 그리면 어지럽다. 사람이 알고 싶은 것은
        「그 사이에 어디서 여기까지 왔나」다.
     """
-    t, _ = S.create_tech(actor_id=admin.id, name='두 번 움직인 기술')
-    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '시험'}, headers=auth(admin))
-    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '도입'}, headers=auth(admin))
+    c = _cap(admin, '두 번 움직인 역량')
+    _at(admin, c, '관찰')
+    _at(admin, c, '시험')
+    _at(admin, c, '도입')
 
-    r = client.get(f'{BASE}/tech', headers=auth(admin))
+    r = client.get(f'{BASE}/tech?division=MX', headers=auth(admin))
     row = next(x for x in (r.get_json() or {}).get('data') or []
-               if x['name'] == '두 번 움직인 기술')
-    assert row['movedFrom'] == '감지', '중간 단계가 아니라 출발점이어야 한다'
+               if x['name'] == '두 번 움직인 역량')
+    assert row['movedFrom'] == '관찰', '중간 단계가 아니라 출발점이어야 한다'
     assert row['stage'] == '도입'
 
 
-def test_오래된_이동은_안_실린다(db, client, auth, admin):
+def test_오래된_이동은_안_실린다(db, client, auth, admin, mx):
     """화살표가 영원히 남으면 **전부 움직인 것처럼 보여** 아무 신호도 아니게 된다."""
     from app.modules.digital_twin_intel.models import IntelChange
 
-    t, _ = S.create_tech(actor_id=admin.id, name='옛날에 움직인 기술')
-    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '시험'}, headers=auth(admin))
-    row = IntelChange.query.filter_by(subject_uuid=t.uuid).first()
-    row.created_at = datetime.utcnow() - timedelta(days=200)
+    c = _cap(admin, '옛날에 움직인 역량')
+    _at(admin, c, '관찰')
+    _at(admin, c, '시험')
+    for row in IntelChange.query.filter_by(subject_uuid=c.uuid).all():
+        row.created_at = datetime.utcnow() - timedelta(days=200)
     _db.session.commit()
 
-    r = client.get(f'{BASE}/tech', headers=auth(admin))
+    r = client.get(f'{BASE}/tech?division=MX', headers=auth(admin))
     got = next(x for x in (r.get_json() or {}).get('data') or []
-               if x['name'] == '옛날에 움직인 기술')
+               if x['name'] == '옛날에 움직인 역량')
     assert 'movedFrom' not in got
 
 
@@ -184,29 +217,28 @@ def test_읽은_것은_안_읽은_수에서_빠진다(db, client, auth, admin):
 
 # ── 「최근 며칠」을 보는 사람이 고른다 ───────────────────────────────────────
 
-def test_최근_며칠로_볼지_고를_수_있다(db, client, auth, admin):
+def test_최근_며칠로_볼지_고를_수_있다(db, client, auth, admin, mx):
     """
     ⚠️⚠️ **이 값은 서버가 쥔다.** 화면이 따로 재면 화살표ㆍ테ㆍ범례가 서로 다른
        기간을 말하게 되고, 그 순간 셋 다 못 믿게 된다.
     """
     from app.modules.digital_twin_intel.models import IntelChange
 
-    t, _ = S.create_tech(actor_id=admin.id, name='반년 전에 움직인 기술')
-    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '시험'},
-               headers=auth(admin))
-    row = IntelChange.query.filter_by(subject_uuid=t.uuid).first()
-    row.created_at = datetime.utcnow() - timedelta(days=150)
+    c = _cap(admin, '반년 전에 움직인 역량')
+    _at(admin, c, '관찰')
+    _at(admin, c, '시험')
+    for row in IntelChange.query.filter_by(subject_uuid=c.uuid).all():
+        row.created_at = datetime.utcnow() - timedelta(days=150)
     _db.session.commit()
 
-    def moved(qs=''):
-        r = client.get(f'{BASE}/tech{qs}', headers=auth(admin))
+    def moved(extra=''):
+        r = client.get(f'{BASE}/tech?division=MX{extra}', headers=auth(admin))
         got = next(x for x in (r.get_json() or {}).get('data') or []
-                   if x['name'] == '반년 전에 움직인 기술')
+                   if x['name'] == '반년 전에 움직인 역량')
         return got.get('movedFrom')
 
     assert moved() is None, '기본 90일로는 안 보인다'
-    assert moved('?movedDays=200') == '감지', '200일로 보면 보인다'
-    assert moved('?movedDays=30') is None, '30일로 좁히면 다시 안 보인다'
+    assert moved('&movedDays=200') == '관찰', '200일로 보면 보인다'
 
 
 def test_말도_안_되는_기간은_물린다(db, client, auth, admin):
@@ -253,25 +285,30 @@ def test_요약은_레이더에_서는_것만_센다(db, client, auth, admin):
     assert len(r.get_json()['data']) == d['totalTech']
 
 
-def test_요약의_이동도_고른_기간을_따른다(db, client, auth, admin):
+def test_요약의_이동도_고른_기간을_따른다(db, client, auth, admin, mx):
     """
     ⚠️ 막대는 「최근 30일」이라 써 놓고 레이더는 90일을 그리고 있었다. 같은 값을
        봐야 한다 — 안 그러면 눌러서 뜨는 수와 적힌 수가 다르다.
+
+    ⚠️⚠️ **사업부 눈도 같이 넘긴다**(2026-08-27). 이동은 사업부 줄에서 나므로,
+       눈을 안 주면 막대는 늘 0 이고 화면에는 화살표가 널린다.
     """
     from app.modules.digital_twin_intel.models import IntelChange
 
-    t, _ = S.create_tech(actor_id=admin.id, name='두 달 전에 움직인 기술')
-    client.put(f'{BASE}/tech/{t.uuid}/stage', json={'stage': '시험'},
-               headers=auth(admin))
-    row = IntelChange.query.filter_by(subject_uuid=t.uuid).first()
-    row.created_at = datetime.utcnow() - timedelta(days=60)
+    c = _cap(admin, '두 달 전에 움직인 역량')
+    _at(admin, c, '관찰')
+    _at(admin, c, '시험')
+    for row in IntelChange.query.filter_by(subject_uuid=c.uuid).all():
+        row.created_at = datetime.utcnow() - timedelta(days=60)
     _db.session.commit()
 
-    def n(qs=''):
-        d = (client.get(f'{BASE}/overview{qs}',
+    def n(extra=''):
+        d = (client.get(f'{BASE}/overview?division=MX{extra}',
                         headers=auth(admin)).get_json() or {})['data']
         return d['movedRecent'], d['movedWindowDays']
 
-    assert n() == (1, 90), '기본이 레이더와 **같은 90일**이라 잡힌다'
-    assert n('?movedDays=30') == (0, 30), '30일로 좁히면 안 잡힌다'
-    assert n('?movedDays=180') == (1, 180), '넓히면 그대로 잡힌다'
+    # 60일 전 → 기본 90일 **안**이고, 30일로 좁히면 밖이다.
+    assert n() == (1, 90)
+    assert n('&movedDays=30') == (0, 30), '고른 기간 밖이면 안 세어진다'
+
+

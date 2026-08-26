@@ -14,7 +14,6 @@ from app.modules.digital_twin_intel import bp
 from app.modules.digital_twin_intel import permissions as P
 from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
-    STAGE_NEW,
     CPT_GROUPS, DEFAULT_SECTORS, MOVED_WINDOW_DAYS, MOVED_WINDOW_MAX,
     MOVED_WINDOW_MIN, NEWS_STATUSES, ORIGINS, STAGES, TECH_KINDS,
     IntelEvidence, IntelNews, IntelTech, IntelTechCapability, shows_vendor,
@@ -336,7 +335,9 @@ def list_tech():
     ⚠️ 사업부를 골랐을 때는 안 싣는다 — 그때는 그 사업부 값이 주점이 되고 나머지
        위성은 사라진다(안 그러면 「내 사업부 눈」인데 남의 점이 널린다).
     """
-    marks = S.division_marks([r.uuid for r in rows if r.kind == 'capability'])         if not division else {}
+    # ⚠️ **도구도 함께 묻는다**(2026-08-27). 도구는 제 단계를 잃었고, 대신 그 도구를
+    #    「무엇으로 하나」에 적은 사업부 줄에서 자리를 얻는다.
+    marks = S.division_marks([r.uuid for r in rows]) if not division else {}
     # ⚠️ 도구 이름을 목록에 함께 싣는다. 화면이 줄마다 따로 물으면 수십 번 왕복한다.
     dtools = S.tools_of(list(dstages.values())) if dstages else {}
     out = []
@@ -439,11 +440,9 @@ def update_tech(uuid):
            역량**이 생기는데, 상세 창에는 역량용 칸이 없어 **지울 길이 아예 없다.**
            목록에서는 그 역량만 엉뚱한 칸에 선다.
         """
-        if data['kind'] == 'capability':
-            t.stage = None
-            t.stage_reason = None
-        elif t.stage is None:
-            t.stage = STAGE_NEW
+        # ⚠️ 역량이든 도구든 단계를 안 갖는다(2026-08-27) — 층이 바뀌어도 비운다.
+        t.stage = None
+        t.stage_reason = None
     if 'kind' in data and data['kind'] in TECH_KINDS:
         # ⚠️ 자식이 달린 역량을 도구로 내리면 그 자식들이 부모 없는 도구가 되어
         #    레이더에 갑자기 쏟아진다. 먼저 떼어 내게 한다.

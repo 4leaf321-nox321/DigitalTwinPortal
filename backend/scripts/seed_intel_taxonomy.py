@@ -21,7 +21,7 @@ from app import create_app                                    # noqa: E402
 from app.extensions import db                                 # noqa: E402
 from app.modules.digital_twin_intel import services as S      # noqa: E402
 from app.modules.digital_twin_intel.models import (           # noqa: E402
-    CPT_KEYS, DEFAULT_SECTORS, STAGE_NEW, IntelDivisionStage, IntelTech,
+    CPT_KEYS, DEFAULT_SECTORS, IntelDivisionStage, IntelTech,
     IntelTechCapability)
 from seed_intel_taxonomy_data import TAXONOMY                                 # noqa: E402
 
@@ -113,14 +113,13 @@ def main():
                     """
                     옛 역량 이름이 이제 도구로 간다 — 매달린 것을 먼저 떼어 낸다.
 
-                    ⚠️⚠️ **단계를 채워 준다**(2026-08-26). 역량은 단계가 비어 있는데,
-                       도구는 갖는 것이 규칙이다. 안 채우면 **단계 없는 도구**가 되어
-                       목록의 「아직 안 적힘」 칸으로 빠지고 단계 거르기에 안 걸린다.
+                    ⚠️ 단계는 안 건드린다 — 역량도 도구도 제 단계를 안 갖는다
+                       (2026-08-27). 도구의 자리는 그 도구를 「무엇으로 하나」에 적은
+                       사업부 줄에서 온다.
                     """
                     IntelTechCapability.query.filter_by(
                         capability_uuid=t.uuid).delete()
                     t.kind = 'tool'
-                    t.stage = t.stage or STAGE_NEW
                 """
                 ⚠️ **이미 있는 연결은 안 건드린다.** 표에 적힌 것을 더할 뿐이다 —
                    사람이 손으로 더 매달아 둔 역량을 씨뿌리기가 지우면 안 된다.
@@ -173,22 +172,17 @@ def main():
 
         # ── 4.6 규칙에 어긋난 줄 바로잡기 ──────────────────────────────────
         """
-        ⚠️⚠️ **역량은 단계가 없고 도구는 있다.** 층을 옮기다, 또는 MCPㆍ소식으로
-           들어오다 어긋난 줄이 생기면 **화면 어디에서도 고칠 길이 없다** — 역량의
-           단계를 지우는 칸이 없고, 단계 없는 도구는 목록의 「아직 안 적힘」으로
-           빠져 단계 거르기에 아예 안 걸린다.
+        ⚠️⚠️ **역량도 도구도 단계를 안 갖는다**(2026-08-27). 층을 옮기다, 또는
+           MCPㆍ소식으로 들어오다 값이 붙으면 **화면 어디에서도 지울 길이 없다** —
+           상세 창에 그 칸이 아예 없기 때문이다.
 
         ⚠️ 표 안팎을 안 가린다. 어긋난 줄은 어디서 왔든 못 쓰는 줄이다.
         """
         mended = 0
-        for c in IntelTech.query.filter_by(kind='capability').all():
-            if c.stage is not None or c.stage_reason:
-                c.stage = None
-                c.stage_reason = None
-                mended += 1
-        for t in IntelTech.query.filter(IntelTech.kind != 'capability').all():
-            if not t.stage:
-                t.stage = STAGE_NEW
+        for t in IntelTech.query.all():
+            if t.stage is not None or t.stage_reason:
+                t.stage = None
+                t.stage_reason = None
                 mended += 1
         if mended:
             db.session.commit()
@@ -221,15 +215,12 @@ def main():
            고칠 길이 없는 줄이 되는데, 여기 안 적으면 **다음에도 모른다.**
            0 이면 조용하다 — 늘 떠 있으면 눈이 지나친다.
         """
-        odd_c = [c.name for c in caps if c.stage]
-        odd_t = [t.name for t in tools if not t.stage]
-        if odd_c or odd_t:
+        odd = [t.name for t in caps + tools if t.stage or t.stage_reason]
+        if odd:
             print()
-            print('  !! 규칙에 안 맞는 줄')
-            for n in odd_c:
-                print('     단계를 든 역량:', n)
-            for n in odd_t:
-                print('     단계 없는 도구:', n)
+            print('  !! 단계를 든 줄 (단계는 사업부 줄에만 산다)')
+            for n in odd:
+                print('    ', n)
         if orph:
             for o in orph:
                 print('     미아:', o.name)

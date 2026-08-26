@@ -225,7 +225,8 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
        서버가 버릴 값 때문에 「추가」 단추가 **영영 안 켜졌다.** 아래에서 칸 자체를
        안 그리므로 여기서도 안 묻는다.
   */
-  const needReason = !edit && !isCap && stage === '보류' && !stageReason.trim();
+  // ⚠️ 단계를 여기서 안 정하니 물을 이유도 없다(2026-08-27).
+  const needReason = false;
 
   const addTag = () => {
     const v = tagInput.trim();
@@ -259,10 +260,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
       ⚠️ **역량은 단계를 안 보낸다.** 서버도 버리지만, 보내면 「그런 것이 있나 보다」로
          읽히고 다음 사람이 칸을 만든다. 단계는 사업부 줄에만 산다.
     */
-    if (!edit && !isCap) {
-      body.stage = stage;
-      if (stageReason.trim()) body.stageReason = stageReason.trim();
-    }
+    // ⚠️ 단계는 안 보낸다 — 서버도 버린다. 보내면 「그런 것이 있나 보다」로 읽힌다.
     onSave(body);
   };
 
@@ -505,38 +503,15 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           </Field>
 
           {/*
-            ⚠️⚠️ **역량에는 단계 칸이 없다**(2026-08-26). 그려 두면 골라도 서버가
-               버리는, 아무 일도 안 하는 칸이 된다 — 그것이 있는 줄 알고 고르는
-               사람이 생긴다.
+            ⚠️⚠️ **단계 칸이 아예 없다**(2026-08-27). 역량도 도구도 제 단계를 안
+               갖는다 — 「우리가 이걸 어디까지 쓰나」는 사업부마다 답이 다르다.
+               그려 두면 골라도 서버가 버리는, 아무 일도 안 하는 칸이 된다.
           */}
-          {!edit && canCurate && isCap && (
+          {!edit && canCurate && (
             <Hint>
-              역량에는 <b>단계가 없습니다.</b> 단계는 사업부마다 답이 달라서
-              사업부별로만 적습니다 — 만든 뒤 「사업부 적기」에서 적으세요.
+              단계는 여기서 안 정합니다. <b>사업부마다 답이 달라서</b> 만든 뒤
+              「사업부 적기」에서 사업부별로 적습니다.
             </Hint>
-          )}
-
-          {!edit && canCurate && !isCap && (
-            <Field>
-              <span>처음 놓을 단계</span>
-              <StageRow>
-                {STAGES.map((st) => (
-                  <StageBtn key={st.key} type="button" $on={stage === st.key}
-                            $color={st.color} title={st.desc}
-                            onClick={() => setStage(st.key)}>
-                    {st.key}
-                  </StageBtn>
-                ))}
-              </StageRow>
-            </Field>
-          )}
-
-          {!edit && canCurate && !isCap && stage !== STAGE_NEW && (
-            <Field>
-              <span>그 단계로 놓는 이유{stage === '보류' ? ' *' : ''}</span>
-              <textarea value={stageReason} onChange={(e) => setStageReason(e.target.value)}
-                        placeholder="예: MX 해석 과제에서 이미 쓰고 있다" />
-            </Field>
           )}
 
           {needReason && (

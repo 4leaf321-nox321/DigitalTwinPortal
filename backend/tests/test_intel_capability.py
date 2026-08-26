@@ -449,52 +449,46 @@ def test_역량으로_걸러_볼_수_있다(db, client, auth, admin):
 #    안 열어 본 것이 화면에서 같아 보였다 — 504칸 중 24칸(4.8%)만 차 있었는데
 #    나머지가 전부 「관찰」로 보였다.
 
-def test_새로_들어온_것은_감지다(db, client, auth, admin):
+def test_새로_들어온_것은_단계가_없다(db, client, auth, admin):
     """
-    ⚠️ 도구는 **감지**로 들어온다 — 아직 아무도 안 봤다.
-    ⚠️⚠️ **역량은 단계가 아예 없다**(2026-08-26). 「우리 회사가 이 역량에서 어디까지
-       왔나」에는 하나의 답이 없다 — 사업부마다 다르고, 그게 이 모듈이 답하려는
-       물음이다. 값을 주더라도 조용히 버린다.
+    ⚠️⚠️ **역량도 도구도 단계를 안 갖는다.** 역량은 2026-08-26, 도구는 2026-08-27 에
+       걷어냈다. 도구는 「제품이 우리 손에 어디까지 들어와 있나라 하나로 말이 된다」는
+       이유로 한동안 남겨 뒀는데 자료가 그 말을 안 받쳐 줬다 — 547개가 전부 「감지」
+       였고 사람이 옮긴 기록이 0건이었다. 논리도 역량과 같다: MX 는 Ansys 계약이
+       있고 VD 는 없으면 「우리가 도입했나」에 하나의 답이 없다.
+
+    ⚠️ 값을 주더라도 조용히 버린다. 뒷문을 열어 두면 MCP 로 들어온 줄만 단계를 갖게
+       되고, 그 한 줄 때문에 화면이 두 규칙을 다 다뤄야 한다.
     """
-    t = _tool(admin, '방금 들어온 도구')
-    assert t.stage == '감지'
+    assert _tool(admin, '방금 들어온 도구').stage is None
+    assert _cap(admin, '방금 만든 역량').stage is None
 
-    c = _cap(admin, '방금 만든 역량')
-    assert c.stage is None
-
-    forced, err = S.create_tech(actor_id=admin.id, name='억지로 넣은 역량',
-                                kind='capability', stage='도입')
-    assert err is None, err
-    assert forced.stage is None, '뒷문으로도 단계가 안 붙는다'
+    for kind in ('capability', 'tool'):
+        forced, err = S.create_tech(actor_id=admin.id, name=f'억지로 {kind}',
+                                    kind=kind, stage='도입')
+        assert err is None, err
+        assert forced.stage is None, '뒷문으로도 단계가 안 붙는다'
 
 
-def test_감지는_낡음을_아예_안_잰다(db, client, auth, admin):
+def test_아무도_안_적었으면_낡음을_아예_안_잰다(db, client, auth, admin):
     """
-    ⚠️⚠️ **재면 안 된다.** 아무도 안 본 것이 수십 개인데 반년 뒤 한꺼번에 켜지면,
+    ⚠️⚠️ **재면 안 된다.** 아무도 안 본 것이 수백 개인데 반년 뒤 한꺼번에 켜지면,
        낡음 표시가 신호가 아니라 잡음이 된다 — 이 모듈의 자정 장치를 스스로
        망가뜨리는 셈이다.
+
+    ⚠️ 「여기 있다」고 말한 적이 없는데 「그 말이 낡았다」고 할 수는 없다. 낡음은
+       **사업부가 적어 둔 단계**로만 잰다.
     """
-    old = _tool(admin, '오래 방치된 감지')
+    old = _tool(admin, '오래 방치된 도구')
     old.created_at = datetime.utcnow() - timedelta(days=2000)
-    old.stage_changed_at = old.created_at
     _db.session.commit()
 
     row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
-                           .get_json() or {})['data'] if x['name'] == '오래 방치된 감지')
-    assert row['stage'] == '감지'
-    assert row['isStale'] is False, '감지는 낡을 것이 없다'
+                           .get_json() or {})['data']
+               if x['name'] == '오래 방치된 도구')
+    assert row['stage'] is None
+    assert row['isStale'] is False, '아무도 안 적었으면 낡을 것이 없다'
     assert row['staleAfterDays'] is None
-
-    # 「지켜보기로 정했다」로 옮기면 그때부터 잰다.
-    client.put(f'{BASE}/tech/{old.uuid}/stage', json={'stage': '관찰'},
-               headers=auth(admin))
-    _db.session.expire_all()
-    o2 = IntelTech.query.filter_by(uuid=old.uuid).first()
-    o2.stage_changed_at = datetime.utcnow() - timedelta(days=200)
-    _db.session.commit()
-    row2 = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
-                            .get_json() or {})['data'] if x['name'] == '오래 방치된 감지')
-    assert row2['staleAfterDays'] == 180 and row2['isStale'] is True
 
 
 def test_역량은_단계가_없어_낡지_않는다(db, client, auth, admin):
@@ -689,3 +683,42 @@ def test_별칭이_겹쳐도_같은_줄로_본다(db, client, auth, admin):
                     headers=auth(admin))
     d = (r.get_json() or {})['data']
     assert d['uuid'] == t.uuid and d['created'] is False
+
+def test_도구도_사업부_줄에서_자리를_얻는다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **도구에서 단계를 걷어내면 자리를 잃는다** — 목록에도 거르기에도 안 걸리는
+       줄이 된다. 그래서 사업부 줄의 「무엇으로 하나」(`tools`)를 **거꾸로 읽어**
+       자리를 준다: 「MX 가 도입 단계에서 LS-DYNA 로 한다」면 그 도구는 MX·도입이다.
+       없던 자료를 만드는 것이 아니라 이미 적혀 있는 것을 뒤집을 뿐이다.
+
+    ⚠️ 한 사업부가 한 도구를 **여러 역량 밑에** 적었으면 같은 딱지가 겹친다 —
+       한 번만 남긴다. 「그 도구가 어디 있나」에 답은 하나다.
+    """
+    from app.modules.digital_twin_dashboard.models import Division
+    for i, nm in enumerate(['MX', 'VD']):
+        if Division.query.filter_by(name=nm).first() is None:
+            _db.session.add(Division(name=nm, order=i, is_active=True))
+    _db.session.commit()
+
+    a = _cap(admin, '충돌 해석')
+    b = _cap(admin, '구조 해석')
+    tool = _tool(admin, 'LS-DYNA', a)
+    S.set_capabilities(tool.uuid, [a.uuid, b.uuid], actor=admin)
+
+    S.set_division_stage(a.uuid, 'MX', '도입', tools=[tool.uuid], actor=admin)
+    S.set_division_stage(b.uuid, 'MX', '도입', tools=[tool.uuid], actor=admin)
+    S.set_division_stage(a.uuid, 'VD', '시험', tools=[tool.uuid], actor=admin)
+
+    rows = (client.get(f'{BASE}/tech', headers=auth(admin)).get_json() or {})['data']
+    got = next(x for x in rows if x['name'] == 'LS-DYNA')
+    assert got['stage'] is None, '도구 자신은 단계가 없다'
+    assert got['divisionMarks'] == [{'division': 'MX', 'stage': '도입'},
+                                    {'division': 'VD', 'stage': '시험'}],         'MX 는 두 역량 밑에 적었지만 딱지는 하나여야 한다'
+
+    # 아무도 안 적은 도구는 자리가 없다 — 그것이 「아직 아무도 안 쓴다」는 뜻이다.
+    lone = _tool(admin, '아무도 안 쓰는 도구', a)
+    got2 = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
+                            .get_json() or {})['data']
+                if x['name'] == '아무도 안 쓰는 도구')
+    assert 'divisionMarks' not in got2
+    assert lone.stage is None

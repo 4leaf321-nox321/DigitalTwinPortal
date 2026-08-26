@@ -22,7 +22,8 @@ import pytest
 from app.extensions import db as _db
 from app.modules.auth.models import UserRole
 from app.modules.digital_twin_intel import services as S
-from app.modules.digital_twin_intel.models import IntelEvidence, IntelNews, IntelTech
+from app.modules.digital_twin_intel.models import (
+    IntelDivisionStage, IntelEvidence, IntelNews, IntelTech)
 
 BASE = '/api/digital-twin-intel'
 
@@ -66,10 +67,14 @@ def test_일반_사용자도_소식을_넣을_수_있다(db, client, auth, plain
     assert r.status_code == 201, f'{r.status_code} · {r.get_json()}'
 
 
-def test_일반_사용자는_레이더_단계를_못_바꾼다(db, client, auth, plain, admin):
+def test_일반_사용자는_단계_길을_못_연다(db, client, auth, plain, admin):
     """
     ⚠️ 단계는 개인 의견이 아니라 **조직이 어디까지 왔는지의 표기**다. 아무나 바꾸면
        아무도 그 표기를 안 믿게 되고, 안 믿는 표기는 없는 것과 같다.
+
+    ⚠️⚠️ 이제 이 길은 **아무한테도 안 열린다**(2026-08-27) — 단계는 사업부 줄에만
+       산다. 그래도 권한 문은 그대로 앞에 서 있어야 한다: 못 쓰는 사람에게는
+       403 이, 쓸 수 있는 사람에게는 **왜 안 되는지**가 돌아가야 한다.
     """
     tech, err = S.create_tech(actor_id=admin.id, name='Omniverse')
     assert err is None, err
@@ -79,15 +84,27 @@ def test_일반_사용자는_레이더_단계를_못_바꾼다(db, client, auth,
     assert r.status_code == 403, f'{r.status_code} · {r.get_json()}'
 
     _db.session.expire_all()
-    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage == '감지'
+    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage is None
 
 
-def test_사무국은_단계를_바꿀_수_있다(db, client, auth, office, admin):
+def test_단계는_이_길로는_못_바꾼다(db, client, auth, office, admin):
+    """
+    ⚠️⚠️ **단계는 사업부 줄에만 산다**(2026-08-27). 역량은 2026-08-26 에 걷어냈고,
+       도구는 「제품이 우리 손에 어디까지 들어와 있나라 하나로 말이 된다」는 이유로
+       남겨 뒀는데 자료가 그 말을 안 받쳐 줬다 — 547개가 전부 「감지」였고 사람이
+       옮긴 기록이 0건이었다.
+
+    ⚠️ 길 자체는 남겨 둔다. MCP 나 옛 화면이 부를 수 있고, 그때 **왜 안 되는지
+       말해 주는 편**이 조용히 404 를 내는 것보다 낫다.
+    """
     tech, _ = S.create_tech(actor_id=admin.id, name='Omniverse')
     r = client.put(f'{BASE}/tech/{tech.uuid}/stage',
                    json={'stage': '시험'}, headers=auth(office))
-    assert r.status_code == 200, f'{r.status_code} · {r.get_json()}'
-    assert (r.get_json() or {}).get('data', {}).get('stage') == '시험'
+    assert r.status_code == 400, f'{r.status_code} · {r.get_json()}'
+    assert '사업부' in (r.get_json() or {}).get('message', '')
+
+    _db.session.expire_all()
+    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage is None
 
 
 def test_일반_사용자는_못_지운다(db, client, auth, plain, admin):
@@ -109,27 +126,27 @@ def test_일반_수정_길로는_단계가_안_바뀐다(db, client, auth, plain
     assert r.status_code == 400, f'{r.status_code} · {r.get_json()}'
 
     _db.session.expire_all()
-    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage == '감지'
+    assert IntelTech.query.filter_by(uuid=tech.uuid).first().stage is None
 
 
-def test_보류로_옮길_때는_이유가_필요하다(db, client, auth, admin):
+def test_새로_들어온_것은_단계가_없다(db, client, auth, admin):
     """
-    ⚠️ **안 쓰기로 한 판단이야말로 근거가 남아야 한다.** 안 남기면 6개월 뒤 같은
-       논의를 처음부터 다시 하고, 그때 아무도 지난번에 왜 접었는지 모른다.
+    ⚠️⚠️ 예전에는 「감지」로 들어왔다. 이제는 **아무 단계도 아니다** — 어느 사업부도
+       아직 이걸 두고 아무 말도 안 했기 때문이다. 「안 쓰기로 한 판단은 근거가
+       남아야 한다」는 규칙은 사업부 줄로 옮겨 갔다
+       (test_intel_division_stage.py::test_보류로_둘_때만_이유를_묻는다).
     """
     tech, _ = S.create_tech(actor_id=admin.id, name='Omniverse')
-    r = client.put(f'{BASE}/tech/{tech.uuid}/stage',
-                   json={'stage': '보류'}, headers=auth(admin))
-    assert r.status_code == 400, f'{r.status_code} · {r.get_json()}'
-    assert '이유' in (r.get_json() or {}).get('message', '')
+    assert tech.stage is None
+    assert tech.stage_reason is None
 
-    r2 = client.put(f'{BASE}/tech/{tech.uuid}/stage',
-                    json={'stage': '보류', 'reason': '라이선스 비용이 과제 예산을 넘는다'},
-                    headers=auth(admin))
-    assert r2.status_code == 200, f'{r2.status_code} · {r2.get_json()}'
+    # 값을 억지로 줘도 안 붙는다 — 뒷문을 열어 두면 그 한 줄 때문에 화면이 두
+    # 규칙을 다 다뤄야 한다.
+    forced, err = S.create_tech(actor_id=admin.id, name='억지로 넣은 도구',
+                                kind='tool', stage='도입')
+    assert err is None, err
+    assert forced.stage is None
 
-
-# ── ② 레이더는 소식의 부산물로 채워진다 ──────────────────────────────────────
 
 def test_소식을_넣으면_기술이_생긴다(db, client, auth, plain):
     """**이 모듈이 살아남는 방식이다.** 따로 채우게 하면 아무도 안 채운다."""
@@ -139,7 +156,8 @@ def test_소식을_넣으면_기술이_생긴다(db, client, auth, plain):
 
     tech = IntelTech.query.filter_by(name='Omniverse').first()
     assert tech is not None, '소식만 들어오고 레이더는 비었다'
-    assert tech.stage == '감지', '⚠️ 새로 본 기술의 기본은 **감지** — 아직 아무도 안 봤다'
+    # ⚠️ 단계는 사업부 줄에만 산다 — 새로 들어온 것은 아무 단계도 아니다.
+    assert tech.stage is None
     assert tech.origin == 'ui'
 
     got = (r.get_json() or {}).get('data', {}).get('technologies') or []
@@ -196,23 +214,39 @@ def test_근거가_오래_없으면_낡음으로_나온다(db, client, auth, adm
     """
     ⚠️ **자정 장치다.** 앞선 셋은 낡아도 낡은 줄 몰랐다. 화면이 「이 줄은 N개월째
        근거가 없다」고 스스로 말해야 아무도 안 보는 표가 되지 않는다.
+
+    ⚠️⚠️ **낡음은 이제 사업부 눈에서만 잰다**(2026-08-27). 기술 자체는 단계가 없고,
+       기준 일수는 단계마다 다르다 — 아무도 「여기 있다」고 말한 적 없는 줄에
+       「그 말이 낡았다」고 할 수는 없다.
     """
-    """
-    ⚠️ **'관찰' 로 놓고 잰다.** 기본값 '감지' 는 「아직 아무도 안 봤다」라 낡음을
-       아예 안 잰다 — 안 그러면 아무도 안 본 수십 개가 반년 뒤 한꺼번에 켜져
-       낡음 표시가 신호가 아니라 잡음이 된다.
-    """
-    tech, _ = S.create_tech(actor_id=admin.id, name='오래된 기술', stage='관찰')
-    # '관찰' 의 기준은 180일. 그보다 오래 전으로 돌려 둔다.
-    tech.stage_changed_at = datetime.utcnow() - timedelta(days=200)
-    tech.created_at = tech.stage_changed_at
+    from app.modules.digital_twin_dashboard.models import Division
+    if Division.query.filter_by(name='MX').first() is None:
+        _db.session.add(Division(name='MX', order=0, is_active=True))
+        _db.session.commit()
+
+    cap, _ = S.create_tech(actor_id=admin.id, name='오래된 역량',
+                           kind='capability')
+    cap.created_at = datetime.utcnow() - timedelta(days=200)
+    _db.session.commit()
+    # '관찰' 의 기준은 180일. 적어 둔 지 그보다 오래됐다고 놓는다.
+    S.set_division_stage(cap.uuid, 'MX', '관찰', actor=admin)
+    row0 = IntelDivisionStage.query.filter_by(
+        tech_uuid=cap.uuid, division='MX').first()
+    row0.changed_at = datetime.utcnow() - timedelta(days=200)
     _db.session.commit()
 
-    r = client.get(f'{BASE}/tech', headers=auth(admin))
+    r = client.get(f'{BASE}/tech?division=MX', headers=auth(admin))
     row = next(t for t in (r.get_json() or {}).get('data') or []
-               if t['name'] == '오래된 기술')
+               if t['name'] == '오래된 역량')
     assert row['isStale'] is True
     assert row['staleAfterDays'] == 180
+
+    # 사업부를 안 고르면 잴 자가 없다 — 낡을 것도 없다.
+    r2 = client.get(f'{BASE}/tech', headers=auth(admin))
+    row2 = next(t for t in (r2.get_json() or {}).get('data') or []
+                if t['name'] == '오래된 역량')
+    assert row2['isStale'] is False
+    assert row2['staleAfterDays'] is None
 
 
 def test_방금_만든_것은_낡지_않았다(db, client, auth, admin):
@@ -228,13 +262,15 @@ def test_단계마다_낡음_기준이_다르다(db, admin):
     """
     '관찰' 은 **지켜보겠다고 해 놓고 안 보고 있다**는 뜻이라 빨리 걸려야 하고,
     '도입' 은 이미 쓰는 것이라 조용해도 이상하지 않다.
+
+    ⚠️ 기준 일수는 **건네받은 단계**로 잰다 — 줄 자체는 단계를 안 갖는다.
     """
-    watch, _ = S.create_tech(actor_id=admin.id, name='관찰중', stage='관찰')
-    adopt, _ = S.create_tech(actor_id=admin.id, name='도입함', stage='도입')
-    assert watch.stale_after_days() < adopt.stale_after_days()
+    t, _ = S.create_tech(actor_id=admin.id, name='어떤 역량', kind='capability')
+    assert t.stale_after_days('관찰') < t.stale_after_days('도입')
+    # ⚠️ 아무 단계도 안 주면 **잴 자가 없다** — 기본값을 물리면 만들자마자 낡는다.
+    assert t.stale_after_days() is None
+    assert t.is_stale(None) is False
 
-
-# ── 레이더 한 줄이 「참고할 수 있는」 것이 되려면 ─────────────────────────────
 
 def test_기술의_참고_칸들이_저장된다(db, client, auth, admin):
     """
@@ -373,25 +409,18 @@ def test_어디로_들어왔는지_남는다(db, client, auth, plain):
     assert err is None, err
     assert n.origin == 'mcp'
 
-def test_단계_이유를_지울_수_있다(db, client, auth, admin):
+def test_단계_이유는_사업부_줄에만_산다(db, client, auth, admin):
     """
-    ⚠️⚠️ 예전에는 값이 있을 때만 담아서, 이유를 **지우고** 저장해도 옛 이유가 그대로
-       남았다 — 화면은 「바꿨습니다」라고 하고 값은 안 바뀌는, 제일 못 믿게 만드는
-       꼴이다(2026-08-26 점검).
-
-    ⚠️ **안 준 것과 빈 것을 가른다** — `None` 이면 그대로 두고, `''` 면 지운다.
-       MCP 처럼 이유를 아예 안 보내는 길이 있어서 이 구별이 필요하다.
+    ⚠️⚠️ 예전에는 기술 줄 자체가 단계와 그 이유를 들었다. 지우고 저장해도 옛 이유가
+       그대로 남는 흠이 있었고(2026-08-26 고침), 이제는 **그 칸 자체가 없다**.
+       이유는 사업부 줄에만 살고, 거기서는 지울 수 있다
+       (test_intel_division_stage.py::test_비우면_그_사업부_줄이_사라진다).
     """
     t, err = S.create_tech(actor_id=admin.id, name='어떤 도구', kind='tool')
     assert err is None
+    assert (t.stage, t.stage_reason) == (None, None)
 
-    S.set_stage(t.uuid, '시험', reason='한 과제에 걸어 본다', actor=admin)
-    assert t.stage_reason == '한 과제에 걸어 본다'
-
-    # 안 줬다 → 그대로.
-    S.set_stage(t.uuid, '관찰', actor=admin)
-    assert t.stage_reason == '한 과제에 걸어 본다'
-
-    # 빈 것을 줬다 → 지운다.
-    S.set_stage(t.uuid, '관찰', reason='', actor=admin)
-    assert t.stage_reason is None
+    _, err2 = S.set_stage(t.uuid, '시험', reason='한 과제에 걸어 본다', actor=admin)
+    assert err2 and '사업부' in err2, err2
+    _db.session.expire_all()
+    assert IntelTech.query.filter_by(uuid=t.uuid).first().stage_reason is None

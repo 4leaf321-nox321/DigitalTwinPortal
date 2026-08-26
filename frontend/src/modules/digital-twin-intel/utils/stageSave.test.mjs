@@ -9,18 +9,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FOLLOW, baseStageOf, asDraft, divisionDirty, divisionNeedsReason,
-  divisionNeedsStage, baseNeedsReason, saveLabel,
+  FOLLOW, asDraft, divisionDirty, divisionNeedsReason,
+  divisionNeedsStage, saveLabel,
 } from './stageSave.js';
-
-test('고르는 값은 그 기술 자신의 단계다 — 사업부가 푼 값이 아니라', () => {
-  // 사업부 눈: 서버가 stage 에 MX 값을, companyStage 에 원래 값을 넣어 보낸다.
-  assert.equal(baseStageOf({ stage: '도입', companyStage: '감지' }), '감지');
-  // 사업부를 안 골랐으면 companyStage 가 아예 없다.
-  assert.equal(baseStageOf({ stage: '관찰' }), '관찰');
-  // ⚠️ 역량은 단계를 안 갖는다 — 늘 빈 값이다(이 길은 이제 도구에만 쓰인다).
-  assert.equal(baseStageOf({ stage: null, companyStage: null }), '');
-});
 
 test('열어만 보고 닫는 것은 바꾼 것이 아니다', () => {
   const kept = { division: 'MX', stage: '도입',
@@ -77,21 +68,13 @@ test('도구만 적고 단계를 안 고르면 찍을 자리가 없다', () => {
   assert.equal(divisionNeedsStage(null), false);
 });
 
-test('기본 설정은 「보류」로 옮길 때만 이유를 묻는다', () => {
-  assert.equal(baseNeedsReason('보류', ''), true);
-  assert.equal(baseNeedsReason('보류', '비싸다'), false);
-  assert.equal(baseNeedsReason('감지', ''), false);
-});
-
-test('무엇이 나가는지 이름을 댄다 — 한쪽만 바뀌어도 나간다', () => {
-  assert.equal(
-    saveLabel({ stageChanged: false, divisionDirty: true, division: 'MX' }), 'MX');
-  assert.equal(
-    saveLabel({ stageChanged: true, divisionDirty: false, division: '' }), '기본 설정');
-  assert.equal(
-    saveLabel({ stageChanged: true, divisionDirty: true, division: 'MX' }),
-    '기본 설정 · MX');
+test('무엇이 나가는지 이름을 댄다', () => {
+  /*
+    ⚠️ 예전에는 「기본 설정」과 사업부가 함께 나갈 수 있어 둘을 이어 붙였다.
+       이제 기술 줄 자체는 단계를 안 가지므로 **나가는 것은 사업부 하나뿐**이다.
+  */
+  assert.equal(saveLabel({ divisionDirty: true, division: 'MX' }), 'MX');
   // 나갈 것이 없으면 빈 글자 — 단추를 끄는 신호다.
-  assert.equal(
-    saveLabel({ stageChanged: false, divisionDirty: false, division: '' }), '');
+  assert.equal(saveLabel({ divisionDirty: false, division: '' }), '');
+  assert.equal(saveLabel({ divisionDirty: false, division: 'MX' }), '');
 });

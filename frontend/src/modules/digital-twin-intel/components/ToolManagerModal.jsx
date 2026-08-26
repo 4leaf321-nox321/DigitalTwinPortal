@@ -509,7 +509,11 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                     <b>{t.name}</b>
                     <small>
                       {t.vendor ? `${t.vendor} · ` : ''}
-                      {t.stage} · 근거 {t.evidenceCount ?? 0}건
+                      {/* ⚠️ 도구에는 단계가 없다 — 자리는 **누가 쓴다고 적었나**다. */}
+                      {(t.divisionMarks || []).length
+                        ? t.divisionMarks.map((m) => `${m.division} ${m.stage}`).join(' · ')
+                        : '아직 아무 사업부도 안 적음'}
+                      {' · 근거 '}{t.evidenceCount ?? 0}건
                       {t.summary ? ` · ${t.summary}` : ''}
                     </small>
 
