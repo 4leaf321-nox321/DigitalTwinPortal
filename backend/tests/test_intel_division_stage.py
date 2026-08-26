@@ -153,8 +153,11 @@ def test_낡음_기준이_그_사업부의_단계를_따른다(db, client, auth,
        적었으면 그 사업부한테는 180일이 기준이다.
 
     ⚠️ **아무도 안 적은 역량은 낡을 것이 없다.** 「여기 있다」고 말한 적이 없는데
-       「그 말이 낡았다」고 할 수는 없다. 기본값 270일을 물리면 역량 63개가
-       만들자마자 죄다 「낡음」이 된다.
+       「그 말이 낡았다」고 할 수는 없다.
+
+    ⚠️⚠️ **방금 적은 줄은 안 낡았다**(2026-08-26 점검). 사업부 줄의 `changed_at` 을
+       안 보면 MX 가 오늘 적어 놓고도 **오늘 바로 「낡음」**이 뜬다 — 방금 사람이
+       들여다본 줄에 그 딱지를 붙이면 딱지를 아무도 안 믿게 된다.
     """
     cap = _cap(admin, '느린 것')
     cap.stage_changed_at = datetime.utcnow() - timedelta(days=300)
@@ -166,9 +169,18 @@ def test_낡음_기준이_그_사업부의_단계를_따른다(db, client, auth,
     assert nobody['staleAfterDays'] is None
     assert nobody['isStale'] is False
 
-    mx = _row(client, auth, admin, f'{BASE}/tech?division=MX', '느린 것')
-    assert mx['staleAfterDays'] == 180, '그 사업부의 단계로 잰다'
-    assert mx['isStale'] is True
+    # 방금 적었다 → 기준 일수는 그 사업부 것이되, 아직 안 낡았다.
+    now = _row(client, auth, admin, f'{BASE}/tech?division=MX', '느린 것')
+    assert now['staleAfterDays'] == 180, '그 사업부의 단계로 잰다'
+    assert now['isStale'] is False, '방금 적은 줄은 안 낡았다'
+
+    # 적어 둔 지 오래됐다 → 그때는 낡았다.
+    row = IntelDivisionStage.query.filter_by(
+        tech_uuid=cap.uuid, division='MX').first()
+    row.changed_at = datetime.utcnow() - timedelta(days=300)
+    _db.session.commit()
+    old = _row(client, auth, admin, f'{BASE}/tech?division=MX', '느린 것')
+    assert old['isStale'] is True
 
 
 def test_이동_화살표가_그_사업부_이력만_본다(db, client, auth, admin, divs):

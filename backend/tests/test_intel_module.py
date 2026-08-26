@@ -372,3 +372,26 @@ def test_어디로_들어왔는지_남는다(db, client, auth, plain):
                            url='https://example.test/mcp')
     assert err is None, err
     assert n.origin == 'mcp'
+
+def test_단계_이유를_지울_수_있다(db, client, auth, admin):
+    """
+    ⚠️⚠️ 예전에는 값이 있을 때만 담아서, 이유를 **지우고** 저장해도 옛 이유가 그대로
+       남았다 — 화면은 「바꿨습니다」라고 하고 값은 안 바뀌는, 제일 못 믿게 만드는
+       꼴이다(2026-08-26 점검).
+
+    ⚠️ **안 준 것과 빈 것을 가른다** — `None` 이면 그대로 두고, `''` 면 지운다.
+       MCP 처럼 이유를 아예 안 보내는 길이 있어서 이 구별이 필요하다.
+    """
+    t, err = S.create_tech(actor_id=admin.id, name='어떤 도구', kind='tool')
+    assert err is None
+
+    S.set_stage(t.uuid, '시험', reason='한 과제에 걸어 본다', actor=admin)
+    assert t.stage_reason == '한 과제에 걸어 본다'
+
+    # 안 줬다 → 그대로.
+    S.set_stage(t.uuid, '관찰', actor=admin)
+    assert t.stage_reason == '한 과제에 걸어 본다'
+
+    # 빈 것을 줬다 → 지운다.
+    S.set_stage(t.uuid, '관찰', reason='', actor=admin)
+    assert t.stage_reason is None

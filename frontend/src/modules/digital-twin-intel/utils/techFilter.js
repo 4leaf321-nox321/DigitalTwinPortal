@@ -12,6 +12,16 @@
  *        **점을 만든 자료와 거르는 자료가 갈리면** 반드시 이런 일이 난다.
  */
 
+/**
+ * 분야가 안 적힌 줄이 서는 자리.
+ *
+ * ⚠️⚠️ **거르는 쪽과 그리는 쪽이 같은 말을 써야 한다**(2026-08-26 점검). 레이더는
+ *    분야 없는 줄을 「분류 없음」 부채꼴에 그려 놓고, 그 이름을 누르면 `category` 를
+ *    그 글자로 놓는다. 그런데 거르는 쪽은 컬럼 값(빈 값)과 견주므로 **아무것도 안
+ *    걸려 화면이 통째로 비었다.**
+ */
+export const UNCATEGORIZED = '분류 없음';
+
 /** 무엇을 찾을 때 훑는 곳. ⚠️ 도구 이름으로도 그 역량이 걸려야 한다. */
 const haystack = (t) => [
   t.name, t.vendor, t.summary,
@@ -58,7 +68,7 @@ export const keepTech = (t, where = {}) => {
   if (staleOnly && !t.isStale) return false;
 
   if (!atStage(t, stage)) return false;
-  if (category && t.category !== category) return false;
+  if (category && (t.category || UNCATEGORIZED) !== category) return false;
 
   const key = (q || '').trim().toLowerCase();
   if (!key) return true;

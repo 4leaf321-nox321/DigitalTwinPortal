@@ -395,6 +395,14 @@ def set_stage(tech_uuid, stage, reason=None, actor=None, source='ui'):
         return None, ('역량은 단계를 따로 두지 않습니다 — 사업부별로 적습니다. '
                       '「사업부 적기」를 쓰세요.')
 
+    """
+    ⚠️⚠️ **안 준 것과 빈 것을 갈라야 한다**(2026-08-26 점검). 예전에는 `if reason:`
+       일 때만 담아서, 이유를 **지우고** 저장해도 옛 이유가 그대로 남았다 — 화면은
+       「바꿨습니다」라고 하고 값은 안 바뀌는, 제일 못 믿게 만드는 꼴이다.
+
+       `None` = 안 줬다(그대로 둔다) · `''` = 지워라
+    """
+    given = reason is not None
     reason = (reason or '').strip()
     if stage == '보류' and not reason:
         return None, "'보류' 로 옮길 때는 이유를 적어야 합니다."
@@ -406,8 +414,8 @@ def set_stage(tech_uuid, stage, reason=None, actor=None, source='ui'):
         log_change('tech', t.uuid, t.name, 'stage', t.stage, stage,
                    reason=reason, actor=actor, source=source)
     t.stage = stage
-    if reason:
-        t.stage_reason = reason
+    if given:
+        t.stage_reason = reason or None
     db.session.commit()
     return t, None
 
@@ -1162,7 +1170,11 @@ def division_sheet(division):
     if division and known and division not in known:
         return None, '모르는 사업부입니다: %s' % division
 
-    caps = (IntelTech.query.filter_by(kind='capability')
+    # ⚠️ **치운 역량은 안 센다**(2026-08-26 점검). 세면 적을 칸 수와 채운 비율이
+    #    부풀어, 다 적어도 「아직 덜 적었다」로 보인다.
+    caps = (IntelTech.query
+            .filter(IntelTech.kind == 'capability',
+                    IntelTech.is_archived.is_(False))
             .order_by(IntelTech.name.asc()).all())
     uuids = [c.uuid for c in caps]
     kids = children_of(uuids)

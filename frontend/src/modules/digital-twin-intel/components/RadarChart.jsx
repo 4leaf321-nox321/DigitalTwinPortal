@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 
 import { STAGES } from './RadarBoard';
+import { UNCATEGORIZED } from '../utils/techFilter';
 
 /**
  * 기술 레이더 — **동심원 넷 + 분류별 부채꼴**, 확대·축소·이동 가능.
@@ -328,7 +329,8 @@ const hash01 = (s, salt = 0) => {
   return ((h >>> 0) % 10000) / 10000;
 };
 
-const UNCATEGORIZED = '분류 없음';
+/* ⚠️ 거르는 쪽(`utils/techFilter`)과 **같은 글자**여야 한다 — 갈리면 부채꼴 이름을
+   눌렀을 때 아무것도 안 걸려 화면이 통째로 빈다. 그래서 거기서 가져다 쓴다. */
 
 /** ISO 시각에서 `YYYY-MM-DD` 만. 없으면 빈 문자열. */
 const ymd = (v) => (v ? String(v).slice(0, 10) : '');
@@ -451,6 +453,16 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
        화살표가 되살아난다.
   */
   const moves = movesOn && divisionLens;
+
+  /*
+    ⚠️⚠️ **못 보게 되면 거르기도 함께 푼다**(2026-08-26 점검). 「옮겨온 것만」을 켠
+       채 사업부를 풀면 화살표를 못 그리므로 그 단추가 화면에서 사라지는데,
+       **거르기는 걸린 채**라 레이더에 일부만 뜨고 왜 그런지 어디에도 안 보인다.
+       스위치를 끌 때 함께 푸는 것과 같은 까닭이다.
+  */
+  useEffect(() => {
+    if (!moves && movedOnly && onMovedOnlyChange) onMovedOnlyChange(false);
+  }, [moves, movedOnly, onMovedOnlyChange]);
   const [view, setView] = useState({ k: 1, x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const svgRef = useRef(null);
@@ -1012,8 +1024,10 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
                       <SubRow>
                         <SectorBtn type="button"
                                    title="이 갈래만 봅니다"
+                                   /* ⚠️ 빈 값을 보내면 **거르기가 풀린다** —
+                                      누른 사람은 좁히려 한 것인데 반대로 넓어졌다. */
                                    onClick={() => onSectorClick
-                                     && onSectorClick(b.tech.category || '')}>
+                                     && onSectorClick(b.tech.category || UNCATEGORIZED)}>
                           {b.tech.category || UNCATEGORIZED}
                         </SectorBtn>
                         {/*

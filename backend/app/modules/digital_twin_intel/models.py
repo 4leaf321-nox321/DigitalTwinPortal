@@ -344,7 +344,7 @@ class IntelTech(BaseModel):
             return None
         return STALE_DAYS[key] if key in STALE_DAYS else STALE_DAYS_DEFAULT
 
-    def is_stale(self, last_evidence_at=None, now=None, stage=None):
+    def is_stale(self, last_evidence_at=None, now=None, stage=None, said_at=None):
         """근거가 오래 없으면 낡은 것으로 본다.
 
         ⚠️ **이 판정이 이 모듈의 자정 장치다.** 앞선 세 번의 시도는 낡아도 낡은 줄
@@ -357,7 +357,13 @@ class IntelTech(BaseModel):
         if days is None:
             return False        # '감지' — 아직 아무도 안 봤으니 낡을 것이 없다
         now = now or datetime.utcnow()
-        base = last_evidence_at or self.stage_changed_at or self.created_at
+        """
+        ⚠️⚠️ **그 사업부가 방금 적었으면 낡은 것이 아니다**(2026-08-26 점검).
+           `said_at` 은 사업부 줄의 `changed_at` 이다. 안 보면 MX 가 오늘 「도입」이라
+           적어 놓고도 **오늘 바로 「낡음」**이 뜬다 — 근거가 오래 없다는 말이 맞더라도,
+           방금 사람이 들여다본 줄에 그 딱지를 붙이면 딱지를 아무도 안 믿게 된다.
+        """
+        base = last_evidence_at or said_at or self.stage_changed_at or self.created_at
         if base is None:
             return False
         return (now - base) > timedelta(days=days)
@@ -403,7 +409,9 @@ class IntelTech(BaseModel):
                     if division_stage.changed_at else None)
         eff = d['stage']
         d['staleAfterDays'] = self.stale_after_days(eff)
-        d['isStale'] = self.is_stale(last_evidence_at, now=now, stage=eff)
+        d['isStale'] = self.is_stale(
+            last_evidence_at, now=now, stage=eff,
+            said_at=(division_stage.changed_at if division_stage else None))
         if last_evidence_at is not None:
             d['lastEvidenceAt'] = last_evidence_at.isoformat()
         if evidence_count is not None:

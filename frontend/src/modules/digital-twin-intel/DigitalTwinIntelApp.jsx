@@ -29,7 +29,7 @@ import NewsModal from './components/NewsModal';
 import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
 import DivisionSheet from './components/DivisionSheet';
-import { keepTech, narrowMarks } from './utils/techFilter';
+import { keepTech, narrowMarks, UNCATEGORIZED } from './utils/techFilter';
 import CapabilityManagerModal from './components/CapabilityManagerModal';
 import ToolManagerModal from './components/ToolManagerModal';
 import RadarChart from './components/RadarChart';
@@ -353,6 +353,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    let fresh = null;
     try {
       /*
         ⚠️⚠️ **사업부 눈으로 푸는 일은 서버가 한다.** 화면이 기본 설정 값과 사업부 값 중
@@ -380,6 +381,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       setNews(n || []);
       setTech(t || []);
       setTechAll(all || t || []);
+      // ⚠️ 새로 읽은 줄을 돌려준다 — 열려 있는 창이 자기 것을 다시 집을 수 있게.
+      fresh = t || [];
       setSettings(s || {});
       setOverview(o || null);
     } catch (e) {
@@ -387,6 +390,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     } finally {
       setLoading(false);
     }
+    return fresh;
   }, [division, movedDays]);
 
   useEffect(() => { load(); }, [load]);
@@ -627,9 +631,19 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     return ordered;
   }, [news, tech, settings.divisions, tab]);
 
-  const categoryOptions = tab === 'news'
-    ? (settings.newsCategories || [])
-    : (settings.techCategories || []);
+  /*
+    ⚠️ **「분류 없음」도 고를 수 있어야 한다**(2026-08-26 점검). 레이더는 분야 없는
+       줄을 그 이름의 부채꼴에 그리고, 그 이름을 누르면 거르기가 그 값으로 걸린다 —
+       그런데 고르개에 그 칸이 없으면 **무엇이 걸렸는지 안 보이고 되돌릴 수도 없다.**
+  */
+  const categoryOptions = useMemo(() => {
+    if (tab === 'news') return settings.newsCategories || [];
+    const all = [...(settings.techCategories || [])];
+    if (tech.some((t) => !t.category) && !all.includes(UNCATEGORIZED)) {
+      all.push(UNCATEGORIZED);
+    }
+    return all;
+  }, [tab, settings.newsCategories, settings.techCategories, tech]);
 
   return (
     <Container>
@@ -718,12 +732,22 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
             )}
 
             {/* ⚠️ 낡음 표시가 있어도 **모아 보는 자리가 없으면** 하나씩 찾아다녀야 한다. */}
+            {/*
+              ⚠️⚠️ **같은 거르기를 상태 둘이 들고 있었다**(2026-08-26 점검). 요약
+                 막대의 「낡음」을 누르면 `focus`, 이 단추는 `staleOnly` — 둘 다
+                 낡은 것만 남긴다. 그래서 막대로 걸어 놓고 이 단추를 껐다 켜면
+                 **아무 일도 안 일어나는 것처럼** 보였다. 하나로 여닫는다.
+              ⚠️ JSX 주석은 `&&` 안에 못 넣는다 — 표현식이 둘이 되어 안 읽힌다.
+            */}
             {tab === 'tech' && (
-              <StaleBtn type="button" $on={staleOnly}
-                        onClick={() => setStaleOnly((v) => !v)}
+              <StaleBtn type="button" $on={staleOnly || focus === 'stale'}
+                        onClick={() => {
+                          if (focus === 'stale') setFocus('');
+                          setStaleOnly((v) => (focus === 'stale' ? false : !v));
+                        }}
                         title="근거가 오래 없어 다시 볼 때가 된 것만 봅니다">
                 <AlertTriangle size={13} /> 낡은 것만
-                {staleOnly ? ` (${shownTech.length})` : ''}
+                {(staleOnly || focus === 'stale') ? ` (${shownTech.length})` : ''}
               </StaleBtn>
             )}
 
@@ -836,7 +860,17 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
       <TechModal tech={selected} onClose={() => setSelected(null)}
                  division={division} divisions={settings.divisions || []}
-                 onDivisionChanged={async () => { await load(); say('사업부 단계를 바꿨습니다.'); }}
+                 /*
+                   ⚠️⚠️ **열려 있는 창의 자료도 갈아 끼운다**(2026-08-26 점검). 새로
+                      읽어도 `selected` 는 옛 객체 그대로라, 사업부 단계를 담고 나서도
+                      창 위쪽이 「아직 아무것도 안 적었습니다」로 남았다.
+                 */
+                 onDivisionChanged={async () => {
+                   const rows = await load();
+                   setSelected((p) => (p
+                     ? (rows || []).find((t) => t.uuid === p.uuid) || p : p));
+                   say('사업부 단계를 바꿨습니다.');
+                 }}
                  onChanged={async () => { setSelected(null); await load(); say('단계를 바꿨습니다.'); }}
                  onDelete={removeTech}
                  onEdit={(t) => { setSelected(null); setTechForm(t); }}

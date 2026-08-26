@@ -474,7 +474,13 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
   const changed = stageChanged || div.dirty;
   // ⚠️ 서버와 **같은 규칙**이다. 여기서만 막으면 서버가 400 을 내고, 서버에만 있으면
   //    사용자가 눌러 보고서야 안다. 둘 다 있어야 한다.
-  const needReason = baseNeedsReason(stage, reason);
+  /*
+    ⚠️⚠️ **역량한테는 안 묻는다**(2026-08-26 점검). 역량은 제 단계가 없는데, 사업부
+       눈으로 열면 `stage` 에 그 사업부 값(예: 보류)이 실려 온다. 그걸 보고 이유를
+       물으면 **사업부만 바꿔도 저장이 영영 안 켜지고**, 설명하는 글도 `!isCap` 로
+       가려 놔서 왜 꺼졌는지 화면 어디에도 안 나온다.
+  */
+  const needReason = !isCap && baseNeedsReason(stage, reason);
 
   /*
     ⚠️⚠️ **보낼 것을 다 보낸 뒤에 알린다.** `onChanged` 는 창을 닫는다
@@ -486,7 +492,12 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
     try {
       let updated = null;
       if (stageChanged) {
-        updated = await api.setStage(tech.uuid, stage, reason.trim() || undefined);
+        /*
+          ⚠️ **빈 이유도 보낸다**(2026-08-26 점검). `undefined` 로 보내면 서버가
+             「안 준 것」으로 보고 옛 이유를 그대로 둔다 — 지우고 저장했는데
+             「바꿨습니다」라고 하고는 안 지워졌다.
+        */
+        updated = await api.setStage(tech.uuid, stage, reason.trim());
       }
       if (div.dirty && divRef.current) await divRef.current.save();
       if (updated) onChanged(updated);
@@ -531,7 +542,9 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
 
           {division && !tech.isDivisionOverride && (
             <Lens>
-              <b>{division}</b> 는 이 역량에 대해 <b>아직 아무것도 안 적었습니다.</b>
+              {/* ⚠️ 도구일 수도 있다 — 「이 역량」이라 못 박으면 도구 상세에서 틀린다. */}
+              <b>{division}</b> 는 {isCap ? '이 역량' : '이 도구'}에 대해
+              <b> 아직 아무것도 안 적었습니다.</b>
               아래 「사업부별로 어디까지 · 왜 · 무엇으로」에서 적으면 레이더에
               점이 생깁니다.
             </Lens>
@@ -709,7 +722,8 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                   <li key={r.uuid}>
                     <button type="button" onClick={() => onOpenTech && onOpenTech(r)}>
                       <b>{r.name}</b>
-                      <em>{r.stage}</em>
+                      {/* ⚠️ 역량에는 단계가 없다 — 그대로 찍으면 **빈 자리**가 뜬다. */}
+                      {r.stage ? <em>{r.stage}</em> : <em>역량</em>}
                       <small>소식 {r.together}건에 같이</small>
                     </button>
                   </li>
