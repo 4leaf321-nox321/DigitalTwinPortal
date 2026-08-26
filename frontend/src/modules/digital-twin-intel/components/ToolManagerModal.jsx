@@ -334,11 +334,12 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
     : showing;
   const currentCap = caps.find((c) => c.uuid === current);
 
+  /** ⚠️ `fn` 이 글월을 돌려주면 그걸 쓴다 — **무슨 일이 났는지는 해 봐야 안다.** */
   const run = async (id, fn, msg) => {
     setBusy(id);
     try {
-      await fn();
-      await onChanged(msg);
+      const said = await fn();
+      await onChanged(said || msg);
     } catch (e) {
       if (showError) showError(e.message);
     } finally {
@@ -354,7 +355,14 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
         ⚠️ **고른 역량 밑으로 바로 매단다.** 만들고 나서 따로 매달게 하면 그 두 번째
            걸음을 안 밟고, 미아만 쌓인다 — 미아는 어느 사업부 표에도 안 나온다.
       */
-      await api.createTech({
+      /*
+        ⚠️⚠️ **이미 있는 이름이면 서버가 있던 줄을 돌려준다**(새로 안 만든다).
+           예전에는 그때 매다는 일까지 건너뛰어서 **아무 일도 안 일어나는데
+           「넣었습니다」**라고 했다(2026-08-26 신고). 이제 서버가 매달아 주고,
+           여기서는 **무슨 일이 일어났는지 그대로** 말한다 — 「넣었다」와 「이미
+           있던 것을 여기에도 매달았다」는 다른 일이다.
+      */
+      const made = await api.createTech({
         name: n,
         vendor: vendor.trim() || undefined,
         kind: 'tool',
@@ -362,7 +370,10 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
       });
       setName('');
       setVendor('');
-    }, `「${n}」 을 넣었습니다.`);
+      return made && made.created === false
+        ? `이미 있던 「${n}」 을 여기에도 매달았습니다.`
+        : `「${n}」 을 넣었습니다.`;
+    }, null);
   };
 
   // ⚠️ 「옮기기」가 아니라 **속한 역량들을 정하는 것**이 됐다.
@@ -545,9 +556,21 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
           </Split>
         </Body>
 
-        {/* ⚠️ Panel 안에 둔다 — 바깥 Overlay 로 클릭이 새면 관리 창이 통째로 닫힌다. */}
+        {/*
+          ⚠️ Panel 안에 둔다 — 바깥 Overlay 로 클릭이 새면 관리 창이 통째로 닫힌다.
+
+          ⚠️⚠️ **열 때마다 새로 만든다**(2026-08-26 신고). 고르기 창은 지금 골라 둔
+             것을 `useState` 초기값으로 **한 번만** 잡는다. 늘 트리에 남겨 두면 그
+             한 번이 `moving === null` 인 순간이라, 창은 **아무것도 안 골라진 채로**
+             뜨고 「다 골랐습니다」를 누르면 걸려 있던 역량이 통째로 떨어져 나갔다
+             (그 도구는 미아가 되고, 사업부들이 적어 둔 「무엇으로 하나」에서도
+             지워진다). 두 번째부터는 **앞 도구에서 고른 것**이 남아 엉뚱한 역량으로
+             덮어썼다.
+        */}
+        {moving && (
         <CapabilityPicker
-          isOpen={Boolean(moving)}
+          key={moving.uuid}
+          isOpen
           capabilities={caps}
           categories={categories}
           multi
@@ -560,6 +583,7 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
             setCaps(t, list, `「${t.name}」 의 역량을 ${list.length}곳으로 정했습니다.`);
           }}
           onClose={() => setMoving(null)} />
+        )}
 
         <Foot>
           <GhostBtn type="button" onClick={onClose}>닫기</GhostBtn>

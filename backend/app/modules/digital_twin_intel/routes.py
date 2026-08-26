@@ -389,12 +389,21 @@ def create_tech():
     data = get_request_json() or {}
     origin = _origin_of(data)
     data.pop('origin', None)
+    """
+    ⚠️⚠️ **새로 만든 것인지 화면에 알려 준다**(2026-08-26 신고). 이름이 겹치면
+       서비스가 **있던 줄을 돌려주는데**, 화면은 그걸 모르고 「넣었습니다」라고 했다.
+       역량 관리에서 이미 있는 이름을 치면 아무것도 안 생겼는데 넣었다고 말했다.
+       서비스 반환 모양을 바꾸면 부르는 곳이 51군데라, 여기서 미리 세어 둔다.
+    """
+    existed = S.find_tech_by_name(data.get('name') or '') is not None
     tech, err = S.create_tech(actor_id=actor.id, origin=origin, **data)
     if err:
         return error_response(err, status_code=400)
-    return created_response(tech.to_dict(
+    out = tech.to_dict(
         capabilities=(S.capabilities_of([tech.uuid]).get(tech.uuid, [])
-                      if tech.kind != 'capability' else None)))
+                      if tech.kind != 'capability' else None))
+    out['created'] = not existed
+    return created_response(out)
 
 
 @bp.route('/tech/<uuid>', methods=['PATCH'])

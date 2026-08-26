@@ -628,3 +628,64 @@ def test_도구만_적은_줄은_아예_안_받는다(db, client, auth, admin):
     row = next(x for x in (client.get(f'{BASE}/tech', headers=auth(admin))
                            .get_json() or {})['data'] if x['name'] == 'CFD')
     assert row['divisionMarks'] == [{'division': 'MX', 'stage': '시험'}]
+
+# ── 이름이 겹칠 때 ───────────────────────────────────────────────────────────
+
+def test_있는_도구에_역량을_보태면_실제로_매달린다(db, client, auth, admin):
+    """
+    ⚠️⚠️ **한 도구가 여러 역량에 걸치는 것이 정상이다.** 그런데 예전에는 이름이
+       겹치면 서비스가 바로 있던 줄을 돌려주고 끝나서, 「도구 관리」에서 이미 있는
+       이름을 다른 역량에 넣으려 하면 **아무 일도 안 일어나는데 「넣었습니다」**라고
+       했다(2026-08-26 신고). 이 화면이 내세우는 바로 그 조작이 조용히 먹혔다.
+
+    ⚠️ **갈아 끼우지 않고 보탠다.** 뜻은 「이 역량에도」이지 「이 역량에만」이 아니다.
+    """
+    a = _cap(admin, '1D 시스템')
+    b = _cap(admin, '제어 검증')
+    tool = _tool(admin, 'MATLAB', a)
+
+    r = client.post(f'{BASE}/tech',
+                    json={'name': 'MATLAB', 'kind': 'tool',
+                          'capabilityUuids': [b.uuid]}, headers=auth(admin))
+    assert r.status_code in (200, 201), r.get_json()
+    d = (r.get_json() or {})['data']
+    assert d['uuid'] == tool.uuid, '새로 만들지 않고 있던 줄을 쓴다'
+    assert d['created'] is False, '새로 만든 것이 아니라고 말해 준다'
+    assert set(d['capabilityUuids']) == {a.uuid, b.uuid}, '보탠다 — 갈아 끼우지 않는다'
+
+
+def test_층이_다른데_이름이_같으면_막는다(db, client, auth, admin):
+    """
+    ⚠️⚠️ 「역량을 넣었습니다」라 해 놓고 **도구가 돌아오는** 일이 있었다. 말없이 남의
+       줄을 돌려주면 화면은 그것이 새 역량인 줄 안다.
+    """
+    _tool(admin, 'Abaqus', _cap(admin, '구조 해석'))
+    r = client.post(f'{BASE}/tech',
+                    json={'name': 'Abaqus', 'kind': 'capability'},
+                    headers=auth(admin))
+    assert r.status_code == 400
+    m = (r.get_json() or {}).get('message', '')
+    assert '도구' in m and '이름' in m, m
+
+
+def test_새로_만든_것인지_알려_준다(db, client, auth, admin):
+    """⚠️ 이 한 칸이 없어서 화면이 「넣었습니다」라고 거짓말했다."""
+    r1 = client.post(f'{BASE}/tech', json={'name': '처음 보는 역량',
+                                           'kind': 'capability'},
+                     headers=auth(admin))
+    assert (r1.get_json() or {})['data']['created'] is True
+    r2 = client.post(f'{BASE}/tech', json={'name': '처음 보는 역량',
+                                           'kind': 'capability'},
+                     headers=auth(admin))
+    assert (r2.get_json() or {})['data']['created'] is False
+
+
+def test_별칭이_겹쳐도_같은_줄로_본다(db, client, auth, admin):
+    """⚠️ 'NVIDIA Omniverse' 와 'Omniverse' 가 두 줄이 되면 레이더가 잡동사니가 된다."""
+    t = _tool(admin, 'NVIDIA Omniverse', _cap(admin, '산업 3D'))
+    t.aliases = ['Omniverse']
+    _db.session.commit()
+    r = client.post(f'{BASE}/tech', json={'name': 'Omniverse', 'kind': 'tool'},
+                    headers=auth(admin))
+    d = (r.get_json() or {})['data']
+    assert d['uuid'] == t.uuid and d['created'] is False

@@ -238,14 +238,61 @@ def find_tech_by_name(name):
     return None
 
 
+def _wanted_caps(data):
+    """만들면서 매달 역량 uuid 들. 문자열 하나로 와도 받아 준다."""
+    want = data.get('capabilityUuids') or data.get('parentUuid') or []
+    if isinstance(want, str):
+        want = [want] if want.strip() else []
+    return [str(u).strip() for u in want if str(u or '').strip()]
+
+
+def _actor_by_id(actor_id):
+    """`set_capabilities` 는 사람을 받는다. id 만 든 자리에서 건네려고 둔다."""
+    if not actor_id:
+        return None
+    try:
+        from app.modules.auth.models import User
+        return User.query.get(actor_id)
+    except Exception:
+        return None
+
+
 def create_tech(actor_id=None, origin='ui', **data):
     name = (data.get('name') or '').strip()
     if not name:
         return None, '기술 이름이 비어 있습니다.'
 
+    want = _wanted_caps(data)
+
     dup = find_tech_by_name(name)
     if dup is not None:
-        # 조용히 새로 만들면 레이더에 같은 기술이 두 줄이 된다. 있는 것을 돌려준다.
+        """
+        ⚠️ 조용히 새로 만들면 레이더에 같은 기술이 두 줄이 된다. 있는 것을 돌려준다.
+
+        ⚠️⚠️ **그런데 시킨 일은 해야 한다**(2026-08-26 신고). 예전에는 여기서 바로
+           빠져나가는 바람에, 「도구 관리」에서 이미 있는 이름(MATLAB)을 다른 역량에
+           넣으려 하면 **아무 일도 안 일어나는데 「넣었습니다」**라고 했다. 한 도구가
+           여러 역량에 걸치는 것이 이 화면이 내세우는 정상 상황인데, 바로 그 조작이
+           조용히 먹혔던 것이다.
+
+        ⚠️ **갈아 끼우지 않고 보탠다.** 여기로 들어오는 뜻은 「이 역량에도 넣어라」이지
+           「이 역량에만 두어라」가 아니다.
+        """
+        kind_want = data.get('kind')
+        if kind_want in TECH_KINDS and dup.kind != kind_want:
+            # ⚠️ 층이 다른데 이름이 같으면 **말없이 남의 줄을 돌려주면 안 된다.**
+            #    「역량을 넣었습니다」라 해 놓고 도구가 돌아오는 일이 실제로 있었다.
+            return None, ('같은 이름이 이미 %s(으)로 있습니다: 「%s」. 층이 다르면 '
+                          '같은 이름을 쓸 수 없습니다.'
+                          % ('역량' if dup.kind == 'capability' else '도구', dup.name))
+        if want and dup.kind != 'capability':
+            have = [c['uuid'] for c in capabilities_of([dup.uuid]).get(dup.uuid, [])]
+            merged = list(dict.fromkeys(have + want))
+            if set(merged) != set(have):
+                _, e = set_capabilities(dup.uuid, merged,
+                                        actor=_actor_by_id(actor_id))
+                if e:
+                    return None, e
         return dup, None
 
     # ⚠️ 기본은 **도구**다. MCPㆍ소식으로 들어오는 것의 대부분이 제품이라, 기본을
@@ -273,10 +320,6 @@ def create_tech(actor_id=None, origin='ui', **data):
        의 층 규칙을 통째로 우회하는 뒷문이 된다 — MCP 는 만들기와 매달기를 한 번에
        하므로 이 길로만 들어오는 줄이 실제로 생긴다.
     """
-    want = data.get('capabilityUuids') or data.get('parentUuid') or []
-    if isinstance(want, str):
-        want = [want] if want.strip() else []
-    want = [str(u).strip() for u in want if str(u or '').strip()]
     if want:
         if kind == 'capability':
             return None, '역량은 다른 것 밑에 매달 수 없습니다. 층은 둘까지입니다.'

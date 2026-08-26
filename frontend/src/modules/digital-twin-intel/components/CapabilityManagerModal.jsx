@@ -7,6 +7,12 @@ import api from '../services/api';
 /**
  * **역량 관리** — 63개를 한 자리에서 본다.
  *
+ * ⚠️⚠️ **여기 오는 `tech` 는 사업부 눈에 안 걸린 것이어야 한다**(2026-08-26 신고).
+ *    「누가 적었나」를 `divisionMarks` 로 말하는데, 서버는 사업부 눈일 때 그 값을
+ *    **안 싣는다.** 눈이 걸린 목록을 받으면 63개 전부가 「아무도 안 적었습니다」가
+ *    되고, 지울 때 「사업부 N곳이 적어 둔 것도 사라집니다」 경고까지 사라진다.
+ *    `DigitalTwinIntelApp` 이 `managerTech` 로 안 걸린 한 벌을 준다.
+ *
  * 왜 만들었나
  *     도구에는 「도구 관리」가 있는데 역량에는 없었다. 역량을 고치려면 레이더에서
  *     점을 찾아 창을 열어야 했고, **점이 없는 역량은 아예 못 찾았다** — 아무 사업부도
@@ -429,11 +435,12 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
     || !sameList(d.cpt, current.cpt || [])
     || !sameList(listOf(d.aliases), current.aliases || []));
 
+  /** ⚠️ `fn` 이 글월을 돌려주면 그걸 쓴다 — **무슨 일이 났는지는 해 봐야 안다.** */
   const run = async (id, fn, msg) => {
     setBusy(id);
     try {
-      await fn();
-      await onChanged(msg);
+      const said = await fn();
+      await onChanged(said || msg);
     } catch (e) {
       if (showError) showError(e.message);
     } finally {
@@ -461,11 +468,21 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
       /*
         ⚠️ **단계를 안 보낸다.** 역량은 단계를 안 갖는다 — 서버도 버리지만, 여기서
            보내면 「그런 것이 있나 보다」로 읽히고 다음 사람이 칸을 만든다.
+
+        ⚠️⚠️ **이미 있는 이름이면 서버가 있던 줄을 돌려준다** — 새 역량은 안 생긴다.
+           예전에는 그때도 「역량 …을 넣었습니다」라고 해서, 목록의 63개가 그대로인데
+           넣었다고 믿게 만들었다(2026-08-26 신고). 이름이 도구와 겹치면 서버가
+           400 을 내므로 그건 오류로 뜬다.
       */
-      await api.createTech({ name: n, kind: 'capability',
-                             category: newCat || undefined });
+      const made = await api.createTech({ name: n, kind: 'capability',
+                                          category: newCat || undefined });
       setNewName('');
-    }, `역량 「${n}」 을 넣었습니다.`);
+      // 있던 것을 골라 준다 — 「어디 갔지」 하고 찾게 두지 않는다.
+      if (made && made.uuid) { setPick(made.uuid); setDraft(null); }
+      return made && made.created === false
+        ? `역량 「${n}」 은 이미 있습니다 — 그것을 폈습니다.`
+        : `역량 「${n}」 을 넣었습니다.`;
+    }, null);
   };
 
   const remove = () => {

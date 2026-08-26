@@ -541,8 +541,14 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           ⚠️ **Panel 안에 둔다.** 바깥 Overlay 밑에 두면 고르기 창을 누른 클릭이
              거기까지 올라가 **폼이 통째로 닫힌다.** Panel 이 이미 막고 있다.
         */}
+        {/*
+          ⚠️⚠️ **열 때마다 새로 만든다**(2026-08-26). 고르기 창은 골라 둔 것을
+             `useState` 초기값으로 한 번만 잡는다. 늘 남겨 두면 「그만두기」로 닫아도
+             고른 것이 안 물러지고, 다시 열면 그만둔 선택이 골라진 채로 되살아난다.
+        */}
+        {pickerOpen && (
         <CapabilityPicker
-          isOpen={pickerOpen}
+          isOpen
           capabilities={(capabilities || []).filter((c) => c.uuid !== initial?.uuid)}
           categories={categories}
           multi
@@ -550,6 +556,7 @@ const TechFormModal = ({ isOpen, initial, onClose, onSave, categories, cptGroups
           noneLabel="아직 안 정함 — 레이더에 혼자 섭니다"
           onDone={(list) => { setCapUuids(list); setPickerOpen(false); }}
           onClose={() => setPickerOpen(false)} />
+        )}
 
         <Foot>
           <Spacer />

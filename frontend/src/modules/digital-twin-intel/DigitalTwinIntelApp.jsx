@@ -272,6 +272,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [tab, setTab] = useState('news');
   const [news, setNews] = useState([]);
   const [tech, setTech] = useState([]);
+  // 사업부 눈에 안 걸린 한 벌. **관리 창 전용**이다(위 `load` 참고).
+  const [techAll, setTechAll] = useState([]);
   const [settings, setSettings] = useState({ newsCategories: [], techCategories: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -356,13 +358,23 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       const q = {};
       if (division) q.division = division;
       if (movedDays) q.movedDays = movedDays;
-      const [n, t, s, o] = await Promise.all([
+      /*
+        ⚠️⚠️ **관리 창은 눈에 안 걸린 목록을 봐야 한다**(2026-08-26 신고). 사업부
+           눈일 때 서버는 `divisionMarks` 를 **안 싣는다**(그 눈에서는 남의 점이
+           널리면 안 되니까). 그런데 「역량 관리」는 그 값으로 「누가 적었나」를
+           말하므로, MX 눈으로 열면 63개 전부가 「아무도 안 적었습니다」가 됐다 —
+           레이더에는 점이 버젓이 찍혀 있는데. 그래서 눈이 걸렸을 때만 한 벌 더
+           불러 관리 창에 준다.
+      */
+      const [n, t, s, o, all] = await Promise.all([
         api.listNews(), api.listTech(q), api.getSettings(),
         // ⚠️ 요약도 **레이더와 같은 기간**을 봐야 한다(위 참고).
         api.overview(movedDays),
+        division ? api.listTech({}) : Promise.resolve(null),
       ]);
       setNews(n || []);
       setTech(t || []);
+      setTechAll(all || t || []);
       setSettings(s || {});
       setOverview(o || null);
     } catch (e) {
@@ -400,6 +412,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       q, category, stage, kind, staleOnly, focus, radar: techView === 'radar',
     })),
     [tech, q, category, stage, staleOnly, focus, kind, techView]);
+
+  // 관리 창이 보는 것. ⚠️ 눈이 안 걸렸으면 `tech` 가 곧 전부다.
+  const managerTech = division ? techAll : tech;
 
   // 고른 단계의 사업부만 남긴 것. 그리는 쪽은 이걸 본다.
   const lensedTech = useMemo(
@@ -827,20 +842,30 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                      }}
                      showError={say} />
 
-      <CapabilityManagerModal isOpen={capsOpen} tech={tech}
+      {/*
+        ⚠️⚠️ **닫으면 트리에서 뺀다**(2026-08-26 신고). `isOpen` 만 넘기면 창은
+           안 보여도 **살아 있어서**, 저장 안 한 편집ㆍ치다 만 이름ㆍ고른 분야가
+           그대로 남는다. 다시 열면 저장된 값처럼 보이고, 그 사이 남이 고쳤어도
+           옛 초안으로 덮어쓴다. 도구 관리도 같았다(q·name·vendor·pick).
+      */}
+      {capsOpen && (
+      <CapabilityManagerModal isOpen tech={managerTech}
                               categories={settings.techCategories}
                               cptGroups={settings.cptGroups}
                               canWrite={canWrite} canCurate={canCurate}
                               onClose={() => setCapsOpen(false)}
                               onChanged={async (msg) => { await load(); if (msg) say(msg); }}
                               showError={say} />
+      )}
 
-      <ToolManagerModal isOpen={toolsOpen} tech={tech}
+      {toolsOpen && (
+      <ToolManagerModal isOpen tech={managerTech}
                         categories={settings.techCategories}
                         canWrite={canWrite} canCurate={canCurate}
                         onClose={() => setToolsOpen(false)}
                         onChanged={async (msg) => { await load(); if (msg) say(msg); }}
                         showError={say} />
+      )}
 
       {/* `key` 로 초기값을 다시 잡는다 — 없으면 다른 기술을 열어도 앞엣것이 남는다. */}
       {techForm && (
