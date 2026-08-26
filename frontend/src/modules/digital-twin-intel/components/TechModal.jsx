@@ -373,6 +373,18 @@ const FootNote = styled.small`
   align-self: center;
 `;
 
+/** 이력 줄이 **어느 사업부** 것인지. ⚠️ 비어 있으면 안 그린다 — 도구 이력이다. */
+const Where = styled.em`
+  font-style: normal;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  border-radius: 999px;
+  padding: 0 0.3125rem;
+  margin-right: 0.25rem;
+`;
+
 const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
                     division, onDivisionChanged,
                     onOpenTech, onCompare, canCurate, showError }) => {
@@ -779,9 +791,19 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             )}
             {changes !== null && changes.length > 0 && (
               <Hist>
+                {/*
+                  ⚠️⚠️ **빈 쪽을 말로 채운다**(2026-08-26 점검). 사업부 줄은 없던
+                     데서 생기고 없어지므로 한쪽이 비어 있는 것이 정상인데, 그대로
+                     찍으면 「도입 → 」 처럼 **화살표 뒤가 빈 줄**이 된다.
+                  ⚠️ **어느 사업부 것인지 적는다.** 역량의 이력은 이제 전부 사업부
+                     줄에서 온다 — 안 적으면 누가 옮겼는지 모르는 줄이 쌓인다.
+                */}
                 {changes.map((c) => (
                   <li key={c.id}>
-                    <b>{c.before_value} → {c.after_value}</b>
+                    <b>
+                      {c.scope && <Where>{c.scope}</Where>}
+                      {c.before_value || '처음 적음'} → {c.after_value || '안 적음'}
+                    </b>
                     <span>{(c.created_at || '').slice(0, 10)}
                       {c.actor_name ? ` · ${c.actor_name}` : ''}</span>
                     {c.reason && <small>{c.reason}</small>}

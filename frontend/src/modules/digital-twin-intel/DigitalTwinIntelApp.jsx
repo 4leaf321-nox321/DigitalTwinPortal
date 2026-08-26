@@ -259,8 +259,13 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   // 단계 변경·삭제·설정은 관리자·사무국만. **서버가 최종 판정**이고 여기서는
   // 누를 수 없는 것을 안 보이게만 한다 — 화면만 막으면 막은 것이 아니다.
   // ⚠️ 역할 문자열은 `dt_office` 다 — 모델 상수 이름(DT_OFFICE_MEMBER)과 다르다.
-  //    `is_admin` 도 함께 본다(다른 화면들과 같은 잣대).
-  const canCurate = ['admin', 'dt_office'].includes(user?.role) || !!user?.is_admin;
+  /*
+    ⚠️⚠️ **서버와 **글자까지** 같아야 한다**(2026-08-26 점검). 서버는
+       `CURATOR_ROLES = (ADMIN, DT_OFFICE_MEMBER)` 만 본다. 여기에 옛 `is_admin` 칸을
+       더해 두었더니, 그 칸만 켜진 옛 계정에게 **단추는 보이는데 누르면 403** 이
+       났다. 못 하는 일을 보여주는 것이 안 보여주는 것보다 나쁘다.
+  */
+  const canCurate = ['admin', 'dt_office'].includes(user?.role);
   /*
     ⚠️ **읽을 수 있으면 쓸 수 있다**(서버의 `can_write` 가 곧 `can_read` 다).
        기술을 넣고 매다는 것은 **판단이 아니라 정리**라서 좁히지 않았다 — 여기서
@@ -368,8 +373,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       */
       const [n, t, s, o, all] = await Promise.all([
         api.listNews(), api.listTech(q), api.getSettings(),
-        // ⚠️ 요약도 **레이더와 같은 기간**을 봐야 한다(위 참고).
-        api.overview(movedDays),
+        // ⚠️ 요약도 **레이더와 같은 기간ㆍ같은 눈**을 봐야 한다(위 참고).
+        api.overview(movedDays, division),
         division ? api.listTech({}) : Promise.resolve(null),
       ]);
       setNews(n || []);

@@ -176,7 +176,7 @@ const Empty = styled.p`
   color: #94a3b8;
 `;
 
-const stageOf = (key) => STAGES.find((s) => s.key === key) || STAGES[2];
+const stageOf = (key) => STAGES.find((s) => s.key === key) || null;
 
 const TechTree = ({ rows, all, categories, onSelect }) => {
   // 펴 놓은 역량. ⚠️ 63개를 다 펴면 600줄이 쏟아진다 — 접힌 채로 시작한다.
@@ -223,7 +223,7 @@ const TechTree = ({ rows, all, categories, onSelect }) => {
   }
 
   const line = ({ cap, kids }) => {
-    const st = stageOf(cap.stage);
+    const marks = cap.divisionMarks || [];
     const isOpen = Boolean(open[cap.uuid]);
     return (
       <Node key={cap.uuid}>
@@ -237,7 +237,28 @@ const TechTree = ({ rows, all, categories, onSelect }) => {
              onKeyDown={(e) => { if (e.key === 'Enter') onSelect(cap); }}>
             {cap.name}
           </b>
-          <Badge $color={st.color} $bg={st.bg}>{cap.stage}</Badge>
+          {/*
+            ⚠️⚠️ **역량에는 단계가 없다**(2026-08-26). 그냥 `cap.stage` 를 찍으면
+               **글자 없는 빈 배지**가 뜨고, 못 찾은 단계가 「관찰」로 떨어져 색까지
+               엉뚱하게 물든다. 역량 자리에는 **누가 어디라고 했는지**를 놓는다 —
+               레이더ㆍ목록과 같은 답이다.
+          */}
+          {marks.length > 0 && marks.map((m) => {
+            const ms = stageOf(m.stage);
+            return (
+              <Badge key={m.division} $color={ms ? ms.color : '#64748b'}
+                     $bg={ms ? ms.bg : '#f1f5f9'}
+                     title={`${m.division} 는 「${m.stage}」`}>
+                {m.division} {m.stage}
+              </Badge>
+            );
+          })}
+          {marks.length === 0 && (
+            <Badge $color="#94a3b8" $bg="#f8fafc"
+                   title="어느 사업부도 아직 어디까지 왔는지 안 적었습니다">
+              아직 안 적힘
+            </Badge>
+          )}
           {cap.isStale && (
             <Badge $color="#b45309" $bg="#fffbeb" title="근거가 오래 없습니다">
               <AlertTriangle size={10} /> 낡음

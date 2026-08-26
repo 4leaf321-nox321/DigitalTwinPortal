@@ -198,9 +198,18 @@ class DtIntelApi {
     * ⚠️ **레이더와 같은 기간을 넘긴다.** 안 넘기면 막대는 90일로 세고 레이더는
     *    고른 기간을 그려서, 눌러 뜨는 수와 적힌 수가 달라진다.
     */
-  overview(movedDays) {
-    const qs = movedDays ? `?movedDays=${movedDays}` : '';
-    return this.request(`${this.baseUrl}/overview${qs}`, {},
+  /**
+   * 화면 맨 위 요약.
+   *
+   * ⚠️ **사업부 눈을 함께 넘긴다.** 안 넘기면 역량이 제 단계가 없어 낡음이 늘
+   *    도구 몇 개로만 세어지고, 화면에는 낡은 것이 널렸는데 막대는 0 을 적는다.
+   */
+  overview(movedDays, division) {
+    const p = new URLSearchParams();
+    if (movedDays) p.set('movedDays', String(movedDays));
+    if (division) p.set('division', division);
+    const qs = p.toString();
+    return this.request(`${this.baseUrl}/overview${qs ? `?${qs}` : ''}`, {},
                         '요약을 불러오지 못했습니다.');
   }
 

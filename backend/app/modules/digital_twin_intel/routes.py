@@ -14,6 +14,7 @@ from app.modules.digital_twin_intel import bp
 from app.modules.digital_twin_intel import permissions as P
 from app.modules.digital_twin_intel import services as S
 from app.modules.digital_twin_intel.models import (
+    STAGE_NEW,
     CPT_GROUPS, DEFAULT_SECTORS, MOVED_WINDOW_DAYS, MOVED_WINDOW_MAX,
     MOVED_WINDOW_MIN, NEWS_STATUSES, ORIGINS, STAGES, TECH_KINDS,
     IntelEvidence, IntelNews, IntelTech, IntelTechCapability, shows_vendor,
@@ -431,6 +432,18 @@ def update_tech(uuid):
     for key in ('name', 'vendor', 'category', 'url', 'summary', 'description'):
         if key in data:
             setattr(t, key, data[key])
+    if 'kind' in data and data['kind'] in TECH_KINDS and data['kind'] != t.kind:
+        """
+        ⚠️⚠️ **층을 바꾸면 단계도 함께 손봐야 한다**(2026-08-26 점검). 역량은 단계를
+           안 갖고 도구는 갖는다. 안 건드리면 도구를 역량으로 올렸을 때 **단계를 든
+           역량**이 생기는데, 상세 창에는 역량용 칸이 없어 **지울 길이 아예 없다.**
+           목록에서는 그 역량만 엉뚱한 칸에 선다.
+        """
+        if data['kind'] == 'capability':
+            t.stage = None
+            t.stage_reason = None
+        elif t.stage is None:
+            t.stage = STAGE_NEW
     if 'kind' in data and data['kind'] in TECH_KINDS:
         # ⚠️ 자식이 달린 역량을 도구로 내리면 그 자식들이 부모 없는 도구가 되어
         #    레이더에 갑자기 쏟아진다. 먼저 떼어 내게 한다.
@@ -728,8 +741,10 @@ def overview():
     denied = _deny_read(actor)
     if denied is not None:
         return denied
+    # ⚠️ 사업부 눈도 함께 넘긴다 — 안 넘기면 막대와 화면이 서로 다른 수를 말한다.
     return success_response(
-        S.overview(actor, moved_days=_moved_days(request.args)))
+        S.overview(actor, moved_days=_moved_days(request.args),
+                   division=(request.args.get('division') or '').strip() or None))
 
 
 @bp.route('/tech/<uuid>/capabilities', methods=['PUT'])

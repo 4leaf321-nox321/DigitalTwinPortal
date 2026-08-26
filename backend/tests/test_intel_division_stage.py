@@ -290,3 +290,74 @@ def test_사업부별로_죽_펴서_본다(db, client, auth, admin, divs):
     o = d['overrides'][0]
     assert (o['division'], o['stage'], o['reason']) == ('MX', '도입', '3년째 쓰는 중')
     assert o['changedAt']
+
+# ── 이력이 거짓말하지 않는다 ─────────────────────────────────────────────────
+
+def test_처음_적은_줄에_없는_이유가_안_박힌다(db, client, auth, admin, divs):
+    """
+    ⚠️⚠️ 예전에는 이유를 안 적으면 「기본 설정 값을 따르도록 되돌렸습니다」가 박혔다.
+       **처음 적는 줄에도** 그렇게 남아서, 이력만 보면 무슨 일이 있었는지 정반대로
+       읽힌다. 기본 설정은 이제 없는 개념이기도 하다.
+    """
+    cap = _cap(admin, 'CFD')
+    _put(client, auth, admin, cap, 'MX', '도입', reason='')
+
+    rows = (client.get(f'{BASE}/tech/{cap.uuid}/changes',
+                       headers=auth(admin)).get_json() or {})['data']
+    mine = [c for c in rows if c['field'] == 'stage']
+    assert len(mine) == 1
+    assert mine[0]['before_value'] is None, '처음 적은 것은 어디서 온 것이 아니다'
+    assert mine[0]['after_value'] == '도입'
+    assert not mine[0]['reason'], f"없는 말이 박혔다: {mine[0]['reason']}"
+    assert mine[0]['scope'] == 'MX', '어느 사업부 것인지 남아야 한다'
+
+
+def test_적어_둔_것을_지우면_그렇게_남는다(db, client, auth, admin, divs):
+    """⚠️ 「기본 설정 값을 따르도록」은 이제 없는 말이다 — 따를 기본 설정이 없다."""
+    cap = _cap(admin, 'CFD')
+    _put(client, auth, admin, cap, 'MX', '도입', reason='')
+    _put(client, auth, admin, cap, 'MX', '', reason='')
+
+    rows = (client.get(f'{BASE}/tech/{cap.uuid}/changes',
+                       headers=auth(admin)).get_json() or {})['data']
+    # ⚠️ 이력은 **새것부터** 온다 — [-1] 은 처음 적은 줄이다.
+    last = [c for c in rows if c['field'] == 'stage'][0]
+    assert (last['before_value'], last['after_value']) == ('도입', None)
+    assert last['reason'] == '적어 둔 것을 지웠습니다.'
+
+
+# ── 합치기ㆍ층 바꾸기 ────────────────────────────────────────────────────────
+
+def test_층이_다르면_못_합친다(db, client, auth, admin, divs):
+    """
+    ⚠️⚠️ 역량을 도구에 합치면 그 역량에 매달려 있던 도구들의 연결이 **도구를**
+       가리키게 되고, 그러면 그 도구들은 「어딘가에 매달린 것」으로 잡혀 레이더에서
+       통째로 사라진다 — 어느 역량 밑에도 안 나오고 미아 목록에도 안 뜬다.
+    """
+    cap = _cap(admin, 'CFD')
+    tool, err = S.create_tech(actor_id=admin.id, name='OpenFOAM', kind='tool')
+    assert err is None
+    S.set_capabilities(tool.uuid, [cap.uuid], actor=admin)
+
+    _, err = S.merge_tech(cap.uuid, tool.uuid, actor=admin)
+    assert err and '층' in err, err
+    _, err2 = S.merge_tech(tool.uuid, cap.uuid, actor=admin)
+    assert err2 and '층' in err2, err2
+
+
+def test_층을_바꾸면_단계도_함께_손본다(db, client, auth, admin, divs):
+    """
+    ⚠️⚠️ 역량은 단계를 안 갖고 도구는 갖는다. 안 건드리면 도구를 역량으로 올렸을 때
+       **단계를 든 역량**이 생기는데, 상세 창에 역량용 칸이 없어 지울 길이 없다.
+    """
+    tool, err = S.create_tech(actor_id=admin.id, name='어떤 도구', kind='tool')
+    assert err is None and tool.stage == '감지'
+
+    r = client.patch(f'{BASE}/tech/{tool.uuid}', json={'kind': 'capability'},
+                     headers=auth(admin))
+    assert r.status_code == 200, r.get_json()
+    assert (r.get_json() or {})['data']['stage'] is None
+
+    r2 = client.patch(f'{BASE}/tech/{tool.uuid}', json={'kind': 'tool'},
+                      headers=auth(admin))
+    assert (r2.get_json() or {})['data']['stage'] == '감지', '도구로 내리면 다시 갖는다'

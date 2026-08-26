@@ -578,6 +578,14 @@ const RadarChart = ({ rows, categories, onSelect, onSectorClick, activeSector,
        대신 누르고 있는 동안만 `window` 에 붙인다 — 밖으로 끌고 나가도 안 끊긴다.
   */
   const onPointerDown = (e) => {
+    /*
+      ⚠️⚠️ **누를 때마다 삼킴 표시를 푼다**(2026-08-26 점검). 끌어 옮긴 뒤의 click 을
+         한 번 삼키려고 표시를 세워 두는데, **빈 자리에서 끌면 click 자체가 안 나서**
+         그 표시가 안 풀린 채 남는다. 그러면 그다음에 점을 눌러도 아무 일이 안
+         일어난다 — 「레이더가 죽었다」로 읽힌다. 푸는 자리를 click 이 아니라
+         **다음 누름**으로 옮긴다.
+    */
+    suppressRef.current = false;
     if (e.button !== 0) return;
     const [px, py] = toSvg(e.clientX, e.clientY);
     dragRef.current = { px, py, x: view.x, y: view.y, moved: false };

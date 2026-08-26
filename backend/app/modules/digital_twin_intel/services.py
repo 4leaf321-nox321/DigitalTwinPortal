@@ -147,7 +147,7 @@ def co_occurring(tech_uuid, limit=8):
     return out
 
 
-def overview(actor=None, moved_days=MOVED_WINDOW_DAYS):
+def overview(actor=None, moved_days=MOVED_WINDOW_DAYS, division=None):
     """화면 맨 위에 띄울 **「오늘 뭘 봐야 하나」**.
 
     ⚠️⚠️ **셈은 「눌렀을 때 보이는 것」과 같아야 한다.** 안 그러면 「낡은 기술 200」을
@@ -159,6 +159,11 @@ def overview(actor=None, moved_days=MOVED_WINDOW_DAYS):
 
     ⚠️ 이동도 **보는 사람이 고른 기간**으로 센다(`moved_days`). 막대는 「최근 30일」
        이라 써 놓고 레이더는 90일을 그리고 있었다.
+
+    ⚠️⚠️ **사업부 눈도 같이 본다**(`division`, 2026-08-26 점검). 역량은 이제 제 단계가
+       없어서, 눈을 모르면 낡음이 **언제나 도구 몇 개**만 세어진다 — 화면에는 낡은
+       역량이 널려 있는데 막대는 0 을 적는다. 이동도 마찬가지로 그 사업부 이력만
+       봐야 한다. 같은 값을 두 곳이 다르게 세면 그 순간 막대를 아무도 안 믿는다.
     """
     unread = IntelNews.query.filter_by(status='신규').count()
     every = IntelTech.query.filter(IntelTech.is_archived.is_(False)).all()
@@ -168,14 +173,18 @@ def overview(actor=None, moved_days=MOVED_WINDOW_DAYS):
              if t.kind == 'capability' or t.uuid not in linked]
 
     stats = evidence_stats([t.uuid for t in techs])
+    # 그 사업부가 적어 둔 단계 — 낡음은 **그 단계로** 재야 한다.
+    dstages = division_stages([t.uuid for t in techs], division) if division else {}
     stale = no_evidence = 0
     for t in techs:
         cnt, last = stats.get(t.uuid, (0, None))
         if cnt == 0:
             no_evidence += 1
-        if t.is_stale(last):
+        row = dstages.get(t.uuid)
+        if t.is_stale(last, stage=(row.stage if row else None) or t.stage):
             stale += 1
-    moved = len(recent_moves([t.uuid for t in techs], days=moved_days))
+    moved = len(recent_moves([t.uuid for t in techs], days=moved_days,
+                             scope=division or None))
     # 링크가 안 걸린 소식 — 「그래서 우리한테 뭔데」가 아직 안 붙은 것
     linked = {l.subject_uuid for l in IntelLink.query.filter_by(
         subject_kind='news').all()}
@@ -570,8 +579,9 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
     if empty:
         if row is not None:
             if before != after:
+                # ⚠️ 「기본 설정 값을 따르도록」은 이제 없는 말이다 — 기본 설정이 없다.
                 log_change('tech', t.uuid, t.name, 'stage', before, after,
-                           reason='기본 설정 값을 따르도록 되돌렸습니다.',
+                           reason='적어 둔 것을 지웠습니다.',
                            actor=actor, source=source, scope=division)
             db.session.delete(row)
             if commit:
@@ -589,8 +599,14 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
 
     if before != after:
         row.changed_at = datetime.utcnow()
+        """
+        ⚠️ **없는 말을 지어내지 않는다**(2026-08-26 점검). 예전에는 이유를 안 적으면
+           「기본 설정 값을 따르도록 되돌렸습니다」가 박혔다 — 처음 적는 줄에도 그렇게
+           남아서, 이력만 보면 무슨 일이 있었는지 정반대로 읽힌다. 이유는 이제
+           「보류」에만 묻는 값이라 비어 있는 것이 정상이다.
+        """
         log_change('tech', t.uuid, t.name, 'stage', before, after,
-                   reason=reason or '기본 설정 값을 따르도록 되돌렸습니다.',
+                   reason=reason or None,
                    actor=actor, source=source, scope=division)
 
     if commit:
@@ -1007,6 +1023,17 @@ def merge_tech(loser_uuid, winner_uuid, actor=None):
     winner = IntelTech.query.filter_by(uuid=winner_uuid).first()
     if loser is None or winner is None:
         return None, '기술을 찾을 수 없습니다.'
+    """
+    ⚠️⚠️ **층이 다르면 못 합친다**(2026-08-26 점검). 역량을 도구에 합치면 그 역량에
+       매달려 있던 도구들의 연결이 **도구를 가리키게** 되고, 그러면 그 도구들은
+       「어딘가에 매달린 것」으로 잡혀 레이더에서 통째로 사라진다 — 어느 역량 밑에도
+       안 나오고 미아 목록에도 안 뜬다. 되돌릴 길도 없다.
+    """
+    if loser.kind != winner.kind:
+        return None, ('층이 다릅니다 — %s 를 %s 에 합칠 수 없습니다. '
+                      '역량은 역량끼리, 도구는 도구끼리만 합칩니다.'
+                      % ('역량' if loser.kind == 'capability' else '도구',
+                         '역량' if winner.kind == 'capability' else '도구'))
 
     # 근거 옮기기 — 이미 같은 짝이 있으면 버린다(유니크 제약).
     have = {e.news_uuid for e in IntelEvidence.query.filter_by(
