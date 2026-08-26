@@ -15,7 +15,7 @@
  * ⚠️ 낡음 판정·단계 목록·분류 목록은 **서버가 준다.** 화면이 자기 표를 들면 반드시
  *    서버와 갈리고, 그러면 화면은 초록인데 서버는 빨간 상태가 된다.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Search, AlertCircle, Loader2, Radar as RadarIcon, List, AlertTriangle,
   Network }
@@ -29,7 +29,8 @@ import NewsModal from './components/NewsModal';
 import TechModal from './components/TechModal';
 import TechFormModal from './components/TechFormModal';
 import DivisionSheet from './components/DivisionSheet';
-import { keepTech, narrowMarks, UNCATEGORIZED } from './utils/techFilter';
+import { keepTech, narrowMarks, onRadar, UNCATEGORIZED }
+  from './utils/techFilter';
 import CapabilityManagerModal from './components/CapabilityManagerModal';
 import ToolManagerModal from './components/ToolManagerModal';
 import RadarChart from './components/RadarChart';
@@ -61,31 +62,34 @@ const Scroller = styled.main`
   display: ${(p) => (p.$fixed ? 'flex' : 'block')};
 `;
 
-const Content = styled.div`
-  width: 100%;
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 1.25rem 2rem 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-
-  @media (max-width: 900px) { padding: 1rem; }
-`;
-
 /*
   레이더는 **가로를 다 쓴다.** 가운데 1600px 상자에 가두면 그림이 좁아지고 오른쪽
   목록이 화면 한가운데 떠 있게 된다 — 목록은 오른쪽 끝에 붙어야 눈이 안 헤맨다.
-  ⚠️ 소식ㆍ목록 보기는 그대로 `Content` 를 쓴다. 글줄이 화면 끝까지 늘어나면 못 읽는다.
+  소식ㆍ목록 보기는 좁게 둔다. 글줄이 화면 끝까지 늘어나면 못 읽는다.
+
+  ⚠️⚠️ **그 둘을 한 컴포넌트로 둔다**(2026-08-26 점검). 예전에는 둘을
+     따로 만들어 `fixed ? WideContent : Content` 로 갈아 끼웠는데, `fixed` 가
+     `!loading` 을 보고 있어서 **다시 읽을 때마다 종류가 바뀌었다.** 종류가 바뀌면
+     React 는 그 밑을 통째로 새로 만든다 — 레이더의 확대ㆍ이동이 매번 풀렸다.
 */
-const WideContent = styled.div`
+const Content = styled.div`
   width: 100%;
-  min-height: 0;
-  flex: 1;
-  padding: 0.75rem 1rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+
+  ${(p) => (p.$fixed ? `
+    min-height: 0;
+    flex: 1;
+    padding: 0.75rem 1rem 1rem;
+    gap: 0.625rem;
+  ` : `
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 1.25rem 2rem 2rem;
+    gap: 0.875rem;
+
+    @media (max-width: 900px) { padding: 1rem; }
+  `)}
 `;
 
 const Toolbar = styled.div`
@@ -345,9 +349,15 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
   const [compareA, setCompareA] = useState(null);
   const [compareB, setCompareB] = useState(null);
 
+  /*
+    ⚠️ **앞 시계를 끄고 새로 잰다**(2026-08-26 점검). 안 끄면 먼저 걸어 둔 시계가
+       나중 안내를 지운다 — 두 번째 안내가 1초 만에 사라지는 일이 났다.
+  */
+  const toastTimer = useRef(null);
   const say = useCallback((msg) => {
     setToast(msg);
-    window.setTimeout(() => setToast(null), 4000);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 4000);
   }, []);
 
   const load = useCallback(async () => {
@@ -422,6 +432,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     })),
     [tech, q, category, stage, staleOnly, focus, kind, techView]);
 
+  // 머리글 탭에 붙는 수. **요약 막대와 같은 규칙**(역량 + 안 매단 도구)이다.
+  const radarCount = useMemo(() => tech.filter(onRadar).length, [tech]);
+
   // 관리 창이 보는 것. ⚠️ 눈이 안 걸렸으면 `tech` 가 곧 전부다.
   const managerTech = division ? techAll : tech;
 
@@ -430,8 +443,13 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
     () => narrowMarks(shownTech, stage), [shownTech, stage]);
 
   // 기본 설정과 다르게 정한 것이 몇 개인가. **이 숫자가 사업부별 보기의 답이다.**
+  /*
+    ⚠️⚠️ **거르기 앞의 수를 센다**(2026-08-26 점검). `shownTech` 를 세면 무엇을 걸러
+       놓았느냐에 따라 「아직 하나도 안 적었습니다」가 떴다 — 적어 둔 것이 버젓이
+       있는데도. 이 띠는 **그 사업부가 얼마나 적었나**를 말하는 자리다.
+  */
   const overrideCount = useMemo(
-    () => shownTech.filter((t) => t.isDivisionOverride).length, [shownTech]);
+    () => tech.filter((t) => t.isDivisionOverride).length, [tech]);
 
   /*
     아직 어느 역량에도 안 매달린 도구. ⚠️ **이 수가 곧 할 일이다** — 그 도구들은
@@ -605,8 +623,8 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
 
   // 레이더 보기일 때만 가로를 다 쓰고, 바깥 스크롤을 끈다. `as` 로 갈아끼우지 않고
   // 컴포넌트를 직접 고른다 — 그 편이 무엇이 그려지는지 한눈에 보인다.
-  const fixed = tab === 'tech' && techView === 'radar' && !loading && !error;
-  const Shell = fixed ? WideContent : Content;
+  // ⚠️ `loading` 을 안 본다 — 보면 다시 읽을 때마다 레이더가 새로 태어난다(위 참고).
+  const fixed = tab === 'tech' && techView === 'radar' && !error;
 
   /*
     고를 수 있는 사업부.
@@ -658,7 +676,9 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
         */
         onTab={(t) => { setTab(t); setCategory(''); setStage(''); setDivision(''); }}
         newsCount={news.length}
-        techCount={tech.length}
+        /* ⚠️ 요약 막대와 **같은 수**여야 한다 — 한 화면에 두 숫자가 뜨면 둘 다
+           못 믿게 된다. 레이더에 서는 줄만 센다. */
+        techCount={radarCount}
         onAdd={() => (tab === 'news' ? setAddOpen(true) : setTechForm({}))}
         onTools={() => setToolsOpen(true)}
         onSheet={() => setSheetOpen(true)}
@@ -669,7 +689,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
       />
 
       <Scroller $fixed={fixed}>
-        <Shell>
+        <Content $fixed={fixed}>
           <OverviewBar data={overview} active={focus} onPick={pickFocus} tab={tab} />
 
           {compareA && !compareB && (
@@ -848,7 +868,7 @@ const DigitalTwinIntelApp = ({ onGoHome }) => {
                         onSelect={merging ? doMerge
                           : compareA && !compareB ? pickCompare : setSelected} />
           )}
-        </Shell>
+        </Content>
       </Scroller>
 
       {/* ⚠️ 닫으면 트리에서 뺀다 — 안 그러면 방금 등록한 내용이 그대로 남아,

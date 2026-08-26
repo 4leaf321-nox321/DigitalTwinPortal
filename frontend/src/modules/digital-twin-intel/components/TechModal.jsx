@@ -426,6 +426,12 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
     setStage(tech.companyStage || tech.stage);
     setReason(tech.stage_reason || '');
     setEvidence(null);
+    /*
+      ⚠️ **이력도 함께 버린다**(2026-08-26 점검). 눌러서 불러오는 값이라 안 지우면
+         다른 기술을 열어도 **앞 기술의 이력**이 그대로 붙어 있다 — 남의 기록을
+         이 기술 것으로 읽게 된다.
+    */
+    setChanges(null);
     api.techEvidence(tech.uuid)
       .then(setEvidence)
       .catch(() => setEvidence([]));
@@ -499,8 +505,23 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
         */
         updated = await api.setStage(tech.uuid, stage, reason.trim());
       }
-      if (div.dirty && divRef.current) await divRef.current.save();
-      if (updated) onChanged(updated);
+
+      /*
+        ⚠️⚠️ **앞엣것이 담긴 뒤에 뒤엣것이 막힐 수 있다**(2026-08-26 점검). 예전에는
+           사업부 쪽이 튕기면 그대로 catch 로 빠져, **이미 담긴 단계가 화면에 하나도
+           안 반영됐다** — 오류만 보고 창을 닫으면 담긴 줄도 모른다. 담긴 것은 담겼다고
+           보여주고, 막힌 것만 따로 알린다.
+      */
+      let divErr = null;
+      if (div.dirty && divRef.current) {
+        try { await divRef.current.save(); } catch (e) { divErr = e; }
+      }
+
+      if (divErr) {
+        // 창은 안 닫는다 — 여기서 고쳐야 하니까. 담긴 것은 다시 읽어 보여준다.
+        if (onDivisionChanged) await onDivisionChanged();
+        showError(divErr.message);
+      } else if (updated) onChanged(updated);
       else if (div.dirty && onDivisionChanged) onDivisionChanged();
     } catch (e) {
       showError(e.message);
@@ -886,9 +907,18 @@ const TechModal = ({ tech, onClose, onChanged, onDelete, onEdit, onMerge,
             ⚠️ **단계를 바꾸는 자리 가까이 둔다.** 멀리 두면 기본 설정만 바꾸고 사업부는
                안 건드리게 되고, 그러면 사업부 값이 조용히 옛것으로 남는다.
           */}
+          {/*
+            ⚠️⚠️ **역량에만 그린다**(2026-08-26 점검). 도구 상세에도 이 칸이 떠서
+               「이 역량을 어디까지…」 같은 역량 전용 문구를 늘어놨고, 거기서 적으면
+               **사업부를 골랐을 때만 보이는 줄**이 생겼다 — 서버도 이제 막는다.
+               도구 단위로는 애초에 비교가 안 된다: MX 가 LS-DYNA 도입, VD 가
+               RADIOSS 도입이면 둘 다 「도입」인데 누가 앞섰는지 읽을 수 없다.
+          */}
+          {isCap && (
           <DivisionStages ref={divRef} tech={tech} canCurate={canCurate}
                           onDraftState={onDivDraft}
                           onChanged={onDivisionChanged} showError={showError} />
+          )}
 
           <LinkList rows={links} onRemove={dropLink} />
 

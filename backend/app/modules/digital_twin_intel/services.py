@@ -553,6 +553,18 @@ def set_division_stage(tech_uuid, division, stage, reason=None, tools=None,
     t = IntelTech.query.filter_by(uuid=tech_uuid).first()
     if t is None:
         return None, '기술을 찾을 수 없습니다.'
+    """
+    ⚠️⚠️ **사업부 단계는 역량에만 붙는다**(2026-08-26 점검). 도구 단위로는 원리적으로
+       비교가 안 된다 — MX 가 LS-DYNA 도입, VD 가 RADIOSS 도입이면 둘 다 「도입」인데
+       서로 다른 줄이라 누가 앞섰는지 읽을 수 없다. 그래서 이 층은 역량 위에서만
+       뜻이 있고, 화면(레이더ㆍ목록ㆍ사업부 적기)도 전부 역량만 다룬다.
+
+       열어 두면 **눈에 따라 있다 없다 하는 자료**가 생긴다 — 사업부를 골랐을 때만
+       보이고 안 골랐을 때는 사라지는 줄이 그렇다.
+    """
+    if t.kind != 'capability':
+        return None, ('사업부 단계는 역량에만 적습니다 — 「%s」 은 도구입니다. '
+                      '그 도구를 쓰는 역량 쪽에 적으세요.' % t.name)
 
     stage = (stage or '').strip() or None
     if stage is not None and stage not in STAGES:

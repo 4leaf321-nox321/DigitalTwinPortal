@@ -373,3 +373,26 @@ def test_층을_바꾸면_단계도_함께_손본다(db, client, auth, admin, di
     r2 = client.patch(f'{BASE}/tech/{tool.uuid}', json={'kind': 'tool'},
                       headers=auth(admin))
     assert (r2.get_json() or {})['data']['stage'] == '감지', '도구로 내리면 다시 갖는다'
+
+def test_사업부_단계는_역량에만_붙는다(db, client, auth, admin, divs):
+    """
+    ⚠️⚠️ 도구 단위로는 **원리적으로 비교가 안 된다** — MX 가 LS-DYNA 도입, VD 가
+       RADIOSS 도입이면 둘 다 「도입」인데 서로 다른 줄이라 누가 앞섰는지 읽을 수
+       없다. 그래서 이 층은 역량 위에서만 뜻이 있다.
+
+    ⚠️ 열어 두면 **눈에 따라 있다 없다 하는 자료**가 생긴다 — 사업부를 골랐을 때만
+       보이고 안 골랐을 때는 사라지는 줄이 그렇다(2026-08-26 점검).
+    """
+    cap = _cap(admin, 'CFD')
+    tool, err = S.create_tech(actor_id=admin.id, name='OpenFOAM', kind='tool')
+    assert err is None
+    S.set_capabilities(tool.uuid, [cap.uuid], actor=admin)
+
+    r = client.put(f'{BASE}/tech/{tool.uuid}/division-stage',
+                   json={'division': 'MX', 'stage': '도입'}, headers=auth(admin))
+    assert r.status_code == 400
+    assert '역량' in (r.get_json() or {}).get('message', '')
+    assert IntelDivisionStage.query.count() == 0
+
+    # 역량 쪽에는 그대로 붙는다.
+    assert _put(client, auth, admin, cap, 'MX', '도입').status_code == 200
