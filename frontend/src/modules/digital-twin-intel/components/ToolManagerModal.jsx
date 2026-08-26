@@ -25,6 +25,9 @@ import CapabilityPicker from './CapabilityPicker';
  *    그랬다 — MATLAB/Simulink 는 1D 시스템ㆍ제어 검증ㆍ대리모델에 함께 걸린다.
  *    그래서 왼쪽에서 어느 역량을 보든 **같은 도구가 여러 곳에 나온다.** 맞는 그림이다.
  */
+/** 분야를 안 가리고 다 본다. ⚠️ 분야 이름과 겹치지 않는 값이어야 한다. */
+const ALL_SECTORS = '전체';
+
 const ORPHAN = '__orphan__';
 
 /*
@@ -48,6 +51,44 @@ const Split = styled.div`
   min-height: 0;
 
   @media (max-width: 800px) { grid-template-columns: 1fr; }
+`;
+
+/*
+  ⚠️⚠️ **분야를 골라 그 분야만 본다**(2026-08-26 요청). 63개를 한 줄로 죽 세우면
+     분야 머리글이 있어도 찾기가 더 어렵다 — 스크롤로 지나쳐 버린다. 드롭다운이
+     아니라 **토글**인 이유는, 지금 어느 분야를 보고 있는지와 **다른 분야가 무엇이
+     있는지**가 함께 보여야 하기 때문이다. 드롭다운은 둘 다 감춘다.
+*/
+const LeftCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-height: 0;
+`;
+
+const Tabs = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1875rem;
+  flex-shrink: 0;
+`;
+
+const Tab = styled.button`
+  border: 1px solid ${(p) => (p.$on ? '#818cf8' : '#e2e8f0')};
+  background: ${(p) => (p.$on ? '#eef2ff' : '#fff')};
+  color: ${(p) => (p.$on ? '#3730a3' : '#64748b')};
+  font-weight: ${(p) => (p.$on ? 600 : 400)};
+  font-size: 0.6875rem;
+  padding: 0.1875rem 0.4375rem;
+  border-radius: 999px;
+  cursor: pointer;
+
+  em {
+    font-style: normal;
+    opacity: 0.6;
+    margin-left: 0.1875rem;
+    font-variant-numeric: tabular-nums;
+  }
 `;
 
 const Left = styled.div`
@@ -244,6 +285,8 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
   const [moving, setMoving] = useState(null);
   const [q, setQ] = useState('');
   const [name, setName] = useState('');
+  // ⚠️ null 은 「아직 안 골랐다」 — 처음 열면 **첫 분야**를 편다(전체를 펴면 안 고친 것과 같다).
+  const [sector, setSector] = useState(null);
   const [vendor, setVendor] = useState('');
   const [busy, setBusy] = useState('');
 
@@ -271,6 +314,15 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
   }, [caps, categories]);
 
   if (!isOpen) return null;
+
+  /*
+    ⚠️ 고른 분야는 **목록만** 줄인다 — 오른쪽에 열어 둔 역량은 그대로 둔다. 분야를
+       바꿀 때마다 고른 것이 튀면 「어디 갔지」가 된다.
+  */
+  const curSector = sector === null
+    ? (sectors[0] ? sectors[0][0] : ALL_SECTORS) : sector;
+  const shownSectors = curSector === ALL_SECTORS
+    ? sectors : sectors.filter(([g]) => g === curSector);
 
   const current = pick || (caps[0] ? caps[0].uuid : ORPHAN);
   const showing = current === ORPHAN
@@ -358,10 +410,27 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
           </Hint>
 
           <Split>
-            <Left>
-              {sectors.map(([g, rows]) => (
+            <LeftCol>
+              {sectors.length > 1 && (
+                <Tabs>
+                  <Tab type="button" $on={curSector === ALL_SECTORS}
+                       onClick={() => setSector(ALL_SECTORS)}>
+                    {ALL_SECTORS}<em>{caps.length}</em>
+                  </Tab>
+                  {sectors.map(([g, rows]) => (
+                    <Tab key={g} type="button" $on={curSector === g}
+                         onClick={() => setSector(g)}>
+                      {g}<em>{rows.length}</em>
+                    </Tab>
+                  ))}
+                </Tabs>
+              )}
+
+              <Left>
+              {shownSectors.map(([g, rows]) => (
                 <React.Fragment key={g}>
-                  <SectorHead>{g}</SectorHead>
+                  {/* ⚠️ 한 분야만 볼 때는 머리글이 겹말이다 — 탭이 이미 말했다. */}
+                  {curSector === ALL_SECTORS && <SectorHead>{g}</SectorHead>}
                   {rows.map((c) => {
                     const n = tools.filter(
                       (t) => (t.capabilityUuids || []).includes(c.uuid)).length;
@@ -387,7 +456,8 @@ const ToolManagerModal = ({ isOpen, tech, categories, canWrite, canCurate,
                 <b>아직 안 매단 도구</b>
                 <em>{orphans.length}</em>
               </Orphan>
-            </Left>
+              </Left>
+            </LeftCol>
 
             <Right>
               <Bar>

@@ -86,6 +86,42 @@ const List = styled.div`
   padding: 0.5rem;
 `;
 
+/*
+  ⚠️⚠️ **분야를 골라 그 분야만 본다**(2026-08-26 요청). 63개를 한 줄로 죽 세우면
+     분야 머리글이 있어도 찾기가 더 어렵다 — 스크롤로 지나쳐 버린다. 드롭다운이
+     아니라 **토글**인 이유는, 지금 어느 분야를 보고 있는지와 **다른 분야가 무엇이
+     있는지**가 함께 보여야 하기 때문이다. 드롭다운은 둘 다 감춘다.
+
+  ⚠️ 탭은 목록 **밖**에 둔다 — 안에 두면 같이 굴러 올라가 사라진다.
+*/
+const Tabs = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1875rem;
+  padding: 0.5rem 0.5rem 0;
+  flex-shrink: 0;
+`;
+
+const Tab = styled.button`
+  border: 1px solid ${(p) => (p.$on ? '#818cf8' : '#e2e8f0')};
+  background: ${(p) => (p.$on ? '#eef2ff' : '#fff')};
+  color: ${(p) => (p.$on ? '#3730a3' : '#64748b')};
+  font-weight: ${(p) => (p.$on ? 600 : 400)};
+  font-size: 0.6875rem;
+  padding: 0.1875rem 0.4375rem;
+  border-radius: 999px;
+  cursor: pointer;
+
+  em {
+    font-style: normal;
+    opacity: 0.6;
+    margin-left: 0.1875rem;
+    font-variant-numeric: tabular-nums;
+  }
+  /* ⚠️ 손 안 탄 것이 있는 분야를 표에서 바로 알아보게 한다 — 그게 할 일이다. */
+  i { font-style: normal; color: #f59e0b; margin-left: 0.1875rem; }
+`;
+
 const Sector = styled.h3`
   margin: 0.625rem 0 0.25rem;
   font-size: 0.6875rem;
@@ -310,6 +346,9 @@ const Msg = styled.p`
   color: #94a3b8;
 `;
 
+/** 분야를 안 가리고 다 본다. ⚠️ 분야 이름과 겹치지 않는 값이어야 한다. */
+const ALL_SECTORS = '전체';
+
 const UNSORTED = '분류 없음';
 const listOf = (s) => s.split(/[,·]/).map((x) => x.trim()).filter(Boolean);
 const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -322,6 +361,8 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
   const [busy, setBusy] = useState('');
   const [newName, setNewName] = useState('');
   const [newCat, setNewCat] = useState('');
+  // ⚠️ null 은 「아직 안 골랐다」 — 처음 열면 **첫 분야**를 편다.
+  const [sector, setSector] = useState(null);
 
   const caps = useMemo(
     () => (tech || []).filter((t) => t.kind === 'capability'), [tech]);
@@ -352,6 +393,17 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
   if (!isOpen) return null;
 
   const current = caps.find((c) => c.uuid === pick) || caps[0] || null;
+
+  /*
+    ⚠️ 고른 분야는 **목록만** 줄인다 — 오른쪽에 열어 둔 역량은 그대로 둔다. 분야를
+       바꿀 때마다 고른 것이 튀면 「어디 갔지」가 된다.
+  */
+  const curSector = sector === null
+    ? (sectors[0] ? sectors[0][0] : ALL_SECTORS) : sector;
+  const shownSectors = curSector === ALL_SECTORS
+    ? sectors : sectors.filter(([g]) => g === curSector);
+  const quietIn = (items) =>
+    items.filter((c) => !(c.divisionMarks || []).length).length;
 
   const asDraft = (c) => ({
     name: c.name || '',
@@ -451,11 +503,30 @@ const CapabilityManagerModal = ({ isOpen, tech, categories, cptGroups,
 
         <Two>
           <Left>
+            {sectors.length > 1 && (
+              <Tabs>
+                <Tab type="button" $on={curSector === ALL_SECTORS}
+                     onClick={() => setSector(ALL_SECTORS)}>
+                  {ALL_SECTORS}<em>{caps.length}</em>
+                  {quiet > 0 && <i title={`아직 아무 사업부도 안 적은 것 ${quiet}개`}>●</i>}
+                </Tab>
+                {sectors.map(([g, items]) => (
+                  <Tab key={g} type="button" $on={curSector === g}
+                       onClick={() => setSector(g)}>
+                    {g}<em>{items.length}</em>
+                    {quietIn(items) > 0 && (
+                      <i title={`아직 아무 사업부도 안 적은 것 ${quietIn(items)}개`}>●</i>
+                    )}
+                  </Tab>
+                ))}
+              </Tabs>
+            )}
             <List>
               {caps.length === 0 && <Msg>역량이 없습니다.</Msg>}
-              {sectors.map(([g, items]) => (
+              {shownSectors.map(([g, items]) => (
                 <React.Fragment key={g}>
-                  <Sector>{g} <span /></Sector>
+                  {/* ⚠️ 한 분야만 볼 때는 머리글이 겹말이다 — 탭이 이미 말했다. */}
+                  {curSector === ALL_SECTORS && <Sector>{g} <span /></Sector>}
                   {items.map((c) => {
                     const said = (c.divisionMarks || []).length;
                     return (
