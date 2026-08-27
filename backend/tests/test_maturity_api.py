@@ -226,3 +226,14 @@ def test_닫힌_부문에는_대상을_못_만든다(client, auth, world, office
                 {'division_id': world['mx'].id, 'name': 'x', 'sector': 'design_automation'},
                 expect=400)
     assert '열리지' in out['message']
+
+
+def test_사업부_이력은_쌍_이름을_달고_최근순이다(client, auth, world, mx_user):
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+    _assess(client, auth, mx_user, p['id'], 'automation', {'rung': 'pre', 'note': 'a'})
+    _assess(client, auth, mx_user, p['id'], 'automation', {'rung': 'run', 'note': 'b'})
+    res = client.get(f'{BASE}/changes?division_id={world["mx"].id}', headers=auth(mx_user))
+    rows = res.get_json()['data']
+    assert [(r['before'], r['after']) for r in rows] == [('pre', 'run'), (None, 'pre')]
+    assert rows[0]['subject_name'] == '낙하 시험' and rows[0]['agent_name'] == '구조 해석'
+    assert client.get(f'{BASE}/changes?division_id={world["vd"].id}', headers=auth(mx_user)).get_json()['data'] == []

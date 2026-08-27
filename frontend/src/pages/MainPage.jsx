@@ -42,7 +42,8 @@ import {
   TrendingUp,
   ClipboardList,
   Coins,
-  Radar
+  Radar,
+  Gauge
 } from 'lucide-react';
 import { APP_VERSION, versionState, versionText } from '../shared/utils/appVersion';
 // AiChatSidebar 는 2026-08-01 에 화면에서 내렸다(아래 mount 자리 주석 참고).
@@ -1231,6 +1232,16 @@ const SIMULATION_FEATURES = [
     gridRow: "span 1",
     icon: Database,
     route: "/digital-twin-reference"
+  },
+  {
+    id: "dev-dt-maturity",
+    name: "개발 디지털 트윈 성숙도",
+    desc: "시험별 시뮬레이션 정확도·자동화·대체 수준",
+    color: 8,
+    gridColumn: "span 1",
+    gridRow: "span 1",
+    icon: Gauge,
+    route: "/dev-dt-maturity"
   },
   {
     id: "digital-twin-task-management",

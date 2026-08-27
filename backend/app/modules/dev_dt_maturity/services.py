@@ -355,3 +355,26 @@ def board(division_id, sector):
             'stale': sum(r['summary']['stale'] for r in rows),
         },
     }
+
+
+def recent_changes(division_id, sector, days=365, limit=500):
+    """사업부의 최근 이력 — 타임라인(「올해 어느 칸이 언제 올라갔나」)의 재료.
+
+    쌍의 이름(시험 × 시뮬레이션)을 같이 실어 화면이 다시 찾지 않게 한다.
+    """
+    since = datetime.utcnow() - timedelta(days=int(days))
+    rows = (MaturityChange.query
+            .join(MaturityPair, MaturityChange.pair_id == MaturityPair.id)
+            .join(MaturitySubject, MaturityPair.subject_id == MaturitySubject.id)
+            .filter(MaturitySubject.division_id == division_id,
+                    MaturitySubject.sector == sector,
+                    MaturityChange.created_at >= since)
+            .order_by(MaturityChange.created_at.desc(), MaturityChange.id.desc())
+            .limit(limit).all())
+    out = []
+    for c in rows:
+        d = c.to_dict()
+        d['subject_name'] = c.pair.subject.name
+        d['agent_name'] = c.pair.agent.name if c.pair.agent else None
+        out.append(d)
+    return out

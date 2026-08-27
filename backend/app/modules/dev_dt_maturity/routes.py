@@ -458,3 +458,17 @@ def reconcile(actor):
         return success_response(I.reconcile(division_id))
     except Exception:
         return _crashed()
+
+
+@bp.route('/changes', methods=['GET'])
+@read_required
+def changes(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    sector = request.args.get('sector') or 'simulation'
+    days = _int_arg('days') or 365
+    try:
+        return success_response(S.recent_changes(division_id, sector, days))
+    except Exception:
+        return _crashed()

@@ -27,6 +27,7 @@ import DigitalTwinTechLevelApp from './modules/digital-twin-tech-level/DigitalTw
 import DigitalTwinResourceApp from './modules/digital-twin-resource/DigitalTwinResourceApp';
 import SPDMStatusApp from './modules/spdm-status/SPDMStatusApp';
 import DigitalTwinReferenceApp from './modules/digital-twin-reference/DigitalTwinReferenceApp';
+import DevDtMaturityApp from './modules/dev-dt-maturity/DevDtMaturityApp';
 import DigitalTwinTaskManagementApp from './modules/digital-twin-task-management/DigitalTwinTaskManagementApp';
 import DigitalTwinSwResourceApp from './modules/digital-twin-sw-resource/DigitalTwinSwResourceApp';
 import DigitalTwinInvestmentApp from './modules/digital-twin-investment/DigitalTwinInvestmentApp';
@@ -298,6 +299,16 @@ const AppWithNav = () => {
         element={
           <ProtectedRoute>
             <DigitalTwinReferenceApp onGoHome={handleGoHome} />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 개발 디지털 트윈 성숙도 — 로드맵 정보의 형제(「언제」↔「얼마나」) */}
+      <Route
+        path="/dev-dt-maturity"
+        element={
+          <ProtectedRoute>
+            <DevDtMaturityApp onGoHome={handleGoHome} />
           </ProtectedRoute>
         }
       />
