@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { X, Plus, Trash2, Loader2, AlertTriangle, Link2, Layers, Wrench, Sparkles, Check, Search } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import ToolPickerModal from './ToolPickerModal';
+import SearchSelect from '../common/SearchSelect';
 import { nextSelection, dragSelection } from '../../utils/selection';
 
 // 시험 항목 / 시뮬레이션 관리 — 왼쪽 목록, 오른쪽 상세. 인텔의 역량 관리와 같은 꼴.
@@ -459,10 +460,9 @@ const ItemManagerModal = ({
           <small>물리 기반 / 데이터 기반 / 하이브리드. 부문이 아니라 속성입니다.</small></Field>
       </Pair>
       <Field><span>담당 부서</span>
-        <select value={d.department_id ?? ''} disabled={!canEditCur} onChange={e => set({ department_id: e.target.value })}>
-          <option value="">— 안 정함 —</option>
-          {(departments[d.division_id] || []).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-        </select>
+        <SearchSelect options={departments[d.division_id] || []} value={d.department_id} disabled={!canEditCur}
+                      onChange={(id) => set({ department_id: id == null ? '' : id })}
+                      placeholder="부서 이름으로 찾기" hint="이 사업부에 그런 부서가 없습니다." />
         <small>이 시뮬레이션을 맡는 부서 — 포탈의 부서 표에서 {divName(d.division_id)} 사업부의 활성 부서만 고릅니다.{(departments[d.division_id] || []).length === 0 ? ' 이 사업부에 등록된 부서가 없습니다 — 부서 표(대시보드 설정)에 먼저 넣으세요.' : ''}</small>
       </Field>
       <Field><span>도구</span>
@@ -659,11 +659,10 @@ const ItemManagerModal = ({
                       {bulkDivision == null ? (
                         <small>사업부가 다른 시뮬레이션이 섞여 있어 부서를 한 번에 정할 수 없습니다 — 부서는 사업부에 속합니다.</small>
                       ) : (
-                        <select value={bulk.department_id} disabled={!canEditBulk} onChange={e => setB({ department_id: e.target.value })}>
-                          <option value={KEEP}>— 그대로 두기 —</option>
-                          <option value="">— 안 정함 —</option>
-                          {(departments[bulkDivision] || []).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-                        </select>
+                        <SearchSelect options={[{ id: KEEP, name: '— 그대로 두기 —' }, ...(departments[bulkDivision] || [])]}
+                                      value={bulk.department_id} disabled={!canEditBulk} allowEmpty={false}
+                                      onChange={(id) => setB({ department_id: id == null ? '' : id })}
+                                      placeholder="부서 이름으로 찾기" />
                       )}</Field>
                     <Field><span>도구 — 고른 시뮬레이션들이 쓰는 것</span>
                       {bulkChips(toolUnion, bulk.add_tools, bulk.remove_tools, 'add_tools', 'remove_tools',

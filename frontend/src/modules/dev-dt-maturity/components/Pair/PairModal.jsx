@@ -260,7 +260,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                         <span style={{ fontSize: '0.8125rem' }}>정확도(%)</span>
                         <Input type="number" min="0" max="100" step="0.1" $w="7rem"
                                value={editing.value}
-                               onChange={e => setEditing(s => ({ ...s, value: e.target.value }))} />
+                               onChange={e => setEditing(s => ({ ...s, value: e.target.value }))}
+                               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
                       </Row>
                     ) : (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
@@ -270,7 +271,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     <Row>
                       <Input $grow placeholder="근거 — 무엇을 보고 이렇게 매겼는지 한 줄 (필수)"
                              value={editing.note}
-                             onChange={e => setEditing(s => ({ ...s, note: e.target.value }))} />
+                             onChange={e => setEditing(s => ({ ...s, note: e.target.value }))}
+                             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
                     </Row>
                     <Row>
                       {(axis.evidence || []).filter(k => evidenceFields[k]).map(k => (
@@ -300,9 +302,13 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     <Row>
                       <Primary disabled={busy || !editing.note.trim()
                         || (editing.kind === 'value' && editing.value === '')} onClick={save}>
-                        <Check size={13} /> 저장
+                        <Check size={13} /> {busy ? '담는 중…' : '저장'}
                       </Primary>
                       <Button onClick={() => setEditing(null)}>취소</Button>
+                      {/* ⚠️ 왜 안 되는지는 단추 옆에서 말한다. 패널 맨 위의 알림은 아래 축을 고칠 때 화면 밖이다(2026-08-28). */}
+                      {!editing.note.trim() && <AxisQ>근거를 적어야 저장됩니다.</AxisQ>}
+                      {editing.note.trim() && editing.kind === 'value' && editing.value === '' && <AxisQ>값을 적어야 저장됩니다.</AxisQ>}
+                      {saveError && <Notice $bad style={{ flexBasis: '100%' }}><AlertTriangle size={14} /> <span>{saveError}</span></Notice>}
                     </Row>
                   </Editor>
                 )}

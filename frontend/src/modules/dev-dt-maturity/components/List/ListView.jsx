@@ -49,6 +49,7 @@ const SimCell = styled.td`
   small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
 `;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
+const DeptCell = styled.td`color: #475569; white-space: nowrap; small { color: #cbd5e1; }`;
 const Icon = styled.button`
   border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem;
   &:hover { color: #b91c1c; background: #fef2f2; } &:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -139,12 +140,12 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
         {!allMode && denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
         <Scroll>
           <Table>
-            <thead><tr><th style={{ width: '38%' }}>시험</th><th>시뮬레이션</th><th style={{ width: '2.5rem' }} /></tr></thead>
+            <thead><tr><th style={{ width: '34%' }}>시험</th><th>시뮬레이션</th><th style={{ width: '22%' }}>담당 부서</th><th style={{ width: '2.5rem' }} /></tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><Muted colSpan={3}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
+              {rows.length === 0 && <tr><Muted colSpan={4}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
               {rows.map(({ subject: s, pairs: ps }) => {
                 const groupRow = allMode && s.division_id !== lastDiv
-                  ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={3}>{divName(s.division_id)}</GroupRow></tr>
+                  ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={4}>{divName(s.division_id)}</GroupRow></tr>
                   : null;
                 lastDiv = s.division_id;
                 const span = Math.max(1, ps.length);
@@ -159,7 +160,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   return (
                     <React.Fragment key={s.id}>
                       {groupRow}
-                      <tr>{cell}<Muted>아직 이은 시뮬레이션이 없습니다.</Muted><td /></tr>
+                      <tr>{cell}<Muted>아직 이은 시뮬레이션이 없습니다.</Muted><td /><td /></tr>
                     </React.Fragment>
                   );
                 }
@@ -174,6 +175,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                           {p.agent?.model_kind && <small>{p.agent.model_kind}</small>}
                           <small>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</small>
                         </SimCell>
+                        <DeptCell>{p.agent?.department_name || <small>—</small>}</DeptCell>
                         <td>
                           <Icon disabled={!canTouch(p.division_id)} title="연결 끊기 — 평가·이력이 같이 사라집니다" onClick={() => cut(p)}>
                             <Trash2 size={14} />

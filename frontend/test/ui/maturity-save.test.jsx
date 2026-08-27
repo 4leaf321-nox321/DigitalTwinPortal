@@ -1,0 +1,122 @@
+// 성숙도 — 저장 흐름을 실제로 눌러 본다. (2026-08-28 「근거를 적어도 저장이 안 된다」 점검에서 시작)
+//
+//   ① 쌍 상세: 칸 누르기 → 근거 적기 → 저장 → PUT 이 가고 사다리가 새 칸을 그린다
+//   ② 쌍 상세: 근거 칸에서 Enter 로도 저장된다
+//   ③ 쌍 상세: 정확도 「값 적기」 → 값·근거 → value 로 간다(rung 없음)
+//   ④ 쌍 상세: 서버가 거절하면 그 이유가 저장 단추 옆에 보인다
+//   ⑤ 관리 창: 항목 고르기 → 세부 고치기 → 저장
+//   ⑥ 관리 창: 담당 부서를 찾아 고르고 저장 → department_id 가 숫자로 간다
+import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
+import React from 'react';
+import { render, click, type, keydown, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import PairSide from '../../src/modules/dev-dt-maturity/components/Pair/PairSide';
+import ItemManagerModal from '../../src/modules/dev-dt-maturity/components/List/ItemManagerModal';
+
+const AXES = [
+  { key: 'accuracy', label: '정확도', kind: 'value', question: '맞는가', evidence: ['compared_tests', 'error_pct'],
+    rungs: [{ key: 'trend', label: '경향 일치' }, { key: 'quantitative', label: '정량 오차 안' }, { key: 'correlated', label: '상관 확립' }] },
+  { key: 'automation', label: '자동화', kind: 'rung', question: '돌아가는가', evidence: ['hours_per_run'],
+    rungs: [{ key: 'manual', label: '수동' }, { key: 'pre', label: '전처리 자동' }, { key: 'run', label: '실행 자동' }] },
+];
+const PAIR = {
+  id: 101, subject_id: 1, agent_id: 10, subject: { name: '낙하 시험', product_families: [] }, agent: { name: '구조 해석', tools: [] },
+  assessments: { automation: { rung: 'pre', rung_index: 1, stale: false, note: '스크립트', evidence: {}, assessed_at: '2026-01-01T00:00:00', assessed_by_name: '홍' } },
+  unassessed: ['accuracy'], changes: [], deny_reason: null, phenomena: [],
+};
+
+export default async function run() {
+  const { say, done } = suite();
+  let refuse = null;   // 서버 거절을 흉내낼 때
+  const calls = fakeFetch(({ url, body }) => {
+    if (url.includes('/pairs/101/assessments/')) {
+      if (refuse) { const e = new Error(refuse); throw e; }
+      const axis = url.split('/assessments/')[1];
+      const a = AXES.find(x => x.key === axis);
+      const idx = a.kind === 'value' ? (body.value >= 90 ? 2 : body.value >= 70 ? 1 : 0) : a.rungs.findIndex(r => r.key === body.rung);
+      return { ...PAIR,
+        assessments: { ...PAIR.assessments, [axis]: { rung: a.rungs[idx].key, rung_index: idx, value: body.value ?? null, note: body.note, evidence: body.evidence || {}, assessed_at: '2026-08-28T00:00:00', assessed_by_name: '나', stale: false } },
+        unassessed: [], changes: [{ id: 9, axis, before: 'pre', after: a.rungs[idx].key, created_at: '2026-08-28T00:00:00', actor_name: '나', note: body.note }] };
+    }
+    if (url.endsWith('/pairs/101')) return PAIR;
+    if (/\/(subjects|agents)\/\d+$/.test(url)) return { id: Number(url.split('/').pop()), ...body };
+    return {};
+  });
+
+  try {
+    // ① 칸 → 근거 → 저장
+    await render(<PairSide pairId={101} axes={AXES} onChanged={() => {}} onClose={() => {}} />);
+    say(html().includes('낙하 시험 × 구조 해석'), '① 쌍이 불러와짐');
+    await click(byText('button', '실행 자동'));
+    const note = document.querySelector('input[placeholder^="근거"]');
+    say(!!note, '① 칸을 누르면 근거 칸이 열림');
+    say(byText('button', '저장').disabled && html().includes('근거를 적어야 저장됩니다'), '① 근거가 비면 저장이 잠기고 이유가 옆에 보임');
+    await type(note, '템플릿 도입');
+    say(!byText('button', '저장').disabled, '① 근거를 적으면 저장이 켜짐');
+    await click(byText('button', '저장')); await settle();
+    const put = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/automation'));
+    say(!!put && put.body.rung === 'run' && put.body.note === '템플릿 도입', `① PUT 이 감: ${JSON.stringify(put?.body)}`);
+    say(!document.querySelector('input[placeholder^="근거"]'), '① 저장 뒤 편집 칸이 닫힘');
+    say(html().includes('템플릿 도입') && html().includes('2026-08-28'), '① 사다리가 새 칸·근거·날짜를 그림');
+
+    // ② Enter 로 저장
+    calls.length = 0;
+    await click(byText('button', '전처리 자동'));
+    await type(document.querySelector('input[placeholder^="근거"]'), '되돌림');
+    await keydown(document.querySelector('input[placeholder^="근거"]'), 'Enter'); await settle();
+    say(calls.some(c => c.method === 'PUT' && c.body?.rung === 'pre'), '② 근거 칸에서 Enter 로 저장됨');
+
+    // ③ 정확도 값
+    calls.length = 0;
+    await click(byText('button', '값 적기'));
+    const num = document.querySelector('input[type="number"]');
+    say(!!num && html().includes('값을 적어야 저장됩니다') === false, '③ 값 칸이 열림');
+    await type(num, '91');
+    await type(document.querySelector('input[placeholder^="근거"]'), '12건 비교');
+    await click(byText('button', '저장')); await settle();
+    const put3 = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/accuracy'));
+    say(!!put3 && put3.body.value === 91 && !('rung' in put3.body), `③ value 로 감: ${JSON.stringify(put3?.body)}`);
+    say(html().includes('91%') && html().includes('상관 확립'), '③ 값이 칸으로 환산돼 그려짐');
+
+    // ④ 서버 거절 — 이유가 단추 옆에
+    refuse = 'VD 사업부 인력만 평가합니다.';
+    await click(byText('button', '수동'));
+    await type(document.querySelector('input[placeholder^="근거"]'), 'x');
+    await click(byText('button', '저장')); await settle();
+    const editor = document.querySelector('input[placeholder^="근거"]');
+    say(!!editor && html().includes('VD 사업부 인력만 평가합니다'), '④ 거절 이유가 편집 칸 옆에 보이고 칸은 열린 채');
+    refuse = null;
+    await unmount();
+
+    // ⑤ 관리 창 — 세부 고치고 저장
+    calls.length = 0;
+    const DIVS = [{ id: 17, name: 'MX', deny_reason: null }];
+    await render(<ItemManagerModal kind="subject" divisionId={17} divisions={DIVS} items={[{ id: 1, name: '낙하 시험', division_id: 17, detail: '', product_families: [] }]} pairCount={{}} canEdit denyReason={null} modelKinds={[]} onClose={() => {}} onChanged={() => {}} />);
+    await click(byText('button', '낙하 시험'));
+    const detail = document.querySelector('input[placeholder^="예: 1.2m"]');
+    say(!!detail && byText('button', '저장').disabled, '⑤ 항목을 고르면 상세가 열리고 안 고치면 저장 잠김');
+    await type(detail, '1.2m');
+    await click(byText('button', '저장')); await settle();
+    const put5 = calls.find(c => c.method === 'PUT' && c.url.includes('/subjects/1'));
+    say(!!put5 && put5.body.detail === '1.2m', `⑤ PUT 이 감: ${JSON.stringify(put5?.body)}`);
+    await unmount();
+
+    // ⑥ 담당 부서 — 찾아서 고르기
+    calls.length = 0;
+    await render(<ItemManagerModal kind="agent" divisionId={17} divisions={DIVS} items={[{ id: 5, name: '구조 해석', division_id: 17, kind: '', model_kind: '', tools: [], department_id: null }]} pairCount={{}} canEdit denyReason={null} modelKinds={[]} departments={{ 17: [{ id: 3, name: 'CAE그룹(MX)' }, { id: 4, name: 'Mecha그룹(MX)' }] }} onClose={() => {}} onChanged={() => {}} />);
+    await click(byText('button', '구조 해석'));
+    const dep = document.querySelector('input[data-search-select]');
+    say(!!dep, '⑥ 담당 부서는 검색되는 고르기');
+    await type(dep, 'CAE'); await settle();
+    const opt = byText('li', 'CAE그룹(MX)');
+    say(!!opt && !byText('li', 'Mecha그룹(MX)'), '⑥ 글자를 치면 좁혀짐');
+    await click(opt); await settle();
+    say(!byText('button', '저장').disabled, '⑥ 고르면 저장이 켜짐');
+    await click(byText('button', '저장')); await settle();
+    const put6 = calls.find(c => c.method === 'PUT' && c.url.includes('/agents/5'));
+    say(!!put6 && put6.body.department_id === 3, `⑥ department_id 가 숫자로 감: ${JSON.stringify(put6?.body)}`);
+    await unmount();
+  } catch (e) {
+    say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);
+  }
+  return done();
+}

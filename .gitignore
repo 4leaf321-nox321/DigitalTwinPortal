@@ -88,3 +88,6 @@ backend/uploads/
 #    그래서 패턴으로 막는다. 진짜 소스는 src/ 밑에만 있다.
 /frontend/*.cjs
 /frontend/*.css
+
+# 눌러 보는 시험(npm run test:ui)의 임시 번들
+frontend/.tmp-ui-tests/
