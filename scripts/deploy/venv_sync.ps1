@@ -1,4 +1,4 @@
-<#
+﻿<#
 Bring the virtualenvs in line with the deployed code.
 
 The venvs live beside the app folder rather than inside it:

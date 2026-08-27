@@ -1,4 +1,4 @@
-Param()
+﻿Param()
 Set-StrictMode -Version Latest
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path

@@ -1,4 +1,4 @@
-Param()
+﻿Param()
 <#
 Run script for the MCP server in the deployed package.
 

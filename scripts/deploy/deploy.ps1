@@ -1,4 +1,4 @@
-<#
+﻿<#
 Deploy a release to a fixed operating folder.
 
 Replaces the numbered-folder scheme (digitaltwinportal11, 12, ...) with one
