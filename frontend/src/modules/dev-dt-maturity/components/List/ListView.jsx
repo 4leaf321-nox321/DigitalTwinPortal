@@ -2,51 +2,75 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Trash2, Link2, AlertTriangle } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
+import PairSide from '../Pair/PairSide';
 
-// 목록 — 쌍을 잇는 곳. (PLAN 7-5)
+// 목록 — 왼쪽은 시험 × 시뮬레이션 표(시험 칸은 같은 것끼리 합침), 오른쪽은 고른 쌍의 상세.
+// (PLAN 7-5, 2026-08-28 요청)
+//
+//   왼쪽   1열 시험(셀 합치기) · 2열 시뮬레이션(누르면 오른쪽에 그 쌍) · 끊기
+//          아래에 잇기 폼. 표가 길어지면 표만 스크롤된다.
+//   오른쪽 쌍 상세 — 모달의 속(PairPanel)을 그대로 심는다. 모달은 안 띄운다.
 //
 // 시험 항목·시뮬레이션의 추가·수정·삭제와 가져오기는 **헤더 단추**가 여는 창에서 한다.
-// 이 화면은 하나에 집중한다 — 시험과 시뮬레이션을 잇고, 끊는 것.
-//
-// 「전체」면 모든 사업부의 쌍이 사업부 이름과 함께 보이고, 잇기는 사업부를 먼저 고른다
-// (쌍은 같은 사업부끼리만). 손댈 수 있는지는 쌍마다 그 사업부로 판단한다.
+// 「전체」면 사업부별로 묶여 보이고, 잇기는 사업부를 먼저 고른다(쌍은 같은 사업부끼리만).
 // ⚠️ 연결을 끊으면 평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
 
-const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.75rem; max-width: 980px;`;
-const Box = styled.section`border: 1px solid #e2e8f0; border-radius: 0.5rem; background: white; overflow: hidden;`;
+const Wrap = styled.div`
+  flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(30rem, 1fr) minmax(0, 1.35fr); gap: 1rem;
+  @media (max-width: 1100px) { grid-template-columns: 1fr; grid-auto-rows: minmax(20rem, auto); }
+`;
+const Left = styled.section`
+  min-height: 0; display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: white; overflow: hidden;
+`;
 const BoxHead = styled.div`
-  display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; background: #f8fafc;
+  flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; background: #f8fafc;
   border-bottom: 1px solid #e2e8f0; font-size: 0.875rem; font-weight: 700; color: #1e293b;
 `;
 const Count = styled.span`font-size: 0.75rem; color: #94a3b8; font-weight: 400;`;
 const Hint = styled.span`margin-left: auto; font-size: 0.75rem; color: #94a3b8; font-weight: 400;`;
-const List = styled.div`display: flex; flex-direction: column; max-height: 60vh; overflow: auto;`;
-const Group = styled.div`padding: 0.4rem 0.75rem 0.15rem; font-size: 0.6875rem; font-weight: 700; color: #64748b; background: #fcfcfd;`;
-const Row = styled.div`
-  display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; border-bottom: 1px solid #f1f5f9;
-  font-size: 0.8125rem; &:hover { background: #fafafa; }
+const Scroll = styled.div`flex: 1; min-height: 0; overflow: auto;`;
+const Table = styled.table`
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8125rem;
+  th { position: sticky; top: 0; z-index: 1; background: #f8fafc; text-align: left; font-size: 0.6875rem; font-weight: 700; color: #64748b;
+       padding: 0.4rem 0.6rem; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
 `;
-const Name = styled.span`flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`;
-const Sub = styled.span`color: #94a3b8; font-size: 0.75rem; white-space: nowrap;`;
+const SubjectCell = styled.td`
+  font-weight: 600; color: #1e293b; background: #fcfcfd; border-right: 1px solid #f1f5f9; white-space: nowrap; vertical-align: top !important;
+  small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }
+`;
+const GroupRow = styled.td`
+  font-size: 0.6875rem; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 0.3rem 0.6rem !important;
+`;
+const SimCell = styled.td`
+  cursor: pointer; color: #1e293b;
+  background: ${p => (p.$on ? '#eff6ff' : 'transparent')}; box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #1d4ed8' : 'none')};
+  &:hover { background: ${p => (p.$on ? '#dbeafe' : '#f1f5f9')}; }
+  small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
+`;
+const Muted = styled.td`color: #94a3b8; font-style: italic;`;
 const Icon = styled.button`
   border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem;
   &:hover { color: #b91c1c; background: #fef2f2; } &:disabled { opacity: 0.3; cursor: not-allowed; }
 `;
-const Form = styled.form`display: flex; gap: 0.4rem; padding: 0.5rem 0.75rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap; align-items: center;`;
-const Select = styled.select`padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; max-width: 20rem;`;
+const Form = styled.form`
+  flex-shrink: 0; display: flex; gap: 0.4rem; padding: 0.5rem 0.75rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap; align-items: center; background: #f8fafc;
+`;
+const Select = styled.select`padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; max-width: 18rem;`;
 const Button = styled.button`
   padding: 0.4rem 0.8rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; background: white; color: #475569;
   font-size: 0.8125rem; font-weight: 600; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem;
   &:hover:not(:disabled) { border-color: #1d4ed8; color: #1d4ed8; } &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
+const Sub = styled.span`color: #94a3b8; font-size: 0.75rem; white-space: nowrap;`;
 const Notice = styled.div`
-  display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.6rem 0.75rem; border-radius: 0.5rem;
+  flex-shrink: 0; display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.5rem 0.75rem; margin: 0.5rem 0.75rem 0; border-radius: 0.5rem;
   background: ${p => (p.$bad ? '#fef2f2' : '#fffbeb')}; border: 1px solid ${p => (p.$bad ? '#fecaca' : '#fde68a')};
   color: ${p => (p.$bad ? '#991b1b' : '#92400e')}; font-size: 0.8125rem; line-height: 1.5;
 `;
-const Foot = styled.div`font-size: 0.75rem; color: #64748b; line-height: 1.5;`;
+const Foot = styled.div`flex-shrink: 0; font-size: 0.6875rem; color: #64748b; line-height: 1.5; padding: 0.4rem 0.75rem; border-top: 1px solid #f1f5f9;`;
 
-const ListView = ({ divisionId, divisions = [], denyReason, onOpenPair, onChanged, refreshKey }) => {
+const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, onOpenPair, onClosePair, onChanged, refreshKey }) => {
   const allMode = divisionId === 'all';
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -67,7 +91,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, onOpenPair, onChange
       ]);
       setSubjects(s.data); setAgents(a.data);
       setPairs(allMode
-        ? b.data.boards.flatMap(x => x.subjects.flatMap(sub => sub.pairs.map(p => ({ ...p, division_id: x.division_id, division_name: x.division_name }))))
+        ? b.data.boards.flatMap(x => x.subjects.flatMap(sub => sub.pairs.map(p => ({ ...p, division_id: x.division_id }))))
         : b.data.subjects.flatMap(x => x.pairs.map(p => ({ ...p, division_id: divisionId }))));
       setReconcile(r.data);
       setError(null);
@@ -77,7 +101,16 @@ const ListView = ({ divisionId, divisions = [], denyReason, onOpenPair, onChange
 
   const run = async (fn) => { try { await fn(); load(); if (onChanged) onChanged(); } catch (e) { setError(e.message); } };
 
-  // 잇기 — 전체면 사업부를 먼저 고른다(쌍은 같은 사업부끼리만). 이미 이어진 짝은 목록에서 뺀다.
+  // 표의 줄 — 시험마다 그 쌍들. 쌍 없는 시험도 한 줄 차지한다(잇는 것을 잊지 않게).
+  const rows = useMemo(() => {
+    const bySubject = {};
+    pairs.forEach(p => { (bySubject[p.subject_id] = bySubject[p.subject_id] || []).push(p); });
+    const order = divisions.map(x => x.id);
+    const list = [...subjects].sort((a, b) => (allMode ? order.indexOf(a.division_id) - order.indexOf(b.division_id) : 0) || (a.order ?? 0) - (b.order ?? 0) || a.id - b.id);
+    return list.map(s => ({ subject: s, pairs: bySubject[s.id] || [] }));
+  }, [subjects, pairs, divisions, allMode]);
+
+  // 잇기 — 전체면 사업부를 먼저 고른다. 이미 이어진 짝은 목록에서 뺀다.
   const linkDivision = allMode ? Number(link.division_id) || null : divisionId;
   const linkSubjects = useMemo(() => subjects.filter(s => !allMode || s.division_id === linkDivision), [subjects, allMode, linkDivision]);
   const linkAgents = useMemo(() => agents.filter(a => !allMode || a.division_id === linkDivision), [agents, allMode, linkDivision]);
@@ -86,49 +119,74 @@ const ListView = ({ divisionId, divisions = [], denyReason, onOpenPair, onChange
   const canLink = linkDivision != null && canTouch(linkDivision);
   const touchable = divisions.filter(x => !x.deny_reason);
 
-  const groups = useMemo(() => {
-    if (!allMode) return [[null, pairs]];
-    const order = divisions.map(x => x.id);
-    const m = new Map();
-    pairs.forEach(p => { if (!m.has(p.division_id)) m.set(p.division_id, []); m.get(p.division_id).push(p); });
-    return [...m.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-  }, [pairs, allMode, divisions]);
+  const cut = (p) => {
+    const n = Object.values(p.assessments).filter(Boolean).length;
+    if (window.confirm(`연결을 끊습니다. 평가 ${n}건과 이력이 같이 사라집니다.`)) {
+      run(() => maturityApi.deletePair(p.id));
+      if (pairId === p.id && onClosePair) onClosePair();
+    }
+  };
 
+  let lastDiv = null;
   return (
     <Wrap>
-      {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
-      {!allMode && denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
-
-      <Box>
+      <Left>
         <BoxHead>
-          <Link2 size={14} /> 쌍 — 시험 × 시뮬레이션 <Count>{pairs.length}</Count>
-          <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 항목 관리와 가져오기는 위 헤더 단추에서</Hint>
+          <Link2 size={14} /> 시험 × 시뮬레이션 <Count>쌍 {pairs.length}</Count>
+          <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 관리·가져오기는 헤더 단추에서</Hint>
         </BoxHead>
-        <List>
-          {pairs.length === 0 && <Row><Sub>아직 이어진 쌍이 없습니다. 아래에서 잇거나 헤더의 「가져오기」로 넣으세요.</Sub></Row>}
-          {groups.map(([divId, list]) => (
-            <React.Fragment key={divId ?? 'one'}>
-              {allMode && <Group>{divName(divId)} · {list.length}</Group>}
-              {list.map(p => (
-                <Row key={p.id}>
-                  <Name>
-                    <a href={`?pair=${p.id}`} onClick={e => { e.preventDefault(); onOpenPair(p.id); }}>
-                      {p.subject.name} × {p.agent?.name}
-                    </a>
-                  </Name>
-                  <Sub>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</Sub>
-                  <Icon disabled={!canTouch(p.division_id)} title="연결 끊기 — 평가·이력이 같이 사라집니다"
-                        onClick={() => {
-                          const n = Object.values(p.assessments).filter(Boolean).length;
-                          if (window.confirm(`연결을 끊습니다. 평가 ${n}건과 이력이 같이 사라집니다.`)) run(() => maturityApi.deletePair(p.id));
-                        }}>
-                    <Trash2 size={14} />
-                  </Icon>
-                </Row>
-              ))}
-            </React.Fragment>
-          ))}
-        </List>
+        {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
+        {!allMode && denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
+        <Scroll>
+          <Table>
+            <thead><tr><th style={{ width: '38%' }}>시험</th><th>시뮬레이션</th><th style={{ width: '2.5rem' }} /></tr></thead>
+            <tbody>
+              {rows.length === 0 && <tr><Muted colSpan={3}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
+              {rows.map(({ subject: s, pairs: ps }) => {
+                const groupRow = allMode && s.division_id !== lastDiv
+                  ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={3}>{divName(s.division_id)}</GroupRow></tr>
+                  : null;
+                lastDiv = s.division_id;
+                const span = Math.max(1, ps.length);
+                const cell = (
+                  <SubjectCell rowSpan={span}>
+                    {s.name}
+                    {s.detail && <small>{s.detail}</small>}
+                    {(s.product_families || []).length > 0 && <small>{s.product_families.join(', ')}</small>}
+                  </SubjectCell>
+                );
+                if (ps.length === 0) {
+                  return (
+                    <React.Fragment key={s.id}>
+                      {groupRow}
+                      <tr>{cell}<Muted>아직 이은 시뮬레이션이 없습니다.</Muted><td /></tr>
+                    </React.Fragment>
+                  );
+                }
+                return (
+                  <React.Fragment key={s.id}>
+                    {groupRow}
+                    {ps.map((p, i) => (
+                      <tr key={p.id}>
+                        {i === 0 && cell}
+                        <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 쌍의 사다리가 나옵니다">
+                          {p.agent?.name}
+                          {p.agent?.model_kind && <small>{p.agent.model_kind}</small>}
+                          <small>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</small>
+                        </SimCell>
+                        <td>
+                          <Icon disabled={!canTouch(p.division_id)} title="연결 끊기 — 평가·이력이 같이 사라집니다" onClick={() => cut(p)}>
+                            <Trash2 size={14} />
+                          </Icon>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </Table>
+        </Scroll>
         {(allMode ? touchable.length > 0 : !denyReason) && (
           <Form onSubmit={e => { e.preventDefault(); if (!canLink || !link.subject_id || !link.agent_id) return;
             run(async () => { await maturityApi.createPair(Number(link.subject_id), Number(link.agent_id)); setLink(l => ({ ...l, subject_id: '', agent_id: '' })); }); }}>
@@ -153,15 +211,16 @@ const ListView = ({ divisionId, divisions = [], denyReason, onOpenPair, onChange
             {allMode && <Sub>쌍은 같은 사업부끼리만 잇습니다.</Sub>}
           </Form>
         )}
-      </Box>
+        {reconcile && (reconcile.missing_here.length > 0 || reconcile.only_here.length > 0) && (
+          <Foot>
+            로드맵과 어긋남 — 로드맵에는 있는데 여기 없는 시험 <strong>{reconcile.missing_here.length}</strong>
+            {reconcile.missing_here.length > 0 && <> ({reconcile.missing_here.slice(0, 6).join(', ')}{reconcile.missing_here.length > 6 ? ' …' : ''})</>}
+            {' '}· 여기만 있는 시험 <strong>{reconcile.only_here.length}</strong>. 세기만 합니다.
+          </Foot>
+        )}
+      </Left>
 
-      {reconcile && (reconcile.missing_here.length > 0 || reconcile.only_here.length > 0) && (
-        <Foot>
-          로드맵과 어긋남 — 로드맵에는 있는데 여기 없는 시험 <strong>{reconcile.missing_here.length}</strong>
-          {reconcile.missing_here.length > 0 && <> ({reconcile.missing_here.slice(0, 6).join(', ')}{reconcile.missing_here.length > 6 ? ' …' : ''})</>}
-          {' '}· 여기만 있는 시험 <strong>{reconcile.only_here.length}</strong>. 세기만 합니다 — 맞추라고 강제하지 않습니다.
-        </Foot>
-      )}
+      <PairSide pairId={pairId} axes={axes} onChanged={() => { load(); if (onChanged) onChanged(); }} onClose={onClosePair} />
     </Wrap>
   );
 };

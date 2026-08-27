@@ -24,7 +24,12 @@ const StickyBar = styled.div`
   flex-shrink: 0; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
   padding: 0.875rem 1.5rem; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
 `;
-const Main = styled.div`flex: 1; overflow-y: auto; padding: 1rem 1.5rem 2rem;`;
+const Main = styled.div`
+  flex: 1; min-height: 0; overflow-y: auto; padding: 1rem 1.5rem 2rem;
+  display: flex; flex-direction: column;
+  /* 목록 탭은 좌 표·우 상세가 화면을 다 쓰고 각자 스크롤된다 — 바깥은 안 흐른다 */
+  ${p => (p.$fill ? 'overflow: hidden; padding-bottom: 1rem;' : '')}
+`;
 const Tab = styled.button`
   padding: 0.4rem 0.9rem; border: none; border-bottom: 2px solid ${p => (p.$on ? '#1d4ed8' : 'transparent')};
   background: transparent; color: ${p => (p.$on ? '#1d4ed8' : '#64748b')}; font-weight: 700; font-size: 0.9rem;
@@ -121,16 +126,18 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
         <Hint>시뮬레이션 부문 · 시험 × 시뮬레이션 쌍마다 정확도·자동화·모델링·범위·대체를 매깁니다. DX KPI(가상 검증률)와는 무관합니다.</Hint>
       </StickyBar>
-      <Main>
+      <Main $fill={tab === 'list'}>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters}
                      onOpenPair={(id) => patch({ pair: id })} refreshKey={refreshKey} />
         ) : (
           <ListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null}
-                    onOpenPair={(id) => patch({ pair: id })} onChanged={bump} refreshKey={refreshKey} />
+                    axes={axes} pairId={pairId}
+                    onOpenPair={(id) => patch({ pair: id })} onClosePair={() => patch({ pair: null })}
+                    onChanged={bump} refreshKey={refreshKey} />
         ))}
-        {pairId && defs && (
+        {pairId && defs && tab !== 'list' && (
           <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
         )}
         {modal && defs && divisionId && (
