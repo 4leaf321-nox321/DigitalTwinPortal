@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Plus, Trash2, Loader2, AlertTriangle, Link2, Layers } from 'lucide-react';
+import { X, Plus, Trash2, Loader2, AlertTriangle, Link2, Layers, Wrench } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import { nextSelection, dragSelection } from '../../utils/selection';
 
@@ -121,16 +121,16 @@ const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 const toDraft = (kind, item) => (kind === 'subject'
   ? { name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
       accuracy_rule: item.accuracy_rule || 'auto' }
-  : { name: item.name, kind: item.kind || '', model_kind: item.model_kind || '' });
+  : { name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])] });
 
 const toPayload = (kind, d) => (kind === 'subject'
   ? { name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
-  : { name: d.name, kind: d.kind, model_kind: d.model_kind || null });
+  : { name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools });
 
 /** 일괄 초안의 빈 상태 — 전부 「그대로 두기」. */
 const emptyBulk = (kind) => (kind === 'subject'
   ? { accuracy_rule: KEEP, add_families: [], remove_families: [] }
-  : { kind: KEEP, model_kind: KEEP });
+  : { kind: KEEP, model_kind: KEEP, add_tools: [], remove_tools: [] });
 
 const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], onClose, onChanged }) => {
   const meta = KINDS[kind];
@@ -225,7 +225,7 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
   // ── 일괄 수정 ──
   const bulkChanged = !!bulk && (kind === 'subject'
     ? (bulk.accuracy_rule !== KEEP || bulk.add_families.length > 0 || bulk.remove_families.length > 0)
-    : (bulk.kind !== KEEP || bulk.model_kind !== KEEP));
+    : (bulk.kind !== KEEP || bulk.model_kind !== KEEP || bulk.add_tools.length > 0 || bulk.remove_tools.length > 0));
   const bulkPayload = (item) => {
     if (kind === 'subject') {
       const fams = (item.product_families || []).filter(f => !bulk.remove_families.includes(f));
@@ -234,7 +234,9 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
       if (bulk.accuracy_rule !== KEEP) p.accuracy_rule = bulk.accuracy_rule;
       return p;
     }
-    const p = {};
+    const tools = (item.tools || []).filter(t => !bulk.remove_tools.includes(t));
+    bulk.add_tools.forEach(t => { if (!tools.includes(t)) tools.push(t); });
+    const p = { tools };
     if (bulk.kind !== KEEP) p.kind = bulk.kind;
     if (bulk.model_kind !== KEEP) p.model_kind = bulk.model_kind || null;
     return p;
@@ -250,6 +252,21 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
     picked.forEach(i => (i.product_families || []).forEach(f => { c[f] = (c[f] || 0) + 1; }));
     return Object.entries(c).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [picked]);
+  // 도구 — 이 사업부의 다른 시뮬레이션이 쓰는 이름이 제안으로. 같은 도구를 다른 글자로 적지 않게.
+  const toolPool = useMemo(() => [...new Set(items.flatMap(i => i.tools || []))].sort(), [items]);
+  const toolUnion = useMemo(() => {
+    const c = {};
+    picked.forEach(i => (i.tools || []).forEach(t => { c[t] = (c[t] || 0) + 1; }));
+    return Object.entries(c).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [picked]);
+  const [newTool, setNewTool] = useState('');
+  const addTool = () => {
+    const t = newTool.trim();
+    if (!t) return;
+    if (many) { if (!bulk.add_tools.includes(t)) setB({ add_tools: [...bulk.add_tools, t], remove_tools: bulk.remove_tools.filter(x => x !== t) }); }
+    else if (d && !d.tools.includes(t)) set({ tools: [...d.tools, t] });
+    setNewTool('');
+  };
 
   const addFamily = () => {
     const f = newFamily.trim();
@@ -296,6 +313,9 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                     <b>{item.name}</b>
                     {kind === 'agent' && item.model_kind && (
                       <em title="모델 종류">{modelKinds.find(m => m.key === item.model_kind)?.label?.slice(0, 2) || item.model_kind}</em>
+                    )}
+                    {kind === 'agent' && (item.tools || []).length > 0 && (
+                      <em title={`도구: ${item.tools.join(' · ')}`}><Wrench size={10} />{item.tools.length}</em>
                     )}
                     {n > 0
                       ? <em title="걸린 쌍"><Link2 size={10} />{n}</em>
@@ -359,6 +379,24 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                     </select>
                     <small>물리 기반 / 데이터 기반 / 하이브리드. 부문이 아니라 속성입니다.</small></Field>
                 </Pair>
+                <Field><span>도구</span>
+                  <Chips>
+                    {d.tools.map(t => (
+                      <Chip key={t}>{t}
+                        {canEdit && <button type="button" title="빼기" onClick={() => set({ tools: d.tools.filter(x => x !== t) })}><X size={11} /></button>}
+                      </Chip>
+                    ))}
+                    {d.tools.length === 0 && <small>아직 없습니다.</small>}
+                    {canEdit && (
+                      <ChipAdd>
+                        <input list="tool-pool" value={newTool} onChange={e => setNewTool(e.target.value)}
+                               placeholder="도구 이름 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTool(); } }} />
+                        <button type="button" onClick={addTool} disabled={!newTool.trim()} title="추가"><Plus size={11} /></button>
+                      </ChipAdd>
+                    )}
+                  </Chips>
+                  <small>이 시뮬레이션에 쓰는 도구를 하나씩 — 예: LS-DYNA, HyperMesh. 이 사업부의 다른 시뮬레이션이 쓰는 이름이 제안으로 뜹니다.</small>
+                </Field>
                 <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
               </>
             )}
@@ -429,9 +467,41 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                       </select></Field>
                   </Pair>
                 )}
+                {kind === 'agent' && (
+                  <Field><span>도구 — 고른 시뮬레이션들이 쓰는 것</span>
+                    <Chips>
+                      {toolUnion.map(([t, n]) => {
+                        const removing = bulk.remove_tools.includes(t);
+                        return (
+                          <Chip key={t} $partial={n < picked.length || removing} title={removing ? '저장하면 전체에서 빠집니다' : `${picked.length}개 중 ${n}개가 씀`}
+                                style={removing ? { textDecoration: 'line-through' } : undefined}>
+                            {t} <small>{n}/{picked.length}</small>
+                            {canEdit && (removing
+                              ? <button type="button" title="빼기 취소" onClick={() => setB({ remove_tools: bulk.remove_tools.filter(x => x !== t) })}><Plus size={11} /></button>
+                              : <button type="button" title="전체에서 빼기" onClick={() => setB({ remove_tools: [...bulk.remove_tools, t], add_tools: bulk.add_tools.filter(x => x !== t) })}><X size={11} /></button>)}
+                          </Chip>
+                        );
+                      })}
+                      {bulk.add_tools.map(t => (
+                        <Chip key={`add-${t}`} title="저장하면 전체에 들어갑니다">+ {t}
+                          {canEdit && <button type="button" title="넣기 취소" onClick={() => setB({ add_tools: bulk.add_tools.filter(x => x !== t) })}><X size={11} /></button>}
+                        </Chip>
+                      ))}
+                      {canEdit && (
+                        <ChipAdd>
+                          <input list="tool-pool" value={newTool} onChange={e => setNewTool(e.target.value)}
+                                 placeholder="전체에 넣을 도구 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTool(); } }} />
+                          <button type="button" onClick={addTool} disabled={!newTool.trim()} title="전체에 넣기"><Plus size={11} /></button>
+                        </ChipAdd>
+                      )}
+                    </Chips>
+                    <small>칩의 ×는 고른 시뮬레이션 전체에서 뺍니다. 점선 칩은 일부만 쓰는 것.</small>
+                  </Field>
+                )}
               </>
             )}
             <datalist id="fam-pool">{familyPool.map(f => <option key={f} value={f} />)}</datalist>
+            <datalist id="tool-pool">{toolPool.map(t => <option key={t} value={t} />)}</datalist>
           </Right>
         </Two>
 

@@ -58,10 +58,18 @@ class MaturityAgent(BaseModel):
     kind = db.Column(db.String(100))                 # 구조 / 열 / 유동 … 자유 텍스트
     # 물리 기반 / 데이터 기반 / 하이브리드 — 부문이 아니라 속성이다(PLAN 2절)
     model_kind = db.Column(db.String(20))
+    # 이 시뮬레이션에 쓰는 도구들 — 인스턴스 목록(예: LS-DYNA, HyperMesh). 자유 텍스트,
+    # 이름으로만 든다. 인텔의 도구 표와 FK 로 묶지 않는다 — 저쪽이 바뀌어도 여기가 안 깨진다.
+    tools = db.Column(db.JSON, default=list)
     project_uuid = db.Column(db.String(64), index=True)   # 참고 링크. FK 아님
 
     pairs = db.relationship('MaturityPair', backref='agent',
                             cascade='all, delete-orphan', passive_deletes=True)
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['tools'] = list(self.tools or [])
+        return d
 
 
 class MaturityPair(BaseModel):

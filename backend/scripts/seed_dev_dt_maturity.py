@@ -37,6 +37,13 @@ from app.modules.dev_dt_maturity.models import (                             # n
 from app.modules.digital_twin_dashboard.models import Division               # noqa: E402
 
 NOW = datetime.now()
+# 종류 → 흔히 쓰는 도구. 시뮬레이션에 인스턴스로 붙는다(전자제품 CAE 에서 흔한 것들).
+TOOLS_BY_KIND = {
+    '구조': ['LS-DYNA', 'HyperMesh'], '열': ['Ansys Icepak', 'FloTHERM'], '유동': ['Ansys Fluent', 'STAR-CCM+'],
+    '전자기': ['HFSS', 'CST Studio'], '진동': ['Ansys Mechanical', 'HyperMesh'], '음향': ['Actran', 'COMSOL'],
+    '광학': ['LightTools', 'Zemax'], '열구조': ['Abaqus', 'HyperMesh'], '동역학': ['RecurDyn', 'Adams'],
+    '시스템': ['Amesim'], '공차': ['3DCS'], 'ML': ['Python', 'PyTorch'],
+}
 PEOPLE = ['김해석', '박시험', '이구조', '최열유동', '정데이터']
 
 # ── 자료 ──────────────────────────────────────────────────────────────────
@@ -361,7 +368,8 @@ def main():
                 for i, (sname, kind, model, assess, history) in enumerate(sims):
                     agent = agents.get(sname)
                     if agent is None:
-                        agent = MaturityAgent(division_id=div.id, sector='simulation', name=sname, kind=kind, model_kind=model)
+                        agent = MaturityAgent(division_id=div.id, sector='simulation', name=sname, kind=kind, model_kind=model,
+                                              tools=TOOLS_BY_KIND.get(kind, []))
                         db.session.add(agent); db.session.flush(); agents[sname] = agent; counts['agents'] += 1
                     pair = MaturityPair(subject_id=subject.id, agent_id=agent.id)
                     db.session.add(pair); db.session.flush(); counts['pairs'] += 1

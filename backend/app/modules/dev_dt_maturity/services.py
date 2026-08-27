@@ -67,7 +67,8 @@ def update_subject(row, payload):
     return row
 
 
-def create_agent(division_id, sector, name, kind=None, model_kind=None, project_uuid=None):
+def create_agent(division_id, sector, name, kind=None, model_kind=None, project_uuid=None,
+                 tools=None):
     _sector_or_refuse(sector)
     if not D.SECTOR_BY_KEY[sector]['has_agent']:
         raise Refused('이 부문은 수단 없이 대상에 직접 매깁니다.')
@@ -80,6 +81,7 @@ def create_agent(division_id, sector, name, kind=None, model_kind=None, project_
         division_id=int(division_id), sector=sector, name=name[:300],
         kind=(kind or '')[:100] or None, model_kind=model_kind or None,
         project_uuid=(project_uuid or '')[:64] or None,
+        tools=_clean_list(tools),
     )
     db.session.add(row)
     db.session.flush()
@@ -101,6 +103,8 @@ def update_agent(row, payload):
         row.model_kind = mk
     if 'project_uuid' in payload:
         row.project_uuid = (payload.get('project_uuid') or '')[:64] or None
+    if 'tools' in payload:
+        row.tools = _clean_list(payload.get('tools'))
     return row
 
 

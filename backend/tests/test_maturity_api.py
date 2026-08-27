@@ -237,3 +237,14 @@ def test_사업부_이력은_쌍_이름을_달고_최근순이다(client, auth, 
     assert [(r['before'], r['after']) for r in rows] == [('pre', 'run'), (None, 'pre')]
     assert rows[0]['subject_name'] == '낙하 시험' and rows[0]['agent_name'] == '구조 해석'
     assert client.get(f'{BASE}/changes?division_id={world["vd"].id}', headers=auth(mx_user)).get_json()['data'] == []
+
+
+def test_시뮬레이션의_도구는_목록으로_들고_정돈된다(client, auth, world, mx_user):
+    a = _post(client, auth, mx_user, '/agents',
+              {'division_id': world['mx'].id, 'name': '구조 해석',
+               'tools': ['LS-DYNA', ' HyperMesh ', 'LS-DYNA', '']})['data']
+    assert a['tools'] == ['LS-DYNA', 'HyperMesh']            # 공백·중복·빈칸 정돈
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'tools': 'Abaqus, HyperMesh'}, headers=auth(mx_user))
+    assert res.get_json()['data']['tools'] == ['Abaqus', 'HyperMesh']   # 쉼표 글자도 받는다
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'kind': '구조'}, headers=auth(mx_user))
+    assert res.get_json()['data']['tools'] == ['Abaqus', 'HyperMesh']   # 안 보낸 칸은 그대로
