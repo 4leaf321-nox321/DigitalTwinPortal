@@ -134,6 +134,18 @@ const Err = styled.div`
   background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.8125rem;
 `;
 
+// 사업부 — 시험 항목도 시뮬레이션도 사업부에 매인다. 쌍은 같은 사업부끼리만 잇기 때문에,
+// 걸린 쌍이 있으면 옮길 수 없다(먼저 끊는다). 다른 사업부로 보내는 것은 가는 쪽도 손댈 수 있어야 한다.
+const DivisionField = ({ d, set, canEdit, divisions, pairs }) => (
+  <Field>
+    <span>사업부</span>
+    <select value={d.division_id ?? ''} disabled={!canEdit || pairs > 0} onChange={e => set({ division_id: Number(e.target.value) })}>
+      {divisions.map(x => <option key={x.id} value={x.id}>{x.name}{x.deny_reason ? ' (손댈 수 없음)' : ''}</option>)}
+    </select>
+    <small>{pairs > 0 ? `걸린 쌍이 ${pairs}개 있어 옮길 수 없습니다 — 옮기려면 먼저 쌍을 끊으세요.` : '쌍이 없을 때만 다른 사업부로 옮길 수 있습니다. 쌍은 같은 사업부끼리만 잇습니다.'}</small>
+  </Field>
+);
+
 const KINDS = {
   subject: { title: '시험 항목 관리', placeholder: '새 시험 항목 이름 — Enter', pick: '왼쪽에서 시험 항목을 고르세요.', unit: '시험' },
   agent: { title: '시뮬레이션 관리', placeholder: '새 시뮬레이션 이름 — Enter', pick: '왼쪽에서 시뮬레이션을 고르세요.', unit: '시뮬레이션' },
@@ -146,20 +158,20 @@ const RULES = [
 const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 
 const toDraft = (kind, item) => (kind === 'subject'
-  ? { name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
+  ? { division_id: item.division_id, name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
       accuracy_rule: item.accuracy_rule || 'auto' }
-  : { name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])] });
+  : { division_id: item.division_id, name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])] });
 
 const toPayload = (kind, d) => (kind === 'subject'
-  ? { name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
-  : { name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools });
+  ? { division_id: d.division_id, name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
+  : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools });
 
 /** 일괄 초안의 빈 상태 — 전부 「그대로 두기」. */
 const emptyBulk = (kind) => (kind === 'subject'
   ? { accuracy_rule: KEEP, add_families: [], remove_families: [] }
   : { kind: KEEP, model_kind: KEEP, add_tools: [], remove_tools: [] });
 
-const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalog = [], onClose, onChanged }) => {
+const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalog = [], divisions = [], onClose, onChanged }) => {
   const meta = KINDS[kind];
   const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
   const [anchor, setAnchor] = useState(null);       // Shift·드래그 범위의 시작
@@ -352,7 +364,7 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
       <Panel onClick={e => e.stopPropagation()}>
         <Head>
           <Title>{meta.title}</Title>
-          <Count>{items.length}개{picked.length > 1 && ` · ${picked.length}개 고름`}</Count>
+          <Count>{divisions.find(x => x.id === divisionId)?.name || ''} · {items.length}개{picked.length > 1 && ` · ${picked.length}개 고름`}</Count>
           {denyReason && <Count>· {denyReason} 읽기만 됩니다.</Count>}
           <CloseButton onClick={onClose} title="닫기"><X size={18} /></CloseButton>
         </Head>
@@ -448,6 +460,9 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
             {!tidyOpen && picked.length === 0 && <Msg>{meta.pick}</Msg>}
 
             {/* ── 하나 ── */}
+            {!tidyOpen && current && d && (
+              <DivisionField d={d} set={set} canEdit={canEdit} divisions={divisions} pairs={pairCount[current.id] || 0} />
+            )}
             {!tidyOpen && current && d && kind === 'subject' && (
               <>
                 <Field><span>이름</span>

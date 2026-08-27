@@ -336,3 +336,21 @@ def test_제품군은_로드맵_설정이_표준이고_찾기_정돈_바꾸기�
     assert res.get_json()['data'] == {'renamed': 2}
     subs = client.get(f'{BASE}/subjects?division_id={world["mx"].id}', headers=auth(mx_user)).get_json()['data']
     assert all('S시리즈' not in s['product_families'] and 'S 시리즈' in s['product_families'] for s in subs)
+
+
+def test_사업부는_속성이고_걸린_쌍이_없을_때만_옮긴다(client, auth, world, mx_user, office):
+    s, a, p = _pair(client, auth, mx_user, world['mx'])
+    assert s['division_id'] == world['mx'].id and a['division_id'] == world['mx'].id
+    # 쌍이 걸린 채로는 못 옮긴다
+    res = client.put(f'{BASE}/subjects/{s["id"]}', json={'division_id': world['vd'].id}, headers=auth(office))
+    assert res.status_code == 400 and '먼저 쌍을 끊으세요' in res.get_json()['message']
+    client.delete(f'{BASE}/pairs/{p["id"]}', headers=auth(mx_user))
+    # MX 사람은 VD 로 못 보낸다 — 가는 쪽도 손댈 수 있어야 한다
+    res = client.put(f'{BASE}/subjects/{s["id"]}', json={'division_id': world['vd'].id}, headers=auth(mx_user))
+    assert res.status_code == 403 and 'VD' in res.get_json()['message']
+    # 사무국은 된다
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'division_id': world['vd'].id}, headers=auth(office))
+    assert res.status_code == 200 and res.get_json()['data']['division_id'] == world['vd'].id
+    # 같은 사업부로 보내는 것은 아무 일도 아니다
+    res = client.put(f'{BASE}/subjects/{s["id"]}', json={'division_id': world['mx'].id, 'detail': 'x'}, headers=auth(mx_user))
+    assert res.status_code == 200 and res.get_json()['data']['division_id'] == world['mx'].id

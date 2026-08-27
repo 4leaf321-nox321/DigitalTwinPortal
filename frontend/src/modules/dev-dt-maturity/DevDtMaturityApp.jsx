@@ -121,7 +121,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
         )}
         {modal && defs && divisionId && (
-          <ModalHost kind={modal} divisionId={divisionId} divisionName={division?.name}
+          <ModalHost kind={modal} divisionId={divisionId} divisionName={division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      onClose={() => setModal(null)} onChanged={bump} />
         )}

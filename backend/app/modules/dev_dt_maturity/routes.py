@@ -167,11 +167,13 @@ def update_subject(actor, row_id):
     row = MaturitySubject.query.get(row_id)
     if not row:
         return error_response('없는 대상입니다.', status_code=404)
-    denied = _deny(actor, row.division_id)
+    p = request.get_json() or {}
+    denied = _deny(actor, row.division_id) or (
+        _deny(actor, p['division_id']) if p.get('division_id') not in (None, '') else None)
     if denied:
         return denied
     try:
-        S.update_subject(row, request.get_json() or {})
+        S.update_subject(row, p)
         db.session.commit()
         return success_response(row.to_dict())
     except S.Refused as e:
@@ -234,11 +236,13 @@ def update_agent(actor, row_id):
     row = MaturityAgent.query.get(row_id)
     if not row:
         return error_response('없는 수단입니다.', status_code=404)
-    denied = _deny(actor, row.division_id)
+    p = request.get_json() or {}
+    denied = _deny(actor, row.division_id) or (
+        _deny(actor, p['division_id']) if p.get('division_id') not in (None, '') else None)
     if denied:
         return denied
     try:
-        S.update_agent(row, request.get_json() or {})
+        S.update_agent(row, p)
         db.session.commit()
         return success_response(row.to_dict())
     except S.Refused as e:

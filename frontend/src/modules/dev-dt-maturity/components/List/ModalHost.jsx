@@ -6,7 +6,7 @@ import ImportModal from './ImportModal';
 // 헤더 단추가 여는 창 셋(시험 항목 관리 · 시뮬레이션 관리 · 가져오기)의 자료 주인.
 // 어느 탭에 있든 헤더에서 열리므로, 목록 화면이 아니라 여기가 목록을 든다.
 
-const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onClose, onChanged }) => {
+const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason, modelKinds, onClose, onChanged }) => {
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
   const [pairs, setPairs] = useState([]);
@@ -59,7 +59,7 @@ const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onC
       items={kind === 'subject' ? subjects : agents}
       pairCount={kind === 'subject' ? pairCount.bySubject : pairCount.byAgent}
       canEdit={!denyReason} denyReason={denyReason} modelKinds={modelKinds}
-      toolSuggestions={toolNames} toolCatalog={toolCatalog} familyCatalog={familyCatalog}
+      toolSuggestions={toolNames} toolCatalog={toolCatalog} familyCatalog={familyCatalog} divisions={divisions}
       onClose={onClose} onChanged={changed}
     />
   );

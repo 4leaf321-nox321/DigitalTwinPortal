@@ -46,7 +46,25 @@ def create_subject(division_id, sector, name, detail=None, product_families=None
     return row
 
 
+def _move_division(row, payload):
+    """사업부를 옮긴다 — **걸린 쌍이 없을 때만.** 쌍은 같은 사업부끼리만 잇는다(create_pair).
+    쌍이 걸린 채 옮기면 MX 시험에 VD 시뮬레이션이 걸린 꼴이 되어 어느 사업부의 평가인지 사라진다.
+    """
+    if 'division_id' not in payload or payload['division_id'] in (None, ''):
+        return
+    try:
+        target = int(payload['division_id'])
+    except (TypeError, ValueError):
+        raise Refused('사업부가 올바르지 않습니다.')
+    if target == row.division_id:
+        return
+    if row.pairs:
+        raise Refused(f'걸린 쌍이 {len(row.pairs)}개 있어 사업부를 옮길 수 없습니다. 먼저 쌍을 끊으세요.')
+    row.division_id = target
+
+
 def update_subject(row, payload):
+    _move_division(row, payload)
     if 'name' in payload:
         name = (payload.get('name') or '').strip()
         if not name:
@@ -89,6 +107,7 @@ def create_agent(division_id, sector, name, kind=None, model_kind=None, project_
 
 
 def update_agent(row, payload):
+    _move_division(row, payload)
     if 'name' in payload:
         name = (payload.get('name') or '').strip()
         if not name:
