@@ -115,7 +115,7 @@ class MaturityAssessment(BaseModel):
     pair_id = db.Column(db.Integer, db.ForeignKey('dt_maturity_pair.id', ondelete='CASCADE'),
                         nullable=False, index=True)
     axis = db.Column(db.String(40), nullable=False)
-    rung = db.Column(db.String(40))
+    rung = db.Column(db.String(120))     # set 축은 켠 항목들을 쉼표로 쌓는다(e5b3d7f19c42)
     value = db.Column(db.Float)
     note = db.Column(db.Text, nullable=False, default='')     # 근거 — 비우고는 저장 못 한다
     evidence = db.Column(db.JSON, default=dict)              # 축마다 모양이 다르다
@@ -137,8 +137,8 @@ class MaturityChange(BaseModel):
     pair_id = db.Column(db.Integer, db.ForeignKey('dt_maturity_pair.id', ondelete='CASCADE'),
                         nullable=False, index=True)
     axis = db.Column(db.String(40), nullable=False)
-    before = db.Column(db.String(60))
-    after = db.Column(db.String(60))
+    before = db.Column(db.String(120))
+    after = db.Column(db.String(120))
     note = db.Column(db.Text)
     actor_user_id = db.Column(db.Integer)
     actor_name = db.Column(db.String(100))

@@ -143,7 +143,14 @@ const toggleFlag = (flags, key, axis) => {
   if (key == null) return [...flags];
   const manual = axis.rungs[0].key;
   if (key === manual) return [];
-  const next = flags.includes(key) ? flags.filter(f => f !== key) : [...flags, key];
+  const implies = axis.implies || {};
+  let next;
+  if (flags.includes(key)) {
+    // 끈다 — 이것을 품는 항목(완전 대체)도 같이 꺼진다. 다 켜진 채 하나만 빠질 수는 없으니까.
+    next = flags.filter(f => f !== key && !(implies[f] || []).includes(key));
+  } else {
+    next = [...flags, key, ...(implies[key] || [])];      // 켠다 — 품는 항목이 있으면 같이 켠다
+  }
   // 정해진 순서로 — 서버도 그렇게 저장하지만, 보낸 것과 저장된 것이 같아야 읽기 쉽다.
   return axis.rungs.slice(1).map(r => r.key).filter(k => next.includes(k));
 };
@@ -302,6 +309,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     return (
                       <Ladder>
                         {axis.rungs.map((r, i) => {
+                          if (i === 0 && axis.hide_empty) return null;      // 「없음」 칸은 안 보인다 — 다 끄면 그 상태
                           const on = flags != null && (i === 0 ? flags.length === 0 : flags.includes(r.key));
                           return (
                             <Rung key={r.key} role="button" tabIndex={0}
@@ -380,7 +388,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     ) : editing.kind === 'set' ? (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
                         → <strong>{flagLabels(axis, editing.flags)}</strong>
-                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다. 「{axis.rungs[0].label}」은 전부 끕니다.</AxisQ>
+                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다.{!axis.hide_empty && <> 「{axis.rungs[0].label}」은 전부 끕니다.</>}{axis.implies?.full && <> 「완전 대체」를 켜면 나머지가 다 켜집니다.</>}</AxisQ>
                       </span></Row>
                     ) : (
                       <Row><span style={{ fontSize: '0.8125rem' }}>

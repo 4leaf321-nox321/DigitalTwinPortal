@@ -54,10 +54,12 @@ def test_자동화는_묶음이다_서열은_켠_개수():
 def test_시험_대체도_묶음이다_오른쪽일수록_앞선_것():
     axis = D.axis_of('simulation', 'substitution')
     assert axis['kind'] == 'set'
-    assert D.set_flag_keys(axis) == ['cause_analysis', 'screening', 'cert_gate', 'full']
-    assert D.set_flags(axis, 'reference') == []
-    assert D.set_rung(axis, ['full', 'screening']) == 'screening,full'
-    assert D.rung_index(axis, 'screening,cert_gate,full') == 3
+    assert D.set_flag_keys(axis) == ['reference', 'cause_analysis', 'screening', 'cert_gate', 'full']
+    assert axis['hide_empty'] is True and D.set_flags(axis, 'none') == []
+    assert D.set_flags(axis, 'reference') == ['reference']                      # 시험 병행도 켜는 항목
+    assert D.set_rung(axis, ['screening']) == 'screening'
+    assert D.set_rung(axis, ['full']) == 'reference,cause_analysis,screening,cert_gate,full'   # 완전 대체는 다 켠다
+    assert D.rung_index(axis, 'reference') == 1
 
 
 def test_칸의_서열은_index_이고_없는_칸은_None():

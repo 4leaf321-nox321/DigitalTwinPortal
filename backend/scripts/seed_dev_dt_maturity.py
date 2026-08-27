@@ -177,8 +177,8 @@ DATA = {
             _s('스탠드 구조 해석', '구조', 'physics',
                {'accuracy': (94, '', {'compared_tests': 25, 'error_pct': 5}, 45),
                 'automation': ('pre,run,post,report', '', {}, 45), 'scope': ('all', '', {}, 45),
-                'substitution': ('screening,cert_gate,full', '전도 시험 전량 대체', {'tests_saved_per_year': 90}, 45)},
-               [(500, None, 'screening', ''), (200, 'screening', 'screening,cert_gate', ''), (45, 'screening,cert_gate', 'screening,cert_gate,full', '인증 기관 합의')]),
+                'substitution': ('reference,cause_analysis,screening,cert_gate,full', '전도 시험 전량 대체', {'tests_saved_per_year': 90}, 45)},
+               [(500, None, 'screening', ''), (200, 'screening', 'screening,cert_gate', ''), (45, 'screening,cert_gate', 'reference,cause_analysis,screening,cert_gate,full', '인증 기관 합의')]),
         ]),
         ('스피커 음향', '내장 스피커 주파수 응답', ['Neo QLED', 'OLED'], [
             _s('TV 음향 해석', '음향', 'physics',

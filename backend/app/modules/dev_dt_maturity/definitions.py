@@ -117,9 +117,13 @@ AXES = {
             'key': 'substitution', 'label': '시험 대체', 'kind': 'set',
             'question': '시험을 어떤 자리에서 대신하는가',
             'evidence': ['tests_saved_per_year'], 'evidence_label': '줄어든 시험 횟수/년',
-            # 묶음이다(2026-08-28) — 원인 분석·사전 검증·인증 게이트·완전 대체는 사다리가 아니라 **쓰임새**라
-            # 겹칠 수 있다. 첫 칸 「시험 병행(참고)」은 아무것도 안 켠 상태. 오른쪽일수록 앞선 것.
+            # 묶음이다(2026-08-28) — 시험 병행·원인 분석·사전 검증·인증 게이트·완전 대체는 사다리가 아니라
+            # **쓰임새**라 겹칠 수 있다. 첫 칸 「없음」은 아무것도 안 켠 상태이고 화면엔 안 보인다(hide_empty).
+            # 「완전 대체」를 켜면 나머지가 다 켜진다(implies). 오른쪽일수록 앞선 것.
+            'hide_empty': True,
+            'implies': {'full': ['reference', 'cause_analysis', 'screening', 'cert_gate']},
             'rungs': [
+                {'key': 'none', 'label': '없음', 'description': '시험 대체에 시뮬레이션을 쓰지 않는다'},
                 {'key': 'reference', 'label': '시험 병행(참고)', 'description': '시험은 그대로, 참고만'},
                 {'key': 'cause_analysis', 'label': '원인 분석', 'description': '시험에서 난 문제의 원인을 시뮬레이션으로 찾는다'},
                 {'key': 'screening', 'label': '사전 검증', 'description': '시험 전에 시뮬레이션으로 먼저 걸러 시험 횟수를 줄인다'},
@@ -186,7 +190,11 @@ def set_flags(axis, rung_key):
 def set_rung(axis, flags):
     """켠 항목 목록 → 저장할 rung 문자열. 빈 묶음은 첫 칸(수동)."""
     allowed = set_flag_keys(axis)
-    picked = [k for k in allowed if k in (flags or [])]
+    picked = set(flags or [])
+    for key, implied in (axis.get('implies') or {}).items():     # 「완전 대체」는 나머지를 다 켠다
+        if key in picked:
+            picked.update(implied)
+    picked = [k for k in allowed if k in picked]
     return ','.join(picked) if picked else rung_keys(axis)[0]
 
 

@@ -56,6 +56,11 @@ const SimCell = styled.td`
   &:hover { background: ${p => (p.$on ? '#dbeafe' : '#f1f5f9')}; }
   small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
 `;
+// 미평가 배지 — 티는 나되 시끄럽지 않게(호박색).
+const Badge = styled.span`
+  display: inline-block; margin-left: 0.4rem; padding: 0 0.45rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600;
+  background: #fef3c7; color: #92400e; border: 1px solid #fde68a; vertical-align: 1px;
+`;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
 const DeptCell = styled.td`color: #475569; white-space: nowrap; small { color: #cbd5e1; }`;
 const Icon = styled.button`
@@ -180,7 +185,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                         <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 쌍의 사다리가 나옵니다">
                           {p.agent?.name}
                           {(p.agent?.tools || []).length > 0 && <small>{p.agent.tools.join(', ')}</small>}
-                          {p.unassessed.length > 0 && <small>미평가 {p.unassessed.length}개</small>}
+                          {p.unassessed.length > 0 && <Badge title={`아직 안 매긴 축: ${p.unassessed.length}`}>미평가 {p.unassessed.length}개</Badge>}
                           {onEditAgent && (
                             <EditBtn type="button" title="시뮬레이션 관리에서 열기" aria-label={`${p.agent?.name} 편집`}
                                      onClick={e => { e.stopPropagation(); onEditAgent(p.agent_id); }}><Pencil size={11} /></EditBtn>
