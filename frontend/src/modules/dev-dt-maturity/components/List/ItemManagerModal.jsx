@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { X, Plus, Trash2, Loader2, AlertTriangle, Link2, Layers } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
+import { nextSelection, dragSelection } from '../../utils/selection';
 
 // 시험 항목 / 시뮬레이션 관리 — 왼쪽 목록, 오른쪽 상세. 인텔의 역량 관리와 같은 꼴.
 //
@@ -157,7 +158,7 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
     if (current && (!draft || draft._id !== current.id)) setDraft({ _id: current.id, ...toDraft(kind, current) });
     if (many && !bulk) setBulk(emptyBulk(kind));
     if (!many && bulk) setBulk(null);
-  }, [current, many]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, many, picked.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 드래그는 창 어디서 놓아도 끝난다.
   useEffect(() => {
@@ -176,30 +177,23 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
   // 제품군 제안 — 이 사업부의 다른 시험이 이미 쓰는 이름. 같은 뜻을 다른 글자로 적지 않게.
   const familyPool = useMemo(() => [...new Set(items.flatMap(i => i.product_families || []))].sort(), [items]);
 
-  // ── 고르기 ──
-  const rangeIds = (a, b) => {
-    const ia = items.findIndex(i => i.id === a), ib = items.findIndex(i => i.id === b);
-    if (ia < 0 || ib < 0) return [b];
-    const [lo, hi] = ia < ib ? [ia, ib] : [ib, ia];
-    return items.slice(lo, hi + 1).map(i => i.id);
-  };
+  // ── 고르기 — 규칙은 utils/selection.js (시험 있음) ──
+  // ⚠️ 여기서 bulk 를 비우면 안 된다(2026-08-28 실제로 깨짐). Ctrl 로 2개→3개가 되면
+  //    many 가 그대로 true 라 초안을 다시 만드는 효과가 안 돌고, 비운 초안만 남아
+  //    오른쪽이 빈 채였다. 여럿→여럿은 초안을 지킨다 — 적어 둔 것도 안 잃는다.
   const pickOne = (id, e) => {
-    setDraft(null); setBulk(null);
-    if (e.shiftKey && anchor != null) { setSelected(rangeIds(anchor, id)); return; }
-    if (e.ctrlKey || e.metaKey) {
-      setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
-      setAnchor(id); return;
-    }
-    setSelected([id]); setAnchor(id);
+    setDraft(null);
+    const next = nextSelection(items, { selected, anchor }, id, { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey });
+    setSelected(next.selected); setAnchor(next.anchor);
   };
   const dragStart = (id, e) => {
     if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.metaKey) return;
     setDragging(true); setAnchor(id);
   };
   const dragOver = (id) => {
-    if (!dragging || anchor == null) return;
-    setDraft(null); setBulk(null);
-    setSelected(rangeIds(anchor, id));
+    if (!dragging) return;
+    const next = dragSelection(items, anchor, id);
+    if (next) { setDraft(null); setSelected(next); }
   };
 
   // ── 서버 ──
