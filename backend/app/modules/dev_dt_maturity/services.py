@@ -85,8 +85,30 @@ def update_subject(row, payload):
     return row
 
 
+def departments_of(division_id):
+    """이 사업부의 활성 부서 — 담당 부서 고르기의 재료. 포탈 부서 표를 읽기만 한다."""
+    from app.modules.digital_twin_dashboard.models import Department
+    rows = (Department.query.filter_by(division_id=int(division_id), is_active=True)
+            .order_by(Department.name).all())
+    return [{'id': r.id, 'name': r.name} for r in rows]
+
+
+def _department_or_refuse(division_id, department_id):
+    """담당 부서는 **그 사업부의 활성 부서**여야 한다. 아니면 거절 — 다른 사업부 부서를
+    달면 어느 사업부의 시뮬레이션인지가 흐려진다. None 은 「안 정함」."""
+    if department_id in (None, ''):
+        return None
+    try:
+        dep_id = int(department_id)
+    except (TypeError, ValueError):
+        raise Refused('담당 부서가 올바르지 않습니다.')
+    if not any(d['id'] == dep_id for d in departments_of(division_id)):
+        raise Refused('담당 부서는 그 시뮬레이션의 사업부에 속한 부서여야 합니다.')
+    return dep_id
+
+
 def create_agent(division_id, sector, name, kind=None, model_kind=None, project_uuid=None,
-                 tools=None):
+                 tools=None, department_id=None):
     _sector_or_refuse(sector)
     if not D.SECTOR_BY_KEY[sector]['has_agent']:
         raise Refused('이 부문은 수단 없이 대상에 직접 매깁니다.')
@@ -100,6 +122,7 @@ def create_agent(division_id, sector, name, kind=None, model_kind=None, project_
         kind=(kind or '')[:100] or None, model_kind=model_kind or None,
         project_uuid=(project_uuid or '')[:64] or None,
         tools=_clean_list(tools),
+        department_id=_department_or_refuse(division_id, department_id),
     )
     db.session.add(row)
     db.session.flush()
@@ -124,6 +147,12 @@ def update_agent(row, payload):
         row.project_uuid = (payload.get('project_uuid') or '')[:64] or None
     if 'tools' in payload:
         row.tools = _clean_list(payload.get('tools'))
+    if 'department_id' in payload:
+        row.department_id = _department_or_refuse(row.division_id, payload.get('department_id'))
+    elif 'division_id' in payload and row.department_id:
+        # 사업부를 옮겼는데 부서가 옛 사업부 것이면 비운다 — 잘못된 짝을 남기지 않는다
+        if not any(d['id'] == row.department_id for d in departments_of(row.division_id)):
+            row.department_id = None
     return row
 
 

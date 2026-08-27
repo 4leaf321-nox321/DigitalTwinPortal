@@ -61,6 +61,9 @@ class MaturityAgent(BaseModel):
     # 이 시뮬레이션에 쓰는 도구들 — 인스턴스 목록(예: LS-DYNA, HyperMesh). 자유 텍스트,
     # 이름으로만 든다. 인텔의 도구 표와 FK 로 묶지 않는다 — 저쪽이 바뀌어도 여기가 안 깨진다.
     tools = db.Column(db.JSON, default=list)
+    # 담당 부서 — 포탈의 부서 표(departments)에서 고른다. 그 시뮬레이션의 사업부에 속한 부서만.
+    # FK 는 아니다(부서 표가 정리돼도 여기가 안 깨지게). 이름은 읽을 때 붙인다.
+    department_id = db.Column(db.Integer, index=True)
     project_uuid = db.Column(db.String(64), index=True)   # 참고 링크. FK 아님
 
     pairs = db.relationship('MaturityPair', backref='agent',
@@ -69,6 +72,14 @@ class MaturityAgent(BaseModel):
     def to_dict(self):
         d = super().to_dict()
         d['tools'] = list(self.tools or [])
+        d['department_name'] = None
+        if self.department_id:
+            try:
+                from app.modules.digital_twin_dashboard.models import Department
+                dep = Department.query.get(self.department_id)
+                d['department_name'] = dep.name if dep else None
+            except Exception:
+                d['department_name'] = None
         return d
 
 

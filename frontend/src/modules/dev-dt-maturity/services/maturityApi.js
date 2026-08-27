@@ -80,6 +80,9 @@ export const maturityApi = {
   getFamilyAudit: (divisionId) => request(`/family-audit?division_id=${divisionId}`),
   renameFamily: (divisionId, from, to) => request('/families/rename', json('POST', { division_id: divisionId, from, to })),
 
+  /** 담당 부서 고르기의 재료 — 사업부의 활성 부서. 'all' 이면 {division_id: [...]} */
+  getDepartments: (divisionId) => request(`/departments?division_id=${divisionId}`),
+
   getSettings: () => request('/settings'),
   putSettings: (payload) => request('/settings', json('PUT', payload)),
 };

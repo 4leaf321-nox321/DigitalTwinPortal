@@ -19,6 +19,7 @@ const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason,
   const [toolNames, setToolNames] = useState([]);
   const [toolCatalog, setToolCatalog] = useState([]);
   const [familyCatalogs, setFamilyCatalogs] = useState({});
+  const [departments, setDepartments] = useState({});   // {division_id: [{id, name}]}
   const [importDivision, setImportDivision] = useState(null);   // 전체일 때 가져올 사업부
 
   const load = async () => {
@@ -45,6 +46,9 @@ const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason,
         .then(pairsList => setFamilyCatalogs(Object.fromEntries(pairsList)));
     }
     if (kind !== 'agent') return;
+    maturityApi.getDepartments(allMode ? 'all' : divisionId)
+      .then(r => setDepartments(allMode ? (r.data || {}) : { [divisionId]: r.data || [] }))
+      .catch(() => setDepartments({}));
     maturityApi.getToolNames().then(r => setToolNames(r.data || [])).catch(() => setToolNames([]));
     maturityApi.getToolCatalog().then(r => setToolCatalog(r.data || [])).catch(() => setToolCatalog([]));
   }, [kind, divisionId, allMode, divisions, subjects]);
@@ -78,7 +82,7 @@ const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason,
       items={kind === 'subject' ? subjects : agents}
       pairCount={kind === 'subject' ? pairCount.bySubject : pairCount.byAgent}
       canEdit={!denyReason} denyReason={denyReason} modelKinds={modelKinds}
-      toolSuggestions={toolNames} toolCatalog={toolCatalog} familyCatalogs={familyCatalogs}
+      toolSuggestions={toolNames} toolCatalog={toolCatalog} familyCatalogs={familyCatalogs} departments={departments}
       onClose={onClose} onChanged={changed}
     />
   );

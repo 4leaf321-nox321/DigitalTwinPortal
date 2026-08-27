@@ -34,7 +34,7 @@ from app.modules.dev_dt_maturity import services as S                        # n
 from app.modules.dev_dt_maturity.models import (                             # noqa: E402
     MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturitySubject,
 )
-from app.modules.digital_twin_dashboard.models import Division               # noqa: E402
+from app.modules.digital_twin_dashboard.models import Department, Division   # noqa: E402
 
 NOW = datetime.now()
 # 종류 → 흔히 쓰는 도구. 시뮬레이션에 인스턴스로 붙는다(전자제품 CAE 에서 흔한 것들).
@@ -361,6 +361,9 @@ def main():
             if not div:
                 continue
             agents = {}
+            # 담당 부서 — 그 사업부의 활성 부서 중 CAE 냄새가 나는 것, 없으면 첫 것, 그것도 없으면 비움
+            deps = Department.query.filter_by(division_id=div.id, is_active=True).order_by(Department.name).all()
+            dep = next((x for x in deps if 'CAE' in (x.name or '').upper() or '해석' in (x.name or '')), deps[0] if deps else None)
             for order, (tname, detail, families, sims) in enumerate(tests, 1):
                 subject = MaturitySubject(division_id=div.id, sector='simulation', name=tname, detail=detail,
                                           product_families=families, accuracy_rule='auto', order=order)
@@ -369,7 +372,7 @@ def main():
                     agent = agents.get(sname)
                     if agent is None:
                         agent = MaturityAgent(division_id=div.id, sector='simulation', name=sname, kind=kind, model_kind=model,
-                                              tools=TOOLS_BY_KIND.get(kind, []))
+                                              tools=TOOLS_BY_KIND.get(kind, []), department_id=(dep.id if dep else None))
                         db.session.add(agent); db.session.flush(); agents[sname] = agent; counts['agents'] += 1
                     pair = MaturityPair(subject_id=subject.id, agent_id=agent.id)
                     db.session.add(pair); db.session.flush(); counts['pairs'] += 1

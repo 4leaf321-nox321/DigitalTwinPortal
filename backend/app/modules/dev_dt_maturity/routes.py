@@ -226,7 +226,7 @@ def create_agent(actor):
     try:
         row = S.create_agent(p['division_id'], p.get('sector') or 'simulation',
                              p.get('name'), p.get('kind'), p.get('model_kind'),
-                             p.get('project_uuid'), p.get('tools'))
+                             p.get('project_uuid'), p.get('tools'), p.get('department_id'))
         db.session.commit()
         return success_response(row.to_dict(), status_code=201)
     except S.Refused as e:
@@ -605,5 +605,22 @@ def rename_family(actor):
     except S.Refused as e:
         db.session.rollback()
         return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/departments', methods=['GET'])
+@read_required
+def departments(actor):
+    """담당 부서 고르기의 재료 — 사업부의 활성 부서. division_id=all 이면 사업부별로 묶어 준다."""
+    if request.args.get('division_id') == 'all':
+        from app.modules.digital_twin_dashboard.models import Division
+        ids = [d.id for d in Division.query.filter_by(is_active=True).all()]
+        return success_response({str(i): S.departments_of(i) for i in ids})
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    try:
+        return success_response(S.departments_of(division_id))
     except Exception:
         return _crashed()

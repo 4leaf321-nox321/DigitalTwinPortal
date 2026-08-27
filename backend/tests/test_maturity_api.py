@@ -359,3 +359,30 @@ def test_사업부는_속성이고_걸린_쌍이_없을_때만_옮긴다(client,
     # 같은 사업부로 보내는 것은 아무 일도 아니다
     res = client.put(f'{BASE}/subjects/{s["id"]}', json={'division_id': world['mx'].id, 'detail': 'x'}, headers=auth(mx_user))
     assert res.status_code == 200 and res.get_json()['data']['division_id'] == world['mx'].id
+
+
+def test_담당_부서는_그_사업부의_활성_부서에서만_고른다(client, auth, world, mx_user, office):
+    from app.modules.digital_twin_dashboard.models import Department
+    mx_dep = Department.query.filter_by(name='MX생기').one()
+    vd_dep = Department.query.filter_by(name='VD생기').one()
+    _db.session.add(Department(name='MX옛부서', division_id=world['mx'].id, is_active=False))
+    _db.session.commit()
+
+    deps = client.get(f'{BASE}/departments?division_id={world["mx"].id}', headers=auth(mx_user)).get_json()['data']
+    assert [d['name'] for d in deps] == ['MX생기']                     # 비활성은 안 나온다
+
+    a = _post(client, auth, mx_user, '/agents', {'division_id': world['mx'].id, 'name': '구조 해석', 'department_id': mx_dep.id})['data']
+    assert a['department_id'] == mx_dep.id and a['department_name'] == 'MX생기'
+
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'department_id': vd_dep.id}, headers=auth(mx_user))
+    assert res.status_code == 400 and '사업부에 속한 부서' in res.get_json()['message']
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'department_id': None}, headers=auth(mx_user))
+    assert res.get_json()['data']['department_name'] is None          # 「안 정함」으로 비운다
+
+    # 사업부를 옮기면 옛 사업부의 부서는 비워진다
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'department_id': mx_dep.id}, headers=auth(mx_user))
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'division_id': world['vd'].id}, headers=auth(office))
+    assert res.get_json()['data']['division_id'] == world['vd'].id and res.get_json()['data']['department_id'] is None
+
+    grouped = client.get(f'{BASE}/departments?division_id=all', headers=auth(mx_user)).get_json()['data']
+    assert grouped[str(world['vd'].id)] == [{'id': vd_dep.id, 'name': 'VD생기'}]

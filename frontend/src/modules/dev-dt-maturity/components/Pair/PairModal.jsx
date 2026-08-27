@@ -182,6 +182,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                 적용 제품군 {(pair.subject.product_families || []).join(', ') || '—'}
                 {pair.agent?.model_kind && <> · 모델 {pair.agent.model_kind}</>}
                 {(pair.agent?.tools || []).length > 0 && <> · 도구 {pair.agent.tools.join(', ')}</>}
+                {pair.agent?.department_name && <> · 담당 {pair.agent.department_name}</>}
                 {pair.agent?.project_uuid && (
                   <> · <a href={`/digital-twin-dashboard?project=${pair.agent.project_uuid}`} target="_blank" rel="noreferrer">과제 열기</a></>
                 )}

@@ -164,20 +164,22 @@ const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 const toDraft = (kind, item) => (kind === 'subject'
   ? { division_id: item.division_id, name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
       accuracy_rule: item.accuracy_rule || 'auto' }
-  : { division_id: item.division_id, name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])] });
+  : { division_id: item.division_id, name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])],
+      department_id: item.department_id ?? '' });
 
 const toPayload = (kind, d) => (kind === 'subject'
   ? { division_id: d.division_id, name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
-  : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools });
+  : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools,
+      department_id: d.department_id === '' ? null : Number(d.department_id) });
 
 /** 일괄 초안의 빈 상태 — 전부 「그대로 두기」. */
 const emptyBulk = (kind) => (kind === 'subject'
   ? { accuracy_rule: KEEP, add_families: [], remove_families: [] }
-  : { kind: KEEP, model_kind: KEEP, add_tools: [], remove_tools: [] });
+  : { kind: KEEP, model_kind: KEEP, department_id: KEEP, add_tools: [], remove_tools: [] });
 
 const ItemManagerModal = ({
   kind, divisionId, allMode = false, divisions = [], items, pairCount, canEdit, denyReason,
-  modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalogs = {}, onClose, onChanged,
+  modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalogs = {}, departments = {}, onClose, onChanged,
 }) => {
   const meta = KINDS[kind];
   const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
@@ -214,6 +216,7 @@ const ItemManagerModal = ({
   const many = picked.length > 1;
   const canEditCur = !!current && canTouch(current.division_id);
   const canEditBulk = many && picked.every(i => canTouch(i.division_id));
+  const bulkDivision = many && picked.every(i => i.division_id === picked[0].division_id) ? picked[0].division_id : null;
 
   useEffect(() => {
     if (current && (!draft || draft._id !== current.id)) setDraft({ _id: current.id, ...toDraft(kind, current) });
@@ -292,7 +295,7 @@ const ItemManagerModal = ({
   // ── 일괄 수정 ──
   const bulkChanged = !!bulk && (kind === 'subject'
     ? (bulk.accuracy_rule !== KEEP || bulk.add_families.length > 0 || bulk.remove_families.length > 0)
-    : (bulk.kind !== KEEP || bulk.model_kind !== KEEP || bulk.add_tools.length > 0 || bulk.remove_tools.length > 0));
+    : (bulk.kind !== KEEP || bulk.model_kind !== KEEP || bulk.department_id !== KEEP || bulk.add_tools.length > 0 || bulk.remove_tools.length > 0));
   const bulkPayload = (item) => {
     if (kind === 'subject') {
       const fams = (item.product_families || []).filter(f => !bulk.remove_families.includes(f));
@@ -306,6 +309,7 @@ const ItemManagerModal = ({
     const p = { tools };
     if (bulk.kind !== KEEP) p.kind = bulk.kind;
     if (bulk.model_kind !== KEEP) p.model_kind = bulk.model_kind || null;
+    if (bulk.department_id !== KEEP) p.department_id = bulk.department_id === '' ? null : Number(bulk.department_id);
     return p;
   };
   const saveBulk = async () => {
@@ -388,6 +392,9 @@ const ItemManagerModal = ({
         {kind === 'agent' && item.model_kind && (
           <em title="모델 종류">{modelKinds.find(m => m.key === item.model_kind)?.label?.slice(0, 2) || item.model_kind}</em>
         )}
+        {kind === 'agent' && item.department_name && (
+          <em title="담당 부서">{item.department_name}</em>
+        )}
         {kind === 'agent' && (item.tools || []).length > 0 && (
           <em title={`도구: ${item.tools.join(' · ')}`}><Wrench size={10} />{item.tools.length}</em>
         )}
@@ -451,6 +458,13 @@ const ItemManagerModal = ({
           </select>
           <small>물리 기반 / 데이터 기반 / 하이브리드. 부문이 아니라 속성입니다.</small></Field>
       </Pair>
+      <Field><span>담당 부서</span>
+        <select value={d.department_id ?? ''} disabled={!canEditCur} onChange={e => set({ department_id: e.target.value })}>
+          <option value="">— 안 정함 —</option>
+          {(departments[d.division_id] || []).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <small>이 시뮬레이션을 맡는 부서 — 포탈의 부서 표에서 {divName(d.division_id)} 사업부의 활성 부서만 고릅니다.{(departments[d.division_id] || []).length === 0 ? ' 이 사업부에 등록된 부서가 없습니다 — 부서 표(대시보드 설정)에 먼저 넣으세요.' : ''}</small>
+      </Field>
       <Field><span>도구</span>
         <Chips>
           {d.tools.map(t => (
@@ -641,6 +655,16 @@ const ItemManagerModal = ({
                           {modelKinds.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
                         </select></Field>
                     </Pair>
+                    <Field><span>담당 부서</span>
+                      {bulkDivision == null ? (
+                        <small>사업부가 다른 시뮬레이션이 섞여 있어 부서를 한 번에 정할 수 없습니다 — 부서는 사업부에 속합니다.</small>
+                      ) : (
+                        <select value={bulk.department_id} disabled={!canEditBulk} onChange={e => setB({ department_id: e.target.value })}>
+                          <option value={KEEP}>— 그대로 두기 —</option>
+                          <option value="">— 안 정함 —</option>
+                          {(departments[bulkDivision] || []).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                        </select>
+                      )}</Field>
                     <Field><span>도구 — 고른 시뮬레이션들이 쓰는 것</span>
                       {bulkChips(toolUnion, bulk.add_tools, bulk.remove_tools, 'add_tools', 'remove_tools',
                         '전체에 넣을 도구 — Enter', '기술정보 모듈의 도구 전체를 분야별로 보고 고릅니다')}
