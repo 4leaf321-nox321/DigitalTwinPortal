@@ -376,3 +376,85 @@ def put_settings(actor):
         return success_response({k: D._setting(k) for k in D.SETTINGS_KEYS})
     except Exception:
         return _crashed()
+
+
+# ── 가져오기 · 어긋남 (PLAN 6절) ──────────────────────────────────────────
+#
+# 틀 내려받기 → 사람이 손봄 → 미리보기(저장 안 함) → 넣기. 전부 사업부 단위.
+
+from flask import Response          # noqa: E402
+from . import importer as I         # noqa: E402
+
+
+@bp.route('/import/template', methods=['GET'])
+@read_required
+def import_template(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    try:
+        rows = I.template_rows(division_id)
+        name = _division_name(division_id) or division_id
+        return Response(
+            I.render_csv(rows), mimetype='text/csv; charset=utf-8',
+            headers={'Content-Disposition':
+                     f"attachment; filename*=UTF-8''maturity_{name}.csv"})
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/import/preview', methods=['POST'])
+@read_required
+def import_preview(actor):
+    p = request.get_json() or {}
+    division_id = p.get('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    if not isinstance(p.get('text'), str):
+        return error_response('text 는 문자열이어야 합니다.', status_code=400)
+    try:
+        return success_response(I.plan(p['text'], int(division_id)))
+    except I.TableFormatError as e:
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/import', methods=['POST'])
+@read_required
+def import_apply(actor):
+    p = request.get_json() or {}
+    division_id = p.get('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    if not isinstance(p.get('text'), str):
+        return error_response('text 는 문자열이어야 합니다.', status_code=400)
+    denied = _deny(actor, division_id)
+    if denied:
+        return denied
+    try:
+        out = I.apply(p['text'], int(division_id), actor,
+                      with_accuracy=bool(p.get('with_accuracy')),
+                      source_label=(p.get('source_label') or '')[:100] or None)
+        db.session.commit()
+        return success_response(out)
+    except I.TableFormatError as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/reconcile', methods=['GET'])
+@read_required
+def reconcile(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    try:
+        return success_response(I.reconcile(division_id))
+    except Exception:
+        return _crashed()
