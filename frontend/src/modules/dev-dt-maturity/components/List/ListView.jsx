@@ -1,21 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Plus, Trash2, Link2, Download, Upload, AlertTriangle, Check } from 'lucide-react';
+import { Trash2, Link2, Download, Upload, AlertTriangle, Check, FlaskConical, Cpu } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
+import ItemManagerModal from './ItemManagerModal';
 
-// 목록 — 시험·시뮬레이션·쌍을 만들고, 로드맵에서 뽑아 넣는다. (PLAN 6절 · 7-5)
+// 목록 — 쌍을 잇고, 로드맵에서 뽑아 넣는다. (PLAN 6절 · 7-5)
+//
+// 시험 항목·시뮬레이션 자체의 추가·수정·삭제는 상단 단추의 **관리 모달**에서 한다.
+// 이 화면 본문은 두 가지에 집중한다 — 잇기(쌍)와 넣기(가져오기).
 //
 // ⚠️ 가져오기는 미리보기 → 넣기 두 단계다. 미리보기는 아무것도 저장하지 않는다.
 // ⚠️ 연결을 끊으면 평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
 
-const Wrap = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; @media (max-width: 1100px) { grid-template-columns: 1fr; }`;
+const Wrap = styled.div`display: flex; flex-direction: column; gap: 1rem;`;
+const TopBar = styled.div`display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;`;
+const Grid = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; @media (max-width: 1100px) { grid-template-columns: 1fr; }`;
 const Box = styled.section`border: 1px solid #e2e8f0; border-radius: 0.5rem; background: white; overflow: hidden;`;
 const BoxHead = styled.div`
   display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; background: #f8fafc;
   border-bottom: 1px solid #e2e8f0; font-size: 0.875rem; font-weight: 700; color: #1e293b;
 `;
 const Count = styled.span`font-size: 0.75rem; color: #94a3b8; font-weight: 400;`;
-const List = styled.div`display: flex; flex-direction: column; max-height: 420px; overflow: auto;`;
+const List = styled.div`display: flex; flex-direction: column; max-height: 480px; overflow: auto;`;
 const Row = styled.div`
   display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; border-bottom: 1px solid #f1f5f9;
   font-size: 0.8125rem; &:hover { background: #fafafa; }
@@ -26,24 +32,24 @@ const Icon = styled.button`
   border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem;
   &:hover { color: #b91c1c; background: #fef2f2; } &:disabled { opacity: 0.3; cursor: not-allowed; }
 `;
-const Form = styled.form`display: flex; gap: 0.4rem; padding: 0.5rem 0.75rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap;`;
+const Form = styled.form`display: flex; gap: 0.4rem; padding: 0.5rem 0.75rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap; align-items: center;`;
 const Input = styled.input`
   padding: 0.35rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem;
   flex: ${p => (p.$grow ? 1 : 'none')}; min-width: 0; width: ${p => p.$w || 'auto'};
 `;
-const Select = styled.select`padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem;`;
+const Select = styled.select`padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; max-width: 18rem;`;
 const Textarea = styled.textarea`
   width: 100%; min-height: 140px; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.375rem;
   font-family: ui-monospace, monospace; font-size: 0.75rem; box-sizing: border-box;
 `;
 const Button = styled.button`
-  padding: 0.35rem 0.7rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; background: white; color: #475569;
-  font-size: 0.8125rem; font-weight: 600; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.4rem 0.8rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; background: white; color: #475569;
+  font-size: 0.8125rem; font-weight: 600; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem;
   &:hover:not(:disabled) { border-color: #1d4ed8; color: #1d4ed8; } &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 const Primary = styled(Button)`background: #1d4ed8; border-color: transparent; color: white;`;
 const Notice = styled.div`
-  display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.6rem 0.75rem; border-radius: 0.5rem; margin: 0.5rem 0.75rem;
+  display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.6rem 0.75rem; border-radius: 0.5rem;
   background: ${p => (p.$bad ? '#fef2f2' : p.$ok ? '#f0fdf4' : '#fffbeb')};
   border: 1px solid ${p => (p.$bad ? '#fecaca' : p.$ok ? '#bbf7d0' : '#fde68a')};
   color: ${p => (p.$bad ? '#991b1b' : p.$ok ? '#15803d' : '#92400e')}; font-size: 0.8125rem; line-height: 1.5;
@@ -54,16 +60,16 @@ const PRow = styled.div`
   display: flex; gap: 0.5rem; padding: 0.3rem 0.5rem; border-bottom: 1px solid #f1f5f9; font-size: 0.75rem;
   color: ${p => (p.$err ? '#991b1b' : '#1e293b')}; background: ${p => (p.$err ? '#fef2f2' : 'white')};
 `;
+const Hint = styled.span`font-size: 0.75rem; color: #94a3b8; margin-left: auto;`;
 
 const ListView = ({ divisionId, denyReason, modelKinds, onOpenPair, onChanged }) => {
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
   const [pairs, setPairs] = useState([]);
-  const [error, setError] = useState(null);
-  const [newSubject, setNewSubject] = useState({ name: '', detail: '', product_families: '' });
-  const [newAgent, setNewAgent] = useState({ name: '', kind: '', model_kind: '' });
-  const [link, setLink] = useState({ subject_id: '', agent_id: '' });
   const [reconcile, setReconcile] = useState(null);
+  const [error, setError] = useState(null);
+  const [link, setLink] = useState({ subject_id: '', agent_id: '' });
+  const [manager, setManager] = useState(null);    // 'subject' | 'agent' | null
   const canEdit = !denyReason;
 
   const load = async () => {
@@ -85,75 +91,33 @@ const ListView = ({ divisionId, denyReason, modelKinds, onOpenPair, onChanged })
 
   const pairCount = useMemo(() => {
     const bySubject = {}, byAgent = {};
-    pairs.forEach(p => { bySubject[p.subject_id] = (bySubject[p.subject_id] || 0) + 1; byAgent[p.agent_id] = (byAgent[p.agent_id] || 0) + 1; });
+    pairs.forEach(p => {
+      bySubject[p.subject_id] = (bySubject[p.subject_id] || 0) + 1;
+      byAgent[p.agent_id] = (byAgent[p.agent_id] || 0) + 1;
+    });
     return { bySubject, byAgent };
   }, [pairs]);
 
+  // 이미 이어진 짝은 잇기 목록에서 뺀다 — 서버도 거절하지만 화면이 먼저 말하는 게 낫다.
+  const linkedAgents = useMemo(() => new Set(
+    pairs.filter(p => String(p.subject_id) === link.subject_id).map(p => p.agent_id)), [pairs, link.subject_id]);
+
   return (
-    <>
+    <Wrap>
       {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
       {denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
-      <Wrap>
-        <Box>
-          <BoxHead>시험 항목 <Count>{subjects.length}</Count></BoxHead>
-          <List>
-            {subjects.map(s => (
-              <Row key={s.id}>
-                <Name title={s.detail || ''}>{s.name} {s.detail && <Sub>{s.detail}</Sub>}</Name>
-                <Sub>× {pairCount.bySubject[s.id] || 0}</Sub>
-                {(s.product_families || []).length > 0 && <Sub>{s.product_families.join(', ')}</Sub>}
-                <Icon disabled={!canEdit} title="지우기 — 걸린 쌍·평가가 같이 사라집니다"
-                      onClick={() => window.confirm(`「${s.name}」을 지웁니다. 걸린 쌍 ${pairCount.bySubject[s.id] || 0}개와 그 평가·이력이 같이 사라집니다.`)
-                        && run(() => maturityApi.deleteSubject(s.id))}>
-                  <Trash2 size={14} />
-                </Icon>
-              </Row>
-            ))}
-          </List>
-          {canEdit && (
-            <Form onSubmit={e => { e.preventDefault(); if (!newSubject.name.trim()) return;
-              run(async () => { await maturityApi.createSubject({ division_id: divisionId, ...newSubject }); setNewSubject({ name: '', detail: '', product_families: '' }); }); }}>
-              <Input $grow placeholder="시험 항목" value={newSubject.name} onChange={e => setNewSubject(s => ({ ...s, name: e.target.value }))} />
-              <Input $w="7rem" placeholder="세부" value={newSubject.detail} onChange={e => setNewSubject(s => ({ ...s, detail: e.target.value }))} />
-              <Input $w="9rem" placeholder="제품군 (쉼표)" value={newSubject.product_families} onChange={e => setNewSubject(s => ({ ...s, product_families: e.target.value }))} />
-              <Button type="submit"><Plus size={13} /> 추가</Button>
-            </Form>
-          )}
-        </Box>
 
-        <Box>
-          <BoxHead>시뮬레이션 <Count>{agents.length}</Count></BoxHead>
-          <List>
-            {agents.map(a => (
-              <Row key={a.id}>
-                <Name>{a.name} {a.kind && <Sub>{a.kind}</Sub>}</Name>
-                {a.model_kind && <Sub>{modelKinds.find(m => m.key === a.model_kind)?.label || a.model_kind}</Sub>}
-                <Sub>× {pairCount.byAgent[a.id] || 0}</Sub>
-                <Icon disabled={!canEdit} title="지우기 — 걸린 쌍·평가가 같이 사라집니다"
-                      onClick={() => window.confirm(`「${a.name}」을 지웁니다. 걸린 쌍 ${pairCount.byAgent[a.id] || 0}개와 그 평가·이력이 같이 사라집니다.`)
-                        && run(() => maturityApi.deleteAgent(a.id))}>
-                  <Trash2 size={14} />
-                </Icon>
-              </Row>
-            ))}
-          </List>
-          {canEdit && (
-            <Form onSubmit={e => { e.preventDefault(); if (!newAgent.name.trim()) return;
-              run(async () => { await maturityApi.createAgent({ division_id: divisionId, ...newAgent, model_kind: newAgent.model_kind || null }); setNewAgent({ name: '', kind: '', model_kind: '' }); }); }}>
-              <Input $grow placeholder="시뮬레이션 (엑셀 행 단위)" value={newAgent.name} onChange={e => setNewAgent(s => ({ ...s, name: e.target.value }))} />
-              <Input $w="6rem" placeholder="종류" value={newAgent.kind} onChange={e => setNewAgent(s => ({ ...s, kind: e.target.value }))} />
-              <Select value={newAgent.model_kind} onChange={e => setNewAgent(s => ({ ...s, model_kind: e.target.value }))}>
-                <option value="">모델 종류</option>
-                {modelKinds.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
-              </Select>
-              <Button type="submit"><Plus size={13} /> 추가</Button>
-            </Form>
-          )}
-        </Box>
+      <TopBar>
+        <Button onClick={() => setManager('subject')}><FlaskConical size={14} /> 시험 항목 관리 <Count>{subjects.length}</Count></Button>
+        <Button onClick={() => setManager('agent')}><Cpu size={14} /> 시뮬레이션 관리 <Count>{agents.length}</Count></Button>
+        <Hint>항목의 추가·수정·삭제는 관리 창에서. 여기서는 잇고, 넣습니다.</Hint>
+      </TopBar>
 
+      <Grid>
         <Box>
-          <BoxHead><Link2 size={14} /> 쌍 (시험 × 시뮬레이션) <Count>{pairs.length}</Count></BoxHead>
+          <BoxHead><Link2 size={14} /> 쌍 — 시험 × 시뮬레이션 <Count>{pairs.length}</Count></BoxHead>
           <List>
+            {pairs.length === 0 && <Row><Sub>아직 이어진 쌍이 없습니다. 아래에서 잇거나 가져오기로 넣으세요.</Sub></Row>}
             {pairs.map(p => (
               <Row key={p.id}>
                 <Name>
@@ -175,23 +139,33 @@ const ListView = ({ divisionId, denyReason, modelKinds, onOpenPair, onChanged })
           {canEdit && (
             <Form onSubmit={e => { e.preventDefault(); if (!link.subject_id || !link.agent_id) return;
               run(async () => { await maturityApi.createPair(Number(link.subject_id), Number(link.agent_id)); setLink({ subject_id: '', agent_id: '' }); }); }}>
-              <Select value={link.subject_id} onChange={e => setLink(l => ({ ...l, subject_id: e.target.value }))}>
+              <Select value={link.subject_id} onChange={e => setLink({ subject_id: e.target.value, agent_id: '' })}>
                 <option value="">시험 항목</option>
                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </Select>
               <span>×</span>
-              <Select value={link.agent_id} onChange={e => setLink(l => ({ ...l, agent_id: e.target.value }))}>
+              <Select value={link.agent_id} onChange={e => setLink(l => ({ ...l, agent_id: e.target.value }))} disabled={!link.subject_id}>
                 <option value="">시뮬레이션</option>
-                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {agents.filter(a => !linkedAgents.has(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </Select>
-              <Button type="submit"><Link2 size={13} /> 잇기</Button>
+              <Button type="submit" disabled={!link.subject_id || !link.agent_id}><Link2 size={13} /> 잇기</Button>
             </Form>
           )}
         </Box>
 
         <ImportBox divisionId={divisionId} canEdit={canEdit} reconcile={reconcile} onDone={done} />
-      </Wrap>
-    </>
+      </Grid>
+
+      {manager && (
+        <ItemManagerModal
+          kind={manager} divisionId={divisionId}
+          items={manager === 'subject' ? subjects : agents}
+          pairCount={manager === 'subject' ? pairCount.bySubject : pairCount.byAgent}
+          canEdit={canEdit} denyReason={denyReason} modelKinds={modelKinds}
+          onClose={() => setManager(null)} onChanged={done}
+        />
+      )}
+    </Wrap>
   );
 };
 
@@ -249,7 +223,7 @@ const ImportBox = ({ divisionId, canEdit, reconcile, onDone }) => {
             <Check size={13} /> ④ 넣기
           </Primary>
         </div>
-        {err && <Notice $bad style={{ margin: 0 }}><AlertTriangle size={14} /> <span>{err}</span></Notice>}
+        {err && <Notice $bad><AlertTriangle size={14} /> <span>{err}</span></Notice>}
         {preview && (
           <>
             <div>
@@ -270,7 +244,7 @@ const ImportBox = ({ divisionId, canEdit, reconcile, onDone }) => {
           </>
         )}
         {result && (
-          <Notice $ok style={{ margin: 0 }}>
+          <Notice $ok>
             <Check size={14} />
             <span>넣었습니다 — 시험 {result.done.subjects} · 시뮬레이션 {result.done.agents} · 쌍 {result.done.pairs} · 정확도 {result.done.accuracy}
               {result.done.skipped ? ` · 오류라 건너뛴 줄 ${result.done.skipped}` : ''}</span>
