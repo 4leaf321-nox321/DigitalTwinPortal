@@ -82,7 +82,9 @@ const HistoryList = styled.div`display: flex; flex-direction: column; gap: 0.3re
 const HistoryRow = styled.div`display: flex; gap: 0.5rem; flex-wrap: wrap;`;
 const When = styled.span`color: #94a3b8; min-width: 6.5rem;`;
 
-const fmtDate = (iso) => (iso ? iso.slice(0, 10) : '');
+// 시점은 **연-월**로만 보인다 — 날짜 단위는 필요 없다(2026-08-28).
+const fmtDate = (iso) => (iso ? iso.slice(0, 7) : '');
+const thisMonth = () => new Date().toISOString().slice(0, 7);
 const isDark = (color) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(color);
 
 /** 이력에서 「이 칸에 언제 올라왔나」. 같은 칸에 여러 번이면 가장 이른 날.
@@ -157,6 +159,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
       value: axis.kind === 'value' ? (cur?.value ?? '') : undefined,
       note: cur?.note || '',
       evidence: { ...(cur?.evidence || {}) },
+      // 평가 시점 — 기존 것이 있으면 그 달, 없으면 이번 달. 옛 자료를 넣을 때 고친다.
+      assessed_at: cur?.assessed_at ? cur.assessed_at.slice(0, 7) : thisMonth(),
     });
   };
 
@@ -164,7 +168,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
     if (!editing?.note?.trim()) return;
     setBusy(true);
     try {
-      const payload = { note: editing.note, evidence: editing.evidence };
+      const payload = { note: editing.note, evidence: editing.evidence, assessed_at: editing.assessed_at || undefined };
       if (editing.kind === 'value') payload.value = Number(editing.value);
       else if (editing.kind === 'set') payload.flags = editing.flags;
       else payload.rung = editing.rung;
@@ -329,6 +333,12 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
                     </Row>
                     <Row>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        평가 시점{' '}
+                        <Input type="month" $w="9rem" max={thisMonth()} value={editing.assessed_at}
+                               onChange={e => setEditing(s => ({ ...s, assessed_at: e.target.value }))}
+                               title="옛 자료면 그 달로 — 사다리의 도달 시점과 이력이 그 달에 선다" />
+                      </label>
                       {(axis.evidence || []).filter(k => evidenceFields[k]).map(k => (
                         <label key={k} style={{ fontSize: '0.75rem', color: '#64748b' }}>
                           {evidenceFields[k].label}{' '}

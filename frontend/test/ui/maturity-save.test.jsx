@@ -70,16 +70,18 @@ export default async function run() {
     await click(byText('button', '저장')); await settle();
     const put = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/automation'));
     say(!!put && JSON.stringify(put.body.flags) === '["pre","run"]' && put.body.note === '템플릿 도입', `① PUT 이 flags 로 감: ${JSON.stringify(put?.body)}`);
+    say(put?.body.assessed_at === '2026-01', '① 평가 시점은 기존 것(2026-01)이 연-월로 채워져 같이 감');
     say(!document.querySelector('input[placeholder^="근거"]'), '① 저장 뒤 편집 칸이 닫힘');
-    say(html().includes('템플릿 도입') && html().includes('2026-08-28'), '① 사다리가 새 묶음·근거·날짜를 그림');
+    say(html().includes('템플릿 도입') && html().includes('2026-08') && !html().includes('2026-08-28'), '① 사다리가 새 묶음·근거·시점(연-월)을 그림');
 
-    // ② 수동을 누르면 전부 꺼지고, Enter 로 저장
+    // ② 수동을 누르면 전부 꺼지고, 시점을 옛 달로 고쳐 Enter 로 저장
     calls.length = 0;
     await click(byText('button', '수동'));
+    await type(document.querySelector('input[type="month"]'), '2024-06');
     say(html().includes('→ <strong>수동</strong>'), '② 「수동」을 누르면 전부 꺼짐');
     await type(document.querySelector('input[placeholder^="근거"]'), '되돌림');
     await keydown(document.querySelector('input[placeholder^="근거"]'), 'Enter'); await settle();
-    say(calls.some(c => c.method === 'PUT' && Array.isArray(c.body?.flags) && c.body.flags.length === 0), '② 근거 칸에서 Enter 로 저장됨(빈 묶음)');
+    say(calls.some(c => c.method === 'PUT' && Array.isArray(c.body?.flags) && c.body.flags.length === 0 && c.body.assessed_at === '2024-06'), '② Enter 로 저장됨(빈 묶음) · 시점 2024-06 이 같이 감');
 
     // ③ 정확도 값
     calls.length = 0;

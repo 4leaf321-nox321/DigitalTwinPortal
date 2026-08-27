@@ -402,3 +402,15 @@ def test_담당_부서는_그_사업부의_활성_부서에서만_고른다(clie
 
     grouped = client.get(f'{BASE}/departments?division_id=all', headers=auth(mx_user)).get_json()['data']
     assert grouped[str(world['vd'].id)] == [{'id': vd_dep.id, 'name': 'VD생기'}]
+
+
+def test_평가_시점은_연월이고_옛_자료는_그_달로_들어간다(client, auth, world, mx_user):
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+    out = _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'basic', 'note': '옛 자료', 'assessed_at': '2025-03'})
+    a = out['data']['assessments']['scope']
+    assert a['assessed_at'].startswith('2025-03-01')
+    assert out['data']['changes'][0]['created_at'].startswith('2025-03-01')       # 이력도 그 달
+    _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'all', 'note': '미래', 'assessed_at': '2099-01'}, expect=400)
+    _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'all', 'note': '꼴', 'assessed_at': '2025/03'}, expect=400)
+    out = _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'all', 'note': '날짜도 받는다', 'assessed_at': '2026-02-17'})
+    assert out['data']['assessments']['scope']['assessed_at'].startswith('2026-02-01')

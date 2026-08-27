@@ -195,12 +195,40 @@ def delete_pair(pair):
 
 # ── 평가 ───────────────────────────────────────────────────────────────────
 
+def parse_month(value):
+    """평가 시점 — **연-월**('2025-11') 또는 날짜('2025-11-03'). 그 달 1일 정오(UTC)로 둔다.
+
+    날짜 단위는 필요 없다(2026-08-28). 옛 자료를 넣을 수 있게 과거는 받고, 미래는 거절한다.
+    """
+    if value in (None, ''):
+        return None
+    s = str(value).strip()
+    for fmt in ('%Y-%m', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f'):
+        try:
+            d = datetime.strptime(s[:len('2025-11-03T00:00:00.000000')], fmt)
+            break
+        except ValueError:
+            continue
+    else:
+        raise Refused('평가 시점은 「2025-11」 꼴(연-월)로 적어 주세요.')
+    month = datetime(d.year, d.month, 1, 12, 0, 0)
+    now = datetime.utcnow()
+    if (month.year, month.month) > (now.year, now.month):
+        raise Refused('평가 시점이 미래입니다.')
+    if month.year < 2000:
+        raise Refused('평가 시점이 너무 오래됐습니다.')
+    return month
+
+
 def assess(pair, axis_key, payload, actor):
     """축 하나를 매긴다. **근거 없이는 저장하지 않는다.** 이력은 바뀌었을 때만.
 
     rung 축:  payload.rung  (그 축의 칸 key)
     value 축: payload.value (숫자) — 칸은 사업부 문턱으로 환산된다. rung 을 보내면 거절.
+    set 축:   payload.flags (켠 항목 목록)
+    assessed_at(선택): 연-월. 옛 자료를 그 시점으로 넣는다 — 평가일과 이력 날짜가 그 달이 된다.
     """
+    when = parse_month(payload.get('assessed_at'))
     subject = pair.subject
     axis = D.axis_of(subject.sector, axis_key)
     if axis is None:
@@ -248,17 +276,22 @@ def assess(pair, axis_key, payload, actor):
         row = MaturityAssessment(pair_id=pair.id, axis=axis_key)
         db.session.add(row)
     row.rung, row.value, row.note, row.evidence = rung, value, note, evidence
-    row.assessed_at = datetime.utcnow()
+    row.assessed_at = when or datetime.utcnow()
     row.assessed_by_id = getattr(actor, 'id', None)
     row.assessed_by_name = getattr(actor, 'name', None)
     db.session.flush()
 
     after = _mark(row)
     if before != after:
-        db.session.add(MaturityChange(
+        change = MaturityChange(
             pair_id=pair.id, axis=axis_key, before=before, after=after, note=note,
             actor_user_id=getattr(actor, 'id', None),
-            actor_name=getattr(actor, 'name', None)))
+            actor_name=getattr(actor, 'name', None))
+        db.session.add(change)
+        if when is not None:
+            # 옛 시점으로 넣었으면 이력도 그 달에 선다 — 사다리의 「언제 올라왔나」가 그것을 읽는다.
+            db.session.flush()
+            change.created_at = when
     return row
 
 
