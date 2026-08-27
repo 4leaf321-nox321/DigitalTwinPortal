@@ -88,6 +88,10 @@ def register_all_blueprints(app):
     from app.modules.digital_twin_reference import bp as digital_twin_reference_bp
     app.register_blueprint(digital_twin_reference_bp, url_prefix='/api/digital-twin-reference')
 
+    # Dev Digital Twin Maturity — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가
+    from app.modules.dev_dt_maturity import bp as dev_dt_maturity_bp
+    app.register_blueprint(dev_dt_maturity_bp, url_prefix='/api/dev-dt-maturity')
+
     # SPDM Status
     from app.modules.spdm_status import bp as spdm_status_bp
     app.register_blueprint(spdm_status_bp, url_prefix='/api/spdm-status')

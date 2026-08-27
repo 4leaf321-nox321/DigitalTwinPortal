@@ -1,0 +1,357 @@
+# -*- coding: utf-8 -*-
+"""쌍 · 평가 · 이력 · 사업부 판 셈. **판단의 규칙은 전부 여기**, 라우트는 배선만.
+
+⚠️ 파생값은 매번 센다(항목 정확도 · 축별 최고 칸 · 미평가 · 낡음). 저장하지 않는다.
+"""
+from datetime import datetime, timedelta
+
+from app.extensions import db
+
+from . import definitions as D
+from .models import (
+    MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturitySubject,
+)
+
+
+class Refused(Exception):
+    """사람이 고칠 수 있는 이유로 거절. 메시지가 그대로 화면에 간다."""
+
+
+# ── 대상 · 수단 ─────────────────────────────────────────────────────────────
+
+def _sector_or_refuse(sector):
+    if sector not in D.SECTOR_BY_KEY:
+        raise Refused('모르는 부문입니다.')
+    if not D.sector_is_active(sector):
+        raise Refused(f'「{D.SECTOR_BY_KEY[sector]["label"]}」 부문은 아직 열리지 않았습니다.')
+    return sector
+
+
+def create_subject(division_id, sector, name, detail=None, product_families=None,
+                   accuracy_rule='auto', roadmap_task_id=None):
+    _sector_or_refuse(sector)
+    name = (name or '').strip()
+    if not name:
+        raise Refused('대상 이름이 필요합니다.')
+    if accuracy_rule not in D.ACCURACY_RULES:
+        raise Refused('집계 규칙은 auto · single · mean 중 하나입니다.')
+    row = MaturitySubject(
+        division_id=int(division_id), sector=sector, name=name[:300],
+        detail=(detail or '')[:500] or None,
+        product_families=_clean_list(product_families),
+        accuracy_rule=accuracy_rule, roadmap_task_id=roadmap_task_id,
+    )
+    db.session.add(row)
+    db.session.flush()
+    return row
+
+
+def update_subject(row, payload):
+    if 'name' in payload:
+        name = (payload.get('name') or '').strip()
+        if not name:
+            raise Refused('대상 이름이 필요합니다.')
+        row.name = name[:300]
+    if 'detail' in payload:
+        row.detail = (payload.get('detail') or '')[:500] or None
+    if 'product_families' in payload:
+        row.product_families = _clean_list(payload.get('product_families'))
+    if 'accuracy_rule' in payload:
+        if payload['accuracy_rule'] not in D.ACCURACY_RULES:
+            raise Refused('집계 규칙은 auto · single · mean 중 하나입니다.')
+        row.accuracy_rule = payload['accuracy_rule']
+    if 'roadmap_task_id' in payload:
+        row.roadmap_task_id = payload.get('roadmap_task_id') or None
+    if 'order' in payload and isinstance(payload['order'], int):
+        row.order = payload['order']
+    return row
+
+
+def create_agent(division_id, sector, name, kind=None, model_kind=None, project_uuid=None):
+    _sector_or_refuse(sector)
+    if not D.SECTOR_BY_KEY[sector]['has_agent']:
+        raise Refused('이 부문은 수단 없이 대상에 직접 매깁니다.')
+    name = (name or '').strip()
+    if not name:
+        raise Refused('수단 이름이 필요합니다.')
+    if model_kind and model_kind not in D.MODEL_KIND_KEYS:
+        raise Refused('모델 종류는 물리 기반 · 데이터 기반 · 하이브리드 중 하나입니다.')
+    row = MaturityAgent(
+        division_id=int(division_id), sector=sector, name=name[:300],
+        kind=(kind or '')[:100] or None, model_kind=model_kind or None,
+        project_uuid=(project_uuid or '')[:64] or None,
+    )
+    db.session.add(row)
+    db.session.flush()
+    return row
+
+
+def update_agent(row, payload):
+    if 'name' in payload:
+        name = (payload.get('name') or '').strip()
+        if not name:
+            raise Refused('수단 이름이 필요합니다.')
+        row.name = name[:300]
+    if 'kind' in payload:
+        row.kind = (payload.get('kind') or '')[:100] or None
+    if 'model_kind' in payload:
+        mk = payload.get('model_kind') or None
+        if mk and mk not in D.MODEL_KIND_KEYS:
+            raise Refused('모델 종류는 물리 기반 · 데이터 기반 · 하이브리드 중 하나입니다.')
+        row.model_kind = mk
+    if 'project_uuid' in payload:
+        row.project_uuid = (payload.get('project_uuid') or '')[:64] or None
+    return row
+
+
+# ── 쌍 ─────────────────────────────────────────────────────────────────────
+
+def create_pair(subject, agent=None):
+    """대상 × 수단. **같은 사업부·같은 부문**이어야 한다.
+
+    ⚠️ MX 의 시험에 VD 의 시뮬레이션을 걸면 어느 사업부의 평가인지가 사라진다.
+    """
+    sector = D.SECTOR_BY_KEY[subject.sector]
+    if sector['has_agent']:
+        if agent is None:
+            raise Refused('이 부문은 수단이 필요합니다.')
+        if agent.division_id != subject.division_id:
+            raise Refused('대상과 수단의 사업부가 다릅니다. 같은 사업부끼리만 잇습니다.')
+        if agent.sector != subject.sector:
+            raise Refused('대상과 수단의 부문이 다릅니다.')
+        dup = MaturityPair.query.filter_by(subject_id=subject.id, agent_id=agent.id).first()
+    else:
+        if agent is not None:
+            raise Refused('이 부문은 수단 없이 대상에 직접 매깁니다.')
+        # NULL 은 유일 제약이 못 잡는다 — 여기서 잡는다.
+        dup = MaturityPair.query.filter_by(subject_id=subject.id, agent_id=None).first()
+    if dup:
+        raise Refused('이미 이어져 있습니다.')
+    row = MaturityPair(subject_id=subject.id, agent_id=agent.id if agent else None)
+    db.session.add(row)
+    db.session.flush()
+    return row
+
+
+def delete_pair(pair):
+    """연결을 끊으면 평가·이력이 같이 사라진다. 몇 건인지 돌려준다 — 확인 문구에 쓴다."""
+    n_assess = len(pair.assessments)
+    n_change = len(pair.changes)
+    db.session.delete(pair)
+    return {'assessments': n_assess, 'changes': n_change}
+
+
+# ── 평가 ───────────────────────────────────────────────────────────────────
+
+def assess(pair, axis_key, payload, actor):
+    """축 하나를 매긴다. **근거 없이는 저장하지 않는다.** 이력은 바뀌었을 때만.
+
+    rung 축:  payload.rung  (그 축의 칸 key)
+    value 축: payload.value (숫자) — 칸은 사업부 문턱으로 환산된다. rung 을 보내면 거절.
+    """
+    subject = pair.subject
+    axis = D.axis_of(subject.sector, axis_key)
+    if axis is None:
+        raise Refused('이 부문에 없는 축입니다.')
+    note = (payload.get('note') or '').strip()
+    if not note:
+        raise Refused('근거가 필요합니다. 무엇을 보고 이렇게 매겼는지 한 줄로 적으세요.')
+
+    row = MaturityAssessment.query.filter_by(pair_id=pair.id, axis=axis_key).first()
+    before = _mark(row) if row else None
+
+    if axis['kind'] == 'value':
+        if 'rung' in payload and payload.get('rung') is not None:
+            raise Refused(f'「{axis["label"]}」은 값으로 매깁니다. 칸은 값에서 정해집니다.')
+        value = payload.get('value')
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            raise Refused(f'「{axis["label"]}」 값(숫자)이 필요합니다.')
+        if not (0 <= value <= 100):
+            raise Refused('값은 0 에서 100 사이입니다.')
+        rung = None
+    else:
+        rung = payload.get('rung')
+        if rung not in D.rung_keys(axis):
+            raise Refused(f'「{axis["label"]}」에 없는 칸입니다.')
+        value = None
+
+    evidence = _clean_evidence(axis, payload.get('evidence'))
+    if axis_key == 'modeling':
+        _grow_phenomena(subject.division_id, evidence.get('phenomena') or [])
+
+    if row is None:
+        row = MaturityAssessment(pair_id=pair.id, axis=axis_key)
+        db.session.add(row)
+    row.rung, row.value, row.note, row.evidence = rung, value, note, evidence
+    row.assessed_at = datetime.utcnow()
+    row.assessed_by_id = getattr(actor, 'id', None)
+    row.assessed_by_name = getattr(actor, 'name', None)
+    db.session.flush()
+
+    after = _mark(row)
+    if before != after:
+        db.session.add(MaturityChange(
+            pair_id=pair.id, axis=axis_key, before=before, after=after, note=note,
+            actor_user_id=getattr(actor, 'id', None),
+            actor_name=getattr(actor, 'name', None)))
+    return row
+
+
+def _mark(row):
+    """이력에 적는 한 칸 — rung 축은 칸 key, value 축은 값."""
+    if row is None:
+        return None
+    if row.value is not None:
+        return f'{row.value:g}'
+    return row.rung
+
+
+def _clean_evidence(axis, raw):
+    """축이 아는 근거 칸만 받는다. 모르는 키는 버린다 — 자유 JSON 은 금방 쓰레기가 된다."""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for key in axis.get('evidence', []):
+        if key not in raw or raw[key] in (None, ''):
+            continue
+        v = raw[key]
+        if key in ('phenomena', 'product_families'):
+            out[key] = _clean_list(v)
+        elif key in ('compared_tests', 'tests_saved_per_year'):
+            try:
+                out[key] = int(v)
+            except (TypeError, ValueError):
+                continue
+        elif key in ('error_pct', 'hours_per_run'):
+            try:
+                out[key] = float(v)
+            except (TypeError, ValueError):
+                continue
+        else:
+            out[key] = str(v)[:500]
+    return out
+
+
+def _clean_list(v):
+    if isinstance(v, str):
+        v = v.split(',')
+    if not isinstance(v, list):
+        return []
+    seen, out = set(), []
+    for x in v:
+        s = str(x).strip()
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s[:100])
+    return out
+
+
+def _grow_phenomena(division_id, tags):
+    """새 태그는 그 사업부 사전에 들어간다. 정리(합치기·이름 바꾸기)는 설정에서 사무국이."""
+    if not tags:
+        return
+    from app.modules.digital_twin_dashboard.models import ModuleSettings
+    row = ModuleSettings.query.filter_by(
+        module_name=D.MODULE_KEY, settings_key='phenomena').first()
+    data = dict(row.settings_data or {}) if row else {}
+    key = str(division_id)
+    have = list(data.get(key) or [])
+    new = [t for t in tags if t not in have]
+    if not new:
+        return
+    data[key] = have + new
+    if row is None:
+        row = ModuleSettings(module_name=D.MODULE_KEY, settings_key='phenomena',
+                             description='사업부별 현상 태그 사전')
+        db.session.add(row)
+    row.settings_data = data
+
+
+# ── 읽기 · 사업부 판 ───────────────────────────────────────────────────────
+
+def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
+    """쌍 하나. 평가는 축 key 로 묶고, value 축은 칸을 같이 환산해 준다."""
+    subject = pair.subject
+    axes = D.get_axes(subject.sector)
+    rule = rule or D.get_accuracy_rule(subject.division_id)
+    stale_days = stale_days or D.get_stale_days()
+    cutoff = datetime.utcnow() - timedelta(days=stale_days)
+    by_axis = {a.axis: a for a in pair.assessments}
+    out_axes = {}
+    for axis in axes:
+        a = by_axis.get(axis['key'])
+        if a is None:
+            out_axes[axis['key']] = None
+            continue
+        d = a.to_dict()
+        if axis['kind'] == 'value':
+            d['rung'] = D.rung_for_value(a.value, rule['thresholds'], rule['boundary'])
+        d['rung_index'] = D.rung_index(axis, d['rung'])
+        d['stale'] = bool(a.assessed_at and a.assessed_at < cutoff)
+        out_axes[axis['key']] = d
+    d = {
+        'id': pair.id,
+        'subject_id': pair.subject_id,
+        'agent_id': pair.agent_id,
+        'subject': subject.to_dict(),
+        'agent': pair.agent.to_dict() if pair.agent else None,
+        'assessments': out_axes,
+        'unassessed': [k for k, v in out_axes.items() if v is None],
+    }
+    if with_changes:
+        d['changes'] = [c.to_dict() for c in sorted(pair.changes, key=lambda c: -c.id)]
+    return d
+
+
+def board(division_id, sector):
+    """사업부 판 — 대상마다 쌍을 접고, 항목 집계를 센다.
+
+    항목 정확도는 쌍들의 값을 subject.accuracy_rule 로 집계한다(값 있는 것만).
+    축별 최고 칸은 「이 시험은 어디까지 왔나」의 요약이다 — 평균이 아니다.
+    """
+    rule = D.get_accuracy_rule(division_id)
+    stale_days = D.get_stale_days()
+    axes = D.get_axes(sector)
+    subjects = (MaturitySubject.query
+                .filter_by(division_id=division_id, sector=sector)
+                .order_by(MaturitySubject.order, MaturitySubject.id).all())
+    rows = []
+    for s in subjects:
+        pairs = [pair_dict(p, rule, stale_days) for p in
+                 sorted(s.pairs, key=lambda p: p.id)]
+        acc_values = [(p['assessments'].get('accuracy') or {}).get('value')
+                      for p in pairs]
+        acc, filled, total = D.aggregate_accuracy(acc_values, s.accuracy_rule)
+        best = {}
+        for axis in axes:
+            idx = [p['assessments'][axis['key']]['rung_index'] for p in pairs
+                   if p['assessments'].get(axis['key'])
+                   and p['assessments'][axis['key']]['rung_index'] is not None]
+            best[axis['key']] = max(idx) if idx else None
+        unassessed = sum(len(p['unassessed']) for p in pairs)
+        stale = sum(1 for p in pairs for a in p['assessments'].values() if a and a['stale'])
+        rows.append({
+            **s.to_dict(),
+            'pairs': pairs,
+            'summary': {
+                'accuracy': acc, 'accuracy_filled': filled, 'accuracy_total': total,
+                'accuracy_rung': D.rung_for_value(acc, rule['thresholds'], rule['boundary']),
+                'best_rung_index': best,
+                'unassessed': unassessed,
+                'stale': stale,
+                'pair_count': len(pairs),
+            },
+        })
+    return {
+        'division_id': division_id, 'sector': sector,
+        'axes': axes, 'accuracy_rule': rule, 'stale_days': stale_days,
+        'subjects': rows,
+        'totals': {
+            'subjects': len(rows),
+            'pairs': sum(r['summary']['pair_count'] for r in rows),
+            'unassessed': sum(r['summary']['unassessed'] for r in rows),
+            'stale': sum(r['summary']['stale'] for r in rows),
+        },
+    }
