@@ -1,14 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Plus, Trash2, Loader2, AlertTriangle, Link2 } from 'lucide-react';
+import { X, Plus, Trash2, Loader2, AlertTriangle, Link2, Layers } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 
 // 시험 항목 / 시뮬레이션 관리 — 왼쪽 목록, 오른쪽 상세. 인텔의 역량 관리와 같은 꼴.
 //
 //   왼쪽 위   이름만 적고 Enter → 바로 생기고 골라진다 (나머지는 오른쪽에서)
-//   왼쪽     목록 — 누르면 오른쪽에 상세
+//   왼쪽     목록 — 누르면 오른쪽에 상세. Ctrl+클릭(하나씩 더) · Shift+클릭(범위) ·
+//            드래그(범위)로 여럿을 고르면 오른쪽이 **일괄 수정**이 된다
 //   오른쪽   그 항목의 칸들. 고치면 저장이 켜진다
 //
+// ⚠️ 일괄 수정에서 **고유한 칸은 뺀다** — 이름·세부·과제 uuid. 여럿에 같은 이름을
+//    쓰면 그건 실수지 편집이 아니다. 나머지는 「그대로 두기」가 기본이고 고른 것만 바뀐다.
+//    제품군은 「전체에 넣기」와 칩의 「전체에서 빼기」로 한 번에 다룬다.
 // ⚠️ 지우면 걸린 쌍·평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
 // ⚠️ 이름표는 label 이 아니라 div 다(인텔 점검 2026-08-26 — label 은 안의 첫 단추를 대신 누른다).
 
@@ -40,12 +44,13 @@ const NewRow = styled.div`
     display: inline-flex; align-items: center; &:disabled { background: #bfdbfe; cursor: not-allowed; }
   }
 `;
-const List = styled.div`flex: 1; min-height: 0; overflow-y: auto; padding: 0.5rem;`;
+const ListHint = styled.div`padding: 0.3rem 0.75rem; font-size: 0.6875rem; color: #94a3b8; border-bottom: 1px solid #f1f5f9; user-select: none;`;
+const List = styled.div`flex: 1; min-height: 0; overflow-y: auto; padding: 0.5rem; user-select: none;`;
 const Pick = styled.button`
   width: 100%; text-align: left; border: 1px solid ${p => (p.$on ? '#93c5fd' : 'transparent')};
   background: ${p => (p.$on ? '#eff6ff' : 'transparent')}; border-radius: 0.375rem; padding: 0.3125rem 0.4375rem;
   cursor: pointer; display: flex; align-items: center; gap: 0.375rem; font: inherit;
-  &:hover { background: #f1f5f9; }
+  &:hover { background: ${p => (p.$on ? '#dbeafe' : '#f1f5f9')}; }
   b { flex: 1; min-width: 0; font-size: 0.8125rem; font-weight: ${p => (p.$on ? 700 : 400)}; color: #0f172a;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   em { font-style: normal; font-size: 0.6875rem; color: #94a3b8; font-variant-numeric: tabular-nums;
@@ -64,8 +69,9 @@ const Field = styled.div`
 `;
 const Chips = styled.div`display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center;`;
 const Chip = styled.span`
-  display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; background: #eff6ff; color: #1e40af;
-  border: 1px solid #bfdbfe; border-radius: 999px; padding: 0.15rem 0.3rem 0.15rem 0.55rem;
+  display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; background: ${p => (p.$partial ? '#f8fafc' : '#eff6ff')};
+  color: ${p => (p.$partial ? '#64748b' : '#1e40af')}; border: 1px ${p => (p.$partial ? 'dashed #cbd5e1' : 'solid #bfdbfe')};
+  border-radius: 999px; padding: 0.15rem 0.3rem 0.15rem 0.55rem;
   button { border: none; background: transparent; color: #60a5fa; cursor: pointer; padding: 0; display: inline-flex; &:hover { color: #1d4ed8; } }
 `;
 const ChipAdd = styled.div`
@@ -77,6 +83,11 @@ const ChipAdd = styled.div`
 const Pair = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; @media (max-width: 700px) { grid-template-columns: 1fr; }`;
 const Info = styled.div`
   font-size: 0.75rem; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.375rem; padding: 0.5rem 0.625rem; line-height: 1.6;
+`;
+const BulkHead = styled.div`
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: #eff6ff; border: 1px solid #bfdbfe;
+  border-radius: 0.5rem; color: #1e40af; font-size: 0.8125rem; font-weight: 700;
+  small { font-weight: 400; color: #3b82f6; }
 `;
 const Foot = styled.div`display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1rem; border-top: 1px solid #e2e8f0; background: #f8fafc;`;
 const Note = styled.small`font-size: 0.6875rem; color: #64748b;`;
@@ -96,14 +107,15 @@ const Err = styled.div`
 `;
 
 const KINDS = {
-  subject: { title: '시험 항목 관리', placeholder: '새 시험 항목 이름 — Enter', pick: '왼쪽에서 시험 항목을 고르세요.' },
-  agent: { title: '시뮬레이션 관리', placeholder: '새 시뮬레이션 이름 — Enter', pick: '왼쪽에서 시뮬레이션을 고르세요.' },
+  subject: { title: '시험 항목 관리', placeholder: '새 시험 항목 이름 — Enter', pick: '왼쪽에서 시험 항목을 고르세요.', unit: '시험' },
+  agent: { title: '시뮬레이션 관리', placeholder: '새 시뮬레이션 이름 — Enter', pick: '왼쪽에서 시뮬레이션을 고르세요.', unit: '시뮬레이션' },
 };
 const RULES = [
   { key: 'auto', label: '자동 — 하나면 그 값, 여럿이면 평균' },
   { key: 'mean', label: '평균 — 값 있는 시뮬레이션의 평균' },
   { key: 'single', label: '단일 — 대표 시뮬레이션 하나 (여럿이면 값 없음)' },
 ];
+const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 
 const toDraft = (kind, item) => (kind === 'subject'
   ? { name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
@@ -114,68 +126,153 @@ const toPayload = (kind, d) => (kind === 'subject'
   ? { name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
   : { name: d.name, kind: d.kind, model_kind: d.model_kind || null, project_uuid: d.project_uuid || null });
 
+/** 일괄 초안의 빈 상태 — 전부 「그대로 두기」. */
+const emptyBulk = (kind) => (kind === 'subject'
+  ? { accuracy_rule: KEEP, add_families: [], remove_families: [] }
+  : { kind: KEEP, model_kind: KEEP });
+
 const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], onClose, onChanged }) => {
   const meta = KINDS[kind];
-  const [pick, setPick] = useState(null);
-  const [draft, setDraft] = useState(null);
+  const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
+  const [anchor, setAnchor] = useState(null);       // Shift·드래그 범위의 시작
+  const [dragging, setDragging] = useState(false);
+  const [draft, setDraft] = useState(null);         // 하나 골랐을 때의 초안
+  const [bulk, setBulk] = useState(null);           // 여럿 골랐을 때의 초안
   const [newName, setNewName] = useState('');
-  const [busy, setBusy] = useState(null);      // 'add' | 'save' | 'del' | null
+  const [newFamily, setNewFamily] = useState('');
+  const [busy, setBusy] = useState(null);           // 'add' | 'save' | 'del' | null
   const [error, setError] = useState(null);
 
   const api = kind === 'subject'
     ? { create: maturityApi.createSubject, update: maturityApi.updateSubject, remove: maturityApi.deleteSubject }
     : { create: maturityApi.createAgent, update: maturityApi.updateAgent, remove: maturityApi.deleteAgent };
 
-  const current = useMemo(() => items.find(i => i.id === pick) || null, [items, pick]);
-  // 고른 것이 바뀌면 초안을 그것으로. 목록이 새로 와도 같은 것을 보고 있으면 초안은 지킨다.
-  useEffect(() => { if (current && (!draft || draft._id !== current.id)) setDraft({ _id: current.id, ...toDraft(kind, current) }); },
-    [current]); // eslint-disable-line react-hooks/exhaustive-deps
+  const byId = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
+  const picked = useMemo(() => selected.map(id => byId[id]).filter(Boolean), [selected, byId]);
+  const current = picked.length === 1 ? picked[0] : null;
+  const many = picked.length > 1;
+
+  // 하나 골랐을 때: 그것의 초안. 목록이 새로 와도 같은 것을 보고 있으면 초안은 지킨다.
+  useEffect(() => {
+    if (current && (!draft || draft._id !== current.id)) setDraft({ _id: current.id, ...toDraft(kind, current) });
+    if (many && !bulk) setBulk(emptyBulk(kind));
+    if (!many && bulk) setBulk(null);
+  }, [current, many]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 드래그는 창 어디서 놓아도 끝난다.
+  useEffect(() => {
+    if (!dragging) return undefined;
+    const up = () => setDragging(false);
+    window.addEventListener('mouseup', up);
+    return () => window.removeEventListener('mouseup', up);
+  }, [dragging]);
+
   const base = current ? toDraft(kind, current) : null;
-  const changed = !!(draft && base && Object.keys(base).some(k => JSON.stringify(base[k] ?? '') !== JSON.stringify(draft[k] ?? '')));
+  const d = draft && current && draft._id === current.id ? draft : null;
+  const changed = !!(d && base && Object.keys(base).some(k => JSON.stringify(base[k] ?? '') !== JSON.stringify(d[k] ?? '')));
+  const set = (patch) => setDraft(x => ({ ...x, ...patch }));
+  const setB = (patch) => setBulk(x => ({ ...x, ...patch }));
+
   // 제품군 제안 — 이 사업부의 다른 시험이 이미 쓰는 이름. 같은 뜻을 다른 글자로 적지 않게.
   const familyPool = useMemo(() => [...new Set(items.flatMap(i => i.product_families || []))].sort(), [items]);
-  const [newFamily, setNewFamily] = useState('');
-  const addFamily = () => {
-    const f = newFamily.trim();
-    if (!f || !d) return;
-    if (!d.product_families.includes(f)) set({ product_families: [...d.product_families, f] });
-    setNewFamily('');
-  };
-  const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
+  // ── 고르기 ──
+  const rangeIds = (a, b) => {
+    const ia = items.findIndex(i => i.id === a), ib = items.findIndex(i => i.id === b);
+    if (ia < 0 || ib < 0) return [b];
+    const [lo, hi] = ia < ib ? [ia, ib] : [ib, ia];
+    return items.slice(lo, hi + 1).map(i => i.id);
+  };
+  const pickOne = (id, e) => {
+    setDraft(null); setBulk(null);
+    if (e.shiftKey && anchor != null) { setSelected(rangeIds(anchor, id)); return; }
+    if (e.ctrlKey || e.metaKey) {
+      setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
+      setAnchor(id); return;
+    }
+    setSelected([id]); setAnchor(id);
+  };
+  const dragStart = (id, e) => {
+    if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.metaKey) return;
+    setDragging(true); setAnchor(id);
+  };
+  const dragOver = (id) => {
+    if (!dragging || anchor == null) return;
+    setDraft(null); setBulk(null);
+    setSelected(rangeIds(anchor, id));
+  };
+
+  // ── 서버 ──
   const run = async (what, fn) => {
     setBusy(what);
     try { const r = await fn(); setError(null); onChanged(); return r; }
     catch (e) { setError(e.message); return null; }
     finally { setBusy(null); }
   };
-
   const add = async () => {
     const name = newName.trim();
     if (!name || busy) return;
     const r = await run('add', () => api.create({ division_id: divisionId, name }));
-    if (r?.data?.id) { setNewName(''); setPick(r.data.id); setDraft(null); }
+    if (r?.data?.id) { setNewName(''); setSelected([r.data.id]); setAnchor(r.data.id); setDraft(null); }
   };
   const save = async () => {
-    if (!changed || !draft.name.trim()) return;
-    const r = await run('save', () => api.update(current.id, toPayload(kind, draft)));
+    if (!changed || !d.name.trim()) return;
+    const r = await run('save', () => api.update(current.id, toPayload(kind, d)));
     if (r) setDraft(null);
   };
-  const remove = async () => {
-    const n = pairCount[current.id] || 0;
-    if (!window.confirm(`「${current.name}」을 지웁니다. 걸린 쌍 ${n}개와 그 평가·이력이 같이 사라집니다.`)) return;
-    const r = await run('del', () => api.remove(current.id));
-    if (r) { setPick(null); setDraft(null); }
+  const removeSelected = async () => {
+    const n = picked.reduce((s, i) => s + (pairCount[i.id] || 0), 0);
+    const what = picked.length === 1 ? `「${picked[0].name}」` : `${meta.unit} ${picked.length}개`;
+    if (!window.confirm(`${what}을 지웁니다. 걸린 쌍 ${n}개와 그 평가·이력이 같이 사라집니다.`)) return;
+    const r = await run('del', () => Promise.all(picked.map(i => api.remove(i.id))));
+    if (r) { setSelected([]); setDraft(null); setBulk(null); }
   };
 
-  const d = draft && current && draft._id === current.id ? draft : null;
+  // ── 일괄 수정 ──
+  const bulkChanged = !!bulk && (kind === 'subject'
+    ? (bulk.accuracy_rule !== KEEP || bulk.add_families.length > 0 || bulk.remove_families.length > 0)
+    : (bulk.kind !== KEEP || bulk.model_kind !== KEEP));
+  const bulkPayload = (item) => {
+    if (kind === 'subject') {
+      const fams = (item.product_families || []).filter(f => !bulk.remove_families.includes(f));
+      bulk.add_families.forEach(f => { if (!fams.includes(f)) fams.push(f); });
+      const p = { product_families: fams };
+      if (bulk.accuracy_rule !== KEEP) p.accuracy_rule = bulk.accuracy_rule;
+      return p;
+    }
+    const p = {};
+    if (bulk.kind !== KEEP) p.kind = bulk.kind;
+    if (bulk.model_kind !== KEEP) p.model_kind = bulk.model_kind || null;
+    return p;
+  };
+  const saveBulk = async () => {
+    if (!bulkChanged) return;
+    const r = await run('save', () => Promise.all(picked.map(i => api.update(i.id, bulkPayload(i)))));
+    if (r) setBulk(emptyBulk(kind));
+  };
+  // 고른 시험들의 제품군 합집합 — 몇 개가 갖고 있는지 함께.
+  const familyUnion = useMemo(() => {
+    const c = {};
+    picked.forEach(i => (i.product_families || []).forEach(f => { c[f] = (c[f] || 0) + 1; }));
+    return Object.entries(c).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [picked]);
+
+  const addFamily = () => {
+    const f = newFamily.trim();
+    if (!f) return;
+    if (many) { if (!bulk.add_families.includes(f)) setB({ add_families: [...bulk.add_families, f], remove_families: bulk.remove_families.filter(x => x !== f) }); }
+    else if (d && !d.product_families.includes(f)) set({ product_families: [...d.product_families, f] });
+    setNewFamily('');
+  };
+
+  const canSave = many ? bulkChanged : (changed && !!d?.name?.trim());
 
   return (
     <Overlay onClick={onClose}>
       <Panel onClick={e => e.stopPropagation()}>
         <Head>
           <Title>{meta.title}</Title>
-          <Count>{items.length}개</Count>
+          <Count>{items.length}개{picked.length > 1 && ` · ${picked.length}개 고름`}</Count>
           {denyReason && <Count>· {denyReason} 읽기만 됩니다.</Count>}
           <CloseButton onClick={onClose} title="닫기"><X size={18} /></CloseButton>
         </Head>
@@ -192,13 +289,16 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                 </button>
               </NewRow>
             )}
+            <ListHint>Ctrl+클릭 하나씩 더 · Shift+클릭 범위 · 드래그 범위 → 여럿을 한 번에 고칩니다</ListHint>
             <List>
               {items.length === 0 && <Msg>아직 없습니다.{canEdit ? ' 위에 이름을 적고 Enter.' : ''}</Msg>}
               {items.map(item => {
                 const n = pairCount[item.id] || 0;
                 return (
-                  <Pick key={item.id} type="button" $on={pick === item.id}
-                        onClick={() => { setPick(item.id); setDraft(null); }}>
+                  <Pick key={item.id} type="button" $on={selected.includes(item.id)}
+                        onClick={e => pickOne(item.id, e)}
+                        onMouseDown={e => dragStart(item.id, e)}
+                        onMouseEnter={() => dragOver(item.id)}>
                     <b>{item.name}</b>
                     {kind === 'agent' && item.model_kind && (
                       <em title="모델 종류">{modelKinds.find(m => m.key === item.model_kind)?.label?.slice(0, 2) || item.model_kind}</em>
@@ -213,7 +313,9 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
           </Left>
 
           <Right>
-            {!current && <Msg>{meta.pick}</Msg>}
+            {picked.length === 0 && <Msg>{meta.pick}</Msg>}
+
+            {/* ── 하나 ── */}
             {current && d && kind === 'subject' && (
               <>
                 <Field><span>이름</span>
@@ -237,9 +339,8 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                     {d.product_families.length === 0 && <small>아직 없습니다.</small>}
                     {canEdit && (
                       <ChipAdd>
-                        <input list={`fam-${current.id}`} value={newFamily} onChange={e => setNewFamily(e.target.value)}
+                        <input list="fam-pool" value={newFamily} onChange={e => setNewFamily(e.target.value)}
                                placeholder="제품군 이름 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFamily(); } }} />
-                        <datalist id={`fam-${current.id}`}>{familyPool.filter(f => !d.product_families.includes(f)).map(f => <option key={f} value={f} />)}</datalist>
                         <button type="button" onClick={addFamily} disabled={!newFamily.trim()} title="추가"><Plus size={11} /></button>
                       </ChipAdd>
                     )}
@@ -270,19 +371,91 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                 <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
               </>
             )}
+
+            {/* ── 여럿 — 일괄 수정 ── */}
+            {many && bulk && (
+              <>
+                <BulkHead>
+                  <Layers size={14} /> {meta.unit} {picked.length}개 일괄 수정
+                  <small>— 고유한 칸({kind === 'subject' ? '이름·세부' : '이름·과제 uuid'})은 여기서 못 고칩니다. 「그대로 두기」인 칸은 안 바뀝니다.</small>
+                </BulkHead>
+                <Info>{picked.map(i => i.name).slice(0, 8).join(' · ')}{picked.length > 8 ? ` … 외 ${picked.length - 8}` : ''}</Info>
+
+                {kind === 'subject' && (
+                  <>
+                    <Field><span>항목 정확도 집계</span>
+                      <select value={bulk.accuracy_rule} disabled={!canEdit} onChange={e => setB({ accuracy_rule: e.target.value })}>
+                        <option value={KEEP}>— 그대로 두기 —</option>
+                        {RULES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                      </select></Field>
+                    <Field><span>적용 제품군 — 고른 시험들이 가진 것</span>
+                      <Chips>
+                        {familyUnion.map(([f, n]) => {
+                          const removing = bulk.remove_families.includes(f);
+                          return (
+                            <Chip key={f} $partial={n < picked.length || removing} title={removing ? '저장하면 전체에서 빠집니다' : `${picked.length}개 중 ${n}개가 가짐`}
+                                  style={removing ? { textDecoration: 'line-through' } : undefined}>
+                              {f} <small>{n}/{picked.length}</small>
+                              {canEdit && (removing
+                                ? <button type="button" title="빼기 취소" onClick={() => setB({ remove_families: bulk.remove_families.filter(x => x !== f) })}><Plus size={11} /></button>
+                                : <button type="button" title="전체에서 빼기" onClick={() => setB({ remove_families: [...bulk.remove_families, f], add_families: bulk.add_families.filter(x => x !== f) })}><X size={11} /></button>)}
+                            </Chip>
+                          );
+                        })}
+                        {bulk.add_families.map(f => (
+                          <Chip key={`add-${f}`} title="저장하면 전체에 들어갑니다">+ {f}
+                            {canEdit && <button type="button" title="넣기 취소" onClick={() => setB({ add_families: bulk.add_families.filter(x => x !== f) })}><X size={11} /></button>}
+                          </Chip>
+                        ))}
+                        {canEdit && (
+                          <ChipAdd>
+                            <input list="fam-pool" value={newFamily} onChange={e => setNewFamily(e.target.value)}
+                                   placeholder="전체에 넣을 제품군 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFamily(); } }} />
+                            <button type="button" onClick={addFamily} disabled={!newFamily.trim()} title="전체에 넣기"><Plus size={11} /></button>
+                          </ChipAdd>
+                        )}
+                      </Chips>
+                      <small>칩의 ×는 고른 시험 전체에서 뺍니다. 점선 칩은 일부만 가진 것 — 넣으면 전체가 갖게 됩니다.</small>
+                    </Field>
+                  </>
+                )}
+                {kind === 'agent' && (
+                  <Pair>
+                    <Field><span>종류</span>
+                      <select value={bulk.kind === KEEP ? KEEP : '__set__'} disabled={!canEdit}
+                              onChange={e => setB({ kind: e.target.value === KEEP ? KEEP : '' })}>
+                        <option value={KEEP}>— 그대로 두기 —</option>
+                        <option value="__set__">같은 값으로 바꾸기…</option>
+                      </select>
+                      {bulk.kind !== KEEP && (
+                        <input value={bulk.kind} disabled={!canEdit} onChange={e => setB({ kind: e.target.value })} placeholder="예: 구조, 열, 유동" />
+                      )}</Field>
+                    <Field><span>모델 종류</span>
+                      <select value={bulk.model_kind} disabled={!canEdit} onChange={e => setB({ model_kind: e.target.value })}>
+                        <option value={KEEP}>— 그대로 두기 —</option>
+                        <option value="">— 안 정함 —</option>
+                        {modelKinds.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                      </select></Field>
+                  </Pair>
+                )}
+              </>
+            )}
+            <datalist id="fam-pool">{familyPool.map(f => <option key={f} value={f} />)}</datalist>
           </Right>
         </Two>
 
         <Foot>
-          {canEdit && current && (
-            <Danger type="button" onClick={remove} disabled={busy === 'del'}><Trash2 size={13} /> 지우기</Danger>
+          {canEdit && picked.length > 0 && (
+            <Danger type="button" onClick={removeSelected} disabled={busy === 'del'}>
+              <Trash2 size={13} /> {many ? `${picked.length}개 지우기` : '지우기'}
+            </Danger>
           )}
           {!canEdit && <Note>읽기만 됩니다 — 자기 사업부의 것만 고칠 수 있습니다.</Note>}
-          {canEdit && current && !changed && <Note>고치면 저장할 수 있습니다</Note>}
+          {canEdit && picked.length > 0 && !canSave && <Note>{many ? '바꿀 칸을 고르면 저장할 수 있습니다' : '고치면 저장할 수 있습니다'}</Note>}
           <Ghost type="button" onClick={onClose} style={{ marginLeft: 'auto' }}>닫기</Ghost>
-          {canEdit && current && (
-            <Save type="button" onClick={save} disabled={!changed || !d?.name?.trim() || busy === 'save'}>
-              {busy === 'save' ? '담는 중…' : '저장'}
+          {canEdit && picked.length > 0 && (
+            <Save type="button" onClick={many ? saveBulk : save} disabled={!canSave || busy === 'save'}>
+              {busy === 'save' ? '담는 중…' : many ? `${picked.length}개에 저장` : '저장'}
             </Save>
           )}
         </Foot>
