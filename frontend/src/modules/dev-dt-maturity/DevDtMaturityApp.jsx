@@ -6,6 +6,7 @@ import Header from './components/Layout/Header';
 import BoardView from './components/Board/BoardView';
 import ListView from './components/List/ListView';
 import PairModal from './components/Pair/PairModal';
+import ModalHost from './components/List/ModalHost';
 import maturityApi from './services/maturityApi';
 import { filtersFromParams, filtersToParams } from './utils/board';
 
@@ -44,6 +45,8 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const [divisions, setDivisions] = useState([]);
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [modal, setModal] = useState(null);        // 'subject' | 'agent' | 'import' | null
+  const [counts, setCounts] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -84,9 +87,19 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const axes = defs?.axes?.simulation || [];
   const bump = () => setRefreshKey(k => k + 1);
 
+  // 헤더 단추에 붙는 수 — 사업부가 바뀌거나 무엇이 바뀌면 다시 센다.
+  useEffect(() => {
+    if (!divisionId) return;
+    let alive = true;
+    Promise.all([maturityApi.listSubjects(divisionId), maturityApi.listAgents(divisionId)])
+      .then(([s, a]) => { if (alive) setCounts({ subjects: s.data.length, agents: a.data.length }); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [divisionId, refreshKey]);
+
   return (
     <Container>
-      <Header onGoHome={onGoHome} />
+      <Header onGoHome={onGoHome} onOpen={setModal} counts={counts} />
       <StickyBar>
         <Select value={divisionId ?? ''} onChange={e => patch({ division: e.target.value, pair: null })}>
           {divisions.map(d => <option key={d.id} value={d.id}>{d.name}{d.deny_reason ? ' (조회)' : ''}</option>)}
@@ -102,10 +115,15 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                      onOpenPair={(id) => patch({ pair: id })} refreshKey={refreshKey} />
         ) : (
           <ListView divisionId={divisionId} denyReason={division?.deny_reason || null}
-                    modelKinds={defs.model_kinds} onOpenPair={(id) => patch({ pair: id })} onChanged={bump} />
+                    onOpenPair={(id) => patch({ pair: id })} onChanged={bump} refreshKey={refreshKey} />
         ))}
         {pairId && defs && (
           <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
+        )}
+        {modal && defs && divisionId && (
+          <ModalHost kind={modal} divisionId={divisionId} divisionName={division?.name}
+                     denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
+                     onClose={() => setModal(null)} onChanged={bump} />
         )}
       </Main>
     </Container>
