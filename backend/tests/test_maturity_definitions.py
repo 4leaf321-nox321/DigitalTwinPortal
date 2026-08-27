@@ -36,6 +36,21 @@ def test_시뮬레이션만_살아_있고_나머지는_자리만_있다():
     assert D.SECTOR_BY_KEY['digital_thread']['has_agent'] is False   # 수단 없는 쌍
 
 
+def test_자동화는_묶음이다_서열은_켠_개수():
+    """전처리·실행·후처리·보고·파이프라인은 선후가 없다. 수동 = 아무것도 안 켬 = 0."""
+    axis = D.axis_of('simulation', 'automation')
+    assert axis['kind'] == 'set'
+    assert D.set_flag_keys(axis) == ['pre', 'run', 'post', 'report', 'pipeline']
+    assert D.set_rung(axis, ['post', 'pre']) == 'pre,post'              # 정해진 순서로 저장
+    assert D.set_rung(axis, []) == 'manual'
+    assert D.set_flags(axis, 'pre,post') == ['pre', 'post']
+    assert D.set_flags(axis, 'manual') == [] and D.set_flags(axis, '') == []
+    assert D.set_flags(axis, 'pre,robot') is None                       # 모르는 항목
+    assert D.rung_index(axis, 'manual') == 0
+    assert D.rung_index(axis, 'pre,run,post') == 3
+    assert D.rung_index(axis, 'robot') is None
+
+
 def test_칸의_서열은_index_이고_없는_칸은_None():
     axis = D.axis_of('simulation', 'substitution')
     assert D.rung_index(axis, 'reference') == 0

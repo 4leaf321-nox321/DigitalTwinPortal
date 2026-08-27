@@ -61,22 +61,22 @@ DATA = {
         ('낙하 시험', '1.2m 6면 26모서리', ['S 시리즈', 'A 시리즈', 'Z 폴드'], [
             _s('낙하 구조 해석', '구조', 'physics',
                {'accuracy': (91, '25년 낙하 32건 비교, 파손 위치 일치율 91%', {'compared_tests': 32, 'error_pct': 6}, 20),
-                'automation': ('post', '낙하 자세 24종 템플릿 + 보고서 자동', {'hours_per_run': 3}, 45),
+                'automation': ('pre,run,post,report', '낙하 자세 24종 템플릿 + 보고서 자동', {'hours_per_run': 3}, 45),
                 'modeling': ('multi', '유리 깨짐·프레임 휨·커넥터 이탈까지', {'phenomena': ['유리 깨짐', '프레임 휨', '커넥터 이탈']}, 45),
                 'scope': ('all', '25년 출시 전 모델에 적용', {}, 45),
                 'substitution': ('screening', '1차 시제 낙하 시험 3회 → 1회', {'tests_saved_per_year': 40}, 45)},
-               [(400, None, 'pre', '메시 자동화'), (250, 'pre', 'run', '자세 템플릿'), (45, 'run', 'post', '보고서 자동')]),
+               [(400, None, 'pre', '메시 자동화'), (250, 'pre', 'pre,run', '자세 템플릿'), (45, 'pre,run', 'pre,run,post,report', '보고서 자동')]),
             _s('낙하 파손 예측 모델', 'ML', 'data',
                {'accuracy': (84, '해석 결과 2,100건 학습, 파손 여부 정확도 84%', {'compared_tests': 120}, 30),
-                'automation': ('pipeline', '설계 변경 → 파손 확률 자동 산출', {'hours_per_run': 0.2}, 30),
+                'automation': ('pre,run,post,report,pipeline', '설계 변경 → 파손 확률 자동 산출', {'hours_per_run': 0.2}, 30),
                 'modeling': ('defect', '유리 깨짐 여부만', {'phenomena': ['유리 깨짐']}, 30),
                 'scope': ('basic', '플래그십 기본 모델', {}, 30)},
-               [(90, None, 'run', '초기 파이프라인'), (30, 'run', 'pipeline', '설계 변경 연동')]),
+               [(90, None, 'pre,run', '초기 파이프라인'), (30, 'pre,run', 'pre,run,post,report,pipeline', '설계 변경 연동')]),
         ]),
         ('굽힘 시험', '3점 굽힘 1kN', ['S 시리즈', 'A 시리즈'], [
             _s('굽힘 강성 해석', '구조', 'physics',
                {'accuracy': (95, '강성 곡선 오차 5% 이내', {'compared_tests': 18, 'error_pct': 5}, 60),
-                'automation': ('run', '', {'hours_per_run': 2}, 60),
+                'automation': ('pre,run', '', {'hours_per_run': 2}, 60),
                 'modeling': ('performance', '강성·최대 변형', {}, 60),
                 'scope': ('all', '', {}, 60),
                 'substitution': ('certified_except', '인증 시험만 남김', {'tests_saved_per_year': 60}, 60)},
@@ -96,19 +96,19 @@ DATA = {
         ('발열 시험', '게임 30분 표면온도', ['S 시리즈', 'A 시리즈', 'Z 폴드'], [
             _s('열 해석 (정상상태)', '열', 'physics',
                {'accuracy': (89, '표면 최고온도 오차 ±2℃', {'compared_tests': 40, 'error_pct': 4}, 10),
-                'automation': ('post', '', {'hours_per_run': 4}, 10),
+                'automation': ('pre,run,post,report', '', {'hours_per_run': 4}, 10),
                 'modeling': ('multi', '핫스팟·스로틀링 시점', {'phenomena': ['핫스팟', '스로틀링']}, 10),
                 'scope': ('all', '', {}, 10),
                 'substitution': ('partial', '', {'tests_saved_per_year': 20}, 10)},
                [(200, None, 'reference', ''), (10, 'reference', 'partial', '온도 챔버 일부 조건 생략')]),
             _s('열 과도응답 예측', 'ML', 'hybrid',
                {'accuracy': (81, '30분 온도 곡선 RMSE 1.8℃', {'compared_tests': 25}, 10),
-                'automation': ('run', '', {}, 10)}),
+                'automation': ('pre,run', '', {}, 10)}),
         ]),
         ('안테나 성능', 'OTA TRP/TIS', ['S 시리즈', 'A 시리즈'], [
             _s('안테나 전자기 해석', '전자기', 'physics',
                {'accuracy': (93, 'TRP 오차 0.5dB', {'compared_tests': 50, 'error_pct': 3}, 90),
-                'automation': ('post', '', {'hours_per_run': 6}, 90),
+                'automation': ('pre,run,post,report', '', {'hours_per_run': 6}, 90),
                 'modeling': ('performance', 'TRP·TIS', {}, 90),
                 'scope': ('all', '', {}, 90),
                 'substitution': ('screening', '', {'tests_saved_per_year': 80}, 90)}),
@@ -136,7 +136,7 @@ DATA = {
         ('스피커 음향', '주파수 응답', ['S 시리즈', 'A 시리즈'], [
             _s('음향 해석', '음향', 'physics',
                {'accuracy': (85, '', {'compared_tests': 20, 'error_pct': 8}, 40),
-                'automation': ('run', '', {'hours_per_run': 5}, 40),
+                'automation': ('pre,run', '', {'hours_per_run': 5}, 40),
                 'modeling': ('performance', '주파수 응답', {}, 40),
                 'scope': ('derived_some', '', {}, 40),
                 'substitution': ('partial', '', {'tests_saved_per_year': 15}, 40)}),
@@ -148,13 +148,13 @@ DATA = {
         ('충전 발열', '25W 유선 충전', ['S 시리즈', 'A 시리즈'], [
             _s('충전 열 해석', '열', 'physics',
                {'accuracy': (87, '', {'compared_tests': 15, 'error_pct': 6}, 50),
-                'automation': ('post', '', {}, 50), 'scope': ('all', '', {}, 50),
+                'automation': ('pre,run,post,report', '', {}, 50), 'scope': ('all', '', {}, 50),
                 'substitution': ('partial', '', {}, 50)}),
         ]),
         ('진동 시험', '수송 진동 프로파일', ['S 시리즈', 'A 시리즈', 'Z 폴드'], [
             _s('랜덤 진동 해석', '진동', 'physics',
                {'accuracy': (90, '', {'compared_tests': 22, 'error_pct': 7}, 35),
-                'automation': ('run', '', {}, 35), 'modeling': ('defect', '납땜 크랙', {'phenomena': ['납땜 크랙']}, 35),
+                'automation': ('pre,run', '', {}, 35), 'modeling': ('defect', '납땜 크랙', {'phenomena': ['납땜 크랙']}, 35),
                 'scope': ('all', '', {}, 35), 'substitution': ('screening', '', {'tests_saved_per_year': 30}, 35)}),
         ]),
     ],
@@ -162,7 +162,7 @@ DATA = {
         ('패널 열변형', '65인치 4시간 점등', ['Neo QLED', 'OLED', 'Crystal UHD'], [
             _s('패널 열-구조 연성 해석', '열구조', 'physics',
                {'accuracy': (86, '휨량 오차 0.3mm', {'compared_tests': 14, 'error_pct': 9}, 30),
-                'automation': ('run', '', {'hours_per_run': 8}, 30),
+                'automation': ('pre,run', '', {'hours_per_run': 8}, 30),
                 'modeling': ('multi', '패널 휨·베젤 갭', {'phenomena': ['패널 휨', '베젤 갭']}, 30),
                 'scope': ('derived_some', '', {}, 30), 'substitution': ('partial', '', {'tests_saved_per_year': 12}, 30)},
                [(150, None, 'reference', ''), (30, 'reference', 'partial', '')]),
@@ -170,13 +170,13 @@ DATA = {
         ('백라이트 휘도 균일도', '9점 측정', ['Neo QLED', 'Crystal UHD'], [
             _s('광학 시뮬레이션', '광학', 'physics',
                {'accuracy': (92, '', {'compared_tests': 30, 'error_pct': 4}, 60),
-                'automation': ('post', '', {}, 60), 'modeling': ('performance', '', {}, 60),
+                'automation': ('pre,run,post,report', '', {}, 60), 'modeling': ('performance', '', {}, 60),
                 'scope': ('all', '', {}, 60), 'substitution': ('certified_except', '', {'tests_saved_per_year': 50}, 60)}),
         ]),
         ('스탠드 하중', '전방 전도 10°', ['Neo QLED', 'OLED', 'Crystal UHD'], [
             _s('스탠드 구조 해석', '구조', 'physics',
                {'accuracy': (94, '', {'compared_tests': 25, 'error_pct': 5}, 45),
-                'automation': ('post', '', {}, 45), 'scope': ('all', '', {}, 45),
+                'automation': ('pre,run,post,report', '', {}, 45), 'scope': ('all', '', {}, 45),
                 'substitution': ('full', '전도 시험 전량 대체', {'tests_saved_per_year': 90}, 45)},
                [(500, None, 'screening', ''), (200, 'screening', 'certified_except', ''), (45, 'certified_except', 'full', '인증 기관 합의')]),
         ]),
@@ -193,13 +193,13 @@ DATA = {
         ('벽걸이 마운트 강도', 'VESA 4배 하중', ['Neo QLED', 'OLED'], [
             _s('마운트 구조 해석', '구조', 'physics',
                {'accuracy': (96, '', {'compared_tests': 12, 'error_pct': 3}, 20),
-                'automation': ('run', '', {}, 20), 'scope': ('all', '', {}, 20),
+                'automation': ('pre,run', '', {}, 20), 'scope': ('all', '', {}, 20),
                 'substitution': ('certified_except', '', {}, 20)}),
         ]),
         ('전원부 발열', '최대 밝기 8시간', ['Neo QLED', 'Crystal UHD'], [
             _s('전원 보드 열 해석', '열', 'physics',
                {'accuracy': (83, '', {'compared_tests': 16, 'error_pct': 7}, 40),
-                'automation': ('run', '', {}, 40), 'modeling': ('defect', '커패시터 과열', {'phenomena': ['커패시터 과열']}, 40)}),
+                'automation': ('pre,run', '', {}, 40), 'modeling': ('defect', '커패시터 과열', {'phenomena': ['커패시터 과열']}, 40)}),
         ]),
         ('리모컨 낙하', '1m 낙하', ['공통'], [
             _s('리모컨 낙하 해석', '구조', 'physics', {'accuracy': (None, '', {}, 0)}),
@@ -207,13 +207,13 @@ DATA = {
         ('화질 무라', '저계조 무라', ['OLED'], [
             _s('무라 예측 모델', 'ML', 'data',
                {'accuracy': (71, '패널 공정 데이터 기반', {'compared_tests': 200}, 25),
-                'automation': ('pipeline', '', {}, 25), 'modeling': ('defect', '무라', {'phenomena': ['무라']}, 25),
+                'automation': ('pre,run,post,report,pipeline', '', {}, 25), 'modeling': ('defect', '무라', {'phenomena': ['무라']}, 25),
                 'scope': ('basic', '', {}, 25)}),
         ]),
         ('베젤 갭 조립', '4변 갭 편차', ['Neo QLED', 'OLED'], [
             _s('공차 해석', '공차', 'physics',
                {'accuracy': (88, '', {'compared_tests': 40, 'error_pct': 6}, 55),
-                'automation': ('post', '', {}, 55), 'scope': ('all', '', {}, 55), 'substitution': ('screening', '', {}, 55)}),
+                'automation': ('pre,run,post,report', '', {}, 55), 'scope': ('all', '', {}, 55), 'substitution': ('screening', '', {}, 55)}),
         ]),
     ],
     'DA': [
@@ -226,11 +226,11 @@ DATA = {
         ('세탁기 탈수 진동', '1400rpm 편심 부하', ['비스포크 세탁기', '드럼 세탁기'], [
             _s('드럼 동역학 해석', '동역학', 'physics',
                {'accuracy': (90, '', {'compared_tests': 28, 'error_pct': 6}, 30),
-                'automation': ('run', '', {}, 30), 'modeling': ('multi', '워킹·소음', {'phenomena': ['워킹', '진동 소음']}, 30),
+                'automation': ('pre,run', '', {}, 30), 'modeling': ('multi', '워킹·소음', {'phenomena': ['워킹', '진동 소음']}, 30),
                 'scope': ('all', '', {}, 30), 'substitution': ('screening', '', {'tests_saved_per_year': 25}, 30)},
-               [(300, None, 'pre', ''), (30, 'pre', 'run', '')]),
+               [(300, None, 'pre', ''), (30, 'pre', 'pre,run', '')]),
             _s('진동 이상 예측', 'ML', 'data',
-               {'accuracy': (78, '', {'compared_tests': 60}, 30), 'automation': ('pipeline', '', {}, 30)}),
+               {'accuracy': (78, '', {'compared_tests': 60}, 30), 'automation': ('pre,run,post,report,pipeline', '', {}, 30)}),
         ]),
         ('모터 소음', '1m 거리 dB', ['비스포크 세탁기', '청소기'], [
             _s('모터 전자기-음향 해석', '음향', 'physics',
@@ -240,7 +240,7 @@ DATA = {
         ('에어컨 냉방 능력', '정격 냉방', ['무풍 에어컨'], [
             _s('냉매 사이클 시뮬레이션', '시스템', 'physics',
                {'accuracy': (93, '', {'compared_tests': 35, 'error_pct': 4}, 45),
-                'automation': ('post', '', {}, 45), 'scope': ('all', '', {}, 45), 'substitution': ('partial', '', {}, 45)}),
+                'automation': ('pre,run,post,report', '', {}, 45), 'scope': ('all', '', {}, 45), 'substitution': ('partial', '', {}, 45)}),
             _s('실내 기류 해석', '유동', 'physics',
                {'accuracy': (80, '', {'compared_tests': 10, 'error_pct': 11}, 45), 'automation': ('pre', '', {}, 45)}),
         ]),
@@ -251,7 +251,7 @@ DATA = {
         ('청소기 흡입력', '흡입 일률', ['비스포크 제트'], [
             _s('팬 유동 해석', '유동', 'physics',
                {'accuracy': (89, '', {'compared_tests': 20, 'error_pct': 6}, 35),
-                'automation': ('run', '', {}, 35), 'scope': ('derived_some', '', {}, 35), 'substitution': ('partial', '', {}, 35)}),
+                'automation': ('pre,run', '', {}, 35), 'scope': ('derived_some', '', {}, 35), 'substitution': ('partial', '', {}, 35)}),
         ]),
         ('오븐 온도 균일도', '9점 온도', ['비스포크 오븐'], [
             _s('오븐 복사-대류 해석', '열', 'physics',
@@ -263,11 +263,11 @@ DATA = {
         ('냉장고 도어 내구', '10만 회 개폐', ['비스포크 냉장고'], [
             _s('힌지 피로 해석', '구조', 'physics',
                {'accuracy': (86, '', {'compared_tests': 11, 'error_pct': 8}, 70),
-                'automation': ('run', '', {}, 70), 'substitution': ('screening', '', {'tests_saved_per_year': 10}, 70)}),
+                'automation': ('pre,run', '', {}, 70), 'substitution': ('screening', '', {'tests_saved_per_year': 10}, 70)}),
         ]),
         ('인덕션 발열 분포', '냄비 바닥 온도', ['비스포크 인덕션'], [
             _s('유도 가열 전자기-열 해석', '전자기', 'physics',
-               {'accuracy': (91, '', {'compared_tests': 18, 'error_pct': 5}, 40), 'automation': ('post', '', {}, 40),
+               {'accuracy': (91, '', {'compared_tests': 18, 'error_pct': 5}, 40), 'automation': ('pre,run,post,report', '', {}, 40),
                 'scope': ('all', '', {}, 40), 'substitution': ('certified_except', '', {}, 40)}),
         ]),
     ],
@@ -275,7 +275,7 @@ DATA = {
         ('기지국 방열', '55℃ 환경 최대 부하', ['5G RU', 'Massive MIMO'], [
             _s('RU 열 해석', '열', 'physics',
                {'accuracy': (88, '', {'compared_tests': 10, 'error_pct': 6}, 30),
-                'automation': ('run', '', {}, 30), 'scope': ('all', '', {}, 30), 'substitution': ('partial', '', {}, 30)}),
+                'automation': ('pre,run', '', {}, 30), 'scope': ('all', '', {}, 30), 'substitution': ('partial', '', {}, 30)}),
         ]),
         ('철탑 진동', '풍하중 진동', ['5G RU'], [
             _s('풍하중 구조 해석', '구조', 'physics',
@@ -288,7 +288,7 @@ DATA = {
         ('안테나 빔 패턴', '빔포밍 이득', ['Massive MIMO'], [
             _s('어레이 안테나 해석', '전자기', 'physics',
                {'accuracy': (95, '', {'compared_tests': 20, 'error_pct': 3}, 40),
-                'automation': ('post', '', {}, 40), 'scope': ('all', '', {}, 40), 'substitution': ('screening', '', {}, 40)}),
+                'automation': ('pre,run,post,report', '', {}, 40), 'scope': ('all', '', {}, 40), 'substitution': ('screening', '', {}, 40)}),
         ]),
         ('낙하·수송', '포장 낙하', ['5G RU'], [
             _s('포장 낙하 해석', '구조', 'physics', {}),
@@ -399,7 +399,8 @@ def main():
                             c.created_at = _days_ago(days); counts['changes'] += 1
                     for (days, before, after, note) in history:
                         axis_key = next((k for k, ax in axes.items()
-                                         if ax['kind'] == 'rung' and after in D.rung_keys(ax)), None)
+                                         if (ax['kind'] == 'rung' and after in D.rung_keys(ax))
+                                         or (ax['kind'] == 'set' and D.set_flags(ax, after) is not None)), None)
                         if not axis_key:
                             continue
                         c = MaturityChange(pair_id=pair.id, axis=axis_key, before=before, after=after,

@@ -108,7 +108,23 @@ def test_정확도는_값으로만_매기고_칸은_환산된다(client, auth, w
 def test_없는_칸_없는_축은_거절한다(client, auth, world, mx_user):
     _, _, p = _pair(client, auth, mx_user, world['mx'])
     _assess(client, auth, mx_user, p['id'], 'automation', {'rung': 'robot', 'note': 'x'}, expect=400)
+    _assess(client, auth, mx_user, p['id'], 'automation', {'flags': ['pre', 'robot'], 'note': 'x'}, expect=400)
+    _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'robot', 'note': 'x'}, expect=400)
     _assess(client, auth, mx_user, p['id'], 'no_such_axis', {'rung': 'run', 'note': 'x'}, expect=400)
+
+
+def test_자동화는_토글_묶음으로_매기고_수동이면_전부_꺼진다(client, auth, world, mx_user):
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+    out = _assess(client, auth, mx_user, p['id'], 'automation', {'flags': ['post', 'pre'], 'note': '전처리·후처리'})
+    a = out['data']['assessments']['automation']
+    assert a['rung'] == 'pre,post' and a['flags'] == ['pre', 'post'] and a['rung_index'] == 2
+    out = _assess(client, auth, mx_user, p['id'], 'automation', {'flags': [], 'note': '다시 수동'})
+    a = out['data']['assessments']['automation']
+    assert a['rung'] == 'manual' and a['flags'] == [] and a['rung_index'] == 0
+    assert [(c['before'], c['after']) for c in out['data']['changes']][:2] == [('pre,post', 'manual'), (None, 'pre,post')]
+    # 옛 모양(rung 하나)도 받는다
+    out = _assess(client, auth, mx_user, p['id'], 'automation', {'rung': 'run', 'note': '옛 화면'})
+    assert out['data']['assessments']['automation']['flags'] == ['run']
 
 
 # ── 권한 — 자기 사업부만 ──────────────────────────────────────────────────
@@ -178,14 +194,14 @@ def test_항목_정확도는_값_있는_것만_평균하고_미평가를_센다(
     a2 = _post(client, auth, mx_user, '/agents', {'division_id': world['mx'].id, 'name': 'CFD'})['data']
     p2 = _post(client, auth, mx_user, '/pairs', {'subject_id': s['id'], 'agent_id': a2['id']})['data']
     _assess(client, auth, mx_user, p1['id'], 'accuracy', {'value': 88, 'note': 'x'})
-    _assess(client, auth, mx_user, p1['id'], 'automation', {'rung': 'run', 'note': 'x'})
-    _assess(client, auth, mx_user, p2['id'], 'automation', {'rung': 'manual', 'note': 'x'})
+    _assess(client, auth, mx_user, p1['id'], 'automation', {'flags': ['pre', 'run'], 'note': 'x'})
+    _assess(client, auth, mx_user, p2['id'], 'automation', {'flags': [], 'note': 'x'})
 
     res = client.get(f'{BASE}/board?division_id={world["mx"].id}', headers=auth(mx_user))
     row = res.get_json()['data']['subjects'][0]
     sm = row['summary']
     assert (sm['accuracy'], sm['accuracy_filled'], sm['accuracy_total']) == (88.0, 1, 2)
-    assert sm['best_rung_index']['automation'] == 2          # run — 평균이 아니라 최고 칸
+    assert sm['best_rung_index']['automation'] == 2          # 켠 개수 2 — 평균이 아니라 최고
     assert sm['best_rung_index']['scope'] is None
     assert sm['unassessed'] == 3 + 4                          # p1 은 5축 중 2개 매김, p2 는 1개
     assert res.get_json()['data']['deny_reason'] is None

@@ -8,8 +8,10 @@
    부문을 하나 더 붙이는 일이 `SECTORS` 와 사다리 한 벌을 더하는 것으로 끝나야 한다.
    그렇지 않으면 3절의 설계가 틀린 것이다.
 
-⚠️ **축은 두 종류다.** `rung`(칸을 고른다) · `value`(값을 적고 문턱으로 칸이 정해진다).
-   정확도가 value 다. 값과 칸이 따로 놀면 정확도가 둘이 된다 — 칸을 바꾸려면 값을 바꿔야 한다.
+⚠️ **축은 세 종류다.** `rung`(칸을 고른다) · `value`(값을 적고 문턱으로 칸이 정해진다) ·
+   `set`(선후 없는 항목을 켜고 끈다 — 자동화). 정확도가 value 다. 값과 칸이 따로 놀면
+   정확도가 둘이 된다 — 칸을 바꾸려면 값을 바꿔야 한다. set 은 첫 칸(수동)이 「아무것도
+   안 켬」이고 서열은 켠 개수다 — 전처리·실행·후처리에는 순서가 없다(2026-08-28).
 
 ⚠️ **사다리 문구는 설정으로 갈아 끼울 수 있지만 key 는 고정이다.** 이력과 평가가
    key 로 묶여 있다. 문구를 고치는 것과 칸을 지우는 것은 다른 일이다.
@@ -69,18 +71,21 @@ AXES = {
             ],
         },
         {
-            'key': 'automation', 'label': '자동화', 'kind': 'rung',
-            'question': '해석 파이프라인이 어디까지 사람 손 없이 도는가',
+            'key': 'automation', 'label': '자동화', 'kind': 'set',
+            'question': '해석 파이프라인의 어느 단계가 사람 손 없이 도는가',
             'evidence': ['hours_per_run'], 'evidence_label': '1회 소요 시간(Hr)',
             # ⚠️ 이것은 **해석 파이프라인**의 자동화다. 「검증 자동화」 부문(로직 검증)과
             #    다른 것을 잰다 — 같은 시험에 둘 다 걸려도 겹치지 않는다(PLAN 3-1).
+            # ⚠️ 사다리가 아니라 **묶음**이다. 전처리·실행·후처리·보고·파이프라인은 선후가
+            #    없어 따로 켜고 끈다. 「수동」은 아무것도 안 켠 상태. 서열(색)은 켠 개수다.
             'rungs': [
-                {'key': 'manual', 'label': '수동', 'description': '전 과정을 사람이 한다'},
+                {'key': 'manual', 'label': '수동', 'description': '아무 단계도 자동이 아니다 — 전 과정을 사람이 한다'},
                 {'key': 'pre', 'label': '전처리 자동', 'description': '형상·메시·조건 준비가 자동'},
                 {'key': 'run', 'label': '실행 자동', 'description': '템플릿으로 해석이 돈다'},
-                {'key': 'post', 'label': '후처리·보고까지', 'description': '결과 정리와 보고서까지 자동'},
-                {'key': 'pipeline', 'label': '파이프라인',
-                 'description': '설계 변경이 들어오면 결과까지 사람 없이 나온다'},
+                {'key': 'post', 'label': '후처리 자동', 'description': '결과 정리(추출·그래프)가 자동'},
+                {'key': 'report', 'label': '보고 자동', 'description': '보고서가 자동으로 나온다'},
+                {'key': 'pipeline', 'label': '파이프라인(오케스트레이션)',
+                 'description': '설계 변경이 들어오면 단계들이 이어져 결과까지 사람 없이 나온다'},
             ],
         },
         {
@@ -114,7 +119,8 @@ AXES = {
             'rungs': [
                 {'key': 'reference', 'label': '시험 병행(참고)', 'description': '시험은 그대로, 참고만'},
                 {'key': 'partial', 'label': '일부 조건 대체', 'description': '일부 조건은 시험을 안 한다'},
-                {'key': 'screening', 'label': '선행 스크리닝', 'description': '시험 횟수를 줄인다'},
+                # ⚠️ key 는 고정(이력이 묶여 있다). 「선행 스크리닝」이 어려워 문구만 바꿨다(2026-08-28).
+                {'key': 'screening', 'label': '사전 검증', 'description': '시험 전에 시뮬레이션으로 먼저 걸러 시험 횟수를 줄인다'},
                 {'key': 'certified_except', 'label': '인증 제외 대체', 'description': '인증 시험만 남긴다'},
                 {'key': 'full', 'label': '완전 대체', 'description': '시험을 하지 않는다'},
             ],
@@ -125,7 +131,7 @@ AXES = {
     'design_automation': [],
     'digital_thread': [],
 }
-AXIS_KINDS = {'rung', 'value'}
+AXIS_KINDS = {'rung', 'value', 'set'}
 
 
 def sector_is_active(sector_key):
@@ -145,9 +151,41 @@ def rung_keys(axis):
 
 
 def rung_index(axis, rung_key):
-    """칸의 서열. 없는 칸이면 None — 0 으로 두면 「첫 칸」과 「미평가」가 섞인다."""
+    """칸의 서열. 없는 칸이면 None — 0 으로 두면 「첫 칸」과 「미평가」가 섞인다.
+
+    set 축은 rung 이 켠 항목들의 묶음('pre,run,post')이고 서열은 **켠 개수**다.
+    'manual'(아무것도 안 켬)은 0.
+    """
+    if axis.get('kind') == 'set':
+        flags = set_flags(axis, rung_key)
+        return None if flags is None else len(flags)
     keys = rung_keys(axis)
     return keys.index(rung_key) if rung_key in keys else None
+
+
+def set_flag_keys(axis):
+    """set 축에서 켤 수 있는 항목들 — 첫 칸(수동)을 뺀 나머지."""
+    return rung_keys(axis)[1:]
+
+
+def set_flags(axis, rung_key):
+    """set 축의 rung 문자열 → 켠 항목 목록. 'manual' 이나 '' 은 []. 모르는 항목이 섞이면 None."""
+    if rung_key is None:
+        return None
+    if rung_key in ('', rung_keys(axis)[0]):
+        return []
+    allowed = set_flag_keys(axis)
+    parts = [p for p in str(rung_key).split(',') if p]
+    if any(p not in allowed for p in parts):
+        return None
+    return [k for k in allowed if k in parts]          # 정해진 순서로
+
+
+def set_rung(axis, flags):
+    """켠 항목 목록 → 저장할 rung 문자열. 빈 묶음은 첫 칸(수동)."""
+    allowed = set_flag_keys(axis)
+    picked = [k for k in allowed if k in (flags or [])]
+    return ','.join(picked) if picked else rung_keys(axis)[0]
 
 
 # ── 정확도 — 값 → 칸, 항목 집계 ───────────────────────────────────────────

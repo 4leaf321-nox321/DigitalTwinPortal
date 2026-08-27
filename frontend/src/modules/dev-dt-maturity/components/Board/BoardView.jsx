@@ -77,10 +77,16 @@ const isDark = (c) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(c);
 const AxisCell = ({ a, axis, dense, onClick }) => {
   const idx = a?.rung_index ?? null;
   const color = colorFor(idx, axis.rungs.length);
-  const label = idx == null ? '미평가' : axis.rungs[idx]?.label;
+  // 묶음 축은 「켠 수/전체」 — 서열이 칸 이름이 아니라 개수다. 어느 것을 켰는지는 대면 보인다.
+  const total = axis.rungs.length - 1;
+  const label = idx == null ? '미평가'
+    : axis.kind === 'set' ? (idx === 0 ? axis.rungs[0].label : `${idx}/${total}`)
+    : axis.rungs[idx]?.label;
+  const flagsText = axis.kind === 'set' && a?.flags?.length
+    ? axis.rungs.filter(r => a.flags.includes(r.key)).map(r => r.label).join(' · ') : null;
   return (
     <Cell $dense={dense} $color={color} $dark={isDark(color)} $stale={a?.stale}
-          title={`${axis.label}: ${label}${a?.stale ? ' · 낡음' : ''}${a?.note ? ` — ${a.note}` : ''}`}
+          title={`${axis.label}: ${flagsText || label}${a?.stale ? ' · 낡음' : ''}${a?.note ? ` — ${a.note}` : ''}`}
           onClick={onClick}>
       {dense ? '' : (axis.kind === 'value' && a?.value != null ? `${a.value}%` : label)}
     </Cell>
@@ -90,10 +96,13 @@ const AxisCell = ({ a, axis, dense, onClick }) => {
 /** 시험 행의 요약 칸 — 축별 최고 칸(평균이 아니다). */
 const BestCell = ({ idx, axis, dense }) => {
   const color = colorFor(idx, axis.rungs.length);
+  const label = idx == null ? null
+    : axis.kind === 'set' ? (idx === 0 ? axis.rungs[0].label : `${idx}/${axis.rungs.length - 1}`)
+    : axis.rungs[idx]?.label;
   return (
     <Cell as="span" $dense={dense} $color={color} $dark={isDark(color)}
-          title={`${axis.label} 최고 칸: ${idx == null ? '미평가' : axis.rungs[idx]?.label}`}>
-      {dense ? '' : (idx == null ? '—' : axis.rungs[idx]?.label)}
+          title={`${axis.label} 최고: ${label ?? '미평가'}`}>
+      {dense ? '' : (label ?? '—')}
     </Cell>
   );
 };

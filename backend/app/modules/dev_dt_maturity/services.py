@@ -223,6 +223,17 @@ def assess(pair, axis_key, payload, actor):
         if not (0 <= value <= 100):
             raise Refused('값은 0 에서 100 사이입니다.')
         rung = None
+    elif axis['kind'] == 'set':
+        # 묶음 — flags(목록)로 받는다. rung 으로 와도 받는다(옛 화면·씨앗: 'pre,run' 또는 항목 하나).
+        flags = payload.get('flags')
+        if flags is None:
+            flags = D.set_flags(axis, payload.get('rung'))
+            if flags is None:
+                raise Refused(f'「{axis["label"]}」에 없는 항목입니다.')
+        elif not isinstance(flags, list) or any(f not in D.set_flag_keys(axis) for f in flags):
+            raise Refused(f'「{axis["label"]}」에 없는 항목입니다.')
+        rung = D.set_rung(axis, flags)
+        value = None
     else:
         rung = payload.get('rung')
         if rung not in D.rung_keys(axis):
@@ -340,6 +351,8 @@ def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
         d = a.to_dict()
         if axis['kind'] == 'value':
             d['rung'] = D.rung_for_value(a.value, rule['thresholds'], rule['boundary'])
+        if axis['kind'] == 'set':
+            d['flags'] = D.set_flags(axis, a.rung) or []
         d['rung_index'] = D.rung_index(axis, d['rung'])
         d['stale'] = bool(a.assessed_at and a.assessed_at < cutoff)
         out_axes[axis['key']] = d

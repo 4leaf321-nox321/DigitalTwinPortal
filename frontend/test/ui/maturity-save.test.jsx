@@ -16,12 +16,17 @@ import ItemManagerModal from '../../src/modules/dev-dt-maturity/components/List/
 const AXES = [
   { key: 'accuracy', label: '정확도', kind: 'value', question: '맞는가', evidence: ['compared_tests', 'error_pct'],
     rungs: [{ key: 'trend', label: '경향 일치' }, { key: 'quantitative', label: '정량 오차 안' }, { key: 'correlated', label: '상관 확립' }] },
-  { key: 'automation', label: '자동화', kind: 'rung', question: '돌아가는가', evidence: ['hours_per_run'],
-    rungs: [{ key: 'manual', label: '수동' }, { key: 'pre', label: '전처리 자동' }, { key: 'run', label: '실행 자동' }] },
+  { key: 'automation', label: '자동화', kind: 'set', question: '돌아가는가', evidence: ['hours_per_run'],
+    rungs: [{ key: 'manual', label: '수동' }, { key: 'pre', label: '전처리 자동' }, { key: 'run', label: '실행 자동' }, { key: 'post', label: '후처리 자동' }] },
+  { key: 'scope', label: '적용 범위', kind: 'rung', question: '어디까지', evidence: [],
+    rungs: [{ key: 'issue', label: '이슈 모델' }, { key: 'basic', label: '기본 모델' }, { key: 'all', label: '전 제품군' }] },
 ];
 const PAIR = {
   id: 101, subject_id: 1, agent_id: 10, subject: { name: '낙하 시험', product_families: [] }, agent: { name: '구조 해석', tools: [] },
-  assessments: { automation: { rung: 'pre', rung_index: 1, stale: false, note: '스크립트', evidence: {}, assessed_at: '2026-01-01T00:00:00', assessed_by_name: '홍' } },
+  assessments: {
+    automation: { rung: 'pre', flags: ['pre'], rung_index: 1, stale: false, note: '스크립트', evidence: {}, assessed_at: '2026-01-01T00:00:00', assessed_by_name: '홍' },
+    scope: { rung: 'basic', rung_index: 1, stale: false, note: '기본만', evidence: {}, assessed_at: '2026-01-01T00:00:00', assessed_by_name: '홍' },
+  },
   unassessed: ['accuracy'], changes: [], deny_reason: null, phenomena: [],
 };
 
@@ -33,10 +38,13 @@ export default async function run() {
       if (refuse) { const e = new Error(refuse); throw e; }
       const axis = url.split('/assessments/')[1];
       const a = AXES.find(x => x.key === axis);
-      const idx = a.kind === 'value' ? (body.value >= 90 ? 2 : body.value >= 70 ? 1 : 0) : a.rungs.findIndex(r => r.key === body.rung);
+      let idx, rung, flags;
+      if (a.kind === 'value') { idx = body.value >= 90 ? 2 : body.value >= 70 ? 1 : 0; rung = a.rungs[idx].key; }
+      else if (a.kind === 'set') { flags = a.rungs.slice(1).map(r => r.key).filter(k => body.flags.includes(k)); idx = flags.length; rung = flags.join(',') || 'manual'; }
+      else { idx = a.rungs.findIndex(r => r.key === body.rung); rung = body.rung; }
       return { ...PAIR,
-        assessments: { ...PAIR.assessments, [axis]: { rung: a.rungs[idx].key, rung_index: idx, value: body.value ?? null, note: body.note, evidence: body.evidence || {}, assessed_at: '2026-08-28T00:00:00', assessed_by_name: '나', stale: false } },
-        unassessed: [], changes: [{ id: 9, axis, before: 'pre', after: a.rungs[idx].key, created_at: '2026-08-28T00:00:00', actor_name: '나', note: body.note }] };
+        assessments: { ...PAIR.assessments, [axis]: { rung, flags, rung_index: idx, value: body.value ?? null, note: body.note, evidence: body.evidence || {}, assessed_at: '2026-08-28T00:00:00', assessed_by_name: '나', stale: false } },
+        unassessed: [], changes: [{ id: 9, axis, before: 'pre', after: rung, created_at: '2026-08-28T00:00:00', actor_name: '나', note: body.note }] };
     }
     if (url.endsWith('/pairs/101')) return PAIR;
     if (/\/(subjects|agents)\/\d+$/.test(url)) return { id: Number(url.split('/').pop()), ...body };
@@ -50,21 +58,28 @@ export default async function run() {
     await click(byText('button', '실행 자동'));
     const note = document.querySelector('input[placeholder^="근거"]');
     say(!!note, '① 칸을 누르면 근거 칸이 열림');
-    say(byText('button', '저장').disabled && html().includes('근거를 적어야 저장됩니다'), '① 근거가 비면 저장이 잠기고 이유가 옆에 보임');
+    say(note.value === '스크립트', '① 편집 칸에 기존 근거가 채워져 있음');
+    say(html().includes('전처리 자동 · 실행 자동'), '① 묶음: 실행 자동을 켜면 전처리에 더해진다(선후 없음)');
+    await click(byText('button', '✓ 전처리 자동')); await settle();
+    say(html().includes('→ <strong>실행 자동</strong>'), '① 묶음: 켠 것을 다시 누르면 꺼진다');
+    await click(byText('button', '전처리 자동')); await settle();
+    await type(note, '');
+    say(byText('button', '저장').disabled && html().includes('근거를 적어야 저장됩니다'), '① 근거를 지우면 저장이 잠기고 이유가 옆에 보임');
     await type(note, '템플릿 도입');
     say(!byText('button', '저장').disabled, '① 근거를 적으면 저장이 켜짐');
     await click(byText('button', '저장')); await settle();
     const put = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/automation'));
-    say(!!put && put.body.rung === 'run' && put.body.note === '템플릿 도입', `① PUT 이 감: ${JSON.stringify(put?.body)}`);
+    say(!!put && JSON.stringify(put.body.flags) === '["pre","run"]' && put.body.note === '템플릿 도입', `① PUT 이 flags 로 감: ${JSON.stringify(put?.body)}`);
     say(!document.querySelector('input[placeholder^="근거"]'), '① 저장 뒤 편집 칸이 닫힘');
-    say(html().includes('템플릿 도입') && html().includes('2026-08-28'), '① 사다리가 새 칸·근거·날짜를 그림');
+    say(html().includes('템플릿 도입') && html().includes('2026-08-28'), '① 사다리가 새 묶음·근거·날짜를 그림');
 
-    // ② Enter 로 저장
+    // ② 수동을 누르면 전부 꺼지고, Enter 로 저장
     calls.length = 0;
-    await click(byText('button', '전처리 자동'));
+    await click(byText('button', '수동'));
+    say(html().includes('→ <strong>수동</strong>'), '② 「수동」을 누르면 전부 꺼짐');
     await type(document.querySelector('input[placeholder^="근거"]'), '되돌림');
     await keydown(document.querySelector('input[placeholder^="근거"]'), 'Enter'); await settle();
-    say(calls.some(c => c.method === 'PUT' && c.body?.rung === 'pre'), '② 근거 칸에서 Enter 로 저장됨');
+    say(calls.some(c => c.method === 'PUT' && Array.isArray(c.body?.flags) && c.body.flags.length === 0), '② 근거 칸에서 Enter 로 저장됨(빈 묶음)');
 
     // ③ 정확도 값
     calls.length = 0;
@@ -78,9 +93,9 @@ export default async function run() {
     say(!!put3 && put3.body.value === 91 && !('rung' in put3.body), `③ value 로 감: ${JSON.stringify(put3?.body)}`);
     say(html().includes('91%') && html().includes('상관 확립'), '③ 값이 칸으로 환산돼 그려짐');
 
-    // ④ 서버 거절 — 이유가 단추 옆에
+    // ④ 서버 거절 — 이유가 단추 옆에 (칸 축으로)
     refuse = 'VD 사업부 인력만 평가합니다.';
-    await click(byText('button', '수동'));
+    await click(byText('button', '전 제품군'));
     await type(document.querySelector('input[placeholder^="근거"]'), 'x');
     await click(byText('button', '저장')); await settle();
     const editor = document.querySelector('input[placeholder^="근거"]');

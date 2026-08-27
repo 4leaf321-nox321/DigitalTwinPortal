@@ -85,15 +85,29 @@ const When = styled.span`color: #94a3b8; min-width: 6.5rem;`;
 const fmtDate = (iso) => (iso ? iso.slice(0, 10) : '');
 const isDark = (color) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(color);
 
-/** 이력에서 「이 칸에 언제 올라왔나」. 같은 칸에 여러 번이면 가장 이른 날. */
+/** 이력에서 「이 칸에 언제 올라왔나」. 같은 칸에 여러 번이면 가장 이른 날.
+ *  묶음(set) 축은 after 가 'pre,run' 꼴이라 항목마다 처음 켜진 날을 찾는다. */
 const reachedDates = (changes, axis) => {
   const out = {};
   (changes || []).filter(c => c.axis === axis.key).forEach(c => {
-    const key = c.after;
-    if (key && (!out[key] || c.created_at < out[key])) out[key] = c.created_at;
+    const keys = axis.kind === 'set' ? String(c.after || '').split(',').filter(Boolean) : [c.after];
+    keys.forEach(key => { if (key && (!out[key] || c.created_at < out[key])) out[key] = c.created_at; });
   });
   return out;
 };
+
+/** 묶음 축의 토글 — 「수동」을 누르면 전부 끈다. 다른 항목은 켜고 끈다(선후 없음). */
+const toggleFlag = (flags, key, axis) => {
+  if (key == null) return [...flags];
+  const manual = axis.rungs[0].key;
+  if (key === manual) return [];
+  const next = flags.includes(key) ? flags.filter(f => f !== key) : [...flags, key];
+  // 정해진 순서로 — 서버도 그렇게 저장하지만, 보낸 것과 저장된 것이 같아야 읽기 쉽다.
+  return axis.rungs.slice(1).map(r => r.key).filter(k => next.includes(k));
+};
+const flagLabels = (axis, flags) => (flags && flags.length
+  ? axis.rungs.filter(r => flags.includes(r.key)).map(r => r.label).join(' · ')
+  : axis.rungs[0].label);
 
 // 껍데기(읽기·모달)와 속(PairPanel)을 가른다 — 속은 props 만 받아 시험·SSR 로 그릴 수 있다.
 const PairModal = ({ pairId, axes, onClose, onChanged }) => {
@@ -133,12 +147,15 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
   const startEdit = (axis, rungKey) => {
     if (!canEdit) return;
     const cur = pair.assessments?.[axis.key];
+    // ⚠️ 근거는 **기존 것을 채워서** 연다(2026-08-28). 비워서 열면 위에 글자로만 남고 칸은 비어
+    //    「안 적힌 것」처럼 보인다. 고치지 않고 저장하면 같은 근거가 다시 저장될 뿐이다.
     setEditing({
       axis: axis.key,
       kind: axis.kind,
       rung: axis.kind === 'rung' ? rungKey : undefined,
+      flags: axis.kind === 'set' ? toggleFlag(cur?.flags || [], rungKey, axis) : undefined,
       value: axis.kind === 'value' ? (cur?.value ?? '') : undefined,
-      note: '',
+      note: cur?.note || '',
       evidence: { ...(cur?.evidence || {}) },
     });
   };
@@ -149,6 +166,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
     try {
       const payload = { note: editing.note, evidence: editing.evidence };
       if (editing.kind === 'value') payload.value = Number(editing.value);
+      else if (editing.kind === 'set') payload.flags = editing.flags;
       else payload.rung = editing.rung;
       const res = await maturityApi.assess(pairId, editing.axis, payload);
       onSaved(res.data);
@@ -217,6 +235,36 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                   ) : <Meta>미평가</Meta>}
                 </AxisHead>
 
+                {axis.kind === 'set' ? (
+                  // 묶음 — 선후 없음. 켠 항목은 채움, 「수동」은 아무것도 안 켰을 때 채움.
+                  // 색은 켠 개수(서열)로 — 다 켜면 가장 진하다. 편집 중엔 초안의 묶음을 그린다.
+                  (() => {
+                    const flags = isEditing ? editing.flags : (a?.flags || null);
+                    const n = flags ? flags.length : null;
+                    const color = colorFor(n, axis.rungs.length);
+                    return (
+                      <Ladder>
+                        {axis.rungs.map((r, i) => {
+                          const on = flags != null && (i === 0 ? flags.length === 0 : flags.includes(r.key));
+                          return (
+                            <Rung key={r.key} type="button"
+                                  $current={on} $reached={on} $color={i === 0 ? '#e2e8f0' : color} $dark={i !== 0 && isDark(color)}
+                                  $editable={canEdit}
+                                  title={`${r.description}${isEditing ? ' — 누르면 켜고 끕니다' : ''}`}
+                                  onClick={() => {
+                                    if (!canEdit) return;
+                                    if (isEditing) setEditing(s => ({ ...s, flags: toggleFlag(s.flags, r.key, axis) }));
+                                    else startEdit(axis, r.key);
+                                  }}>
+                              <RungLabel>{i === 0 ? r.label : (on ? '✓ ' : '') + r.label}</RungLabel>
+                              {i !== 0 && dates[r.key] && <RungDate>{fmtDate(dates[r.key])}</RungDate>}
+                            </Rung>
+                          );
+                        })}
+                      </Ladder>
+                    );
+                  })()
+                ) : (
                 <Ladder>
                   {axis.rungs.map((r, i) => {
                     const reached = curIdx != null && i <= curIdx;
@@ -233,6 +281,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     );
                   })}
                 </Ladder>
+                )}
 
                 {a && (
                   <Note>
@@ -263,6 +312,11 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                                onChange={e => setEditing(s => ({ ...s, value: e.target.value }))}
                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
                       </Row>
+                    ) : editing.kind === 'set' ? (
+                      <Row><span style={{ fontSize: '0.8125rem' }}>
+                        → <strong>{flagLabels(axis, editing.flags)}</strong>
+                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다. 「수동」은 전부 끕니다.</AxisQ>
+                      </span></Row>
                     ) : (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
                         → <strong>{axis.rungs.find(r => r.key === editing.rung)?.label}</strong>
@@ -325,7 +379,11 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                 <HistoryList>
                   {pair.changes.map(c => {
                     const axis = axes.find(x => x.key === c.axis);
-                    const lab = (k) => axis?.rungs.find(r => r.key === k)?.label || k || '—';
+                    const lab = (k) => {
+                      if (!k) return '—';
+                      if (axis?.kind === 'set') return flagLabels(axis, String(k).split(',').filter(x => x !== 'manual' && x));
+                      return axis?.rungs.find(r => r.key === k)?.label || k;
+                    };
                     return (
                       <HistoryRow key={c.id}>
                         <When>{fmtDate(c.created_at)}</When>
