@@ -62,6 +62,18 @@ const Field = styled.div`
   }
   small { font-size: 0.6875rem; color: #94a3b8; }
 `;
+const Chips = styled.div`display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center;`;
+const Chip = styled.span`
+  display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; background: #eff6ff; color: #1e40af;
+  border: 1px solid #bfdbfe; border-radius: 999px; padding: 0.15rem 0.3rem 0.15rem 0.55rem;
+  button { border: none; background: transparent; color: #60a5fa; cursor: pointer; padding: 0; display: inline-flex; &:hover { color: #1d4ed8; } }
+`;
+const ChipAdd = styled.div`
+  display: flex; gap: 0.25rem; align-items: center;
+  input { font-size: 0.75rem; padding: 0.25rem 0.4rem; border: 1px dashed #cbd5e1; border-radius: 999px; font-family: inherit; width: 11rem; }
+  button { border: none; background: #1d4ed8; color: #fff; border-radius: 999px; width: 1.4rem; height: 1.4rem; cursor: pointer;
+           display: inline-flex; align-items: center; justify-content: center; &:disabled { background: #bfdbfe; cursor: not-allowed; } }
+`;
 const Pair = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; @media (max-width: 700px) { grid-template-columns: 1fr; }`;
 const Info = styled.div`
   font-size: 0.75rem; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.375rem; padding: 0.5rem 0.625rem; line-height: 1.6;
@@ -94,13 +106,12 @@ const RULES = [
 ];
 
 const toDraft = (kind, item) => (kind === 'subject'
-  ? { name: item.name, detail: item.detail || '', product_families: (item.product_families || []).join(', '),
-      accuracy_rule: item.accuracy_rule || 'auto', roadmap_task_id: item.roadmap_task_id ?? '' }
+  ? { name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
+      accuracy_rule: item.accuracy_rule || 'auto' }
   : { name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', project_uuid: item.project_uuid || '' });
 
 const toPayload = (kind, d) => (kind === 'subject'
-  ? { name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule,
-      roadmap_task_id: d.roadmap_task_id === '' ? null : Number(d.roadmap_task_id) }
+  ? { name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
   : { name: d.name, kind: d.kind, model_kind: d.model_kind || null, project_uuid: d.project_uuid || null });
 
 const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], onClose, onChanged }) => {
@@ -120,7 +131,16 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
   useEffect(() => { if (current && (!draft || draft._id !== current.id)) setDraft({ _id: current.id, ...toDraft(kind, current) }); },
     [current]); // eslint-disable-line react-hooks/exhaustive-deps
   const base = current ? toDraft(kind, current) : null;
-  const changed = !!(draft && base && Object.keys(base).some(k => String(base[k] ?? '') !== String(draft[k] ?? '')));
+  const changed = !!(draft && base && Object.keys(base).some(k => JSON.stringify(base[k] ?? '') !== JSON.stringify(draft[k] ?? '')));
+  // 제품군 제안 — 이 사업부의 다른 시험이 이미 쓰는 이름. 같은 뜻을 다른 글자로 적지 않게.
+  const familyPool = useMemo(() => [...new Set(items.flatMap(i => i.product_families || []))].sort(), [items]);
+  const [newFamily, setNewFamily] = useState('');
+  const addFamily = () => {
+    const f = newFamily.trim();
+    if (!f || !d) return;
+    if (!d.product_families.includes(f)) set({ product_families: [...d.product_families, f] });
+    setNewFamily('');
+  };
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
   const run = async (what, fn) => {
@@ -201,20 +221,31 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                 <Pair>
                   <Field><span>세부</span>
                     <input value={d.detail} disabled={!canEdit} onChange={e => set({ detail: e.target.value })} placeholder="예: 1.2m 6면 26모서리" /></Field>
-                  <Field><span>적용 제품군</span>
-                    <input value={d.product_families} disabled={!canEdit} onChange={e => set({ product_families: e.target.value })} placeholder="쉼표로 여럿 — 예: S 시리즈, A 시리즈" />
-                    <small>적용 범위 축의 비율은 이 목록을 사업부 전체 제품군과 대봐 셉니다.</small></Field>
-                </Pair>
-                <Pair>
                   <Field><span>항목 정확도 집계</span>
                     <select value={d.accuracy_rule} disabled={!canEdit} onChange={e => set({ accuracy_rule: e.target.value })}>
                       {RULES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
                     </select>
                     <small>시뮬레이션이 여럿일 때 항목 정확도를 어떻게 낼지. 사업부 엑셀의 규칙과 맞춥니다.</small></Field>
-                  <Field><span>로드맵 항목 id (참고)</span>
-                    <input value={d.roadmap_task_id} disabled={!canEdit} onChange={e => set({ roadmap_task_id: e.target.value })} placeholder="비워도 됩니다" />
-                    <small>로드맵 정보의 시험 항목 번호. 있으면 「로드맵에서 보기」가 열립니다.</small></Field>
                 </Pair>
+                <Field><span>적용 제품군</span>
+                  <Chips>
+                    {d.product_families.map(f => (
+                      <Chip key={f}>{f}
+                        {canEdit && <button type="button" title="빼기" onClick={() => set({ product_families: d.product_families.filter(x => x !== f) })}><X size={11} /></button>}
+                      </Chip>
+                    ))}
+                    {d.product_families.length === 0 && <small>아직 없습니다.</small>}
+                    {canEdit && (
+                      <ChipAdd>
+                        <input list={`fam-${current.id}`} value={newFamily} onChange={e => setNewFamily(e.target.value)}
+                               placeholder="제품군 이름 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFamily(); } }} />
+                        <datalist id={`fam-${current.id}`}>{familyPool.filter(f => !d.product_families.includes(f)).map(f => <option key={f} value={f} />)}</datalist>
+                        <button type="button" onClick={addFamily} disabled={!newFamily.trim()} title="추가"><Plus size={11} /></button>
+                      </ChipAdd>
+                    )}
+                  </Chips>
+                  <small>하나씩 넣습니다. 이 사업부의 다른 시험이 쓰는 이름이 제안으로 뜹니다 — 적용 범위 축의 비율은 이 목록을 사업부 전체 제품군과 대봐 셉니다.</small>
+                </Field>
                 <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
               </>
             )}
