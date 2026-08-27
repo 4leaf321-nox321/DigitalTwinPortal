@@ -624,3 +624,24 @@ def departments(actor):
         return success_response(S.departments_of(division_id))
     except Exception:
         return _crashed()
+
+
+@bp.route('/pairs/<int:pair_id>/reached/<axis>/<rung>', methods=['PUT'])
+@read_required
+def set_reached(actor, pair_id, axis, rung):
+    """칸의 도달 시점(연-월)을 그 자리에서 적는다. {month: '2025-03'}"""
+    pair = MaturityPair.query.get(pair_id)
+    if not pair:
+        return error_response('없는 쌍입니다.', status_code=404)
+    denied = _deny(actor, pair.subject.division_id)
+    if denied:
+        return denied
+    try:
+        S.set_reached(pair, axis, rung, (request.get_json() or {}).get('month'), actor)
+        db.session.commit()
+        return success_response(S.pair_dict(pair, with_changes=True))
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()

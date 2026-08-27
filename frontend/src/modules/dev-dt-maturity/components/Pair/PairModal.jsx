@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Check, History, AlertTriangle } from 'lucide-react';
+import { X, Check, History, AlertTriangle, Pencil } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import { colorFor } from '../../utils/board';
 
@@ -46,7 +46,9 @@ const Stale = styled.span`
   border-radius: 0.25rem; padding: 0.05rem 0.35rem;
 `;
 const Ladder = styled.div`display: flex; gap: 0.35rem; flex-wrap: wrap;`;
-const Rung = styled.button`
+// div 다 — 칸 밑에 시점을 고치는 입력·단추가 들어가서(button 안에 button 은 안 된다).
+const Rung = styled.div`
+  user-select: none;
   flex: 1 1 0; min-width: 96px; padding: 0.45rem 0.5rem; border-radius: 0.375rem; text-align: left;
   border: 2px solid ${p => (p.$current ? '#1d4ed8' : '#e2e8f0')};
   background: ${p => (p.$reached ? p.$color : 'white')};
@@ -56,7 +58,7 @@ const Rung = styled.button`
   &:hover { border-color: ${p => (p.$editable ? '#1d4ed8' : '#e2e8f0')}; }
 `;
 const RungLabel = styled.div`font-weight: 700;`;
-const RungDate = styled.div`font-size: 0.6875rem; opacity: 0.8; margin-top: 0.1rem;`;
+const RungDate = styled.span`display: block;font-size: 0.6875rem; opacity: 0.8; margin-top: 0.1rem;`;
 const Note = styled.div`font-size: 0.8125rem; color: #475569; margin-top: 0.5rem; line-height: 1.5;`;
 const Editor = styled.div`
   margin-top: 0.6rem; padding: 0.7rem 0.75rem; background: #f8fafc; border: 1px dashed #cbd5e1;
@@ -96,6 +98,31 @@ const reachedDates = (changes, axis) => {
     keys.forEach(key => { if (key && (!out[key] || c.created_at < out[key])) out[key] = c.created_at; });
   });
   return out;
+};
+
+/** 칸 밑의 도달 시점 — 보이고, 연필로 고치고, 없으면 「시점 적기」. 클릭은 칸의 클릭과 따로 간다. */
+const ReachedAt = ({ axis, rung, reached, canEdit, date, dating, setDating, save, busy }) => {
+  const mine = dating && dating.axis === axis.key && dating.rung === rung.key;
+  if (mine) {
+    return (
+      <RungDate onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+        <input type="month" max={thisMonth()} value={dating.month} autoFocus
+               onChange={e => setDating(s => ({ ...s, month: e.target.value }))}
+               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') setDating(null); }}
+               style={{ fontSize: '0.6875rem', width: '7rem', fontFamily: 'inherit' }} />
+        <button type="button" disabled={busy || !dating.month} onClick={save} title="이 달로" style={{ marginLeft: '0.2rem' }}><Check size={10} /></button>
+        <button type="button" onClick={() => setDating(null)} title="취소"><X size={10} /></button>
+      </RungDate>
+    );
+  }
+  if (!reached) return date ? <RungDate>{fmtDate(date)}</RungDate> : null;
+  return (
+    <RungDate onClick={e => { e.stopPropagation(); if (canEdit) setDating({ axis: axis.key, rung: rung.key, month: date ? date.slice(0, 7) : thisMonth() }); }}
+              title={canEdit ? '이 칸에 올라온 시점을 고칩니다' : undefined} style={canEdit ? { cursor: 'pointer' } : undefined}>
+      {date ? fmtDate(date) : (canEdit ? '시점 적기' : '')}
+      {canEdit && <Pencil size={9} style={{ marginLeft: '0.2rem', opacity: 0.7 }} />}
+    </RungDate>
+  );
 };
 
 /** 묶음 축의 토글 — 「수동」을 누르면 전부 끈다. 다른 항목은 켜고 끈다(선후 없음). */
@@ -141,6 +168,18 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
   const [editing, setEditing] = useState(null);   // { axis, rung?, value?, note, evidence }
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  // 칸의 도달 시점을 그 자리에서 고친다 — { axis, rung, month }. 한 평가에 시점 하나면
+  // 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야 해서(2026-08-28).
+  const [dating, setDating] = useState(null);
+  const saveReached = async () => {
+    if (!dating?.month) return;
+    setBusy(true);
+    try {
+      const res = await maturityApi.setReached(pairId, dating.axis, dating.rung, dating.month);
+      onSaved(res.data); setDating(null); setSaveError(null);
+    } catch (e) { setSaveError(e.message); }
+    finally { setBusy(false); }
+  };
   const error = saveError || loadError;
 
   const canEdit = pair && !pair.deny_reason;
@@ -168,7 +207,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
     if (!editing?.note?.trim()) return;
     setBusy(true);
     try {
-      const payload = { note: editing.note, evidence: editing.evidence, assessed_at: editing.assessed_at || undefined };
+      // 시점은 값 축에서만 같이 간다 — 칸·묶음 축은 칸 밑에서 따로 고친다(옛 달이 새 이력에 묻으면 안 된다).
+      const payload = { note: editing.note, evidence: editing.evidence, assessed_at: editing.kind === 'value' ? (editing.assessed_at || undefined) : undefined };
       if (editing.kind === 'value') payload.value = Number(editing.value);
       else if (editing.kind === 'set') payload.flags = editing.flags;
       else payload.rung = editing.rung;
@@ -251,7 +291,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                         {axis.rungs.map((r, i) => {
                           const on = flags != null && (i === 0 ? flags.length === 0 : flags.includes(r.key));
                           return (
-                            <Rung key={r.key} type="button"
+                            <Rung key={r.key} role="button" tabIndex={0}
                                   $current={on} $reached={on} $color={i === 0 ? '#e2e8f0' : color} $dark={i !== 0 && isDark(color)}
                                   $editable={canEdit}
                                   title={`${r.description}${isEditing ? ' — 누르면 켜고 끕니다' : ''}`}
@@ -261,7 +301,10 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                                     else startEdit(axis, r.key);
                                   }}>
                               <RungLabel>{i === 0 ? r.label : (on ? '✓ ' : '') + r.label}</RungLabel>
-                              {i !== 0 && dates[r.key] && <RungDate>{fmtDate(dates[r.key])}</RungDate>}
+                              {i !== 0 && (
+                                <ReachedAt axis={axis} rung={r} reached={on && !isEditing} canEdit={canEdit}
+                                           date={dates[r.key]} dating={dating} setDating={setDating} save={saveReached} busy={busy} />
+                              )}
                             </Rung>
                           );
                         })}
@@ -274,13 +317,14 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     const reached = curIdx != null && i <= curIdx;
                     const color = colorFor(i, axis.rungs.length);
                     return (
-                      <Rung key={r.key} type="button"
+                      <Rung key={r.key} role="button" tabIndex={0}
                             $current={i === curIdx} $reached={reached} $color={color} $dark={isDark(color)}
                             $editable={canEdit && axis.kind === 'rung'}
                             title={r.description}
                             onClick={() => axis.kind === 'rung' && startEdit(axis, r.key)}>
                         <RungLabel>{r.label}</RungLabel>
-                        {dates[r.key] && <RungDate>{fmtDate(dates[r.key])}</RungDate>}
+                        <ReachedAt axis={axis} rung={r} reached={reached} canEdit={canEdit && axis.kind === 'rung'}
+                                   date={dates[r.key]} dating={dating} setDating={setDating} save={saveReached} busy={busy} />
                       </Rung>
                     );
                   })}
@@ -333,12 +377,14 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
                     </Row>
                     <Row>
-                      <label style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                        평가 시점{' '}
-                        <Input type="month" $w="9rem" max={thisMonth()} value={editing.assessed_at}
-                               onChange={e => setEditing(s => ({ ...s, assessed_at: e.target.value }))}
-                               title="옛 자료면 그 달로 — 사다리의 도달 시점과 이력이 그 달에 선다" />
-                      </label>
+                      {editing.kind === 'value' && (
+                        <label style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          평가 시점{' '}
+                          <Input type="month" $w="9rem" max={thisMonth()} value={editing.assessed_at}
+                                 onChange={e => setEditing(s => ({ ...s, assessed_at: e.target.value }))}
+                                 title="옛 자료면 그 달로" />
+                        </label>
+                      )}
                       {(axis.evidence || []).filter(k => evidenceFields[k]).map(k => (
                         <label key={k} style={{ fontSize: '0.75rem', color: '#64748b' }}>
                           {evidenceFields[k].label}{' '}

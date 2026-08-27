@@ -46,6 +46,9 @@ export const maturityApi = {
   createPair: (subjectId, agentId) =>
     request('/pairs', json('POST', { subject_id: subjectId, agent_id: agentId })),
   deletePair: (id) => request(`/pairs/${id}`, { method: 'DELETE' }),
+  /** 칸의 도달 시점(연-월)을 그 자리에서 적는다. */
+  setReached: (pairId, axis, rung, month) =>
+    request(`/pairs/${pairId}/reached/${axis}/${rung}`, json('PUT', { month })),
   /** 축 하나를 매긴다. 근거(note)가 없으면 서버가 거절한다. */
   assess: (pairId, axis, payload) =>
     request(`/pairs/${pairId}/assessments/${axis}`, json('PUT', payload)),

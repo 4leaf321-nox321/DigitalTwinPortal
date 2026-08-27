@@ -414,3 +414,36 @@ def test_평가_시점은_연월이고_옛_자료는_그_달로_들어간다(cli
     _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'all', 'note': '꼴', 'assessed_at': '2025/03'}, expect=400)
     out = _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'all', 'note': '날짜도 받는다', 'assessed_at': '2026-02-17'})
     assert out['data']['assessments']['scope']['assessed_at'].startswith('2026-02-01')
+
+
+def test_칸의_도달_시점을_그_자리에서_적는다(client, auth, world, mx_user):
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+    _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'basic', 'note': 'a'})     # 이력: None→basic (오늘)
+    _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'all', 'note': 'b'})       # 이력: basic→all (오늘)
+
+    def reached(rung, month, expect=200):
+        res = client.put(f'{BASE}/pairs/{p["id"]}/reached/scope/{rung}', json={'month': month}, headers=auth(mx_user))
+        assert res.status_code == expect, res.get_json()
+        return res.get_json()
+
+    out = reached('basic', '2024-06')
+    dates = {c['after']: c['created_at'][:7] for c in out['data']['changes']}
+    assert dates['basic'] == '2024-06' and dates['all'] != '2024-06'                      # 그 칸의 이력만 옮긴다
+    # 이력이 없는 아래 칸(issue)은 「시점 적기」 이력을 만든다
+    out = reached('issue', '2023-11')
+    made = [c for c in out['data']['changes'] if c['after'] == 'issue']
+    assert len(made) == 1 and made[0]['created_at'][:7] == '2023-11' and made[0]['note'] == '시점 적기'
+    # 아직 안 올라온 칸 · 미래 · 값 축은 거절
+    _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'basic', 'note': '내림'})
+    reached('all', '2024-01', expect=400)
+    reached('basic', '2099-01', expect=400)
+    res = client.put(f'{BASE}/pairs/{p["id"]}/reached/accuracy/trend', json={'month': '2024-01'}, headers=auth(mx_user))
+    assert res.status_code == 400
+
+    # 묶음 축: 켠 항목만, 그 항목을 켠 이력의 날짜를 옮긴다
+    _assess(client, auth, mx_user, p['id'], 'automation', {'flags': ['pre', 'run'], 'note': 'x'})
+    res = client.put(f'{BASE}/pairs/{p["id"]}/reached/automation/run', json={'month': '2025-02'}, headers=auth(mx_user))
+    assert res.status_code == 200
+    assert any(c['axis'] == 'automation' and 'run' in c['after'] and c['created_at'][:7] == '2025-02' for c in res.get_json()['data']['changes'])
+    res = client.put(f'{BASE}/pairs/{p["id"]}/reached/automation/post', json={'month': '2025-02'}, headers=auth(mx_user))
+    assert res.status_code == 400

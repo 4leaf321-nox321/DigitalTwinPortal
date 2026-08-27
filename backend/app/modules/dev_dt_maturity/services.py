@@ -668,3 +668,48 @@ def board_all(sector='simulation'):
         'boards': boards,
         'totals': {k: sum(b['totals'][k] for b in boards) for k in ('subjects', 'pairs', 'unassessed', 'stale')},
     }
+
+
+def set_reached(pair, axis_key, rung_key, month, actor):
+    """「이 칸에 언제 올라왔나」를 그 칸에서 바로 적는다. (2026-08-28)
+
+    한 평가에 시점 하나면 사다리를 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야
+    한다. 대신 도달한 칸의 연-월을 그 자리에서 고친다 — 이력(change)이 그 칸의 시점이다.
+      · 그 칸을 만든 이력이 있으면(after 가 그 칸 / 묶음이면 그 항목을 켠 것) 가장 이른 것의 날짜를 옮긴다
+      · 없으면(가져온 자료 등) 그 칸을 적는 이력을 하나 만든다 — 근거는 「시점 적기」
+    현재 칸보다 위의 칸에는 못 적는다 — 아직 안 올라온 칸의 시점은 뜻이 없다.
+    """
+    subject = pair.subject
+    axis = D.axis_of(subject.sector, axis_key)
+    if axis is None or axis['kind'] == 'value':
+        raise Refused('이 축은 칸의 시점을 따로 적지 않습니다.')
+    when = parse_month(month)
+    if when is None:
+        raise Refused('연-월이 필요합니다.')
+    cur = MaturityAssessment.query.filter_by(pair_id=pair.id, axis=axis_key).first()
+    if cur is None:
+        raise Refused('먼저 이 축을 매기세요 — 매기지 않은 칸의 시점은 뜻이 없습니다.')
+    if axis['kind'] == 'set':
+        if rung_key not in D.set_flag_keys(axis):
+            raise Refused('이 축에 없는 항목입니다.')
+        if rung_key not in (D.set_flags(axis, cur.rung) or []):
+            raise Refused('켜지 않은 항목의 시점은 적을 수 없습니다.')
+        hit = lambda c: rung_key in str(c.after or '').split(',')     # noqa: E731
+    else:
+        keys = D.rung_keys(axis)
+        if rung_key not in keys:
+            raise Refused('이 축에 없는 칸입니다.')
+        if keys.index(rung_key) > keys.index(cur.rung):
+            raise Refused('아직 올라오지 않은 칸의 시점은 적을 수 없습니다.')
+        hit = lambda c: c.after == rung_key                             # noqa: E731
+    rows = sorted((c for c in pair.changes if c.axis == axis_key and hit(c)), key=lambda c: c.created_at)
+    if rows:
+        rows[0].created_at = when
+        return rows[0]
+    change = MaturityChange(pair_id=pair.id, axis=axis_key, before=None, after=rung_key,
+                            note='시점 적기', actor_user_id=getattr(actor, 'id', None),
+                            actor_name=getattr(actor, 'name', None))
+    db.session.add(change)
+    db.session.flush()
+    change.created_at = when
+    return change

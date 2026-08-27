@@ -46,6 +46,10 @@ export default async function run() {
         assessments: { ...PAIR.assessments, [axis]: { rung, flags, rung_index: idx, value: body.value ?? null, note: body.note, evidence: body.evidence || {}, assessed_at: '2026-08-28T00:00:00', assessed_by_name: '나', stale: false } },
         unassessed: [], changes: [{ id: 9, axis, before: 'pre', after: rung, created_at: '2026-08-28T00:00:00', actor_name: '나', note: body.note }] };
     }
+    if (url.includes('/reached/')) {
+      const [, axis, rung] = url.split('/reached/')[1].match(/^(\w+)\/(\w+)$/);
+      return { ...PAIR, changes: [{ id: 21, axis, before: null, after: rung, created_at: `${body.month}-01T12:00:00`, actor_name: '나', note: '시점 적기' }] };
+    }
     if (url.endsWith('/pairs/101')) return PAIR;
     if (/\/(subjects|agents)\/\d+$/.test(url)) return { id: Number(url.split('/').pop()), ...body };
     return {};
@@ -55,14 +59,14 @@ export default async function run() {
     // ① 칸 → 근거 → 저장
     await render(<PairSide pairId={101} axes={AXES} onChanged={() => {}} onClose={() => {}} />);
     say(html().includes('낙하 시험 × 구조 해석'), '① 쌍이 불러와짐');
-    await click(byText('button', '실행 자동'));
+    await click(byText('[role="button"]', '실행 자동'));
     const note = document.querySelector('input[placeholder^="근거"]');
     say(!!note, '① 칸을 누르면 근거 칸이 열림');
     say(note.value === '스크립트', '① 편집 칸에 기존 근거가 채워져 있음');
     say(html().includes('전처리 자동 · 실행 자동'), '① 묶음: 실행 자동을 켜면 전처리에 더해진다(선후 없음)');
-    await click(byText('button', '✓ 전처리 자동')); await settle();
+    await click(byText('[role="button"]', '✓ 전처리 자동')); await settle();
     say(html().includes('→ <strong>실행 자동</strong>'), '① 묶음: 켠 것을 다시 누르면 꺼진다');
-    await click(byText('button', '전처리 자동')); await settle();
+    await click(byText('[role="button"]', '전처리 자동')); await settle();
     await type(note, '');
     say(byText('button', '저장').disabled && html().includes('근거를 적어야 저장됩니다'), '① 근거를 지우면 저장이 잠기고 이유가 옆에 보임');
     await type(note, '템플릿 도입');
@@ -70,18 +74,28 @@ export default async function run() {
     await click(byText('button', '저장')); await settle();
     const put = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/automation'));
     say(!!put && JSON.stringify(put.body.flags) === '["pre","run"]' && put.body.note === '템플릿 도입', `① PUT 이 flags 로 감: ${JSON.stringify(put?.body)}`);
-    say(put?.body.assessed_at === '2026-01', '① 평가 시점은 기존 것(2026-01)이 연-월로 채워져 같이 감');
+    say(put?.body.assessed_at === undefined, '① 묶음 축은 시점을 같이 보내지 않음(칸 밑에서 따로 고침)');
     say(!document.querySelector('input[placeholder^="근거"]'), '① 저장 뒤 편집 칸이 닫힘');
     say(html().includes('템플릿 도입') && html().includes('2026-08') && !html().includes('2026-08-28'), '① 사다리가 새 묶음·근거·시점(연-월)을 그림');
 
-    // ② 수동을 누르면 전부 꺼지고, 시점을 옛 달로 고쳐 Enter 로 저장
+    // ② 수동을 누르면 전부 꺼지고, Enter 로 저장
     calls.length = 0;
-    await click(byText('button', '수동'));
-    await type(document.querySelector('input[type="month"]'), '2024-06');
+    await click(byText('[role="button"]', '수동'));
     say(html().includes('→ <strong>수동</strong>'), '② 「수동」을 누르면 전부 꺼짐');
     await type(document.querySelector('input[placeholder^="근거"]'), '되돌림');
     await keydown(document.querySelector('input[placeholder^="근거"]'), 'Enter'); await settle();
-    say(calls.some(c => c.method === 'PUT' && Array.isArray(c.body?.flags) && c.body.flags.length === 0 && c.body.assessed_at === '2024-06'), '② Enter 로 저장됨(빈 묶음) · 시점 2024-06 이 같이 감');
+    say(calls.some(c => c.method === 'PUT' && Array.isArray(c.body?.flags) && c.body.flags.length === 0), '② 근거 칸에서 Enter 로 저장됨(빈 묶음)');
+
+    // ②-2 칸의 도달 시점을 그 자리에서 — 적용 범위(칸 축)에서 이력 없는 도달 칸(첫 것: issue) 밑 「시점 적기」
+    calls.length = 0;
+    await click(byText('span', '시점 적기'));
+    const monthIn = document.querySelector('input[type="month"]');
+    say(!!monthIn, '②-2 칸 밑의 시점을 누르면 월 고르기가 열림');
+    await type(monthIn, '2024-09');
+    await keydown(monthIn, 'Enter'); await settle();
+    const reachedCall = calls.find(c => c.url.includes('/reached/scope/issue'));
+    say(!!reachedCall && reachedCall.body.month === '2024-09', `②-2 PUT reached 가 감: ${JSON.stringify(reachedCall?.body)}`);
+    say(html().includes('2024-09'), '②-2 사다리가 그 달을 그림');
 
     // ③ 정확도 값
     calls.length = 0;
@@ -97,7 +111,7 @@ export default async function run() {
 
     // ④ 서버 거절 — 이유가 단추 옆에 (칸 축으로)
     refuse = 'VD 사업부 인력만 평가합니다.';
-    await click(byText('button', '전 제품군'));
+    await click(byText('[role="button"]', '전 제품군'));
     await type(document.querySelector('input[placeholder^="근거"]'), 'x');
     await click(byText('button', '저장')); await settle();
     const editor = document.querySelector('input[placeholder^="근거"]');
