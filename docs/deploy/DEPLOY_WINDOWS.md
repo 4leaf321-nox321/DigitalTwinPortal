@@ -531,3 +531,27 @@ Remove-Item -Recurse -Force 'F:\data\0_Program\_deploytest'
 
 연습은 기존 프로젝트 폴더에 영향을 주지 않습니다. 공유되는 것은 `.env`가
 가리키는 데이터베이스뿐입니다.
+
+## B-5. 기술정보 분류 씨뿌리기 (역량·도구)
+
+기술정보 모듈의 역량 81개·도구 684개는 마이그레이션이 아니라 **씨뿌리기 스크립트**로
+들어갑니다. 정본은 `backend\scripts\` 의 두 파이썬 파일이고, 아래 껍데기가 그 둘을
+운영 배치에 맞춰 순서대로 부릅니다.
+
+```powershell
+cd C:\Server\DigitalTwinPortal
+.\scripts\deploy\seed_production.ps1            # 1) 미리보기 — 아무것도 안 고침
+.\scripts\deploy\seed_production.ps1 -Apply     # 2) 괜찮으면 씨뿌리기
+```
+
+- 파이썬은 `deploy.ps1` 과 같은 규칙으로 `<AppPath>_venvs\backend\Scripts\python.exe` 를 씁니다.
+- 마이그레이션이 먼저입니다. `deploy.ps1` 이 돌렸으면 됐고, `-SkipMigrations` 였다면
+  `backend` 에서 `python -m flask db upgrade` 부터.
+- 미리보기에 **「지워질 역량」이 0 이 아니면** 운영에서 손으로 넣은 역량입니다.
+  씨뿌리기는 표에 없는 역량을 지우고 되돌릴 수 없으니, 그것부터 판단하세요.
+- 이름이 같은 줄은 uuid 를 그대로 두고 부모만 옮깁니다 — 근거 소식·사업부의
+  「무엇으로 하나」는 끊기지 않습니다. 여러 번 돌려도 결과는 같습니다.
+- 앱이 떠 있는 채로 돌려도 됩니다(DB 만 건드립니다).
+
+끝나면 기술정보 레이더에 역량이 서는지, 전략 모듈 ① 진단에 「기술 근거」 패널이
+뜨는지 확인합니다(사업부 줄이 하나도 없으면 「사업부 적기부터」 안내가 대신 뜹니다).
