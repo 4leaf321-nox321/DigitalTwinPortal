@@ -68,6 +68,9 @@ export const maturityApi = {
     })),
   reconcile: (divisionId) => request(`/reconcile?division_id=${divisionId}`),
 
+  /** 도구 이름 제안 — 인텔 도구 표의 이름만. 없어도 빈 목록. */
+  getToolNames: () => request('/tool-names'),
+
   getSettings: () => request('/settings'),
   putSettings: (payload) => request('/settings', json('PUT', payload)),
 };

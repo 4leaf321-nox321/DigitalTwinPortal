@@ -472,3 +472,22 @@ def changes(actor):
         return success_response(S.recent_changes(division_id, sector, days))
     except Exception:
         return _crashed()
+
+
+@bp.route('/tool-names', methods=['GET'])
+@read_required
+def tool_names(actor):
+    """도구 이름 제안 — 인텔 모듈의 도구 표(이름만). **읽기 전용 결합.**
+
+    ⚠️ 인텔의 /tech 는 근거 건수·낡음까지 계산해 무겁다. 여기서는 이름만 뽑는다.
+       FK 로 묶지 않는다 — 제안일 뿐이고, 인텔에 없는 이름도 적을 수 있다.
+    """
+    try:
+        from app.modules.digital_twin_intel.models import IntelTech
+        rows = (IntelTech.query
+                .filter(IntelTech.kind != 'capability', IntelTech.is_archived.is_(False))
+                .with_entities(IntelTech.name).order_by(IntelTech.name).all())
+        return success_response(sorted({(r[0] or '').strip() for r in rows if (r[0] or '').strip()}))
+    except Exception:
+        # 인텔이 없거나 표가 비어도 이 모듈은 돌아야 한다 — 제안이 없을 뿐이다.
+        return success_response([])

@@ -248,3 +248,18 @@ def test_시뮬레이션의_도구는_목록으로_들고_정돈된다(client, a
     assert res.get_json()['data']['tools'] == ['Abaqus', 'HyperMesh']   # 쉼표 글자도 받는다
     res = client.put(f'{BASE}/agents/{a["id"]}', json={'kind': '구조'}, headers=auth(mx_user))
     assert res.get_json()['data']['tools'] == ['Abaqus', 'HyperMesh']   # 안 보낸 칸은 그대로
+
+
+def test_도구_이름_제안은_인텔_도구_표에서_온다(client, auth, world, mx_user):
+    from app.modules.digital_twin_intel.models import IntelTech
+    import uuid as _u
+    _db.session.add_all([
+        IntelTech(uuid=str(_u.uuid4()), name='LS-DYNA', kind='tool'),
+        IntelTech(uuid=str(_u.uuid4()), name=' HyperMesh ', kind='tool'),
+        IntelTech(uuid=str(_u.uuid4()), name='구조 해석', kind='capability'),      # 역량은 제안이 아니다
+        IntelTech(uuid=str(_u.uuid4()), name='옛 도구', kind='tool', is_archived=True),
+    ])
+    _db.session.commit()
+    res = client.get(f'{BASE}/tool-names', headers=auth(mx_user))
+    assert res.status_code == 200
+    assert res.get_json()['data'] == ['HyperMesh', 'LS-DYNA']

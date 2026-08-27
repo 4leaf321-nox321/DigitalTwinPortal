@@ -132,7 +132,7 @@ const emptyBulk = (kind) => (kind === 'subject'
   ? { accuracy_rule: KEEP, add_families: [], remove_families: [] }
   : { kind: KEEP, model_kind: KEEP, add_tools: [], remove_tools: [] });
 
-const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], onClose, onChanged }) => {
+const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], toolSuggestions = [], onClose, onChanged }) => {
   const meta = KINDS[kind];
   const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
   const [anchor, setAnchor] = useState(null);       // Shift·드래그 범위의 시작
@@ -252,8 +252,11 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
     picked.forEach(i => (i.product_families || []).forEach(f => { c[f] = (c[f] || 0) + 1; }));
     return Object.entries(c).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [picked]);
-  // 도구 — 이 사업부의 다른 시뮬레이션이 쓰는 이름이 제안으로. 같은 도구를 다른 글자로 적지 않게.
-  const toolPool = useMemo(() => [...new Set(items.flatMap(i => i.tools || []))].sort(), [items]);
+  // 도구 제안 — 이 사업부의 다른 시뮬레이션이 쓰는 이름 + **인텔 도구 표의 이름**(684개).
+  // 같은 도구를 다른 글자로 적지 않게, 그리고 새 사업부가 처음 적을 때도 표준 이름을 고르게.
+  const toolPool = useMemo(
+    () => [...new Set([...items.flatMap(i => i.tools || []), ...toolSuggestions])].sort((a, b) => a.localeCompare(b, 'ko')),
+    [items, toolSuggestions]);
   const toolUnion = useMemo(() => {
     const c = {};
     picked.forEach(i => (i.tools || []).forEach(t => { c[t] = (c[t] || 0) + 1; }));
@@ -395,7 +398,7 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                       </ChipAdd>
                     )}
                   </Chips>
-                  <small>이 시뮬레이션에 쓰는 도구를 하나씩 — 예: LS-DYNA, HyperMesh. 이 사업부의 다른 시뮬레이션이 쓰는 이름이 제안으로 뜹니다.</small>
+                  <small>이 시뮬레이션에 쓰는 도구를 하나씩 — 예: LS-DYNA, HyperMesh. 이 사업부가 쓰는 이름과 기술정보 모듈의 도구 이름이 제안으로 뜹니다.</small>
                 </Field>
                 <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
               </>
