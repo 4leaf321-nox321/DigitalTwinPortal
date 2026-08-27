@@ -11,7 +11,7 @@ import { nextSelection, dragSelection } from '../../utils/selection';
 //            드래그(범위)로 여럿을 고르면 오른쪽이 **일괄 수정**이 된다
 //   오른쪽   그 항목의 칸들. 고치면 저장이 켜진다
 //
-// ⚠️ 일괄 수정에서 **고유한 칸은 뺀다** — 이름·세부·과제 uuid. 여럿에 같은 이름을
+// ⚠️ 일괄 수정에서 **고유한 칸은 뺀다** — 이름·세부. 여럿에 같은 이름을
 //    쓰면 그건 실수지 편집이 아니다. 나머지는 「그대로 두기」가 기본이고 고른 것만 바뀐다.
 //    제품군은 「전체에 넣기」와 칩의 「전체에서 빼기」로 한 번에 다룬다.
 // ⚠️ 지우면 걸린 쌍·평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
@@ -121,11 +121,11 @@ const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 const toDraft = (kind, item) => (kind === 'subject'
   ? { name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
       accuracy_rule: item.accuracy_rule || 'auto' }
-  : { name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', project_uuid: item.project_uuid || '' });
+  : { name: item.name, kind: item.kind || '', model_kind: item.model_kind || '' });
 
 const toPayload = (kind, d) => (kind === 'subject'
   ? { name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
-  : { name: d.name, kind: d.kind, model_kind: d.model_kind || null, project_uuid: d.project_uuid || null });
+  : { name: d.name, kind: d.kind, model_kind: d.model_kind || null });
 
 /** 일괄 초안의 빈 상태 — 전부 「그대로 두기」. */
 const emptyBulk = (kind) => (kind === 'subject'
@@ -359,9 +359,6 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                     </select>
                     <small>물리 기반 / 데이터 기반 / 하이브리드. 부문이 아니라 속성입니다.</small></Field>
                 </Pair>
-                <Field><span>대시보드 과제 uuid (참고)</span>
-                  <input value={d.project_uuid} disabled={!canEdit} onChange={e => set({ project_uuid: e.target.value })} placeholder="비워도 됩니다" />
-                  <small>있으면 쌍 상세에 「과제 열기」가 열립니다.</small></Field>
                 <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
               </>
             )}
@@ -371,7 +368,7 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
               <>
                 <BulkHead>
                   <Layers size={14} /> {meta.unit} {picked.length}개 일괄 수정
-                  <small>— 고유한 칸({kind === 'subject' ? '이름·세부' : '이름·과제 uuid'})은 여기서 못 고칩니다. 「그대로 두기」인 칸은 안 바뀝니다.</small>
+                  <small>— 고유한 칸({kind === 'subject' ? '이름·세부' : '이름'})은 여기서 못 고칩니다. 「그대로 두기」인 칸은 안 바뀝니다.</small>
                 </BulkHead>
                 <Info>{picked.map(i => i.name).slice(0, 8).join(' · ')}{picked.length > 8 ? ` … 외 ${picked.length - 8}` : ''}</Info>
 
