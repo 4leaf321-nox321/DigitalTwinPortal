@@ -7,6 +7,7 @@ import BoardView from './components/Board/BoardView';
 import ListView from './components/List/ListView';
 import PairModal from './components/Pair/PairModal';
 import ModalHost from './components/List/ModalHost';
+import SettingsModal from './components/Settings/SettingsModal';
 import maturityApi from './services/maturityApi';
 import { filtersFromParams, filtersToParams } from './utils/board';
 
@@ -111,7 +112,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
 
   return (
     <Container>
-      <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} />
+      <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} canCurate={!!defs?.can_curate} />
       <StickyBar>
         <DivBar>
           <DivBtn type="button" $on={divisionId === 'all'} onClick={() => patch({ division: 'all', pair: null })} title="모든 사업부를 사업부별로 묶어 봅니다">전체</DivBtn>
@@ -140,7 +141,11 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {pairId && defs && tab !== 'list' && (
           <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
         )}
-        {modal && defs && divisionId && (
+        {modal?.kind === 'settings' && defs && (
+          <SettingsModal divisions={divisions} accuracyRungs={(axes.find(a => a.key === 'accuracy') || {}).rungs || []}
+                         onClose={() => setModal(null)} onChanged={bump} />
+        )}
+        {modal && modal.kind !== 'settings' && defs && divisionId && (
           <ModalHost kind={modal.kind} initialId={modal.id ?? null} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      onClose={() => setModal(null)} onChanged={bump} />

@@ -62,12 +62,13 @@ AXES = {
             # ⚠️ value 축의 칸은 사람이 고르지 않는다 — 값이 문턱을 넘으면 올라간다.
             #    '미검증' 은 값이 없는 상태라 사다리에 없다(None).
             'rungs': [
+                # 문구는 2026-08-28 — 한 줄 막대의 세 영역. key 는 고정.
                 {'key': 'trend', 'label': '경향 일치',
                  'description': '시험의 방향·순서는 맞지만 값은 안 맞는다'},
-                {'key': 'quantitative', 'label': '정량 오차 안',
-                 'description': '정해 둔 오차 기준 안에 든다'},
-                {'key': 'correlated', 'label': '상관 확립',
-                 'description': '반복 시험과의 상관이 확립돼 결과를 믿고 쓴다'},
+                {'key': 'quantitative', 'label': '원인 분석',
+                 'description': '값이 맞아 문제의 원인을 시뮬레이션으로 찾을 수 있다'},
+                {'key': 'correlated', 'label': '현상 재현',
+                 'description': '시험의 현상을 그대로 재현해 결과를 믿고 쓴다'},
             ],
         },
         {
@@ -127,7 +128,7 @@ AXES = {
                 {'key': 'none', 'label': '없음', 'description': '시험 대체에 시뮬레이션을 쓰지 않는다'},
                 {'key': 'reference', 'label': '시험 병행(참고)', 'description': '시험은 그대로, 참고만'},
                 {'key': 'cause_analysis', 'label': '원인 분석', 'description': '시험에서 난 문제의 원인을 시뮬레이션으로 찾는다'},
-                {'key': 'screening', 'label': '사전 검증', 'description': '시험 전에 시뮬레이션으로 먼저 걸러 시험 횟수를 줄인다'},
+                {'key': 'screening', 'label': '사전 검증(자주 검증)', 'description': '시험 전에 설계자가 시뮬레이션으로 먼저 걸러 시험 횟수를 줄인다'},
                 {'key': 'cert_gate', 'label': '신뢰성 인증 게이트', 'description': '신뢰성 인증의 관문을 시뮬레이션 결과로 통과한다'},
                 {'key': 'full', 'label': '완전 대체', 'description': '시험을 하지 않는다'},
             ],

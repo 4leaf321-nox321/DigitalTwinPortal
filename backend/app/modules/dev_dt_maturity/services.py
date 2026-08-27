@@ -398,6 +398,7 @@ def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
         'id': pair.id,
         'subject_id': pair.subject_id,
         'agent_id': pair.agent_id,
+        'accuracy_rule': rule,          # 화면의 정확도 막대가 세 영역을 이 문턱으로 나눈다
         'subject': subject.to_dict(),
         'agent': pair.agent.to_dict() if pair.agent else None,
         'assessments': out_axes,

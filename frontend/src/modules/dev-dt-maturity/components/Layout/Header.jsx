@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -18,7 +18,7 @@ const HeaderButton = styled.button`
 `;
 const Count = styled.span`font-size: 0.7rem; color: #94a3b8; font-weight: 500;`;
 
-const Header = ({ onGoHome, onOpen, counts = {} }) => (
+const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false }) => (
   <CommonHeader
     logo={<Gauge size={24} strokeWidth={2} />}
     title="개발 디지털 트윈 성숙도"
@@ -37,6 +37,11 @@ const Header = ({ onGoHome, onOpen, counts = {} }) => (
         <HeaderButton $variant="primary" onClick={() => onOpen('import')} title="틀 내려받기 → 채워서 붙여넣기 → 미리보기 → 넣기">
           <Upload size={16} /> 가져오기
         </HeaderButton>
+        {canCurate && (
+          <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자" style={{ marginLeft: '0.5rem' }}>
+            <Settings size={16} /> 설정
+          </HeaderButton>
+        )}
       </Buttons>
     }
   />

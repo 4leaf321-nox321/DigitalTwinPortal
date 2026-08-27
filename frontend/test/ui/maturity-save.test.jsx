@@ -15,7 +15,7 @@ import ItemManagerModal from '../../src/modules/dev-dt-maturity/components/List/
 
 const AXES = [
   { key: 'accuracy', label: '정확도', kind: 'value', question: '맞는가', evidence: ['compared_tests', 'error_pct'],
-    rungs: [{ key: 'trend', label: '경향 일치' }, { key: 'quantitative', label: '정량 오차 안' }, { key: 'correlated', label: '상관 확립' }] },
+    rungs: [{ key: 'trend', label: '경향 일치' }, { key: 'quantitative', label: '원인 분석' }, { key: 'correlated', label: '현상 재현' }] },
   { key: 'automation', label: '자동화', kind: 'set', question: '돌아가는가', evidence: ['hours_per_run'],
     rungs: [{ key: 'manual', label: '수동' }, { key: 'pre', label: '전처리 자동' }, { key: 'run', label: '실행 자동' }, { key: 'post', label: '후처리 자동' }] },
   { key: 'scope', label: '적용 범위', kind: 'rung', question: '어디까지', evidence: [],
@@ -108,7 +108,7 @@ export default async function run() {
     await click(byText('button', '저장')); await settle();
     const put3 = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/accuracy'));
     say(!!put3 && put3.body.value === 91 && !('rung' in put3.body), `③ value 로 감: ${JSON.stringify(put3?.body)}`);
-    say(html().includes('91%') && html().includes('상관 확립'), '③ 값이 칸으로 환산돼 그려짐');
+    say(html().includes('91%') && html().includes('현상 재현'), '③ 값이 막대의 영역(현상 재현)으로 그려짐');
     say(!!document.querySelector('[aria-label="정확도 줄 지우기"]') && html().includes('12건 비교'), '③ 정확도가 줄로 붙어 보임');
     window.confirm = () => true;
     await click(document.querySelector('[aria-label="정확도 줄 지우기"]')); await settle();

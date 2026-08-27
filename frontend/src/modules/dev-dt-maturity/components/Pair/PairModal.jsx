@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { X, Check, History, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import { colorFor, reachedDates } from '../../utils/board';
+import { AccuracyPreview, DEFAULT_RULE } from '../Settings/SettingsModal';
 
 // 쌍 상세 — 사다리를 **그 안에서** 그린다. (PLAN 7-1)
 //
@@ -89,12 +90,48 @@ const fmtDate = (iso) => (iso ? iso.slice(0, 7) : '');
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const isDark = (color) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(color);
 
-/** 정확도 줄 — 저장마다 한 줄. 늦은 달이 위. 지우면 남은 줄의 가장 늦은 것이 현재가 된다. */
+/** 정확도 — 숫자까지 채워진 한 줄 막대. 세 영역(경향 일치 · 원인 분석 · 현상 재현)은 사업부 문턱으로 갈린다. */
+const AccuracyBar = ({ axis, a, rule }) => {
+  const m = Object.fromEntries((rule?.thresholds || []).map(t => [t.rung, Number(t.min)]));
+  const q = m.quantitative ?? 70, c = m.correlated ?? 90;
+  const value = a?.value != null ? Number(a.value) : null;
+  const cur = a?.rung ? axis.rungs.find(r => r.key === a.rung) : null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', fontSize: '0.8125rem' }}>
+        {value != null
+          ? <><strong style={{ fontSize: '1.1rem', color: '#1e293b' }}>{value}%</strong><span style={{ color: '#1d4ed8', fontWeight: 600 }}>{cur?.label}</span></>
+          : <span style={{ color: '#94a3b8' }}>미검증 — 아직 값이 없습니다</span>}
+        {a?.assessed_at && <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>· {fmtDate(a.assessed_at)}</span>}
+      </div>
+      <div style={{ position: 'relative' }}>
+        <AccuracyPreview q={q} c={c} boundary={rule?.boundary} rungs={axis.rungs} value={value} />
+        {value != null && (
+          // 채움 — 값까지 진하게 덮고, 그 자리에 눈금을 세운다
+          <>
+            <div style={{ position: 'absolute', inset: 0, width: `${Math.min(Math.max(value, 0), 100)}%`, background: 'rgba(29, 78, 216, 0.28)', borderRadius: '0.4rem 0 0 0.4rem', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: '-0.2rem', bottom: '-0.2rem', left: `calc(${Math.min(Math.max(value, 0), 100)}% - 1px)`, width: '2px', background: '#1e293b', pointerEvents: 'none' }} title={`${value}%`} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** 정확도 줄 — 저장마다 한 줄. 최근 것만 보이고, 나머지는 「자세히」. 지우면 남은 줄의 가장 늦은 것이 현재가 된다. */
 const Entries = ({ entries, canEdit, busy, onRemove }) => {
+  const [open, setOpen] = useState(false);
   if (!entries.length) return null;
-  const rows = [...entries].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.id - a.id));
+  const all = [...entries].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.id - a.id));
+  const rows = open ? all : all.slice(0, 1);
   return (
     <HistoryList style={{ marginTop: '0.5rem' }}>
+      {all.length > 1 && (
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+                style={{ alignSelf: 'flex-start', border: 'none', background: 'transparent', color: '#1d4ed8', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.75rem', padding: 0 }}>
+          {open ? '접기' : `자세히 — 이전 기록 ${all.length - 1}건`}
+        </button>
+      )}
       {rows.map((c, i) => (
         <HistoryRow key={c.id} style={i === 0 ? { fontWeight: 600, color: '#1e293b' } : undefined}>
           <When>{fmtDate(c.created_at)}</When>
@@ -332,6 +369,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                       </Ladder>
                     );
                   })()
+                ) : axis.kind === 'value' ? (
+                  <AccuracyBar axis={axis} a={a} rule={pair.accuracy_rule || DEFAULT_RULE} />
                 ) : (
                 <Ladder>
                   {axis.rungs.map((r, i) => {
