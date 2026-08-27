@@ -10,7 +10,7 @@ import ImportModal from './ImportModal';
 // 쌍은 전체 판에서 편다. 제품군 찾기의 재료는 사업부마다 다르므로 사업부별로 받아 map 으로 준다.
 // 가져오기는 사업부 하나가 있어야 한다(틀이 사업부 것이다) — 전체면 창 안에서 고른다.
 
-const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason, modelKinds, onClose, onChanged }) => {
+const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason, modelKinds, initialId = null, onClose, onChanged }) => {
   const allMode = divisionId === 'all';
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -83,6 +83,7 @@ const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason,
       pairCount={kind === 'subject' ? pairCount.bySubject : pairCount.byAgent}
       canEdit={!denyReason} denyReason={denyReason} modelKinds={modelKinds}
       toolSuggestions={toolNames} toolCatalog={toolCatalog} familyCatalogs={familyCatalogs} departments={departments}
+      initialId={initialId}
       onClose={onClose} onChanged={changed}
     />
   );

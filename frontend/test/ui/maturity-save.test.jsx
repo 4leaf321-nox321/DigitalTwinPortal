@@ -6,6 +6,7 @@
 //   ④ 쌍 상세: 서버가 거절하면 그 이유가 저장 단추 옆에 보인다
 //   ⑤ 관리 창: 항목 고르기 → 세부 고치기 → 저장
 //   ⑥ 관리 창: 담당 부서를 찾아 고르고 저장 → department_id 가 숫자로 간다
+//   ⑦ 관리 창: 표의 연필로 열면 그 항목이 골라진 채 열린다(initialId)
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, type, keydown, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
@@ -114,6 +115,15 @@ export default async function run() {
     await click(byText('button', '저장')); await settle();
     const put6 = calls.find(c => c.method === 'PUT' && c.url.includes('/agents/5'));
     say(!!put6 && put6.body.department_id === 3, `⑥ department_id 가 숫자로 감: ${JSON.stringify(put6?.body)}`);
+    await unmount();
+
+    // ⑦ initialId — 표의 연필로 연 것처럼
+    await render(<ItemManagerModal kind="subject" divisionId={17} divisions={DIVS} initialId={2}
+                   items={[{ id: 1, name: '낙하 시험', division_id: 17, detail: '', product_families: [] }, { id: 2, name: '굽힘 시험', division_id: 17, detail: '3점', product_families: [] }]}
+                   pairCount={{}} canEdit denyReason={null} modelKinds={[]} onClose={() => {}} onChanged={() => {}} />);
+    await settle();
+    const opened = document.querySelector('input[placeholder^="예: 1.2m"]');
+    say(!!opened && opened.value === '3점', '⑦ 연필로 열면 그 항목(굽힘 시험)이 골라진 채 상세가 열림');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

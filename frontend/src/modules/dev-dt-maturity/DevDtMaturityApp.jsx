@@ -57,7 +57,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const [divisions, setDivisions] = useState([]);
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [modal, setModal] = useState(null);        // 'subject' | 'agent' | 'import' | null
+  const [modal, setModal] = useState(null);        // { kind: 'subject'|'agent'|'import', id?: number } | null
   const [counts, setCounts] = useState({});
 
   useEffect(() => {
@@ -112,7 +112,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
 
   return (
     <Container>
-      <Header onGoHome={onGoHome} onOpen={setModal} counts={counts} />
+      <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} />
       <StickyBar>
         <DivBar>
           <DivBtn type="button" $on={divisionId === 'all'} onClick={() => patch({ division: 'all', pair: null })} title="모든 사업부를 사업부별로 묶어 봅니다">전체</DivBtn>
@@ -135,13 +135,15 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           <ListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null}
                     axes={axes} pairId={pairId}
                     onOpenPair={(id) => patch({ pair: id })} onClosePair={() => patch({ pair: null })}
+                    onEditSubject={(id) => setModal({ kind: 'subject', id })}
+                    onEditAgent={(id) => setModal({ kind: 'agent', id })}
                     onChanged={bump} refreshKey={refreshKey} />
         ))}
         {pairId && defs && tab !== 'list' && (
           <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
         )}
         {modal && defs && divisionId && (
-          <ModalHost kind={modal} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
+          <ModalHost kind={modal.kind} initialId={modal.id ?? null} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      onClose={() => setModal(null)} onChanged={bump} />
         )}

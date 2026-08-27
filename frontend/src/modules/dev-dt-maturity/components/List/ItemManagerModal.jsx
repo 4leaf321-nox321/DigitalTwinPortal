@@ -180,7 +180,7 @@ const emptyBulk = (kind) => (kind === 'subject'
 
 const ItemManagerModal = ({
   kind, divisionId, allMode = false, divisions = [], items, pairCount, canEdit, denyReason,
-  modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalogs = {}, departments = {}, onClose, onChanged,
+  modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalogs = {}, departments = {}, initialId = null, onClose, onChanged,
 }) => {
   const meta = KINDS[kind];
   const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
@@ -212,6 +212,12 @@ const ItemManagerModal = ({
   const addDivisionId = allMode ? Number(newDiv) : divisionId;
 
   const byId = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
+  // 표에서 연필로 열었으면 **그 항목이 골라진 채** 연다. 목록이 나중에 와도 한 번만 잡는다.
+  const [seeded, setSeeded] = useState(false);
+  useEffect(() => {
+    if (seeded || initialId == null) return;
+    if (byId[initialId]) { setSelected([initialId]); setAnchor(initialId); setSeeded(true); }
+  }, [initialId, byId, seeded]);
   const picked = useMemo(() => selected.map(id => byId[id]).filter(Boolean), [selected, byId]);
   const current = picked.length === 1 ? picked[0] : null;
   const many = picked.length > 1;

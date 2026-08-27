@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Trash2, Link2, AlertTriangle } from 'lucide-react';
+import { Trash2, Link2, AlertTriangle, Pencil } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import PairSide from '../Pair/PairSide';
 
@@ -38,12 +38,19 @@ const Table = styled.table`
 const SubjectCell = styled.td`
   font-weight: 600; color: #1e293b; background: #fcfcfd; border-right: 1px solid #f1f5f9; white-space: nowrap; vertical-align: top !important;
   small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }
+  position: relative; padding-right: 1.8rem !important;
+`;
+// 호버하면 뜨는 연필 — 누르면 그 항목이 골라진 채 관리 창이 열린다. 칸의 클릭(쌍 고르기)과는 따로.
+const EditBtn = styled.button`
+  position: absolute; top: 0.3rem; right: 0.3rem; border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 0.3rem;
+  width: 1.4rem; height: 1.4rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0;
+  td:hover > & { opacity: 1; } &:hover { border-color: #1d4ed8; color: #1d4ed8; } &:focus { opacity: 1; }
 `;
 const GroupRow = styled.td`
   font-size: 0.6875rem; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 0.3rem 0.6rem !important;
 `;
 const SimCell = styled.td`
-  cursor: pointer; color: #1e293b;
+  cursor: pointer; color: #1e293b; position: relative; padding-right: 1.8rem !important;
   background: ${p => (p.$on ? '#eff6ff' : 'transparent')}; box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #1d4ed8' : 'none')};
   &:hover { background: ${p => (p.$on ? '#dbeafe' : '#f1f5f9')}; }
   small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
@@ -71,7 +78,7 @@ const Notice = styled.div`
 `;
 const Foot = styled.div`flex-shrink: 0; font-size: 0.6875rem; color: #64748b; line-height: 1.5; padding: 0.4rem 0.75rem; border-top: 1px solid #f1f5f9;`;
 
-const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, onOpenPair, onClosePair, onChanged, refreshKey }) => {
+const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, onOpenPair, onClosePair, onEditSubject, onEditAgent, onChanged, refreshKey }) => {
   const allMode = divisionId === 'all';
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -154,6 +161,10 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                     {s.name}
                     {s.detail && <small>{s.detail}</small>}
                     {(s.product_families || []).length > 0 && <small>{s.product_families.join(', ')}</small>}
+                    {onEditSubject && (
+                      <EditBtn type="button" title="시험 항목 관리에서 열기" aria-label={`${s.name} 편집`}
+                               onClick={e => { e.stopPropagation(); onEditSubject(s.id); }}><Pencil size={11} /></EditBtn>
+                    )}
                   </SubjectCell>
                 );
                 if (ps.length === 0) {
@@ -174,6 +185,10 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                           {p.agent?.name}
                           {p.agent?.model_kind && <small>{p.agent.model_kind}</small>}
                           <small>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</small>
+                          {onEditAgent && (
+                            <EditBtn type="button" title="시뮬레이션 관리에서 열기" aria-label={`${p.agent?.name} 편집`}
+                                     onClick={e => { e.stopPropagation(); onEditAgent(p.agent_id); }}><Pencil size={11} /></EditBtn>
+                          )}
                         </SimCell>
                         <DeptCell>{p.agent?.department_name || <small>—</small>}</DeptCell>
                         <td>
