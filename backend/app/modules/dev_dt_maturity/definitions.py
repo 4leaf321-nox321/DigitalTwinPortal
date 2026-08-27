@@ -103,14 +103,15 @@ AXES = {
         },
         {
             'key': 'scope', 'label': '적용 범위', 'kind': 'rung',
-            'question': '어느 제품까지 쓰는가',
+            'question': '어느 개발 과제에서 도는가',
             'evidence': ['product_families'], 'evidence_label': '대상 제품군',
+            # 기준은 **개발 과제 흐름** 하나다(2026-08-28) — 모델과 제품군을 섞으면 경계가 안 보였다.
+            # ⚠️ key 는 고정(이력이 묶여 있다). 문구만 바뀐다.
             'rungs': [
-                # ⚠️ key 는 고정(이력이 묶여 있다). 문구는 2026-08-28 에 다듬었다.
-                {'key': 'issue', 'label': '이슈 모델 중심', 'description': '문제 된 모델을 중심으로'},
-                {'key': 'basic', 'label': 'Basic 모델', 'description': 'basic 모델을 검토한다'},
-                {'key': 'derived_some', 'label': '전 모델', 'description': '그 제품군의 모델 전부'},
-                {'key': 'all', 'label': '파생 포함 전 제품군', 'description': '전 제품군을 검토한다'},
+                {'key': 'issue', 'label': '이슈 대응', 'description': '문제가 난 뒤, 그 모델에만'},
+                {'key': 'basic', 'label': '대표(Basic) 모델', 'description': '제품군의 대표 모델 개발에서'},
+                {'key': 'derived_some', 'label': '신규 개발 전 모델', 'description': '신규 개발 과제 전부에서'},
+                {'key': 'all', 'label': '파생·지역 변형까지', 'description': '파생·지역 변형 과제까지 전부에서'},
             ],
         },
         {
