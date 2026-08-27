@@ -263,3 +263,46 @@ def test_도구_이름_제안은_인텔_도구_표에서_온다(client, auth, wo
     res = client.get(f'{BASE}/tool-names', headers=auth(mx_user))
     assert res.status_code == 200
     assert res.get_json()['data'] == ['HyperMesh', 'LS-DYNA']
+
+
+def test_도구_정돈은_표기_차이와_없는_이름을_가려_제안한다(client, auth, world, mx_user, vd_user):
+    from app.modules.digital_twin_intel.models import IntelTech
+    import uuid as _u
+    _db.session.add_all([IntelTech(uuid=str(_u.uuid4()), name=n, kind='tool')
+                         for n in ['Altair HyperMesh', 'LS-DYNA', 'Ansys Fluent', '3D Slicer']])
+    _db.session.commit()
+    _post(client, auth, mx_user, '/agents', {'division_id': world['mx'].id, 'name': 'a', 'tools': ['HyperMesh', 'ls-dyna', '사내툴']})
+    _post(client, auth, mx_user, '/agents', {'division_id': world['mx'].id, 'name': 'b', 'tools': ['HyperMesh', 'Ansys Fluent', '3D']})
+
+    audit = client.get(f'{BASE}/tool-audit?division_id={world["mx"].id}', headers=auth(mx_user)).get_json()['data']
+    by = {r['name']: r for r in audit['tools']}
+    assert by['HyperMesh'] == {'name': 'HyperMesh', 'count': 2, 'in_intel': False, 'suggestion': 'Altair HyperMesh', 'known_variant': False}
+    assert by['ls-dyna']['suggestion'] == 'LS-DYNA' and by['ls-dyna']['known_variant'] is True   # 표기만 다름
+    assert by['사내툴']['suggestion'] is None                                                     # 인텔에 없음
+    assert by['3D']['suggestion'] is None                                                         # 너무 짧아 안 맞춘다
+    assert by['Ansys Fluent']['in_intel'] is True
+    assert audit['off_standard'] == 4
+    # 표준 것은 뒤로, 제안 있는 것이 앞으로
+    assert audit['tools'][-1]['name'] == 'Ansys Fluent'
+
+    # 맞추기 — 사업부 전체에서. 다른 사업부 사람은 못 한다.
+    res = client.post(f'{BASE}/tools/rename', json={'division_id': world['mx'].id, 'from': 'HyperMesh', 'to': 'Altair HyperMesh'}, headers=auth(vd_user))
+    assert res.status_code == 403
+    res = client.post(f'{BASE}/tools/rename', json={'division_id': world['mx'].id, 'from': 'HyperMesh', 'to': 'Altair HyperMesh'}, headers=auth(mx_user))
+    assert res.get_json()['data'] == {'renamed': 2}
+    names = sorted(t for a in client.get(f'{BASE}/agents?division_id={world["mx"].id}', headers=auth(mx_user)).get_json()['data'] for t in a['tools'])
+    assert 'HyperMesh' not in names and names.count('Altair HyperMesh') == 2
+
+
+def test_도구_목록은_분야와_공급사를_같이_준다(client, auth, world, mx_user):
+    from app.modules.digital_twin_intel.models import IntelTech
+    import uuid as _u
+    _db.session.add_all([
+        IntelTech(uuid=str(_u.uuid4()), name='LS-DYNA', kind='tool', category='시뮬레이션·해석', vendor='Ansys'),
+        IntelTech(uuid=str(_u.uuid4()), name='분야없음', kind='tool'),
+        IntelTech(uuid=str(_u.uuid4()), name='LS-DYNA', kind='tool', category='시뮬레이션·해석'),   # 겹치면 하나
+    ])
+    _db.session.commit()
+    rows = client.get(f'{BASE}/tool-catalog', headers=auth(mx_user)).get_json()['data']
+    assert {r['name']: (r['category'], r['vendor']) for r in rows} == {
+        'LS-DYNA': ('시뮬레이션·해석', 'Ansys'), '분야없음': ('기타', None)}

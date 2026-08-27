@@ -491,3 +491,62 @@ def tool_names(actor):
     except Exception:
         # 인텔이 없거나 표가 비어도 이 모듈은 돌아야 한다 — 제안이 없을 뿐이다.
         return success_response([])
+
+
+@bp.route('/tool-audit', methods=['GET'])
+@read_required
+def tool_audit(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    try:
+        return success_response(S.tool_audit(division_id))
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/tools/rename', methods=['POST'])
+@read_required
+def rename_tool(actor):
+    p = request.get_json() or {}
+    division_id = p.get('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    denied = _deny(actor, division_id)
+    if denied:
+        return denied
+    try:
+        n = S.rename_tool(int(division_id), p.get('from'), p.get('to'))
+        db.session.commit()
+        return success_response({'renamed': n})
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/tool-catalog', methods=['GET'])
+@read_required
+def tool_catalog(actor):
+    """도구 찾기 창의 재료 — 인텔 도구의 이름·분야·공급사. 이름만으로는 684개를 못 찾는다.
+
+    ⚠️ /tool-names 와 같이 읽기 전용 결합이고 FK 는 없다. 인텔이 없으면 빈 목록.
+    """
+    try:
+        from app.modules.digital_twin_intel.models import IntelTech
+        rows = (IntelTech.query
+                .filter(IntelTech.kind != 'capability', IntelTech.is_archived.is_(False))
+                .with_entities(IntelTech.name, IntelTech.category, IntelTech.vendor)
+                .order_by(IntelTech.category, IntelTech.name).all())
+        seen, out = set(), []
+        for name, category, vendor in rows:
+            n = (name or '').strip()
+            if not n or n in seen:
+                continue
+            seen.add(n)
+            out.append({'name': n, 'category': (category or '').strip() or '기타',
+                        'vendor': (vendor or '').strip() or None})
+        return success_response(out)
+    except Exception:
+        return success_response([])

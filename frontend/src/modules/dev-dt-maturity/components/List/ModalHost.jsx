@@ -12,6 +12,7 @@ const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onC
   const [pairs, setPairs] = useState([]);
   const [reconcile, setReconcile] = useState(null);
   const [toolNames, setToolNames] = useState([]);
+  const [toolCatalog, setToolCatalog] = useState([]);
 
   const load = async () => {
     try {
@@ -29,6 +30,7 @@ const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onC
   useEffect(() => {
     if (kind !== 'agent') return;
     maturityApi.getToolNames().then(r => setToolNames(r.data || [])).catch(() => setToolNames([]));
+    maturityApi.getToolCatalog().then(r => setToolCatalog(r.data || [])).catch(() => setToolCatalog([]));
   }, [kind]);
 
   const changed = () => { load(); if (onChanged) onChanged(); };
@@ -53,7 +55,7 @@ const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onC
       items={kind === 'subject' ? subjects : agents}
       pairCount={kind === 'subject' ? pairCount.bySubject : pairCount.byAgent}
       canEdit={!denyReason} denyReason={denyReason} modelKinds={modelKinds}
-      toolSuggestions={toolNames}
+      toolSuggestions={toolNames} toolCatalog={toolCatalog}
       onClose={onClose} onChanged={changed}
     />
   );

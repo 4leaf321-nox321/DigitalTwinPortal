@@ -382,3 +382,88 @@ def recent_changes(division_id, sector, days=365, limit=500):
         d['agent_name'] = c.pair.agent.name if c.pair.agent else None
         out.append(d)
     return out
+
+
+# ── 도구 이름 정돈 — 인텔 표준 이름과 대본다 ─────────────────────────────────
+#
+# 같은 도구를 「HyperMesh」「Altair HyperMesh」「hypermesh」로 적으면 셈이 갈린다.
+# 인텔 도구 표가 표준 이름이다(FK 는 아니다 — 제안과 정돈의 기준일 뿐).
+
+def _tool_key(name):
+    """비교용 열쇠 — 대소문자·공백·기호를 무시한다."""
+    import re
+    return re.sub(r'[^0-9a-z가-힣]', '', (name or '').lower())
+
+
+def intel_tool_names():
+    try:
+        from app.modules.digital_twin_intel.models import IntelTech
+        rows = (IntelTech.query
+                .filter(IntelTech.kind != 'capability', IntelTech.is_archived.is_(False))
+                .with_entities(IntelTech.name).all())
+        return sorted({(r[0] or '').strip() for r in rows if (r[0] or '').strip()})
+    except Exception:
+        return []
+
+
+def suggest_tool_name(name, standard):
+    """인텔 이름 중 무엇으로 맞출지. 없으면 None.
+
+    1) 열쇠가 같으면 그것(표기만 다른 것 — 「hypermesh」→「HyperMesh」)
+    2) 내 열쇠가 인텔 이름 열쇠 **안에** 통째로 들어 있으면 그중 가장 짧은 것
+       (「HyperMesh」→「Altair HyperMesh」). 세 글자 미만은 안 맞춘다 — 「3D」가 너무 많이 걸린다.
+    """
+    key = _tool_key(name)
+    if not key:
+        return None
+    by_key = {}
+    for s in standard:
+        by_key.setdefault(_tool_key(s), s)
+    if key in by_key:
+        return by_key[key] if by_key[key] != name else None
+    if len(key) < 3:
+        return None
+    hits = [s for k, s in by_key.items() if key in k]
+    return min(hits, key=len) if hits else None
+
+
+def tool_audit(division_id, sector='simulation'):
+    """사업부가 쓰는 도구 이름마다 — 몇 개가 쓰나 · 인텔에 있나 · 무엇으로 맞출지."""
+    standard = intel_tool_names()
+    std_keys = {_tool_key(s) for s in standard}
+    counts = {}
+    for a in MaturityAgent.query.filter_by(division_id=division_id, sector=sector).all():
+        for t in (a.tools or []):
+            counts[t] = counts.get(t, 0) + 1
+    rows = []
+    for name, n in counts.items():
+        exact = name in standard
+        rows.append({
+            'name': name, 'count': n,
+            'in_intel': exact,
+            'suggestion': None if exact else suggest_tool_name(name, standard),
+            # 열쇠는 같은데 표기만 다른가(제안이 곧 답) / 인텔에 아예 없는가
+            'known_variant': (not exact) and _tool_key(name) in std_keys,
+        })
+    rows.sort(key=lambda r: (r['in_intel'], r['suggestion'] is None, -r['count'], r['name']))
+    return {'tools': rows, 'standard_count': len(standard),
+            'off_standard': sum(1 for r in rows if not r['in_intel'])}
+
+
+def rename_tool(division_id, old, new, sector='simulation'):
+    """사업부의 모든 시뮬레이션에서 도구 이름을 바꾼다. 몇 개를 고쳤는지 돌려준다."""
+    old = (old or '').strip()
+    new = (new or '').strip()
+    if not old or not new:
+        raise Refused('바꿀 이름과 새 이름이 둘 다 필요합니다.')
+    if old == new:
+        return 0
+    n = 0
+    for a in MaturityAgent.query.filter_by(division_id=division_id, sector=sector).all():
+        tools = list(a.tools or [])
+        if old not in tools:
+            continue
+        a.tools = _clean_list([new if t == old else t for t in tools])
+        n += 1
+    db.session.flush()
+    return n

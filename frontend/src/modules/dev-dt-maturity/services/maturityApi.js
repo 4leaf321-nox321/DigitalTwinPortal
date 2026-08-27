@@ -70,6 +70,11 @@ export const maturityApi = {
 
   /** 도구 이름 제안 — 인텔 도구 표의 이름만. 없어도 빈 목록. */
   getToolNames: () => request('/tool-names'),
+  /** 도구 찾기 창의 재료 — 이름·분야·공급사. */
+  getToolCatalog: () => request('/tool-catalog'),
+  /** 사업부 도구 이름 정돈 — 인텔 표준과 대본 결과. */
+  getToolAudit: (divisionId) => request(`/tool-audit?division_id=${divisionId}`),
+  renameTool: (divisionId, from, to) => request('/tools/rename', json('POST', { division_id: divisionId, from, to })),
 
   getSettings: () => request('/settings'),
   putSettings: (payload) => request('/settings', json('PUT', payload)),
