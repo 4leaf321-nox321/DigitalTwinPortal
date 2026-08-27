@@ -90,17 +90,19 @@ AXES = {
             ],
         },
         {
-            'key': 'modeling', 'label': '모델링 수준', 'kind': 'rung',
-            'question': '무엇까지 재현하는가',
+            'key': 'modeling', 'label': '모델링 수준', 'kind': 'set',
+            'question': '무엇을 재현하는가',
             'evidence': ['phenomena'], 'evidence_label': '재현 가능한 현상 태그',
-            # 「재현의 깊이」 사다리(2026-08-28). ⚠️ key 는 고정(이력이 묶여 있다) — 문구만 바뀐다.
-            #   geometry 형상 → performance 거동 → defect 신뢰성 시험 불량 → multi 시장 불량 → condition 원인 규명
+            # 묶음이다(2026-08-28) — 형상·거동·원인 규명·불량 재현들은 서로 따로 되는 일이라 각각 켠다.
+            # 첫 칸 「없음」은 안 보인다(hide_empty). ⚠️ key 는 고정(이력이 묶여 있다).
+            'hide_empty': True,
             'rungs': [
+                {'key': 'none', 'label': '없음', 'description': '아직 아무것도 재현하지 않는다'},
                 {'key': 'geometry', 'label': '형상 재현', 'description': '치수·재질·경계 조건이 실물이다'},
                 {'key': 'performance', 'label': '거동 재현', 'description': '변형·온도·유동 같은 물리 거동이 시험과 같이 나온다'},
+                {'key': 'condition', 'label': '원인 규명', 'description': '왜 나는지 — 기여 인자와 경로를 시뮬레이션으로 가려낸다'},
                 {'key': 'defect', 'label': '신뢰성 시험 불량 재현', 'description': '신뢰성 시험에서 난 그 불량이 시뮬레이션에서도 난다'},
                 {'key': 'multi', 'label': '시장 불량 재현', 'description': '시장에서 난 불량(사용 조건·누적 이력)이 시뮬레이션에서도 난다'},
-                {'key': 'condition', 'label': '원인 규명', 'description': '왜 나는지 — 기여 인자와 경로를 시뮬레이션으로 가려낸다'},
             ],
         },
         {

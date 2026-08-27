@@ -51,6 +51,14 @@ def test_자동화는_묶음이다_서열은_켠_개수():
     assert D.rung_index(axis, 'robot') is None
 
 
+def test_모델링_수준도_묶음이다_원인_규명이_셋째():
+    axis = D.axis_of('simulation', 'modeling')
+    assert axis['kind'] == 'set' and axis['hide_empty'] is True
+    assert D.set_flag_keys(axis) == ['geometry', 'performance', 'condition', 'defect', 'multi']
+    assert D.set_flags(axis, 'defect') == ['defect']            # 옛 칸 하나짜리 값도 그대로 읽힌다
+    assert D.rung_index(axis, 'geometry,multi') == 2
+
+
 def test_시험_대체도_묶음이다_오른쪽일수록_앞선_것():
     axis = D.axis_of('simulation', 'substitution')
     assert axis['kind'] == 'set'
