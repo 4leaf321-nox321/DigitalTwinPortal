@@ -45,7 +45,6 @@ const DivBtn = styled.button`
   font-size: 0.8125rem; font-weight: 600; font-family: inherit; cursor: pointer;
   &:hover { border-color: #1d4ed8; }
 `;
-const Hint = styled.span`font-size: 0.75rem; color: #94a3b8;`;
 const Notice = styled.div`
   display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.6rem 0.75rem; border-radius: 0.5rem; margin-bottom: 0.75rem;
   background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.8125rem;
@@ -124,7 +123,6 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         </DivBar>
         <Tab $on={tab === 'board'} onClick={() => patch({ tab: null })}>성숙도</Tab>
         <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
-        <Hint>시뮬레이션 부문 · 시험 × 시뮬레이션 쌍마다 정확도·자동화·모델링·범위·대체를 매깁니다. DX KPI(가상 검증률)와는 무관합니다.</Hint>
       </StickyBar>
       <Main $fill={tab === 'list'}>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}

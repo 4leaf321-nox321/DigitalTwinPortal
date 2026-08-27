@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Check, History, AlertTriangle, Pencil } from 'lucide-react';
+import { X, Check, History, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
-import { colorFor } from '../../utils/board';
+import { colorFor, reachedDates } from '../../utils/board';
 
 // 쌍 상세 — 사다리를 **그 안에서** 그린다. (PLAN 7-1)
 //
@@ -48,7 +48,7 @@ const Stale = styled.span`
 const Ladder = styled.div`display: flex; gap: 0.35rem; flex-wrap: wrap;`;
 // div 다 — 칸 밑에 시점을 고치는 입력·단추가 들어가서(button 안에 button 은 안 된다).
 const Rung = styled.div`
-  user-select: none;
+  user-select: none; min-width: 0; overflow: hidden;
   flex: 1 1 0; min-width: 96px; padding: 0.45rem 0.5rem; border-radius: 0.375rem; text-align: left;
   border: 2px solid ${p => (p.$current ? '#1d4ed8' : '#e2e8f0')};
   background: ${p => (p.$reached ? p.$color : 'white')};
@@ -89,15 +89,28 @@ const fmtDate = (iso) => (iso ? iso.slice(0, 7) : '');
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const isDark = (color) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(color);
 
-/** 이력에서 「이 칸에 언제 올라왔나」. 같은 칸에 여러 번이면 가장 이른 날.
- *  묶음(set) 축은 after 가 'pre,run' 꼴이라 항목마다 처음 켜진 날을 찾는다. */
-const reachedDates = (changes, axis) => {
-  const out = {};
-  (changes || []).filter(c => c.axis === axis.key).forEach(c => {
-    const keys = axis.kind === 'set' ? String(c.after || '').split(',').filter(Boolean) : [c.after];
-    keys.forEach(key => { if (key && (!out[key] || c.created_at < out[key])) out[key] = c.created_at; });
-  });
-  return out;
+/** 정확도 줄 — 저장마다 한 줄. 늦은 달이 위. 지우면 남은 줄의 가장 늦은 것이 현재가 된다. */
+const Entries = ({ entries, canEdit, busy, onRemove }) => {
+  if (!entries.length) return null;
+  const rows = [...entries].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.id - a.id));
+  return (
+    <HistoryList style={{ marginTop: '0.5rem' }}>
+      {rows.map((c, i) => (
+        <HistoryRow key={c.id} style={i === 0 ? { fontWeight: 600, color: '#1e293b' } : undefined}>
+          <When>{fmtDate(c.created_at)}</When>
+          <span style={{ minWidth: '3.5rem' }}>{c.after}%</span>
+          <span style={{ color: '#94a3b8' }}>{c.actor_name}</span>
+          {c.note && <span>“{c.note}”</span>}
+          {canEdit && (
+            <button type="button" disabled={busy} onClick={() => onRemove(c.id)} aria-label="정확도 줄 지우기" title="이 줄 지우기"
+                    style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}>
+              <Trash2 size={12} />
+            </button>
+          )}
+        </HistoryRow>
+      ))}
+    </HistoryList>
+  );
 };
 
 /** 칸 밑의 도달 시점 — 보이고, 연필로 고치고, 없으면 「시점 적기」. 클릭은 칸의 클릭과 따로 간다. */
@@ -105,12 +118,12 @@ const ReachedAt = ({ axis, rung, reached, canEdit, date, dating, setDating, save
   const mine = dating && dating.axis === axis.key && dating.rung === rung.key;
   if (mine) {
     return (
-      <RungDate onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+      <RungDate onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.15rem', minWidth: 0 }}>
         <input type="month" max={thisMonth()} value={dating.month} autoFocus
                onChange={e => setDating(s => ({ ...s, month: e.target.value }))}
                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') setDating(null); }}
-               style={{ fontSize: '0.6875rem', width: '7rem', fontFamily: 'inherit' }} />
-        <button type="button" disabled={busy || !dating.month} onClick={save} title="이 달로" style={{ marginLeft: '0.2rem' }}><Check size={10} /></button>
+               style={{ fontSize: '0.6875rem', width: '100%', minWidth: 0, boxSizing: 'border-box', fontFamily: 'inherit' }} />
+        <button type="button" disabled={busy || !dating.month} onClick={save} title="이 달로"><Check size={10} /></button>
         <button type="button" onClick={() => setDating(null)} title="취소"><X size={10} /></button>
       </RungDate>
     );
@@ -171,6 +184,15 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
   // 칸의 도달 시점을 그 자리에서 고친다 — { axis, rung, month }. 한 평가에 시점 하나면
   // 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야 해서(2026-08-28).
   const [dating, setDating] = useState(null);
+  const removeEntry = async (changeId) => {
+    if (!window.confirm('이 정확도 줄을 지울까요? 남은 줄 가운데 가장 늦은 것이 현재가 됩니다.')) return;
+    setBusy(true);
+    try {
+      const res = await maturityApi.deleteChange(pairId, changeId);
+      onSaved(res.data); setSaveError(null);
+    } catch (e) { setSaveError(e.message); }
+    finally { setBusy(false); }
+  };
   const saveReached = async () => {
     if (!dating?.month) return;
     setBusy(true);
@@ -199,7 +221,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
       note: cur?.note || '',
       evidence: { ...(cur?.evidence || {}) },
       // 평가 시점 — 기존 것이 있으면 그 달, 없으면 이번 달. 옛 자료를 넣을 때 고친다.
-      assessed_at: cur?.assessed_at ? cur.assessed_at.slice(0, 7) : thisMonth(),
+      assessed_at: thisMonth(),
     });
   };
 
@@ -239,16 +261,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
               {pair ? `${pair.subject.name} × ${pair.agent?.name ?? '(수단 없음)'}` : '불러오는 중…'}
             </Title>
             {pair && (
-              <Sub>
-                {pair.subject.detail && <>{pair.subject.detail} · </>}
-                적용 제품군 {(pair.subject.product_families || []).join(', ') || '—'}
-                {pair.agent?.model_kind && <> · 모델 {pair.agent.model_kind}</>}
-                {(pair.agent?.tools || []).length > 0 && <> · 도구 {pair.agent.tools.join(', ')}</>}
-                {pair.agent?.department_name && <> · 담당 {pair.agent.department_name}</>}
-                {pair.agent?.project_uuid && (
-                  <> · <a href={`/digital-twin-dashboard?project=${pair.agent.project_uuid}`} target="_blank" rel="noreferrer">과제 열기</a></>
-                )}
-              </Sub>
+              <Sub>{(pair.agent?.tools || []).length > 0 ? pair.agent.tools.join(', ') : '\u00a0'}</Sub>
             )}
           </div>
           <CloseButton onClick={onClose} title="닫기"><X size={18} /></CloseButton>
@@ -343,10 +356,14 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                   </Note>
                 )}
 
+                {axis.kind === 'value' && (
+                  <Entries entries={(pair.changes || []).filter(c => c.axis === axis.key)}
+                           canEdit={canEdit} busy={busy} onRemove={removeEntry} />
+                )}
                 {canEdit && axis.kind === 'value' && !isEditing && (
                   <Row style={{ marginTop: '0.5rem' }}>
-                    <Button onClick={() => startEdit(axis)}>값 적기</Button>
-                    <AxisQ>칸은 값에서 정해집니다 — 사업부 문턱 기준</AxisQ>
+                    <Button onClick={() => startEdit(axis)}>줄 추가</Button>
+                    <AxisQ>저장마다 한 줄이 쌓입니다 — 가장 늦은 달이 현재, 칸은 값에서(사업부 문턱)</AxisQ>
                   </Row>
                 )}
 
@@ -429,11 +446,11 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
           {pair && (
             <AxisBlock>
               <AxisHead><History size={14} /> <AxisName>이력</AxisName></AxisHead>
-              {(pair.changes || []).length === 0 ? (
+              {(pair.changes || []).filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').length === 0 ? (
                 <AxisQ>아직 바뀐 것이 없습니다.</AxisQ>
               ) : (
                 <HistoryList>
-                  {pair.changes.map(c => {
+                  {pair.changes.filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').map(c => {
                     const axis = axes.find(x => x.key === c.axis);
                     const lab = (k) => {
                       if (!k) return '—';

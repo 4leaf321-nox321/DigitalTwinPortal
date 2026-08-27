@@ -272,17 +272,22 @@ def assess(pair, axis_key, payload, actor):
     if axis_key == 'modeling':
         _grow_phenomena(subject.division_id, evidence.get('phenomena') or [])
 
+    # 값 축(정확도)은 **줄줄이** 쌓는다 — 저장마다 이력 한 줄, 같은 값이어도. 현재 값은 가장 늦은 줄.
+    # 옛 달로 넣으면(backfill) 줄만 붙고 현재는 그대로다. (2026-08-28)
+    backfill = (axis['kind'] == 'value' and when is not None and row is not None
+                and row.assessed_at is not None and when < row.assessed_at)
     if row is None:
         row = MaturityAssessment(pair_id=pair.id, axis=axis_key)
         db.session.add(row)
-    row.rung, row.value, row.note, row.evidence = rung, value, note, evidence
-    row.assessed_at = when or datetime.utcnow()
-    row.assessed_by_id = getattr(actor, 'id', None)
-    row.assessed_by_name = getattr(actor, 'name', None)
+    if not backfill:
+        row.rung, row.value, row.note, row.evidence = rung, value, note, evidence
+        row.assessed_at = when or datetime.utcnow()
+        row.assessed_by_id = getattr(actor, 'id', None)
+        row.assessed_by_name = getattr(actor, 'name', None)
     db.session.flush()
 
-    after = _mark(row)
-    if before != after:
+    after = f'{value:g}' if axis['kind'] == 'value' else _mark(row)
+    if axis['kind'] == 'value' or before != after:
         change = MaturityChange(
             pair_id=pair.id, axis=axis_key, before=before, after=after, note=note,
             actor_user_id=getattr(actor, 'id', None),
@@ -670,6 +675,39 @@ def board_all(sector='simulation'):
     }
 
 
+REACHED_NOTE = '시점 적기'     # 칸의 시점만 적은 이력 — 화면은 이것을 「내려감」으로 읽지 않는다
+
+
+def delete_entry(pair, change_id, actor):
+    """정확도 줄 하나를 지운다. 남은 줄 가운데 가장 늦은 것이 현재가 된다 — 없으면 미평가."""
+    change = next((c for c in pair.changes if c.id == change_id), None)
+    if change is None:
+        raise Refused('없는 줄입니다.')
+    axis = D.axis_of(pair.subject.sector, change.axis)
+    if axis is None or axis['kind'] != 'value':
+        raise Refused('값 축의 줄만 지울 수 있습니다 — 다른 축의 이력은 남습니다.')
+    row = MaturityAssessment.query.filter_by(pair_id=pair.id, axis=change.axis).first()
+    db.session.delete(change)
+    db.session.flush()
+    rest = sorted((c for c in pair.changes if c.axis == change.axis and c.id != change_id),
+                  key=lambda c: (c.created_at, c.id))
+    if not rest:
+        if row is not None:
+            db.session.delete(row)
+        return None
+    last = rest[-1]
+    if row is None:
+        row = MaturityAssessment(pair_id=pair.id, axis=change.axis)
+        db.session.add(row)
+    try:
+        row.value = float(last.after)
+    except (TypeError, ValueError):
+        row.value = None
+    row.rung, row.note = None, last.note
+    row.assessed_at, row.assessed_by_id, row.assessed_by_name = last.created_at, last.actor_user_id, last.actor_name
+    return row
+
+
 def set_reached(pair, axis_key, rung_key, month, actor):
     """「이 칸에 언제 올라왔나」를 그 칸에서 바로 적는다. (2026-08-28)
 
@@ -707,7 +745,7 @@ def set_reached(pair, axis_key, rung_key, month, actor):
         rows[0].created_at = when
         return rows[0]
     change = MaturityChange(pair_id=pair.id, axis=axis_key, before=None, after=rung_key,
-                            note='시점 적기', actor_user_id=getattr(actor, 'id', None),
+                            note=REACHED_NOTE, actor_user_id=getattr(actor, 'id', None),
                             actor_name=getattr(actor, 'name', None))
     db.session.add(change)
     db.session.flush()

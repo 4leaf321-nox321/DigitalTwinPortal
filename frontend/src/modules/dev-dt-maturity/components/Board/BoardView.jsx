@@ -6,7 +6,7 @@ import {
   colorFor, distribution, applyFilters, accuracyLabel, changesByMonth,
 } from '../../utils/board';
 
-// 사업부 판 — 모드 셋: 훑기(히트맵) · 읽기(접힌 표) · 진전(타임라인). (PLAN 7-2)
+// 사업부 판 — 모드 셋: 요약(히트맵) · 상세(접힌 표) · 변화(타임라인). (PLAN 7-2)
 //
 // ⚠️ 확대·축소는 없다. 표가 커지지 않게 하는 것(접힘·필터)이 답이다.
 // ⚠️ 축은 순서형이라 평균이 없다 — 분포와 최고 칸만.
@@ -183,9 +183,9 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
   return (
     <Wrap>
       <Bar>
-        <ModeBtn $on={mode === 'scan'} onClick={() => setMode('scan')} title="한눈에 — 색만">훑기</ModeBtn>
-        <ModeBtn $on={mode === 'read'} onClick={() => setMode('read')} title="접힌 표 — 펼쳐 읽기">읽기</ModeBtn>
-        <ModeBtn $on={mode === 'progress'} onClick={() => setMode('progress')} title="올해 어느 칸이 언제 올라갔나">진전</ModeBtn>
+        <ModeBtn $on={mode === 'scan'} onClick={() => setMode('scan')} title="한눈에 — 색만">요약</ModeBtn>
+        <ModeBtn $on={mode === 'read'} onClick={() => setMode('read')} title="접힌 표 — 펼쳐 읽기">상세</ModeBtn>
+        <ModeBtn $on={mode === 'progress'} onClick={() => setMode('progress')} title="올해 어느 칸이 언제 올라갔나">변화</ModeBtn>
         <span style={{ width: '0.5rem' }} />
         <Chip $on={filters.unassessedOnly} onClick={() => set({ unassessedOnly: !filters.unassessedOnly })}>미평가만</Chip>
         <Chip $on={filters.staleOnly} onClick={() => set({ staleOnly: !filters.staleOnly })}>낡은 것만</Chip>

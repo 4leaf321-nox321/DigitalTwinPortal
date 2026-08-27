@@ -46,6 +46,8 @@ export const maturityApi = {
   createPair: (subjectId, agentId) =>
     request('/pairs', json('POST', { subject_id: subjectId, agent_id: agentId })),
   deletePair: (id) => request(`/pairs/${id}`, { method: 'DELETE' }),
+  /** 정확도 줄 하나를 지운다(값 축만). */
+  deleteChange: (pairId, changeId) => request(`/pairs/${pairId}/changes/${changeId}`, { method: 'DELETE' }),
   /** 칸의 도달 시점(연-월)을 그 자리에서 적는다. */
   setReached: (pairId, axis, rung, month) =>
     request(`/pairs/${pairId}/reached/${axis}/${rung}`, json('PUT', { month })),

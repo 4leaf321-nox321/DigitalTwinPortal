@@ -447,3 +447,35 @@ def test_칸의_도달_시점을_그_자리에서_적는다(client, auth, world,
     assert any(c['axis'] == 'automation' and 'run' in c['after'] and c['created_at'][:7] == '2025-02' for c in res.get_json()['data']['changes'])
     res = client.put(f'{BASE}/pairs/{p["id"]}/reached/automation/post', json={'month': '2025-02'}, headers=auth(mx_user))
     assert res.status_code == 400
+
+
+def test_정확도는_줄줄이_쌓이고_옛_달은_현재를_덮지_않는다(client, auth, world, mx_user):
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+    out = _assess(client, auth, mx_user, p['id'], 'accuracy', {'value': 88, 'note': '5월 비교', 'assessed_at': '2026-05'})
+    out = _assess(client, auth, mx_user, p['id'], 'accuracy', {'value': 88, 'note': '6월 비교', 'assessed_at': '2026-06'})
+    rows = [c for c in out['data']['changes'] if c['axis'] == 'accuracy']
+    assert len(rows) == 2                                                        # 같은 값이어도 줄이 붙는다
+    assert out['data']['assessments']['accuracy']['note'] == '6월 비교'
+    # 옛 달(3월)로 넣으면 줄만 붙고 현재(6월 88)는 그대로
+    out = _assess(client, auth, mx_user, p['id'], 'accuracy', {'value': 60, 'note': '3월 비교', 'assessed_at': '2026-03'})
+    a = out['data']['assessments']['accuracy']
+    assert a['value'] == 88 and a['note'] == '6월 비교' and a['assessed_at'].startswith('2026-06')
+    rows = sorted((c for c in out['data']['changes'] if c['axis'] == 'accuracy'), key=lambda c: c['created_at'])
+    assert [c['after'] for c in rows] == ['60', '88', '88']
+
+    # 줄 지우기 — 가장 늦은 줄을 지우면 그 앞 줄이 현재가 된다
+    latest = max(rows, key=lambda c: c['created_at'])
+    res = client.delete(f'{BASE}/pairs/{p["id"]}/changes/{latest["id"]}', headers=auth(mx_user))
+    assert res.status_code == 200, res.get_json()
+    a = res.get_json()['data']['assessments']['accuracy']
+    assert a['note'] == '5월 비교' and a['assessed_at'].startswith('2026-05')
+    # 다 지우면 미평가
+    for c in [c for c in res.get_json()['data']['changes'] if c['axis'] == 'accuracy']:
+        res = client.delete(f'{BASE}/pairs/{p["id"]}/changes/{c["id"]}', headers=auth(mx_user))
+        assert res.status_code == 200
+    assert 'accuracy' in res.get_json()['data']['unassessed']
+    # 칸 축의 이력은 못 지운다
+    out = _assess(client, auth, mx_user, p['id'], 'scope', {'rung': 'basic', 'note': 'a'})
+    c = out['data']['changes'][0]
+    res = client.delete(f'{BASE}/pairs/{p["id"]}/changes/{c["id"]}', headers=auth(mx_user))
+    assert res.status_code == 400

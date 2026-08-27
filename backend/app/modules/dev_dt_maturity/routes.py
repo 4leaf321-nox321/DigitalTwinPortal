@@ -645,3 +645,24 @@ def set_reached(actor, pair_id, axis, rung):
         return error_response(str(e), status_code=400)
     except Exception:
         return _crashed()
+
+
+@bp.route('/pairs/<int:pair_id>/changes/<int:change_id>', methods=['DELETE'])
+@read_required
+def delete_entry(actor, pair_id, change_id):
+    """정확도 줄 하나를 지운다 — 값 축만. 남은 줄의 가장 늦은 것이 현재가 된다."""
+    pair = MaturityPair.query.get(pair_id)
+    if not pair:
+        return error_response('없는 쌍입니다.', status_code=404)
+    denied = _deny(actor, pair.subject.division_id)
+    if denied:
+        return denied
+    try:
+        S.delete_entry(pair, change_id, actor)
+        db.session.commit()
+        return success_response(S.pair_dict(pair, with_changes=True))
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()

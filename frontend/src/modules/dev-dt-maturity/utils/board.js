@@ -105,3 +105,33 @@ export const changesByMonth = (changes) => {
   });
   return out;
 };
+
+export const REACHED_NOTE = '시점 적기';   // 서버가 칸의 시점만 적은 이력 — 다른 칸을 내린 것으로 읽지 않는다
+
+/** 이력에서 「이 칸에 언제 올라왔나」 — **지금 이어지고 있는 도달의 시작**.
+ *  켰다 끈 항목·내려온 칸은 시점이 없고, 다시 올라오면 그 날부터다(2026-08-28). 이력을 시간순으로
+ *  훑으며, 그 칸을 잃은 이력이 나오면 지운다. 묶음(set) 축은 after 가 'pre,run' 꼴. */
+export const reachedDates = (changes, axis) => {
+  const out = {};
+  const rows = (changes || []).filter(c => c.axis === axis.key)
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id));
+  const order = axis.rungs.map(r => r.key);
+  rows.forEach(c => {
+    const marker = c.before == null && c.note === REACHED_NOTE;
+    if (axis.kind === 'set') {
+      const on = String(c.after || '').split(',').filter(k => k && k !== order[0]);
+      if (marker) { on.forEach(k => { out[k] = c.created_at; }); return; }
+      order.slice(1).forEach(k => {
+        if (on.includes(k)) { if (!out[k]) out[k] = c.created_at; } else delete out[k];
+      });
+      return;
+    }
+    const idx = order.indexOf(c.after);
+    if (idx < 0) return;
+    if (marker) { out[c.after] = c.created_at; return; }
+    order.forEach((k, i) => {
+      if (i <= idx) { if (!out[k]) out[k] = c.created_at; } else delete out[k];
+    });
+  });
+  return out;
+};

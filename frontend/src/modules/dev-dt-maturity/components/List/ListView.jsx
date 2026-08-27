@@ -36,7 +36,8 @@ const Table = styled.table`
   td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
 `;
 const SubjectCell = styled.td`
-  font-weight: 600; color: #1e293b; background: #fcfcfd; border-right: 1px solid #f1f5f9; white-space: nowrap; vertical-align: top !important;
+  font-weight: 600; color: #1e293b; background: #fcfcfd; border-right: 1px solid #f1f5f9; vertical-align: top !important;
+  overflow-wrap: anywhere;   /* 좁으면 줄을 바꾼다 — 연필이 칸 밖으로 밀리지 않게 */
   small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }
   position: relative; padding-right: 1.8rem !important;
 `;
@@ -50,7 +51,7 @@ const GroupRow = styled.td`
   font-size: 0.6875rem; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 0.3rem 0.6rem !important;
 `;
 const SimCell = styled.td`
-  cursor: pointer; color: #1e293b; position: relative; padding-right: 1.8rem !important;
+  cursor: pointer; color: #1e293b; position: relative; padding-right: 1.8rem !important; overflow-wrap: anywhere;
   background: ${p => (p.$on ? '#eff6ff' : 'transparent')}; box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #1d4ed8' : 'none')};
   &:hover { background: ${p => (p.$on ? '#dbeafe' : '#f1f5f9')}; }
   small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
@@ -76,14 +77,12 @@ const Notice = styled.div`
   background: ${p => (p.$bad ? '#fef2f2' : '#fffbeb')}; border: 1px solid ${p => (p.$bad ? '#fecaca' : '#fde68a')};
   color: ${p => (p.$bad ? '#991b1b' : '#92400e')}; font-size: 0.8125rem; line-height: 1.5;
 `;
-const Foot = styled.div`flex-shrink: 0; font-size: 0.6875rem; color: #64748b; line-height: 1.5; padding: 0.4rem 0.75rem; border-top: 1px solid #f1f5f9;`;
 
 const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, onOpenPair, onClosePair, onEditSubject, onEditAgent, onChanged, refreshKey }) => {
   const allMode = divisionId === 'all';
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
   const [pairs, setPairs] = useState([]);
-  const [reconcile, setReconcile] = useState(null);
   const [error, setError] = useState(null);
   const [link, setLink] = useState({ division_id: '', subject_id: '', agent_id: '' });
 
@@ -92,16 +91,15 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
 
   const load = async () => {
     try {
-      const [s, a, b, r] = await Promise.all([
+      // 로드맵과의 어긋남은 「가져오기」 창에서만 센다 — 목록 밑의 줄은 뺐다(2026-08-28).
+      const [s, a, b] = await Promise.all([
         maturityApi.listSubjects(divisionId), maturityApi.listAgents(divisionId),
         maturityApi.getBoard(divisionId),
-        allMode ? Promise.resolve({ data: null }) : maturityApi.reconcile(divisionId),
       ]);
       setSubjects(s.data); setAgents(a.data);
       setPairs(allMode
         ? b.data.boards.flatMap(x => x.subjects.flatMap(sub => sub.pairs.map(p => ({ ...p, division_id: x.division_id }))))
         : b.data.subjects.flatMap(x => x.pairs.map(p => ({ ...p, division_id: divisionId }))));
-      setReconcile(r.data);
       setError(null);
     } catch (e) { setError(e.message); }
   };
@@ -159,8 +157,6 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                 const cell = (
                   <SubjectCell rowSpan={span}>
                     {s.name}
-                    {s.detail && <small>{s.detail}</small>}
-                    {(s.product_families || []).length > 0 && <small>{s.product_families.join(', ')}</small>}
                     {onEditSubject && (
                       <EditBtn type="button" title="시험 항목 관리에서 열기" aria-label={`${s.name} 편집`}
                                onClick={e => { e.stopPropagation(); onEditSubject(s.id); }}><Pencil size={11} /></EditBtn>
@@ -183,7 +179,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                         {i === 0 && cell}
                         <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 쌍의 사다리가 나옵니다">
                           {p.agent?.name}
-                          {p.agent?.model_kind && <small>{p.agent.model_kind}</small>}
+                          {(p.agent?.tools || []).length > 0 && <small>{p.agent.tools.join(', ')}</small>}
                           <small>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</small>
                           {onEditAgent && (
                             <EditBtn type="button" title="시뮬레이션 관리에서 열기" aria-label={`${p.agent?.name} 편집`}
@@ -227,13 +223,6 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
             <Button type="submit" disabled={!canLink || !link.subject_id || !link.agent_id}><Link2 size={13} /> 잇기</Button>
             {allMode && <Sub>쌍은 같은 사업부끼리만 잇습니다.</Sub>}
           </Form>
-        )}
-        {reconcile && (reconcile.missing_here.length > 0 || reconcile.only_here.length > 0) && (
-          <Foot>
-            로드맵과 어긋남 — 로드맵에는 있는데 여기 없는 시험 <strong>{reconcile.missing_here.length}</strong>
-            {reconcile.missing_here.length > 0 && <> ({reconcile.missing_here.slice(0, 6).join(', ')}{reconcile.missing_here.length > 6 ? ' …' : ''})</>}
-            {' '}· 여기만 있는 시험 <strong>{reconcile.only_here.length}</strong>. 세기만 합니다.
-          </Foot>
         )}
       </Left>
 

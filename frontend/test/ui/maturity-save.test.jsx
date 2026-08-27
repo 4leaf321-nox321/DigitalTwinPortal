@@ -33,7 +33,7 @@ const PAIR = {
 export default async function run() {
   const { say, done } = suite();
   let refuse = null;   // 서버 거절을 흉내낼 때
-  const calls = fakeFetch(({ url, body }) => {
+  const calls = fakeFetch(({ url, method, body }) => {
     if (url.includes('/pairs/101/assessments/')) {
       if (refuse) { const e = new Error(refuse); throw e; }
       const axis = url.split('/assessments/')[1];
@@ -44,12 +44,13 @@ export default async function run() {
       else { idx = a.rungs.findIndex(r => r.key === body.rung); rung = body.rung; }
       return { ...PAIR,
         assessments: { ...PAIR.assessments, [axis]: { rung, flags, rung_index: idx, value: body.value ?? null, note: body.note, evidence: body.evidence || {}, assessed_at: '2026-08-28T00:00:00', assessed_by_name: '나', stale: false } },
-        unassessed: [], changes: [{ id: 9, axis, before: 'pre', after: rung, created_at: '2026-08-28T00:00:00', actor_name: '나', note: body.note }] };
+        unassessed: [], changes: [{ id: 9, axis, before: 'pre', after: a.kind === 'value' ? String(body.value) : rung, created_at: `${body.assessed_at || '2026-08'}-28T00:00:00`, actor_name: '나', note: body.note }] };
     }
     if (url.includes('/reached/')) {
       const [, axis, rung] = url.split('/reached/')[1].match(/^(\w+)\/(\w+)$/);
       return { ...PAIR, changes: [{ id: 21, axis, before: null, after: rung, created_at: `${body.month}-01T12:00:00`, actor_name: '나', note: '시점 적기' }] };
     }
+    if (method === 'DELETE' && url.includes('/changes/')) return PAIR;
     if (url.endsWith('/pairs/101')) return PAIR;
     if (/\/(subjects|agents)\/\d+$/.test(url)) return { id: Number(url.split('/').pop()), ...body };
     return {};
@@ -99,7 +100,7 @@ export default async function run() {
 
     // ③ 정확도 값
     calls.length = 0;
-    await click(byText('button', '값 적기'));
+    await click(byText('button', '줄 추가'));
     const num = document.querySelector('input[type="number"]');
     say(!!num && html().includes('값을 적어야 저장됩니다') === false, '③ 값 칸이 열림');
     await type(num, '91');
@@ -108,6 +109,10 @@ export default async function run() {
     const put3 = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/accuracy'));
     say(!!put3 && put3.body.value === 91 && !('rung' in put3.body), `③ value 로 감: ${JSON.stringify(put3?.body)}`);
     say(html().includes('91%') && html().includes('상관 확립'), '③ 값이 칸으로 환산돼 그려짐');
+    say(!!document.querySelector('[aria-label="정확도 줄 지우기"]') && html().includes('12건 비교'), '③ 정확도가 줄로 붙어 보임');
+    window.confirm = () => true;
+    await click(document.querySelector('[aria-label="정확도 줄 지우기"]')); await settle();
+    say(calls.some(c => c.method === 'DELETE' && c.url.includes('/changes/9')), '③ 줄의 휴지통이 DELETE 를 보냄');
 
     // ④ 서버 거절 — 이유가 단추 옆에 (칸 축으로)
     refuse = 'VD 사업부 인력만 평가합니다.';

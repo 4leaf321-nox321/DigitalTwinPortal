@@ -75,3 +75,47 @@ test('이력은 쌍·달로 묶인다', () => {
   assert.deepEqual(Object.keys(m), ['1', '2']);
   assert.equal(m[1]['2026-02'].length, 2);
 });
+
+// ── reachedDates: 「지금 이어지고 있는 도달의 시작」 — 껐다 켠 것·내려온 칸은 시점이 없다 ──
+import { reachedDates, REACHED_NOTE } from './board.js';
+
+const SET_AXIS = { key: 'automation', kind: 'set', rungs: [{ key: 'manual' }, { key: 'pre' }, { key: 'run' }, { key: 'post' }] };
+const RUNG_AXIS = { key: 'scope', kind: 'rung', rungs: [{ key: 'issue' }, { key: 'basic' }, { key: 'all' }] };
+const at = (m) => `${m}-01T12:00:00`;
+
+test('묶음 축: 켰다 끈 항목은 시점이 없고, 다시 켜면 그 달부터', () => {
+  const changes = [
+    { id: 1, axis: 'automation', before: null, after: 'pre,run', created_at: at('2025-01') },
+    { id: 2, axis: 'automation', before: 'pre,run', after: 'pre', created_at: at('2025-03') },      // run 끔
+    { id: 3, axis: 'automation', before: 'pre', after: 'pre,run', created_at: at('2025-06') },      // run 다시 켬
+    { id: 4, axis: 'automation', before: 'pre,run', after: 'manual', created_at: at('2025-08') },   // 전부 끔
+    { id: 5, axis: 'automation', before: 'manual', after: 'post', created_at: at('2025-09') },
+  ];
+  const d = reachedDates(changes.slice(0, 3), SET_AXIS);
+  assert.equal(d.pre, at('2025-01'));
+  assert.equal(d.run, at('2025-06'));                                    // 처음 켠 1월이 아니라 다시 켠 6월
+  const d2 = reachedDates(changes, SET_AXIS);
+  assert.deepEqual(d2, { post: at('2025-09') });                         // 끈 것은 없다
+});
+
+test('칸 축: 내려온 칸은 시점이 없고, 아래 칸은 위로 올라갈 때 같이 찍힌다', () => {
+  const changes = [
+    { id: 1, axis: 'scope', before: null, after: 'all', created_at: at('2025-02') },
+    { id: 2, axis: 'scope', before: 'all', after: 'issue', created_at: at('2025-05') },
+    { id: 3, axis: 'scope', before: 'issue', after: 'basic', created_at: at('2025-07') },
+  ];
+  assert.deepEqual(reachedDates(changes.slice(0, 1), RUNG_AXIS), { issue: at('2025-02'), basic: at('2025-02'), all: at('2025-02') });
+  assert.deepEqual(reachedDates(changes, RUNG_AXIS), { issue: at('2025-02'), basic: at('2025-07') });   // all 은 없다
+});
+
+test('「시점 적기」 이력은 그 칸만 적고 다른 칸을 내리지 않는다 · 순서는 날짜순', () => {
+  const changes = [
+    { id: 2, axis: 'scope', before: null, after: 'basic', created_at: at('2025-05') },
+    { id: 9, axis: 'scope', before: null, after: 'issue', note: REACHED_NOTE, created_at: at('2023-11') },
+    { id: 3, axis: 'automation', before: null, after: 'pre,run', created_at: at('2025-05') },
+    { id: 10, axis: 'automation', before: null, after: 'run', note: REACHED_NOTE, created_at: at('2024-02') },
+  ];
+  assert.deepEqual(reachedDates(changes, RUNG_AXIS), { issue: at('2023-11'), basic: at('2025-05') });   // 적은 시점이 남는다
+  assert.equal(reachedDates(changes, SET_AXIS).pre, at('2025-05'));
+  assert.equal(reachedDates(changes, SET_AXIS).run, at('2024-02'));      // 적은 시점이 이어진다
+});
