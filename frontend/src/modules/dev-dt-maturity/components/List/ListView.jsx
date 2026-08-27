@@ -180,7 +180,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                         <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 쌍의 사다리가 나옵니다">
                           {p.agent?.name}
                           {(p.agent?.tools || []).length > 0 && <small>{p.agent.tools.join(', ')}</small>}
-                          <small>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</small>
+                          {p.unassessed.length > 0 && <small>미평가 {p.unassessed.length}개</small>}
                           {onEditAgent && (
                             <EditBtn type="button" title="시뮬레이션 관리에서 열기" aria-label={`${p.agent?.name} 편집`}
                                      onClick={e => { e.stopPropagation(); onEditAgent(p.agent_id); }}><Pencil size={11} /></EditBtn>

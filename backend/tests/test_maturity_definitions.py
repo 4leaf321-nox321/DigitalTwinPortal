@@ -51,10 +51,19 @@ def test_자동화는_묶음이다_서열은_켠_개수():
     assert D.rung_index(axis, 'robot') is None
 
 
-def test_칸의_서열은_index_이고_없는_칸은_None():
+def test_시험_대체도_묶음이다_오른쪽일수록_앞선_것():
     axis = D.axis_of('simulation', 'substitution')
-    assert D.rung_index(axis, 'reference') == 0
-    assert D.rung_index(axis, 'full') == 4
+    assert axis['kind'] == 'set'
+    assert D.set_flag_keys(axis) == ['cause_analysis', 'screening', 'cert_gate', 'full']
+    assert D.set_flags(axis, 'reference') == []
+    assert D.set_rung(axis, ['full', 'screening']) == 'screening,full'
+    assert D.rung_index(axis, 'screening,cert_gate,full') == 3
+
+
+def test_칸의_서열은_index_이고_없는_칸은_None():
+    axis = D.axis_of('simulation', 'scope')
+    assert D.rung_index(axis, 'issue') == 0
+    assert D.rung_index(axis, 'all') == 3
     assert D.rung_index(axis, '없는칸') is None      # 0 으로 두면 첫 칸과 미평가가 섞인다
 
 

@@ -106,22 +106,24 @@ AXES = {
             'question': '어느 제품까지 쓰는가',
             'evidence': ['product_families'], 'evidence_label': '대상 제품군',
             'rungs': [
-                {'key': 'issue', 'label': '이슈 모델 1~2개', 'description': '문제 된 모델에만'},
-                {'key': 'basic', 'label': '기본 모델', 'description': 'basic 모델을 검토한다'},
-                {'key': 'derived_some', 'label': '파생 일부', 'description': '파생 모델 일부까지'},
+                # ⚠️ key 는 고정(이력이 묶여 있다). 문구는 2026-08-28 에 다듬었다.
+                {'key': 'issue', 'label': '이슈 모델 중심', 'description': '문제 된 모델을 중심으로'},
+                {'key': 'basic', 'label': 'Basic 모델', 'description': 'basic 모델을 검토한다'},
+                {'key': 'derived_some', 'label': '전 모델', 'description': '그 제품군의 모델 전부'},
                 {'key': 'all', 'label': '파생 포함 전 제품군', 'description': '전 제품군을 검토한다'},
             ],
         },
         {
-            'key': 'substitution', 'label': '시험 대체', 'kind': 'rung',
-            'question': '시험을 얼마나 대신하는가',
+            'key': 'substitution', 'label': '시험 대체', 'kind': 'set',
+            'question': '시험을 어떤 자리에서 대신하는가',
             'evidence': ['tests_saved_per_year'], 'evidence_label': '줄어든 시험 횟수/년',
+            # 묶음이다(2026-08-28) — 원인 분석·사전 검증·인증 게이트·완전 대체는 사다리가 아니라 **쓰임새**라
+            # 겹칠 수 있다. 첫 칸 「시험 병행(참고)」은 아무것도 안 켠 상태. 오른쪽일수록 앞선 것.
             'rungs': [
                 {'key': 'reference', 'label': '시험 병행(참고)', 'description': '시험은 그대로, 참고만'},
-                {'key': 'partial', 'label': '일부 조건 대체', 'description': '일부 조건은 시험을 안 한다'},
-                # ⚠️ key 는 고정(이력이 묶여 있다). 「선행 스크리닝」이 어려워 문구만 바꿨다(2026-08-28).
+                {'key': 'cause_analysis', 'label': '원인 분석', 'description': '시험에서 난 문제의 원인을 시뮬레이션으로 찾는다'},
                 {'key': 'screening', 'label': '사전 검증', 'description': '시험 전에 시뮬레이션으로 먼저 걸러 시험 횟수를 줄인다'},
-                {'key': 'certified_except', 'label': '인증 제외 대체', 'description': '인증 시험만 남긴다'},
+                {'key': 'cert_gate', 'label': '신뢰성 인증 게이트', 'description': '신뢰성 인증의 관문을 시뮬레이션 결과로 통과한다'},
                 {'key': 'full', 'label': '완전 대체', 'description': '시험을 하지 않는다'},
             ],
         },

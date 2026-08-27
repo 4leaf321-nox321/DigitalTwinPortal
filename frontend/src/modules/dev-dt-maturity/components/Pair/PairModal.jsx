@@ -380,7 +380,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     ) : editing.kind === 'set' ? (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
                         → <strong>{flagLabels(axis, editing.flags)}</strong>
-                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다. 「수동」은 전부 끕니다.</AxisQ>
+                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다. 「{axis.rungs[0].label}」은 전부 끕니다.</AxisQ>
                       </span></Row>
                     ) : (
                       <Row><span style={{ fontSize: '0.8125rem' }}>

@@ -79,8 +79,8 @@ DATA = {
                 'automation': ('pre,run', '', {'hours_per_run': 2}, 60),
                 'modeling': ('performance', '강성·최대 변형', {}, 60),
                 'scope': ('all', '', {}, 60),
-                'substitution': ('certified_except', '인증 시험만 남김', {'tests_saved_per_year': 60}, 60)},
-               [(300, None, 'partial', '일부 조건'), (60, 'partial', 'certified_except', '인증 외 전량 대체')]),
+                'substitution': ('screening,cert_gate', '인증 시험만 남김', {'tests_saved_per_year': 60}, 60)},
+               [(300, None, 'cause_analysis', '일부 조건'), (60, 'cause_analysis', 'screening,cert_gate', '인증 외 전량 대체')]),
         ]),
         ('폴더블 힌지 내구', '20만 회 접힘', ['Z 폴드'], [
             _s('힌지 마모 해석', '구조', 'physics',
@@ -99,8 +99,8 @@ DATA = {
                 'automation': ('pre,run,post,report', '', {'hours_per_run': 4}, 10),
                 'modeling': ('multi', '핫스팟·스로틀링 시점', {'phenomena': ['핫스팟', '스로틀링']}, 10),
                 'scope': ('all', '', {}, 10),
-                'substitution': ('partial', '', {'tests_saved_per_year': 20}, 10)},
-               [(200, None, 'reference', ''), (10, 'reference', 'partial', '온도 챔버 일부 조건 생략')]),
+                'substitution': ('cause_analysis', '', {'tests_saved_per_year': 20}, 10)},
+               [(200, None, 'reference', ''), (10, 'reference', 'cause_analysis', '온도 챔버 일부 조건 생략')]),
             _s('열 과도응답 예측', 'ML', 'hybrid',
                {'accuracy': (81, '30분 온도 곡선 RMSE 1.8℃', {'compared_tests': 25}, 10),
                 'automation': ('pre,run', '', {}, 10)}),
@@ -139,7 +139,7 @@ DATA = {
                 'automation': ('pre,run', '', {'hours_per_run': 5}, 40),
                 'modeling': ('performance', '주파수 응답', {}, 40),
                 'scope': ('derived_some', '', {}, 40),
-                'substitution': ('partial', '', {'tests_saved_per_year': 15}, 40)}),
+                'substitution': ('cause_analysis', '', {'tests_saved_per_year': 15}, 40)}),
         ]),
         ('키 내구', '측면 키 50만 회', ['S 시리즈', 'A 시리즈'], [
             _s('돔 스위치 피로 해석', '구조', 'physics',
@@ -149,7 +149,7 @@ DATA = {
             _s('충전 열 해석', '열', 'physics',
                {'accuracy': (87, '', {'compared_tests': 15, 'error_pct': 6}, 50),
                 'automation': ('pre,run,post,report', '', {}, 50), 'scope': ('all', '', {}, 50),
-                'substitution': ('partial', '', {}, 50)}),
+                'substitution': ('cause_analysis', '', {}, 50)}),
         ]),
         ('진동 시험', '수송 진동 프로파일', ['S 시리즈', 'A 시리즈', 'Z 폴드'], [
             _s('랜덤 진동 해석', '진동', 'physics',
@@ -164,21 +164,21 @@ DATA = {
                {'accuracy': (86, '휨량 오차 0.3mm', {'compared_tests': 14, 'error_pct': 9}, 30),
                 'automation': ('pre,run', '', {'hours_per_run': 8}, 30),
                 'modeling': ('multi', '패널 휨·베젤 갭', {'phenomena': ['패널 휨', '베젤 갭']}, 30),
-                'scope': ('derived_some', '', {}, 30), 'substitution': ('partial', '', {'tests_saved_per_year': 12}, 30)},
-               [(150, None, 'reference', ''), (30, 'reference', 'partial', '')]),
+                'scope': ('derived_some', '', {}, 30), 'substitution': ('cause_analysis', '', {'tests_saved_per_year': 12}, 30)},
+               [(150, None, 'reference', ''), (30, 'reference', 'cause_analysis', '')]),
         ]),
         ('백라이트 휘도 균일도', '9점 측정', ['Neo QLED', 'Crystal UHD'], [
             _s('광학 시뮬레이션', '광학', 'physics',
                {'accuracy': (92, '', {'compared_tests': 30, 'error_pct': 4}, 60),
                 'automation': ('pre,run,post,report', '', {}, 60), 'modeling': ('performance', '', {}, 60),
-                'scope': ('all', '', {}, 60), 'substitution': ('certified_except', '', {'tests_saved_per_year': 50}, 60)}),
+                'scope': ('all', '', {}, 60), 'substitution': ('screening,cert_gate', '', {'tests_saved_per_year': 50}, 60)}),
         ]),
         ('스탠드 하중', '전방 전도 10°', ['Neo QLED', 'OLED', 'Crystal UHD'], [
             _s('스탠드 구조 해석', '구조', 'physics',
                {'accuracy': (94, '', {'compared_tests': 25, 'error_pct': 5}, 45),
                 'automation': ('pre,run,post,report', '', {}, 45), 'scope': ('all', '', {}, 45),
-                'substitution': ('full', '전도 시험 전량 대체', {'tests_saved_per_year': 90}, 45)},
-               [(500, None, 'screening', ''), (200, 'screening', 'certified_except', ''), (45, 'certified_except', 'full', '인증 기관 합의')]),
+                'substitution': ('screening,cert_gate,full', '전도 시험 전량 대체', {'tests_saved_per_year': 90}, 45)},
+               [(500, None, 'screening', ''), (200, 'screening', 'screening,cert_gate', ''), (45, 'screening,cert_gate', 'screening,cert_gate,full', '인증 기관 합의')]),
         ]),
         ('스피커 음향', '내장 스피커 주파수 응답', ['Neo QLED', 'OLED'], [
             _s('TV 음향 해석', '음향', 'physics',
@@ -194,7 +194,7 @@ DATA = {
             _s('마운트 구조 해석', '구조', 'physics',
                {'accuracy': (96, '', {'compared_tests': 12, 'error_pct': 3}, 20),
                 'automation': ('pre,run', '', {}, 20), 'scope': ('all', '', {}, 20),
-                'substitution': ('certified_except', '', {}, 20)}),
+                'substitution': ('screening,cert_gate', '', {}, 20)}),
         ]),
         ('전원부 발열', '최대 밝기 8시간', ['Neo QLED', 'Crystal UHD'], [
             _s('전원 보드 열 해석', '열', 'physics',
@@ -240,7 +240,7 @@ DATA = {
         ('에어컨 냉방 능력', '정격 냉방', ['무풍 에어컨'], [
             _s('냉매 사이클 시뮬레이션', '시스템', 'physics',
                {'accuracy': (93, '', {'compared_tests': 35, 'error_pct': 4}, 45),
-                'automation': ('pre,run,post,report', '', {}, 45), 'scope': ('all', '', {}, 45), 'substitution': ('partial', '', {}, 45)}),
+                'automation': ('pre,run,post,report', '', {}, 45), 'scope': ('all', '', {}, 45), 'substitution': ('cause_analysis', '', {}, 45)}),
             _s('실내 기류 해석', '유동', 'physics',
                {'accuracy': (80, '', {'compared_tests': 10, 'error_pct': 11}, 45), 'automation': ('pre', '', {}, 45)}),
         ]),
@@ -251,7 +251,7 @@ DATA = {
         ('청소기 흡입력', '흡입 일률', ['비스포크 제트'], [
             _s('팬 유동 해석', '유동', 'physics',
                {'accuracy': (89, '', {'compared_tests': 20, 'error_pct': 6}, 35),
-                'automation': ('pre,run', '', {}, 35), 'scope': ('derived_some', '', {}, 35), 'substitution': ('partial', '', {}, 35)}),
+                'automation': ('pre,run', '', {}, 35), 'scope': ('derived_some', '', {}, 35), 'substitution': ('cause_analysis', '', {}, 35)}),
         ]),
         ('오븐 온도 균일도', '9점 온도', ['비스포크 오븐'], [
             _s('오븐 복사-대류 해석', '열', 'physics',
@@ -268,14 +268,14 @@ DATA = {
         ('인덕션 발열 분포', '냄비 바닥 온도', ['비스포크 인덕션'], [
             _s('유도 가열 전자기-열 해석', '전자기', 'physics',
                {'accuracy': (91, '', {'compared_tests': 18, 'error_pct': 5}, 40), 'automation': ('pre,run,post,report', '', {}, 40),
-                'scope': ('all', '', {}, 40), 'substitution': ('certified_except', '', {}, 40)}),
+                'scope': ('all', '', {}, 40), 'substitution': ('screening,cert_gate', '', {}, 40)}),
         ]),
     ],
     'NW': [
         ('기지국 방열', '55℃ 환경 최대 부하', ['5G RU', 'Massive MIMO'], [
             _s('RU 열 해석', '열', 'physics',
                {'accuracy': (88, '', {'compared_tests': 10, 'error_pct': 6}, 30),
-                'automation': ('pre,run', '', {}, 30), 'scope': ('all', '', {}, 30), 'substitution': ('partial', '', {}, 30)}),
+                'automation': ('pre,run', '', {}, 30), 'scope': ('all', '', {}, 30), 'substitution': ('cause_analysis', '', {}, 30)}),
         ]),
         ('철탑 진동', '풍하중 진동', ['5G RU'], [
             _s('풍하중 구조 해석', '구조', 'physics',
