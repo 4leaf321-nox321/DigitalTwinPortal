@@ -377,6 +377,11 @@ const IssuesView = ({
   const dropped = issues.filter(
     i => i.status === 'dropped' && inDivision(i, division));
   const orphans = live.filter(i => i.crux_id === null);
+  // 영향도 × 실행가능성이 둘 다 있어야 우선순위가 선다. 비워 둘 수 있는 것은
+  // 설계지만(근거 없는 점수 강제 금지), **전멸**이면 왜 안 도는지 이 화면이
+  // 말해야 한다 — 카드마다 붙는 「우선순위 미평가」 딱지로는 합이 안 보인다.
+  const unscored = live.filter(
+    i => i.impact == null || i.feasibility == null);
   const visibleCandidates = (candidates || []).filter(
     c => inDivision(c, division));
   // 보이는 난제 중 이슈가 하나도 안 달린 것. 서버의 coverage 는 전체 기준이라
@@ -542,8 +547,22 @@ const IssuesView = ({
           이슈 {live.length}건
           {emptyCruxCount > 0 && ` · 할 일이 없는 난제 ${emptyCruxCount}개`}
           {orphans.length > 0 && ` · 난제에 안 걸린 이슈 ${orphans.length}건`}
+          {unscored.length > 0 && unscored.length < live.length
+            && ` · 점수 없는 이슈 ${unscored.length}건`}
         </Hint>
       </Head>
+
+      {live.length >= 2 && unscored.length === live.length && (
+        <Warn>
+          <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+          <span>
+            이슈 {live.length}건 전부 <strong>영향도·실행가능성이
+            비어 있습니다</strong> — 무엇부터 다룰지 이 판이 못 가립니다.
+            근거가 서는 것부터 각 카드의 수정(연필)에서 매기세요. 근거 없는
+            점수를 강제하지는 않습니다.
+          </span>
+        </Warn>
+      )}
 
       <CruxGrid id="sec-issue-cruxes">
       {visibleCruxes.map(crux => {

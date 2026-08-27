@@ -192,7 +192,9 @@ class StrategyIssue(BaseModel):
     source_ref = db.Column(db.String(200))
 
     # 1~5. **비워둘 수 있다.** 근거 없이 매긴 점수는 판단을 돕지 못한다 —
-    # 진단 격자와 같은 이유로 강제하지 않는다. ④ 솔루션 우선순위에서 쓰인다.
+    # 진단 격자와 같은 이유로 강제하지 않는다. ② 화면이 카드에 곱을 보여주고,
+    # 전부 비면 「무엇부터 다룰지 못 가린다」고 그 자리에서 말한다.
+    # (④ 솔루션의 사분면은 이것이 아니라 **솔루션 자신의** 영향·실행가능성을 쓴다)
     impact = db.Column(db.Integer, nullable=True)       # 풀면 얼마나 달라지는가
     feasibility = db.Column(db.Integer, nullable=True)  # 올해 손댈 수 있는가
 

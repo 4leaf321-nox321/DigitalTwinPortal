@@ -279,9 +279,12 @@ def derive_findings(metrics_by_division, divisions, context=None, thresholds=Non
          '특정 사업부가 아니라 전사적으로 비어 있습니다. 과제가 실제로 따로 도는 '
          '것인지, 선행과제 기능을 쓰지 않는 것인지 먼저 가려야 합니다.'),
     ):
-        values = [metrics_by_division.get(d.id, {}).get(metric_key) for d in divisions]
-        valid = [v for v in values if v is not None]
-        if valid and min(valid) >= threshold:
+        # ⚠️ 판정은 universal(=_all_divisions_hit) **하나로** 한다. 여기서 따로
+        #    세면 자료가 빈 사업부가 있을 때 「전 사업부」 줄이 거짓으로 나오고,
+        #    위의 사업부별 줄과 **이중 보고**가 된다 — 실제로 그랬다(3-4 시험).
+        if universal.get(metric_key):
+            valid = [metrics_by_division.get(d.id, {}).get(metric_key)
+                     for d in divisions]
             add(key, severity, title, detail, None,
                 {metric_key: {'min': min(valid), 'max': max(valid)}})
 
@@ -514,24 +517,47 @@ def derive_strategy_link_findings(projects, linked_uuids, divisions,
     for p in known:
         by_division.setdefault(names.get(p.get('사업부')), []).append(p)
 
+    hits = []
     for division_id, items in by_division.items():
         if division_id is None:
             continue
         loose = [p for p in items if p['_uuid'] not in linked]
         share = round(len(loose) * 100 / len(items), 1)
-        if share < limit:
-            continue
-        # ⚠️ **제목에 사업부를 적는다.** 안 적으면 목록에 「과제 21건(100%)이…」가
-        #    사업부 수만큼 똑같이 늘어서, 어느 조직 이야기인지 알 수 없다.
-        #    다른 규칙들은 「MX 과제 63.3%…」처럼 이미 그렇게 한다.
-        add(f'strategy_unlinked:{division_id}', 'medium',
-            f'{names_by_id.get(division_id, "?")} 과제 {len(loose)}건({share}%)이 '
-            f'올해 전략의 어느 솔루션에도 안 걸려 있습니다',
-            '전략이 현장에서 이미 벌어지는 일을 안 담은 것일 수도, 과제가 '
-            '전략과 무관하게 도는 것일 수도 있습니다. ④ 솔루션에서 과제를 '
-            '걸거나, 그 과제들이 무엇을 위한 것인지 되물어야 합니다.',
-            division_id,
-            {'unlinked': len(loose), 'total': len(items), 'share': share})
+        if share >= limit:
+            hits.append((division_id, items, loose, share))
+
+    if len(hits) >= 2 and len(hits) == sum(
+            1 for d in by_division if d is not None):
+        # ⚠️ **전 사업부가 똑같이 넘으면 전사 한 줄로 접는다.** 같은 문장이
+        #    사업부 수만큼 늘어서면 정작 차이 있는 신호가 반복문에 묻힌다 —
+        #    지표 쪽 _all_divisions_hit 와 같은 접기다.
+        n_loose = sum(len(h[2]) for h in hits)
+        n_all = sum(len(h[1]) for h in hits)
+        share_all = round(n_loose * 100 / n_all, 1)
+        add('strategy_unlinked:all', 'medium',
+            f'올해 전략과 과제가 통째로 안 이어져 있습니다 '
+            f'({n_loose}건, {share_all}%)',
+            '전 사업부가 같은 상태입니다. 전략이 현장에서 이미 벌어지는 일을 '
+            '안 담은 것일 수도, 과제가 전략과 무관하게 도는 것일 수도 '
+            '있습니다. ④ 솔루션에서 과제를 걸거나, 그 과제들이 무엇을 위한 '
+            '것인지 되물어야 합니다.',
+            None,
+            {'unlinked': n_loose, 'total': n_all, 'share': share_all,
+             'by_division': {names_by_id.get(d, '?'): sh
+                             for d, _items, _loose, sh in hits}})
+    else:
+        for division_id, items, loose, share in hits:
+            # ⚠️ **제목에 사업부를 적는다.** 안 적으면 목록에 「과제 21건(100%)이…」가
+            #    사업부 수만큼 똑같이 늘어서, 어느 조직 이야기인지 알 수 없다.
+            #    다른 규칙들은 「MX 과제 63.3%…」처럼 이미 그렇게 한다.
+            add(f'strategy_unlinked:{division_id}', 'medium',
+                f'{names_by_id.get(division_id, "?")} 과제 {len(loose)}건({share}%)이 '
+                f'올해 전략의 어느 솔루션에도 안 걸려 있습니다',
+                '전략이 현장에서 이미 벌어지는 일을 안 담은 것일 수도, 과제가 '
+                '전략과 무관하게 도는 것일 수도 있습니다. ④ 솔루션에서 과제를 '
+                '걸거나, 그 과제들이 무엇을 위한 것인지 되물어야 합니다.',
+                division_id,
+                {'unlinked': len(loose), 'total': len(items), 'share': share})
 
     # 반대쪽. 하겠다고 적어 놓고 아무도 안 하는 것 — 이쪽이 더 급하다.
     total_share = round(

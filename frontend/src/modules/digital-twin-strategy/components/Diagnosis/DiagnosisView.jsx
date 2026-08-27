@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import ObservedMatrix from './ObservedMatrix';
 import MetricDetail from './MetricDetail';
 import KpiCoverage from './KpiCoverage';
@@ -139,6 +139,19 @@ const AxisSelect = styled.select`
   &:focus { outline: none; border-color: #7c3aed; }
 `;
 
+const Notice = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.875rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 0.5rem;
+  color: #92400e;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+`;
+
 const Collapsed = styled.div`
   padding: 0.875rem 1.125rem;
   background: #f8fafc;
@@ -181,6 +194,11 @@ const DiagnosisView = ({
   const hasIntel = Boolean(intelError) || intelEvidence?.total_caps > 0;
   const intelRows = (intelEvidence?.cells || [])
     .filter(c => c.recorded > 0).length;
+  // 목표는 아래 「세부 판단」의 지표 줄에 적는다. 하나도 없으면 격차(목표−현재)가
+  // 구조적으로 안 생겨, 지표에서 이슈 후보가 나오는 길이 통째로 막힌다 —
+  // 막지 않되 왜 안 도는지는 그 자리에서 말한다(사이클 완주 장치).
+  const targetCount = (metrics || [])
+    .filter(m => m.target_value != null).length;
   const techDimLabel = Object.fromEntries(
     ((categories || []).find(c => c.key === 'technical')?.dimensions || [])
       .map(d => [d.key, d.label]));
@@ -320,6 +338,19 @@ const DiagnosisView = ({
               </AxisTabs>
             )}
           </Head>
+
+          {!metricsError && (metrics || []).length > 0 && targetCount === 0 && (
+            <Notice>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '0.15rem' }} />
+              <span>
+                <strong>목표가 하나도 없어 격차를 못 잽니다.</strong> 관측값은
+                보이지만 「목표−현재」가 없으면 지표에서 ② 이슈의 후보가 나오는
+                길이 막힙니다. 아래 <strong>세부 판단</strong>을 펴면 지표 줄에
+                목표를 적을 수 있습니다 — 전부 채울 의무는 없습니다.
+              </span>
+            </Notice>
+          )}
+
           {metricsError
             ? <Collapsed>{metricsError}</Collapsed>
             : (
