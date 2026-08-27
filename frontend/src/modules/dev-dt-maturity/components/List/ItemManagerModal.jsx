@@ -98,12 +98,14 @@ const Chip = styled.span`
 const FindBtn = styled.button`
   display: inline-flex; align-items: center; gap: 0.25rem; border: 1px solid #cbd5e1; background: white; color: #475569;
   border-radius: 999px; padding: 0.2rem 0.55rem; font-size: 0.75rem; font-weight: 600; font-family: inherit; cursor: pointer;
+  width: auto; height: auto; white-space: nowrap;
   &:hover { border-color: #1d4ed8; color: #1d4ed8; }
 `;
 const ChipAdd = styled.div`
   display: flex; gap: 0.25rem; align-items: center;
   input { font-size: 0.75rem; padding: 0.25rem 0.4rem; border: 1px dashed #cbd5e1; border-radius: 999px; font-family: inherit; width: 11rem; }
-  button { border: none; background: #1d4ed8; color: #fff; border-radius: 999px; width: 1.4rem; height: 1.4rem; cursor: pointer;
+  /* ⚠️ 둥근 + 단추(첫 번째)에만. 뒤에 오는 「찾기」 단추까지 1.4rem 으로 눌러 글자가 밖으로 나왔다(2026-08-28). */
+  > button:first-of-type { border: none; background: #1d4ed8; color: #fff; border-radius: 999px; width: 1.4rem; height: 1.4rem; cursor: pointer;
            display: inline-flex; align-items: center; justify-content: center; &:disabled { background: #bfdbfe; cursor: not-allowed; } }
 `;
 const Pair = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; @media (max-width: 700px) { grid-template-columns: 1fr; }`;
