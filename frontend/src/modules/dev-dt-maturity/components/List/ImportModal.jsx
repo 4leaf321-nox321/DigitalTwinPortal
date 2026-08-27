@@ -52,7 +52,7 @@ const PRow = styled.div`
   color: ${p => (p.$err ? '#991b1b' : '#1e293b')}; background: ${p => (p.$err ? '#fef2f2' : 'white')};
 `;
 
-const ImportModal = ({ divisionId, divisionName, canEdit, denyReason, reconcile, onClose, onDone }) => {
+const ImportModal = ({ divisionId, divisionName, canEdit, denyReason, reconcile, onClose, onDone, divisions = null, onPickDivision = null }) => {
   const [text, setText] = useState('');
   const [label, setLabel] = useState('');
   const [withAccuracy, setWithAccuracy] = useState(false);
@@ -89,6 +89,13 @@ const ImportModal = ({ divisionId, divisionName, canEdit, denyReason, reconcile,
       <Panel onClick={e => e.stopPropagation()}>
         <Head>
           <Title>가져오기 — {divisionName}</Title>
+          {divisions && (
+            <select value={divisionId ?? ''} onChange={e => onPickDivision(Number(e.target.value))}
+                    style={{ padding: '0.3rem 0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontFamily: 'inherit', fontSize: '0.8125rem' }}
+                    title="가져올 사업부 — 틀은 사업부 것입니다">
+              {divisions.map(d => <option key={d.id} value={d.id}>{d.name}{d.deny_reason ? ' (조회)' : ''}</option>)}
+            </select>
+          )}
           <CloseButton onClick={onClose} title="닫기"><X size={18} /></CloseButton>
         </Head>
         <Body>

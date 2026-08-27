@@ -570,3 +570,26 @@ def rename_family(division_id, old, new, sector='simulation'):
         n += 1
     db.session.flush()
     return n
+
+
+def board_all(sector='simulation'):
+    """전 사업부 판 — 사업부마다 board() 를 돌려 묶는다. 사업부 이름을 실어 화면이 다시 찾지 않게.
+
+    ⚠️ 판의 셈(항목 정확도·낡음)은 **사업부 문턱**으로 하므로 사업부별로 돌린다. 한 번에
+       섞어 세면 MX 문턱으로 VD 를 재게 된다.
+    """
+    from app.modules.digital_twin_dashboard.models import Division
+    divisions = (Division.query.filter_by(is_active=True, is_kpi_owner=True)
+                 .order_by(Division.order, Division.id).all())
+    boards = []
+    for d in divisions:
+        b = board(d.id, sector)
+        b['division_name'] = d.name
+        for s in b['subjects']:
+            s['division_name'] = d.name
+        boards.append(b)
+    return {
+        'sector': sector,
+        'boards': boards,
+        'totals': {k: sum(b['totals'][k] for b in boards) for k in ('subjects', 'pairs', 'unassessed', 'stale')},
+    }

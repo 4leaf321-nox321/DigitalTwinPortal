@@ -59,6 +59,10 @@ const Td = styled.td`
 const SubjectRow = styled.tr`background: ${p => (p.$open ? '#f8fafc' : 'white')}; cursor: pointer;`;
 const PairRow = styled.tr`background: #fcfcfd;`;
 const Name = styled.span`font-weight: 600;`;
+const DivTag = styled.span`
+  display: inline-block; font-size: 0.6875rem; font-weight: 700; color: #1e40af; background: #eff6ff;
+  border-radius: 0.25rem; padding: 0.05rem 0.35rem; margin-right: 0.35rem;
+`;
 const Sub = styled.span`color: #94a3b8; font-size: 0.75rem;`;
 const Cell = styled.button`
   display: inline-block; min-width: ${p => (p.$dense ? '1.1rem' : '4.5rem')}; height: ${p => (p.$dense ? '1.1rem' : 'auto')};
@@ -105,6 +109,21 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, ref
     let alive = true;
     (async () => {
       try {
+        if (divisionId === 'all') {
+          // 전체 — 사업부마다의 판을 묶는다. 셈(문턱·낡음)은 사업부별로 이미 돼 있다.
+          const b = await maturityApi.getBoard('all');
+          const boards = b.data.boards || [];
+          const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id).catch(() => ({ data: [] }))));
+          if (!alive) return;
+          setBoard({
+            ...b.data,
+            subjects: boards.flatMap(x => x.subjects),
+            stale_days: boards[0]?.stale_days ?? 365,
+            deny_reason: null,
+          });
+          setChanges(cs.flatMap(c => c.data || [])); setError(null);
+          return;
+        }
         const [b, c] = await Promise.all([
           maturityApi.getBoard(divisionId),
           maturityApi.getChanges(divisionId),
@@ -141,8 +160,8 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
   if (!board.subjects.length) {
     return (
       <Empty>
-        이 사업부에는 아직 시험 항목이 없습니다. <strong>목록</strong> 탭에서 로드맵의 틀을
-        내려받아 시뮬레이션 단위로 쪼개 올리거나, 시험·시뮬레이션을 직접 적으세요.
+        아직 시험 항목이 없습니다. 헤더의 <strong>가져오기</strong>로 로드맵의 틀을
+        내려받아 시뮬레이션 단위로 쪼개 올리거나, <strong>시험 항목 관리</strong>에서 직접 적으세요.
       </Empty>
     );
   }
@@ -234,6 +253,7 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
                     <SubjectRow $open={isOpen} onClick={() => !dense && toggle(s.id)}>
                       <Td $dense={dense}>
                         {!dense && (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}{' '}
+                        {s.division_name && <DivTag>{s.division_name}</DivTag>}
                         <Name>{s.name}</Name> {s.detail && <Sub>{s.detail}</Sub>}
                         {' '}<Sub>× {s.pairs.length}</Sub>
                       </Td>
@@ -307,7 +327,7 @@ const ProgressView = ({ subjects, axes, byMonth, onOpenPair }) => {
         <tbody>
           {rows.filter(({ p }) => byMonth[p.id]).map(({ s, p }) => (
             <tr key={p.id}>
-              <Td><Name>{s.name}</Name> <Sub>× {p.agent?.name}</Sub></Td>
+              <Td>{s.division_name && <DivTag>{s.division_name}</DivTag>}<Name>{s.name}</Name> <Sub>× {p.agent?.name}</Sub></Td>
               {cols.map(m => (
                 <Td key={m}>
                   {(byMonth[p.id]?.[m] || []).map(c => {

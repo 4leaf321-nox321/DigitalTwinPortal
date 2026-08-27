@@ -30,8 +30,15 @@ const Tab = styled.button`
   background: transparent; color: ${p => (p.$on ? '#1d4ed8' : '#64748b')}; font-weight: 700; font-size: 0.9rem;
   font-family: inherit; cursor: pointer;
 `;
-const Select = styled.select`
-  padding: 0.35rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.875rem; font-weight: 600;
+// 사업부는 드롭다운이 아니라 **토글**이다 — 지금 어느 사업부를 보는지와 다른 사업부가
+// 무엇이 있는지가 함께 보여야 한다(인텔 분야 토글과 같은 이유). 「전체」는 모든 사업부를
+// 사업부별로 묶어 보여 준다.
+const DivBar = styled.div`display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap;`;
+const DivBtn = styled.button`
+  padding: 0.3rem 0.7rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#e2e8f0')}; border-radius: 999px;
+  background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : p.$muted ? '#94a3b8' : '#475569')};
+  font-size: 0.8125rem; font-weight: 600; font-family: inherit; cursor: pointer;
+  &:hover { border-color: #1d4ed8; }
 `;
 const Hint = styled.span`font-size: 0.75rem; color: #94a3b8;`;
 const Notice = styled.div`
@@ -57,8 +64,9 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     })();
   }, []);
 
-  // 사업부: URL → 내 사업부 → 첫 사업부
+  // 사업부: URL → 내 사업부 → 첫 사업부. 'all' 은 전체.
   const divisionId = useMemo(() => {
+    if (params.get('division') === 'all') return 'all';
     const fromUrl = Number(params.get('division'));
     if (fromUrl && divisions.some(d => d.id === fromUrl)) return fromUrl;
     if (defs?.my_division_id && divisions.some(d => d.id === defs.my_division_id)) return defs.my_division_id;
@@ -101,9 +109,14 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     <Container>
       <Header onGoHome={onGoHome} onOpen={setModal} counts={counts} />
       <StickyBar>
-        <Select value={divisionId ?? ''} onChange={e => patch({ division: e.target.value, pair: null })}>
-          {divisions.map(d => <option key={d.id} value={d.id}>{d.name}{d.deny_reason ? ' (조회)' : ''}</option>)}
-        </Select>
+        <DivBar>
+          <DivBtn type="button" $on={divisionId === 'all'} onClick={() => patch({ division: 'all', pair: null })} title="모든 사업부를 사업부별로 묶어 봅니다">전체</DivBtn>
+          {divisions.map(d => (
+            <DivBtn key={d.id} type="button" $on={divisionId === d.id} $muted={!!d.deny_reason}
+                    title={d.deny_reason ? `${d.deny_reason} 조회만 됩니다.` : d.name}
+                    onClick={() => patch({ division: d.id, pair: null })}>{d.name}</DivBtn>
+          ))}
+        </DivBar>
         <Tab $on={tab === 'board'} onClick={() => patch({ tab: null })}>성숙도</Tab>
         <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
         <Hint>시뮬레이션 부문 · 시험 × 시뮬레이션 쌍마다 정확도·자동화·모델링·범위·대체를 매깁니다. DX KPI(가상 검증률)와는 무관합니다.</Hint>
@@ -114,14 +127,14 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters}
                      onOpenPair={(id) => patch({ pair: id })} refreshKey={refreshKey} />
         ) : (
-          <ListView divisionId={divisionId} denyReason={division?.deny_reason || null}
+          <ListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null}
                     onOpenPair={(id) => patch({ pair: id })} onChanged={bump} refreshKey={refreshKey} />
         ))}
         {pairId && defs && (
           <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
         )}
         {modal && defs && divisionId && (
-          <ModalHost kind={modal} divisionId={divisionId} divisionName={division?.name} divisions={divisions}
+          <ModalHost kind={modal} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      onClose={() => setModal(null)} onChanged={bump} />
         )}

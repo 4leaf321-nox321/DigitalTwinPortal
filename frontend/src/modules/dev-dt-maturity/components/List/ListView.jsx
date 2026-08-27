@@ -8,6 +8,8 @@ import maturityApi from '../../services/maturityApi';
 // 시험 항목·시뮬레이션의 추가·수정·삭제와 가져오기는 **헤더 단추**가 여는 창에서 한다.
 // 이 화면은 하나에 집중한다 — 시험과 시뮬레이션을 잇고, 끊는 것.
 //
+// 「전체」면 모든 사업부의 쌍이 사업부 이름과 함께 보이고, 잇기는 사업부를 먼저 고른다
+// (쌍은 같은 사업부끼리만). 손댈 수 있는지는 쌍마다 그 사업부로 판단한다.
 // ⚠️ 연결을 끊으면 평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
 
 const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.75rem; max-width: 980px;`;
@@ -19,6 +21,7 @@ const BoxHead = styled.div`
 const Count = styled.span`font-size: 0.75rem; color: #94a3b8; font-weight: 400;`;
 const Hint = styled.span`margin-left: auto; font-size: 0.75rem; color: #94a3b8; font-weight: 400;`;
 const List = styled.div`display: flex; flex-direction: column; max-height: 60vh; overflow: auto;`;
+const Group = styled.div`padding: 0.4rem 0.75rem 0.15rem; font-size: 0.6875rem; font-weight: 700; color: #64748b; background: #fcfcfd;`;
 const Row = styled.div`
   display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; border-bottom: 1px solid #f1f5f9;
   font-size: 0.8125rem; &:hover { background: #fafafa; }
@@ -43,23 +46,29 @@ const Notice = styled.div`
 `;
 const Foot = styled.div`font-size: 0.75rem; color: #64748b; line-height: 1.5;`;
 
-const ListView = ({ divisionId, denyReason, onOpenPair, onChanged, refreshKey }) => {
+const ListView = ({ divisionId, divisions = [], denyReason, onOpenPair, onChanged, refreshKey }) => {
+  const allMode = divisionId === 'all';
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
   const [pairs, setPairs] = useState([]);
   const [reconcile, setReconcile] = useState(null);
   const [error, setError] = useState(null);
-  const [link, setLink] = useState({ subject_id: '', agent_id: '' });
-  const canEdit = !denyReason;
+  const [link, setLink] = useState({ division_id: '', subject_id: '', agent_id: '' });
+
+  const canTouch = (divId) => (allMode ? !divisions.find(x => x.id === divId)?.deny_reason : !denyReason);
+  const divName = (id) => divisions.find(x => x.id === id)?.name || '';
 
   const load = async () => {
     try {
       const [s, a, b, r] = await Promise.all([
         maturityApi.listSubjects(divisionId), maturityApi.listAgents(divisionId),
-        maturityApi.getBoard(divisionId), maturityApi.reconcile(divisionId),
+        maturityApi.getBoard(divisionId),
+        allMode ? Promise.resolve({ data: null }) : maturityApi.reconcile(divisionId),
       ]);
       setSubjects(s.data); setAgents(a.data);
-      setPairs(b.data.subjects.flatMap(x => x.pairs));
+      setPairs(allMode
+        ? b.data.boards.flatMap(x => x.subjects.flatMap(sub => sub.pairs.map(p => ({ ...p, division_id: x.division_id, division_name: x.division_name }))))
+        : b.data.subjects.flatMap(x => x.pairs.map(p => ({ ...p, division_id: divisionId }))));
       setReconcile(r.data);
       setError(null);
     } catch (e) { setError(e.message); }
@@ -68,14 +77,27 @@ const ListView = ({ divisionId, denyReason, onOpenPair, onChanged, refreshKey })
 
   const run = async (fn) => { try { await fn(); load(); if (onChanged) onChanged(); } catch (e) { setError(e.message); } };
 
-  // 이미 이어진 짝은 잇기 목록에서 뺀다 — 서버도 거절하지만 화면이 먼저 말하는 게 낫다.
+  // 잇기 — 전체면 사업부를 먼저 고른다(쌍은 같은 사업부끼리만). 이미 이어진 짝은 목록에서 뺀다.
+  const linkDivision = allMode ? Number(link.division_id) || null : divisionId;
+  const linkSubjects = useMemo(() => subjects.filter(s => !allMode || s.division_id === linkDivision), [subjects, allMode, linkDivision]);
+  const linkAgents = useMemo(() => agents.filter(a => !allMode || a.division_id === linkDivision), [agents, allMode, linkDivision]);
   const linkedAgents = useMemo(() => new Set(
     pairs.filter(p => String(p.subject_id) === link.subject_id).map(p => p.agent_id)), [pairs, link.subject_id]);
+  const canLink = linkDivision != null && canTouch(linkDivision);
+  const touchable = divisions.filter(x => !x.deny_reason);
+
+  const groups = useMemo(() => {
+    if (!allMode) return [[null, pairs]];
+    const order = divisions.map(x => x.id);
+    const m = new Map();
+    pairs.forEach(p => { if (!m.has(p.division_id)) m.set(p.division_id, []); m.get(p.division_id).push(p); });
+    return [...m.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+  }, [pairs, allMode, divisions]);
 
   return (
     <Wrap>
       {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
-      {denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
+      {!allMode && denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
 
       <Box>
         <BoxHead>
@@ -84,37 +106,51 @@ const ListView = ({ divisionId, denyReason, onOpenPair, onChanged, refreshKey })
         </BoxHead>
         <List>
           {pairs.length === 0 && <Row><Sub>아직 이어진 쌍이 없습니다. 아래에서 잇거나 헤더의 「가져오기」로 넣으세요.</Sub></Row>}
-          {pairs.map(p => (
-            <Row key={p.id}>
-              <Name>
-                <a href={`?pair=${p.id}`} onClick={e => { e.preventDefault(); onOpenPair(p.id); }}>
-                  {p.subject.name} × {p.agent?.name}
-                </a>
-              </Name>
-              <Sub>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</Sub>
-              <Icon disabled={!canEdit} title="연결 끊기 — 평가·이력이 같이 사라집니다"
-                    onClick={() => {
-                      const n = Object.values(p.assessments).filter(Boolean).length;
-                      if (window.confirm(`연결을 끊습니다. 평가 ${n}건과 이력이 같이 사라집니다.`)) run(() => maturityApi.deletePair(p.id));
-                    }}>
-                <Trash2 size={14} />
-              </Icon>
-            </Row>
+          {groups.map(([divId, list]) => (
+            <React.Fragment key={divId ?? 'one'}>
+              {allMode && <Group>{divName(divId)} · {list.length}</Group>}
+              {list.map(p => (
+                <Row key={p.id}>
+                  <Name>
+                    <a href={`?pair=${p.id}`} onClick={e => { e.preventDefault(); onOpenPair(p.id); }}>
+                      {p.subject.name} × {p.agent?.name}
+                    </a>
+                  </Name>
+                  <Sub>{p.unassessed.length ? `미평가 ${p.unassessed.length}` : '전부 매김'}</Sub>
+                  <Icon disabled={!canTouch(p.division_id)} title="연결 끊기 — 평가·이력이 같이 사라집니다"
+                        onClick={() => {
+                          const n = Object.values(p.assessments).filter(Boolean).length;
+                          if (window.confirm(`연결을 끊습니다. 평가 ${n}건과 이력이 같이 사라집니다.`)) run(() => maturityApi.deletePair(p.id));
+                        }}>
+                    <Trash2 size={14} />
+                  </Icon>
+                </Row>
+              ))}
+            </React.Fragment>
           ))}
         </List>
-        {canEdit && (
-          <Form onSubmit={e => { e.preventDefault(); if (!link.subject_id || !link.agent_id) return;
-            run(async () => { await maturityApi.createPair(Number(link.subject_id), Number(link.agent_id)); setLink({ subject_id: '', agent_id: '' }); }); }}>
-            <Select value={link.subject_id} onChange={e => setLink({ subject_id: e.target.value, agent_id: '' })}>
+        {(allMode ? touchable.length > 0 : !denyReason) && (
+          <Form onSubmit={e => { e.preventDefault(); if (!canLink || !link.subject_id || !link.agent_id) return;
+            run(async () => { await maturityApi.createPair(Number(link.subject_id), Number(link.agent_id)); setLink(l => ({ ...l, subject_id: '', agent_id: '' })); }); }}>
+            {allMode && (
+              <Select value={link.division_id} onChange={e => setLink({ division_id: e.target.value, subject_id: '', agent_id: '' })}>
+                <option value="">사업부</option>
+                {touchable.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </Select>
+            )}
+            <Select value={link.subject_id} disabled={allMode && !linkDivision}
+                    onChange={e => setLink(l => ({ ...l, subject_id: e.target.value, agent_id: '' }))}>
               <option value="">시험 항목</option>
-              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {linkSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
             <span>×</span>
-            <Select value={link.agent_id} onChange={e => setLink(l => ({ ...l, agent_id: e.target.value }))} disabled={!link.subject_id}>
+            <Select value={link.agent_id} disabled={!link.subject_id}
+                    onChange={e => setLink(l => ({ ...l, agent_id: e.target.value }))}>
               <option value="">시뮬레이션</option>
-              {agents.filter(a => !linkedAgents.has(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {linkAgents.filter(a => !linkedAgents.has(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
-            <Button type="submit" disabled={!link.subject_id || !link.agent_id}><Link2 size={13} /> 잇기</Button>
+            <Button type="submit" disabled={!canLink || !link.subject_id || !link.agent_id}><Link2 size={13} /> 잇기</Button>
+            {allMode && <Sub>쌍은 같은 사업부끼리만 잇습니다.</Sub>}
           </Form>
         )}
       </Box>

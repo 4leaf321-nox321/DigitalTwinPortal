@@ -107,12 +107,18 @@ def divisions(actor):
 @bp.route('/board', methods=['GET'])
 @read_required
 def board(actor):
-    division_id = _int_arg('division_id')
     sector = request.args.get('sector') or 'simulation'
-    if division_id is None:
-        return error_response('사업부를 고르세요. 이 판에는 「전체」가 없습니다.', status_code=400)
     if not D.sector_is_active(sector):
         return error_response('아직 열리지 않은 부문입니다.', status_code=400)
+    # 「전체」 — 사업부마다 판을 돌려 묶는다. 사업부별 셈은 그대로다.
+    if request.args.get('division_id') == 'all':
+        try:
+            return success_response(S.board_all(sector))
+        except Exception:
+            return _crashed()
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
     try:
         data = S.board(division_id, sector)
         data['deny_reason'] = P.deny_reason(actor, division_id, _division_name(division_id))

@@ -44,6 +44,10 @@ test('필터는 쌍을 좁히고, 쌍이 안 남는 시험은 뺀다', () => {
   assert.deepEqual(applyFilters(SUBJECTS, { modelKind: 'physics' }).map(s => s.pairs.map(p => p.id)), [[11]]);
   assert.deepEqual(applyFilters(SUBJECTS, { axis: 'automation', minRung: 1 }).map(s => s.pairs.map(p => p.id)), [[11]]);
   assert.deepEqual(applyFilters(SUBJECTS, {}).length, 2);
+  // 쌍 없는 시험 — 조건이 없으면 보이고, 쌍 조건이 켜지면 빠진다
+  const withEmpty = [...SUBJECTS, { id: 3, name: '빈 시험', product_families: [], pairs: [] }];
+  assert.deepEqual(applyFilters(withEmpty, {}).map(s => s.id), [1, 2, 3]);
+  assert.deepEqual(applyFilters(withEmpty, { unassessedOnly: true }).map(s => s.id), [1, 2]);
 });
 
 test('필터는 URL 로 오가고 돌아온다', () => {

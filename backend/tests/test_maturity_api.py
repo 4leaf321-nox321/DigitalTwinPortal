@@ -191,10 +191,15 @@ def test_항목_정확도는_값_있는_것만_평균하고_미평가를_센다(
     assert res.get_json()['data']['deny_reason'] is None
 
 
-def test_판에는_전체가_없다(client, auth, world, mx_user):
+def test_사업부_없이는_판을_못_열고_전체는_사업부마다_묶어_준다(client, auth, world, mx_user, office):
     res = client.get(f'{BASE}/board', headers=auth(mx_user))
     assert res.status_code == 400
-    assert '전체' in res.get_json()['message']
+    _pair(client, auth, mx_user, world['mx'])
+    _pair(client, auth, office, world['vd'], subject='VD 시험', agent='VD 해석')
+    d = client.get(f'{BASE}/board?division_id=all', headers=auth(mx_user)).get_json()['data']
+    assert [b['division_name'] for b in d['boards']] == ['MX', 'VD']
+    assert d['totals']['subjects'] == 2 and d['totals']['pairs'] == 2
+    assert d['boards'][1]['subjects'][0]['division_name'] == 'VD'
 
 
 # ── 태그 사전 · 설정 ───────────────────────────────────────────────────────

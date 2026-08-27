@@ -36,9 +36,12 @@ export const distribution = (subjects, axes) => {
  *   family          적용 제품군에 이 값이 든 시험
  *   modelKind       수단의 모델 종류
  *   axis + minRung  그 축이 이 칸 이상인 쌍
- * 쌍이 하나도 안 남는 시험은 빠진다. 시험만 남기면 「왜 비었지」가 된다.
+ * 쌍 조건(미평가·낡음·모델 종류·축)이 하나라도 켜져 있을 때만, 쌍이 안 남는 시험을 뺀다 —
+ * 시험만 남기면 「왜 비었지」가 된다. 조건이 없으면 **쌍 없는 시험도 보인다**(2026-08-28):
+ * 아직 시뮬레이션을 안 이은 시험이 판에서 사라지면 잇는 것을 잊는다.
  */
 export const applyFilters = (subjects, f = {}) => {
+  const pairFilter = !!(f.unassessedOnly || f.staleOnly || f.modelKind || (f.axis && f.minRung != null));
   return subjects.map(s => {
     if (f.family && !(s.product_families || []).includes(f.family)) return null;
     const pairs = (s.pairs || []).filter(p => {
@@ -51,7 +54,7 @@ export const applyFilters = (subjects, f = {}) => {
       }
       return true;
     });
-    if (!pairs.length) return null;
+    if (!pairs.length && pairFilter) return null;
     return { ...s, pairs };
   }).filter(Boolean);
 };
