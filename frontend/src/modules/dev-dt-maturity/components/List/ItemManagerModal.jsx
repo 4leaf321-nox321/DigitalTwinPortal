@@ -159,7 +159,7 @@ const emptyBulk = (kind) => (kind === 'subject'
   ? { accuracy_rule: KEEP, add_families: [], remove_families: [] }
   : { kind: KEEP, model_kind: KEEP, add_tools: [], remove_tools: [] });
 
-const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], toolSuggestions = [], toolCatalog = [], onClose, onChanged }) => {
+const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyReason, modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalog = [], onClose, onChanged }) => {
   const meta = KINDS[kind];
   const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
   const [anchor, setAnchor] = useState(null);       // Shift·드래그 범위의 시작
@@ -295,6 +295,11 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
   const addTools = (names) => {
     const fresh = names.map(n => n.trim()).filter(Boolean);
     if (!fresh.length) return;
+    if (kind === 'subject') {
+      if (many) setB({ add_families: [...new Set([...bulk.add_families, ...fresh])], remove_families: bulk.remove_families.filter(x => !fresh.includes(x)) });
+      else if (d) set({ product_families: [...new Set([...d.product_families, ...fresh])] });
+      return;
+    }
     if (many) setB({ add_tools: [...new Set([...bulk.add_tools, ...fresh])], remove_tools: bulk.remove_tools.filter(x => !fresh.includes(x)) });
     else if (d) set({ tools: [...new Set([...d.tools, ...fresh])] });
   };
@@ -303,16 +308,26 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
   const [tidyOpen, setTidyOpen] = useState(false);
   const [tidyTo, setTidyTo] = useState({});       // name → 새 이름(제안을 덮어쓸 때)
   const standardSet = useMemo(() => new Set(toolSuggestions), [toolSuggestions]);
+  // 도구(시뮬레이션)와 제품군(시험 항목)이 같은 정돈 판을 쓴다. 표준만 다르다 —
+  // 도구는 기술정보 모듈의 도구 표, 제품군은 로드맵 정보의 제품군 설정.
+  const TIDY = kind === 'agent'
+    ? { label: '도구', title: '도구 이름 정돈', standard: '기술정보 모듈의 도구 이름', rows: 'tools', inKey: 'in_intel',
+        audit: maturityApi.getToolAudit, rename: maturityApi.renameTool, pool: 'tool-pool', hint: '표준에 없는 이름도 그대로 둘 수 있습니다 — 사내 도구는 인텔에 없는 게 정상입니다. 정돈은 같은 도구를 다른 글자로 세지 않기 위한 것입니다.' }
+    : { label: '제품군', title: '제품군 이름 정돈', standard: '로드맵 정보의 제품군 설정', rows: 'families', inKey: 'in_standard',
+        audit: maturityApi.getFamilyAudit, rename: maturityApi.renameFamily, pool: 'fam-pool', hint: '로드맵 정보에 없는 제품군도 그대로 둘 수 있습니다. 같은 제품군을 두 모듈이 다른 글자로 부르면 어긋남 셈이 틀어지므로, 로드맵 쪽 이름을 표준으로 봅니다.' };
   const loadTidy = async () => {
-    try { setTidy((await maturityApi.getToolAudit(divisionId)).data); setError(null); } catch (e) { setError(e.message); }
+    try { setTidy((await TIDY.audit(divisionId)).data); setError(null); } catch (e) { setError(e.message); }
   };
-  useEffect(() => { if (kind === 'agent' && tidyOpen) loadTidy(); }, [kind, tidyOpen, items]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tidyOpen) loadTidy(); }, [kind, tidyOpen, items]); // eslint-disable-line react-hooks/exhaustive-deps
   const renameTool = async (from, to) => {
     const target = (to || '').trim();
     if (!target || target === from) return;
-    const r = await run('save', () => maturityApi.renameTool(divisionId, from, target));
+    const r = await run('save', () => TIDY.rename(divisionId, from, target));
     if (r) { setTidyTo(x => ({ ...x, [from]: undefined })); loadTidy(); }
   };
+  const tidyRows = tidy ? (tidy[TIDY.rows] || []) : null;
+  const standardFamilySet = useMemo(
+    () => new Set(familyCatalog.filter(f => f.category !== '이 사업부가 쓰는 것' || true).map(f => f.name)), [familyCatalog]);
   const addTool = () => {
     const t = newTool.trim();
     if (!t) return;
@@ -356,12 +371,10 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
             )}
             <ListHint>
               Ctrl+클릭 하나씩 더 · Shift+클릭 범위 · 드래그 범위 → 여럿을 한 번에 고칩니다
-              {kind === 'agent' && (
-                <TidyBtn type="button" $on={tidyOpen} onClick={() => setTidyOpen(v => !v)} style={{ marginLeft: '0.5rem' }}
-                         title="도구 이름을 기술정보 모듈의 표준 이름과 대봅니다">
-                  <Sparkles size={12} /> 도구 정돈{tidy && tidy.off_standard > 0 && <em>{tidy.off_standard}</em>}
-                </TidyBtn>
-              )}
+              <TidyBtn type="button" $on={tidyOpen} onClick={() => setTidyOpen(v => !v)} style={{ marginLeft: '0.5rem' }}
+                       title={`${TIDY.label} 이름을 ${TIDY.standard}과 대봅니다`}>
+                <Sparkles size={12} /> {TIDY.label} 정돈{tidy && tidy.off_standard > 0 && <em>{tidy.off_standard}</em>}
+              </TidyBtn>
             </ListHint>
             <List>
               {items.length === 0 && <Msg>아직 없습니다.{canEdit ? ' 위에 이름을 적고 Enter.' : ''}</Msg>}
@@ -389,35 +402,35 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
           </Left>
 
           <Right>
-            {kind === 'agent' && tidyOpen && (
+            {tidyOpen && (
               <>
                 <BulkHead>
-                  <Sparkles size={14} /> 도구 이름 정돈 — {divisionNameOf()}
-                  <small>— 기술정보 모듈의 도구 이름({tidy?.standard_count ?? '…'}개)이 표준입니다. 맞추면 이 사업부의 모든 시뮬레이션에서 바뀝니다.</small>
+                  <Sparkles size={14} /> {TIDY.title} — {divisionNameOf()}
+                  <small>— {TIDY.standard}({tidy?.standard_count ?? '…'}개)이 표준입니다. 맞추면 이 사업부의 모든 {meta.unit}에서 바뀝니다.</small>
                   <Small type="button" onClick={() => setTidyOpen(false)} style={{ marginLeft: 'auto' }}><X size={12} /> 닫기</Small>
                 </BulkHead>
-                {!tidy && <Msg>대보는 중…</Msg>}
-                {tidy && tidy.tools.length === 0 && <Msg>아직 적힌 도구가 없습니다.</Msg>}
-                {tidy && tidy.tools.length > 0 && (
+                {!tidyRows && <Msg>대보는 중…</Msg>}
+                {tidyRows && tidyRows.length === 0 && <Msg>아직 적힌 {TIDY.label}이 없습니다.</Msg>}
+                {tidyRows && tidyRows.length > 0 && (
                   <TidyTable>
-                    <thead><tr><th>적힌 이름</th><th>쓰는 시뮬레이션</th><th>표준 이름</th><th /></tr></thead>
+                    <thead><tr><th>적힌 이름</th><th>쓰는 {meta.unit}</th><th>표준 이름</th><th /></tr></thead>
                     <tbody>
-                      {tidy.tools.map(r => (
+                      {tidyRows.map(r => (
                         <tr key={r.name}>
-                          <td>{r.in_intel ? r.name : <Chip $warn title="기술정보 모듈에 없는 표기">{r.name}</Chip>}</td>
+                          <td>{r[TIDY.inKey] ? r.name : <Chip $warn title={`${TIDY.standard}에 없는 표기`}>{r.name}</Chip>}</td>
                           <td>{r.count}</td>
                           <td>
-                            {r.in_intel ? <small style={{ color: '#15803d' }}>표준과 같음</small> : (
-                              <input list="tool-pool" value={tidyTo[r.name] ?? r.suggestion ?? ''}
+                            {r[TIDY.inKey] ? <small style={{ color: '#15803d' }}>표준과 같음</small> : (
+                              <input list={TIDY.pool} value={tidyTo[r.name] ?? r.suggestion ?? ''}
                                      placeholder={r.suggestion ? '' : '표준 이름을 고르거나 적으세요'}
                                      disabled={!canEdit}
                                      onChange={e => setTidyTo(x => ({ ...x, [r.name]: e.target.value }))} />
                             )}
-                            {!r.in_intel && r.known_variant && <small> · 표기만 다름</small>}
-                            {!r.in_intel && !r.suggestion && !r.known_variant && <small> · 비슷한 것 없음</small>}
+                            {!r[TIDY.inKey] && r.known_variant && <small> · 표기만 다름</small>}
+                            {!r[TIDY.inKey] && !r.suggestion && !r.known_variant && <small> · 비슷한 것 없음</small>}
                           </td>
                           <td>
-                            {!r.in_intel && (
+                            {!r[TIDY.inKey] && (
                               <Small type="button" disabled={!canEdit || busy === 'save' || !((tidyTo[r.name] ?? r.suggestion) || '').trim()}
                                      onClick={() => renameTool(r.name, tidyTo[r.name] ?? r.suggestion)} title="이 사업부 전체에서 바꿉니다">
                                 <Check size={12} /> 맞추기
@@ -429,10 +442,10 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                     </tbody>
                   </TidyTable>
                 )}
-                <small style={{ color: '#94a3b8' }}>표준에 없는 이름도 그대로 둘 수 있습니다 — 사내 도구는 인텔에 없는 게 정상입니다. 정돈은 같은 도구를 다른 글자로 세지 않기 위한 것입니다.</small>
+                <small style={{ color: '#94a3b8' }}>{TIDY.hint}</small>
               </>
             )}
-            {!(kind === 'agent' && tidyOpen) && picked.length === 0 && <Msg>{meta.pick}</Msg>}
+            {!tidyOpen && picked.length === 0 && <Msg>{meta.pick}</Msg>}
 
             {/* ── 하나 ── */}
             {!tidyOpen && current && d && kind === 'subject' && (
@@ -461,10 +474,11 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                         <input list="fam-pool" value={newFamily} onChange={e => setNewFamily(e.target.value)}
                                placeholder="제품군 이름 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFamily(); } }} />
                         <button type="button" onClick={addFamily} disabled={!newFamily.trim()} title="추가"><Plus size={11} /></button>
+                        <FindBtn type="button" onClick={() => setPicker(true)} title="이 사업부·로드맵 정보·다른 사업부의 제품군을 보고 고릅니다"><Search size={11} /> 찾기</FindBtn>
                       </ChipAdd>
                     )}
                   </Chips>
-                  <small>하나씩 넣습니다. 이 사업부의 다른 시험이 쓰는 이름이 제안으로 뜹니다 — 적용 범위 축의 비율은 이 목록을 사업부 전체 제품군과 대봐 셉니다.</small>
+                  <small>하나씩 넣습니다. 「찾기」로 이 사업부·로드맵 정보·다른 사업부의 제품군을 보고 고르세요 — 적용 범위 축의 비율은 이 목록을 사업부 전체 제품군과 대봐 셉니다.</small>
                 </Field>
                 <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
               </>
@@ -548,6 +562,7 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
                             <input list="fam-pool" value={newFamily} onChange={e => setNewFamily(e.target.value)}
                                    placeholder="전체에 넣을 제품군 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFamily(); } }} />
                             <button type="button" onClick={addFamily} disabled={!newFamily.trim()} title="전체에 넣기"><Plus size={11} /></button>
+                            <FindBtn type="button" onClick={() => setPicker(true)} title="이 사업부·로드맵 정보·다른 사업부의 제품군을 보고 고릅니다"><Search size={11} /> 찾기</FindBtn>
                           </ChipAdd>
                         )}
                       </Chips>
@@ -631,9 +646,12 @@ const ItemManagerModal = ({ kind, divisionId, items, pairCount, canEdit, denyRea
       </Panel>
       {picker && (
         <ToolPickerModal
-          catalog={toolCatalog}
-          have={many ? [...bulk.add_tools] : (d?.tools || [])}
-          title={many ? `도구 찾기 — ${picked.length}개 시뮬레이션 전체에 넣기` : `도구 찾기 — ${current?.name || ''}`}
+          catalog={kind === 'subject' ? familyCatalog : toolCatalog}
+          have={kind === 'subject'
+            ? (many ? [...bulk.add_families] : (d?.product_families || []))
+            : (many ? [...bulk.add_tools] : (d?.tools || []))}
+          title={many ? `${TIDY.label} 찾기 — ${picked.length}개 ${meta.unit} 전체에 넣기` : `${TIDY.label} 찾기 — ${current?.name || ''}`}
+          countLabel={kind === 'subject' ? '제품군' : '기술정보 모듈의 도구'}
           onPick={addTools} onClose={() => setPicker(false)} />
       )}
     </Overlay>

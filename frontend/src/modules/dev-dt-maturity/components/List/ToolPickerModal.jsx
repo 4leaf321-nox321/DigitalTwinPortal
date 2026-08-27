@@ -57,7 +57,7 @@ const Msg = styled.p`margin: 0; padding: 2rem; text-align: center; color: #94a3b
 
 const ALL = '__all__';
 
-const ToolPickerModal = ({ catalog = [], have = [], title = '도구 찾기', onPick, onClose }) => {
+const ToolPickerModal = ({ catalog = [], have = [], title = '도구 찾기', countLabel = '기술정보 모듈의 도구', onPick, onClose }) => {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState(ALL);
   const [picked, setPicked] = useState([]);
@@ -86,12 +86,12 @@ const ToolPickerModal = ({ catalog = [], have = [], title = '도구 찾기', onP
       <Panel onClick={e => e.stopPropagation()}>
         <Head>
           <Title>{title}</Title>
-          <Count>기술정보 모듈의 도구 {catalog.length}개</Count>
+          <Count>{countLabel} {catalog.length}개</Count>
           <CloseButton onClick={onClose} title="닫기"><X size={18} /></CloseButton>
         </Head>
         <SearchRow>
           <Search size={14} color="#94a3b8" />
-          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="이름이나 공급사로 찾기 — 예: HyperMesh, Ansys" />
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="이름으로 찾기" />
           <Count>{shown.length}개</Count>
         </SearchRow>
         <Two>
@@ -102,7 +102,7 @@ const ToolPickerModal = ({ catalog = [], have = [], title = '도구 찾기', onP
             ))}
           </Cats>
           <Grid>
-            {shown.length === 0 && <Msg>맞는 도구가 없습니다. 표준에 없는 이름은 입력칸에 직접 적으면 됩니다.</Msg>}
+            {shown.length === 0 && <Msg>맞는 것이 없습니다. 목록에 없는 이름은 입력칸에 직접 적으면 됩니다.</Msg>}
             {shown.map(t => {
               const has = haveSet.has(t.name);
               const on = picked.includes(t.name);

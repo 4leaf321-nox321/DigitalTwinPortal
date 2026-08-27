@@ -75,6 +75,10 @@ export const maturityApi = {
   /** 사업부 도구 이름 정돈 — 인텔 표준과 대본 결과. */
   getToolAudit: (divisionId) => request(`/tool-audit?division_id=${divisionId}`),
   renameTool: (divisionId, from, to) => request('/tools/rename', json('POST', { division_id: divisionId, from, to })),
+  /** 제품군 — 도구와 같은 셋. 표준은 로드맵 정보의 제품군 설정. */
+  getFamilyCatalog: (divisionId) => request(`/family-catalog?division_id=${divisionId}`),
+  getFamilyAudit: (divisionId) => request(`/family-audit?division_id=${divisionId}`),
+  renameFamily: (divisionId, from, to) => request('/families/rename', json('POST', { division_id: divisionId, from, to })),
 
   getSettings: () => request('/settings'),
   putSettings: (payload) => request('/settings', json('PUT', payload)),

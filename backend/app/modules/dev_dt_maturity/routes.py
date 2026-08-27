@@ -550,3 +550,50 @@ def tool_catalog(actor):
         return success_response(out)
     except Exception:
         return success_response([])
+
+
+# ── 제품군 — 도구와 같은 셋 ──────────────────────────────────────────────────
+
+@bp.route('/family-catalog', methods=['GET'])
+@read_required
+def family_catalog(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    try:
+        return success_response(S.family_catalog(division_id))
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/family-audit', methods=['GET'])
+@read_required
+def family_audit(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    try:
+        return success_response(S.family_audit(division_id))
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/families/rename', methods=['POST'])
+@read_required
+def rename_family(actor):
+    p = request.get_json() or {}
+    division_id = p.get('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    denied = _deny(actor, division_id)
+    if denied:
+        return denied
+    try:
+        n = S.rename_family(int(division_id), p.get('from'), p.get('to'))
+        db.session.commit()
+        return success_response({'renamed': n})
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()

@@ -306,3 +306,33 @@ def test_도구_목록은_분야와_공급사를_같이_준다(client, auth, wor
     rows = client.get(f'{BASE}/tool-catalog', headers=auth(mx_user)).get_json()['data']
     assert {r['name']: (r['category'], r['vendor']) for r in rows} == {
         'LS-DYNA': ('시뮬레이션·해석', 'Ansys'), '분야없음': ('기타', None)}
+
+
+def test_제품군은_로드맵_설정이_표준이고_찾기_정돈_바꾸기가_도구와_같다(client, auth, world, mx_user):
+    from app.modules.digital_twin_dashboard.models import ModuleSettings
+    _db.session.add(ModuleSettings(module_name='digital_twin_reference', settings_key='product_families',
+                                   settings_data=[{'divisionId': str(world['mx'].id), 'name': 'S 시리즈'},
+                                                  {'divisionId': str(world['mx'].id), 'name': 'Z 폴드'},
+                                                  {'divisionId': str(world['vd'].id), 'name': 'Neo QLED'}]))
+    _db.session.commit()
+    _post(client, auth, mx_user, '/subjects', {'division_id': world['mx'].id, 'name': '낙하', 'product_families': ['S시리즈', '사내전용']})
+    _post(client, auth, mx_user, '/subjects', {'division_id': world['mx'].id, 'name': '굽힘', 'product_families': ['S시리즈', 'Z 폴드']})
+
+    cat = client.get(f'{BASE}/family-catalog?division_id={world["mx"].id}', headers=auth(mx_user)).get_json()['data']
+    by = {r['name']: r for r in cat}
+    assert by['S시리즈']['category'] == '이 사업부가 쓰는 것' and by['S시리즈']['vendor'] == '2개 시험'
+    assert by['S 시리즈']['category'] == '로드맵 정보의 제품군'
+    assert by['Neo QLED'] == {'name': 'Neo QLED', 'category': '다른 사업부의 제품군', 'vendor': 'VD'}
+    assert by['Z 폴드']['category'] == '이 사업부가 쓰는 것'          # 쓰는 것이 로드맵보다 앞
+
+    audit = client.get(f'{BASE}/family-audit?division_id={world["mx"].id}', headers=auth(mx_user)).get_json()['data']
+    rows = {r['name']: r for r in audit['families']}
+    assert rows['S시리즈']['suggestion'] == 'S 시리즈' and rows['S시리즈']['known_variant'] is True
+    assert rows['사내전용']['suggestion'] is None
+    assert rows['Z 폴드']['in_standard'] is True
+    assert (audit['standard_count'], audit['off_standard']) == (2, 2)
+
+    res = client.post(f'{BASE}/families/rename', json={'division_id': world['mx'].id, 'from': 'S시리즈', 'to': 'S 시리즈'}, headers=auth(mx_user))
+    assert res.get_json()['data'] == {'renamed': 2}
+    subs = client.get(f'{BASE}/subjects?division_id={world["mx"].id}', headers=auth(mx_user)).get_json()['data']
+    assert all('S시리즈' not in s['product_families'] and 'S 시리즈' in s['product_families'] for s in subs)

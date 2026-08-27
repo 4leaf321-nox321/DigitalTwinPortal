@@ -13,6 +13,7 @@ const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onC
   const [reconcile, setReconcile] = useState(null);
   const [toolNames, setToolNames] = useState([]);
   const [toolCatalog, setToolCatalog] = useState([]);
+  const [familyCatalog, setFamilyCatalog] = useState([]);
 
   const load = async () => {
     try {
@@ -28,10 +29,13 @@ const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onC
   useEffect(() => { if (divisionId) load(); }, [divisionId, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   // 도구 제안은 인텔 표 — 한 번만. 실패해도 창은 뜬다(제안이 없을 뿐).
   useEffect(() => {
+    if (kind === 'subject' && divisionId) {
+      maturityApi.getFamilyCatalog(divisionId).then(r => setFamilyCatalog(r.data || [])).catch(() => setFamilyCatalog([]));
+    }
     if (kind !== 'agent') return;
     maturityApi.getToolNames().then(r => setToolNames(r.data || [])).catch(() => setToolNames([]));
     maturityApi.getToolCatalog().then(r => setToolCatalog(r.data || [])).catch(() => setToolCatalog([]));
-  }, [kind]);
+  }, [kind, divisionId, subjects]);
 
   const changed = () => { load(); if (onChanged) onChanged(); };
   const pairCount = useMemo(() => {
@@ -55,7 +59,7 @@ const ModalHost = ({ kind, divisionId, divisionName, denyReason, modelKinds, onC
       items={kind === 'subject' ? subjects : agents}
       pairCount={kind === 'subject' ? pairCount.bySubject : pairCount.byAgent}
       canEdit={!denyReason} denyReason={denyReason} modelKinds={modelKinds}
-      toolSuggestions={toolNames} toolCatalog={toolCatalog}
+      toolSuggestions={toolNames} toolCatalog={toolCatalog} familyCatalog={familyCatalog}
       onClose={onClose} onChanged={changed}
     />
   );

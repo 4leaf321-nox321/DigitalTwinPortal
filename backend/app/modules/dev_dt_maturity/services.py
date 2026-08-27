@@ -467,3 +467,87 @@ def rename_tool(division_id, old, new, sector='simulation'):
         n += 1
     db.session.flush()
     return n
+
+
+# ── 제품군 — 도구와 같은 방식: 목록(찾기) · 정돈(표준과 대보기) · 이름 바꾸기 ─────
+#
+# 표준은 **로드맵 정보 모듈의 제품군 설정**(사업부별). 이 모듈이 정본을 따로 두지 않는다 —
+# 같은 제품군을 두 모듈이 다른 글자로 부르면 로드맵과의 어긋남 셈이 틀어진다. 읽기 전용, FK 없음.
+
+def roadmap_families(division_id=None):
+    """로드맵 정보의 제품군 설정. division_id 를 주면 그 사업부 것만, 없으면 (사업부 id, 이름) 전부."""
+    try:
+        from app.modules.digital_twin_dashboard.models import ModuleSettings
+        row = ModuleSettings.query.filter_by(
+            module_name='digital_twin_reference', settings_key='product_families').first()
+        rows = row.settings_data if row and isinstance(row.settings_data, list) else []
+    except Exception:
+        rows = []
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        name = (r.get('name') or '').strip()
+        did = str(r.get('divisionId') or '')
+        if name and (division_id is None or did == str(division_id)):
+            out.append((did, name))
+    return out
+
+
+def family_catalog(division_id, sector='simulation'):
+    """찾기 창의 재료 — 이 사업부가 쓰는 것 · 로드맵 정보의 제품군 · 다른 사업부의 제품군."""
+    from app.modules.digital_twin_dashboard.models import Division
+    names_by_div = {str(d.id): d.name for d in Division.query.all()}
+    used = {}
+    for s in MaturitySubject.query.filter_by(division_id=division_id, sector=sector).all():
+        for f in (s.product_families or []):
+            used[f] = used.get(f, 0) + 1
+    out, seen = [], set()
+    for f, n in sorted(used.items(), key=lambda kv: (-kv[1], kv[0])):
+        out.append({'name': f, 'category': '이 사업부가 쓰는 것', 'vendor': f'{n}개 시험'}); seen.add(f)
+    for did, f in roadmap_families():
+        if f in seen:
+            continue
+        mine = did == str(division_id)
+        out.append({'name': f, 'category': '로드맵 정보의 제품군' if mine else '다른 사업부의 제품군',
+                    'vendor': None if mine else names_by_div.get(did)})
+        seen.add(f)
+    return out
+
+
+def family_audit(division_id, sector='simulation'):
+    """시험 항목이 쓰는 제품군 이름마다 — 몇 개가 쓰나 · 로드맵 표준에 있나 · 무엇으로 맞출지."""
+    standard = sorted({f for _d, f in roadmap_families(division_id)})
+    std_keys = {_tool_key(s) for s in standard}
+    counts = {}
+    for s in MaturitySubject.query.filter_by(division_id=division_id, sector=sector).all():
+        for f in (s.product_families or []):
+            counts[f] = counts.get(f, 0) + 1
+    rows = []
+    for name, n in counts.items():
+        exact = name in standard
+        rows.append({'name': name, 'count': n, 'in_standard': exact,
+                     'suggestion': None if exact else suggest_tool_name(name, standard),
+                     'known_variant': (not exact) and _tool_key(name) in std_keys})
+    rows.sort(key=lambda r: (r['in_standard'], r['suggestion'] is None, -r['count'], r['name']))
+    return {'families': rows, 'standard_count': len(standard),
+            'off_standard': sum(1 for r in rows if not r['in_standard'])}
+
+
+def rename_family(division_id, old, new, sector='simulation'):
+    """사업부의 모든 시험 항목에서 제품군 이름을 바꾼다. 몇 개를 고쳤는지."""
+    old = (old or '').strip()
+    new = (new or '').strip()
+    if not old or not new:
+        raise Refused('바꿀 이름과 새 이름이 둘 다 필요합니다.')
+    if old == new:
+        return 0
+    n = 0
+    for s in MaturitySubject.query.filter_by(division_id=division_id, sector=sector).all():
+        fams = list(s.product_families or [])
+        if old not in fams:
+            continue
+        s.product_families = _clean_list([new if f == old else f for f in fams])
+        n += 1
+    db.session.flush()
+    return n
