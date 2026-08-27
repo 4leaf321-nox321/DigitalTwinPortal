@@ -35,6 +35,10 @@ API_BASE = os.environ.get("DT_API_BASE", "http://localhost:5174").rstrip("/")
 API_PREFIX = "/api/dt-v2"
 # 기술정보 모듈은 블루프린트가 달라 접두사도 다르다.
 INTEL_PREFIX = "/api/digital-twin-intel"
+# 설문 모듈은 **만들기(사무국)와 응답(전원)이 접두사부터 갈려 있다** — 권한 기준이
+# 달라 백엔드가 일부러 갈라 둔 것이고, 여기서도 그 구분을 그대로 따른다.
+SURVEY_MANAGE_PREFIX = "/api/surveys/manage"
+SURVEY_PREFIX = "/api/surveys"
 
 # 기본은 SSE(streamable-http). 중간에 SSE 를 버퍼링하는 프록시·VPN·보안장비가 끼면
 # initialize 응답의 첫 바이트가 클라이언트에 닿지 못해 "무응답 → 타임아웃" 이 난다.
@@ -102,6 +106,23 @@ async def _intel(ctx, method, path, *, params=None, json_body=None):
     """기술정보 모듈로 보낸다. 인증 헤더는 똑같이 그대로 넘어간다."""
     return await _request(ctx, method, path, params=params, json_body=json_body,
                           prefix=INTEL_PREFIX)
+
+
+async def _survey_manage(ctx, method, path, *, params=None, json_body=None):
+    """설문 관리(사무국·관리자)로 보낸다. 권한 판정은 백엔드가 한다 — 사무국이
+    아니면 403 이 그대로 올라온다."""
+    return await _request(ctx, method, path, params=params, json_body=json_body,
+                          prefix=SURVEY_MANAGE_PREFIX)
+
+
+async def _survey_manage_text(ctx, path):
+    """CSV 처럼 **봉투 없이 본문이 오는** 응답. 성공이면 본문 글을 그대로 준다."""
+    async with httpx.AsyncClient(timeout=60) as c:
+        r = await c.get(f"{API_BASE}{SURVEY_MANAGE_PREFIX}{path}",
+                        headers=_forward_headers(ctx))
+    if not r.is_success:
+        return _unwrap(r)
+    return {"status": "ok", "csv": r.text}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1298,6 +1319,179 @@ async def link_intel_evidence(
                         json_body={"newsUuid": news_uuid, "techUuid": tech_uuid,
                                    "note": note or None, "origin": "mcp"})
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 설문 — 만들기ㆍ배포ㆍ집계 (사무국·관리자) / 내 설문 (전원)
+#
+# ⚠️ **일부러 안 만든 도구들** — 없는 것이 맞아서 없다.
+#     응답 제출        응답은 사람이 화면에서 한다. AI 가 대신 답하면 설문이 아니다
+#     응답자 확인      신원 조회는 감사 로그와 함께 화면에서만 (identities)
+#     응답 원자료 CSV  서술형 원문의 반출이다 — 익명 응답의 원문이 다른 시스템으로
+#                      나가는 일이라 화면(감사 로그)에만 둔다. 집계 요약까지만 준다
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def list_surveys(
+    ctx: Context,
+    status: str = "",
+    context_type: str = "",
+    context_id: int = 0,
+) -> list:
+    """설문 목록 (사무국·관리자).
+
+    status: draft(작성 중) | open(배포됨) | closed(마감). 비우면 전부.
+    context_type/context_id 로 어디에 매달린 설문인지 좁힐 수 있다
+    (예: context_type="strategy_plan" — 전략 진단용 설문).
+    """
+    params = {}
+    if status:
+        params["status"] = status
+    if context_type:
+        params["context_type"] = context_type
+    if context_id:
+        params["context_id"] = context_id
+    return await _survey_manage(ctx, "GET", "", params=params)
+
+
+@mcp.tool()
+async def get_survey(survey_id: int, ctx: Context) -> dict:
+    """설문 하나 — 문항까지 통째로.
+
+    ⚠️ 문항의 `roles`/`processes` 가 빈 목록이면 **전원에게** 보인다는 뜻이다.
+    ⚠️ 응답이 하나라도 들어온 설문은 문항이 **잠겨서 못 고친다** — 고칠 것이
+       있으면 배포(open) 전에 해야 한다.
+    """
+    return await _survey_manage(ctx, "GET", f"/{survey_id}")
+
+
+@mcp.tool()
+async def get_survey_options(ctx: Context) -> dict:
+    """설문을 만들 때 **고를 수 있는 값들** — 역할ㆍ프로세스ㆍ연결키ㆍ대상 구분.
+
+    ⚠️ 표를 짜기 **전에** 부른다. 여기 없는 역할ㆍ프로세스를 표에 적으면 그 문항은
+       아무에게도 안 보이는 문항이 되고, 배포 단계에서 막힌다.
+    ⚠️ 연결키(link_key)는 설문 답을 전략 진단 격자에 잇는 고리다
+       (예: organization:readiness). 진단에 쓸 문항에만 붙인다.
+    """
+    return await _survey_manage(ctx, "GET", "/options")
+
+
+@mcp.tool()
+async def preview_survey_table(text: str, ctx: Context) -> dict:
+    """붙여넣은 표를 **읽어만 본다. 아무것도 저장하지 않는다.**
+
+    ⚠️⚠️ `import_survey_table` 을 부르기 전에 **반드시 이걸 먼저** 부른다.
+       오류가 한 줄이라도 있으면 넣기가 통째로 거부되므로, 여기서 행별 오류를
+       받아 표를 고친 뒤 넣는 것이 한 번에 가는 길이다.
+
+    표 형식 — 첫 행은 머리글, 열 아홉 개가 **순서 고정**이다:
+
+        섹션 | 역할 | 프로세스 | 문항 | 유형 | 보기 | 필수 | 도움말 | 연결키
+
+        섹션          비우면 직전 행의 섹션을 잇는다
+        역할/프로세스  쉼표로 여럿. **비우면 전원** (값은 get_survey_options 에서)
+        유형          척도 | 객관식 | 복수선택 | 순위 | 서술
+        보기          `|` 로 구분. 객관식·복수선택·순위에만. 척도·서술은 비운다
+        필수          예/아니오. 비우면 필수
+        도움말·연결키  선택
+
+    ⚠️ 구분자: 표 안에 **탭이 하나라도 있으면 탭**(엑셀 붙여넣기), 없으면 쉼표.
+       AI 가 표를 지어서 보낼 때는 탭으로 잇는 것이 안전하다 — 문항에 쉼표가
+       들어가도 열이 안 밀린다.
+
+    돌려주는 것: 행마다 읽힌 결과와 오류, ok_count / error_count.
+    """
+    return await _survey_manage(ctx, "POST", "/import/preview",
+                                json_body={"text": text})
+
+
+@mcp.tool()
+async def import_survey_table(
+    text: str,
+    ctx: Context,
+    title: str = "",
+    survey_id: int = 0,
+    description: str = "",
+    target_type: str = "",
+    context_type: str = "",
+    context_id: int = 0,
+) -> dict:
+    """표를 설문으로 넣는다. **survey_id 유무로 길이 갈린다.**
+
+        survey_id 없음 → `title` 로 설문을 **새로** 만든다 (title 필수)
+        survey_id 있음 → 그 설문 **뒤에 문항을 덧붙인다** (기존 문항은 남는다)
+
+    ⚠️⚠️ 먼저 `preview_survey_table` 로 오류 0건을 확인할 것. 오류가 한 줄이라도
+       있으면 서버가 **아무것도 만들지도 덧붙이지도 않는다.**
+    ⚠️ 넣은 뒤에도 설문은 draft 다 — 배포는 `set_survey_status` 로 따로 한다.
+       배포 전이면 표를 고쳐 새 설문으로 다시 넣으면 그만이니, 넣기를 두려워할
+       것 없다.
+    ⚠️ 역할ㆍ프로세스 축은 따로 안 주면 **표에 등장한 것**을 그대로 쓴다.
+    target_type: all(전원) | department | role | user. 비우면 all.
+    """
+    body = {"text": text}
+    if survey_id:
+        body["survey_id"] = survey_id
+    if title:
+        body["title"] = title
+    if description:
+        body["description"] = description
+    if target_type:
+        body["target_type"] = target_type
+    if context_type:
+        body["context_type"] = context_type
+    if context_id:
+        body["context_id"] = context_id
+    return await _survey_manage(ctx, "POST", "/import", json_body=body)
+
+
+@mcp.tool()
+async def set_survey_status(survey_id: int, status: str, ctx: Context) -> dict:
+    """설문 배포ㆍ마감. status: draft | open | closed.
+
+    ⚠️ open 은 **그 순간 대상 전원의 홈에 뜬다**는 뜻이다 — 문항이 확정됐는지
+       사용자에게 확인받고 옮길 것. 문항 없는 설문, 아무도 못 보는 문항이 섞인
+       설문은 서버가 배포를 물린다.
+    ⚠️ 응답이 들어오기 시작하면 문항은 잠긴다. 되돌려(draft) 고칠 수 있는 것은
+       **응답이 없을 때뿐**이다.
+    """
+    return await _survey_manage(ctx, "PUT", f"/{survey_id}/status",
+                                json_body={"status": status})
+
+
+@mcp.tool()
+async def get_survey_results(survey_id: int, ctx: Context) -> dict:
+    """설문 집계 — 화면이 보는 것과 같은 것. **응답자 신원은 실리지 않는다.**
+
+    응답 수가 항상 같이 온다 — 몇 명이 답했는지 모르는 평균은 숫자 구경이다.
+    소속을 모르는 응답도 따로 세어져 온다.
+
+    ⚠️ 응답 수가 적은 칸(사업부 × 역할)은 평균이 한 사람 말이다. 결론을 만들 때
+       칸의 n 을 함께 말할 것.
+    """
+    return await _survey_manage(ctx, "GET", f"/{survey_id}/results")
+
+
+@mcp.tool()
+async def export_survey_summary(survey_id: int, ctx: Context) -> dict:
+    """집계표 CSV — 한 줄이 **하나의 숫자가 선 조건**(문항 × 사업부 × 역할)이다.
+
+    표 계산이나 보고서 만들 때 이걸 쓴다. 응답 **원자료가 아니다** — 원자료(서술형
+    원문 포함)는 익명 응답의 반출이라 화면에서 감사 로그와 함께만 내려받는다.
+    """
+    return await _survey_manage_text(ctx, f"/{survey_id}/export/summary")
+
+
+@mcp.tool()
+async def my_surveys(ctx: Context) -> list:
+    """**내가 받은** 설문 — 열려 있는 것, 답했는지 여부와 함께. (전원)
+
+    미응답이 먼저 온다. 여기 나오는 설문의 응답은 화면에서 한다 — 제출 도구는
+    일부러 없다(AI 가 대신 답하면 설문이 아니다).
+    """
+    return await _request(ctx, "GET", "/mine", prefix=SURVEY_PREFIX)
 
 
 if __name__ == "__main__":
