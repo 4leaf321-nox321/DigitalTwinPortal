@@ -91,15 +91,16 @@ AXES = {
         },
         {
             'key': 'modeling', 'label': '모델링 수준', 'kind': 'rung',
-            'question': '어떤 불량·현상까지 예측하는가',
-            'evidence': ['phenomena'], 'evidence_label': '예측 가능한 현상 태그',
+            'question': '무엇까지 재현하는가',
+            'evidence': ['phenomena'], 'evidence_label': '재현 가능한 현상 태그',
+            # 「재현의 깊이」 사다리(2026-08-28). ⚠️ key 는 고정(이력이 묶여 있다) — 문구만 바뀐다.
+            #   geometry 형상 → performance 거동 → defect 신뢰성 시험 불량 → multi 시장 불량 → condition 원인 규명
             'rungs': [
-                {'key': 'geometry', 'label': '형상 재현', 'description': '형상을 재현하는 수준'},
-                {'key': 'performance', 'label': '성능 지표', 'description': '성능 지표를 예측한다'},
-                {'key': 'defect', 'label': '특정 불량/현상', 'description': '불량 한 종을 예측한다'},
-                {'key': 'multi', 'label': '복수 현상', 'description': '여러 현상을 함께 예측한다'},
-                {'key': 'condition', 'label': '불량 발생 조건 탐색',
-                 'description': '어떤 조건에서 불량이 나는지 찾는다'},
+                {'key': 'geometry', 'label': '형상 재현', 'description': '치수·재질·경계 조건이 실물이다'},
+                {'key': 'performance', 'label': '거동 재현', 'description': '변형·온도·유동 같은 물리 거동이 시험과 같이 나온다'},
+                {'key': 'defect', 'label': '신뢰성 시험 불량 재현', 'description': '신뢰성 시험에서 난 그 불량이 시뮬레이션에서도 난다'},
+                {'key': 'multi', 'label': '시장 불량 재현', 'description': '시장에서 난 불량(사용 조건·누적 이력)이 시뮬레이션에서도 난다'},
+                {'key': 'condition', 'label': '원인 규명', 'description': '왜 나는지 — 기여 인자와 경로를 시뮬레이션으로 가려낸다'},
             ],
         },
         {
