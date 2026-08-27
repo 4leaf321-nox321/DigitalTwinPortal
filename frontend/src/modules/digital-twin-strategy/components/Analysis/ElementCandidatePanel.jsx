@@ -176,7 +176,8 @@ const ElementCandidatePanel = ({ candidates, kinds, onPromote, rail = false }) =
             <Empty>
               가져올 후보가 없습니다. ① 진단에서 <strong>수준</strong>을 매기거나
               {' '}<strong>발견 사항</strong>이 생기면 여기에 강점·약점 후보로 뜹니다.
-              기회·위협은 포탈에 없는 정보라 <strong>설문</strong>에서만 옵니다.
+              기회·위협은 <strong>설문</strong>과 <strong>기술 소식</strong>(근거를
+              건 것)에서 옵니다.
             </Empty>
           ) : (
             <>

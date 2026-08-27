@@ -8,6 +8,7 @@ import FindingsPanel from './FindingsPanel';
 import PromoteCrux from './PromoteCrux';
 import CruxPanel from './CruxPanel';
 import SurveyEvidence from './SurveyEvidence';
+import IntelEvidence from './IntelEvidence';
 import SurveyVoices from './SurveyVoices';
 import FlowMap from '../FlowMap';
 import AssessmentGrid from '../Assessment/AssessmentView';
@@ -152,6 +153,7 @@ const DiagnosisView = ({
   categories, divisions, metricDefinitions, thresholds,
   assessments, metrics, metricsError, kpiCoverage, findings, cruxes,
   surveyEvidence, surveyVoicesAvailable, onApplySurvey, onLoadVoices,
+  intelEvidence, intelError, onApplyIntel,
   processMetrics, canEdit, onMetricDetail,
   onChange, onTargetChange, onBumpTargets,
   onCruxAdd, onCruxUpdate, onCruxDelete, onCruxDemote,
@@ -174,16 +176,30 @@ const DiagnosisView = ({
   const hasSurvey = surveyEvidence?.cells?.length > 0
     || surveyEvidence?.surveys?.length > 0;
   const hasVoices = surveyEvidence?.surveys?.length > 0;
+  // 인텔 모듈이 없거나 비어 있으면(역량 0) 자리 자체를 안 만든다. 읽기 실패는
+  // 다르다 — 그건 비어 있는 게 아니라 고장이라, 자리를 만들어 이유를 적는다.
+  const hasIntel = Boolean(intelError) || intelEvidence?.total_caps > 0;
+  const intelRows = (intelEvidence?.cells || [])
+    .filter(c => c.recorded > 0).length;
+  const techDimLabel = Object.fromEntries(
+    ((categories || []).find(c => c.key === 'technical')?.dimensions || [])
+      .map(d => [d.key, d.label]));
 
   const flow = [
     { kind: 'group', label: '근거' },
     { kind: 'node', id: 'sec-observed', label: '관측' },
     ...(!metricsError ? [{ kind: 'node', id: 'sec-kpi', label: '지표별 연결' }] : []),
-    ...(hasSurvey ? [
-      { kind: 'node', id: 'sec-survey', label: '설문 근거' },
-      // 설문 근거만 본줄기를 벗어난다 — 발견 사항이 아니라 진단값으로 간다.
-      // 이 갈림이 화면에서 제일 안 보이던 것이다.
-      { kind: 'branch', text: <><strong>반영</strong>하면 조직 역량 칸으로</> },
+    ...(hasSurvey ? [{ kind: 'node', id: 'sec-survey', label: '설문 근거' }] : []),
+    ...(hasIntel ? [{ kind: 'node', id: 'sec-intel', label: '기술 근거' }] : []),
+    // 설문·기술 근거만 본줄기를 벗어난다 — 발견 사항이 아니라 진단값으로 간다.
+    // 이 갈림이 화면에서 제일 안 보이던 것이다.
+    ...((hasSurvey || hasIntel) ? [
+      {
+        kind: 'branch',
+        text: <><strong>반영</strong>하면{' '}
+          {hasSurvey && '조직 역량'}{hasSurvey && hasIntel && '·'}
+          {hasIntel && '기술'} 칸으로</>,
+      },
       { kind: 'side', id: 'sec-grid', label: '세부 판단' },
     ] : []),
     { kind: 'link', note: '⚙기준을 넘은 것만' },
@@ -384,6 +400,32 @@ const DiagnosisView = ({
                           onApply={canEdit ? onApplySurvey : null} />
         </Section>
 
+        {/* 기술 레이더가 아는 것. 설문이 조직 역량을 채우듯 여기는 기술 축을
+            채운다 — 사업부별 단계(도입·시험·관찰·감지)가 곧 근거다.
+
+            ⚠️ 여기서도 아무것도 자동으로 바뀌지 않는다. 후보일 뿐이고,
+               누르는 것은 사람이다. */}
+        {hasIntel && (
+          <Section id="sec-intel">
+            <Head>
+              <StepBadge>1</StepBadge>
+              <Title>기술 근거</Title>
+              {intelRows > 0 && <Count>{intelRows}칸</Count>}
+              <Hint>
+                기술 레이더의 <strong>사업부별 단계</strong>를 기술 축의 후보
+                레벨로 환산했습니다. 어느 역량을 보고 나온 값인지 같이 적혀
+                있습니다. <strong>응용 축에는 후보를 내지 않습니다</strong> —
+                도구를 들인 것과 의사결정에 쓰는 것은 다른 일입니다.{' '}
+                <strong>「반영」을 누르면</strong> 맨 아래{' '}
+                <strong>세부 판단</strong>의 기술 칸이 그 값으로 바뀝니다.
+              </Hint>
+            </Head>
+            <IntelEvidence evidence={intelEvidence} error={intelError}
+                           dimensionLabel={techDimLabel}
+                           onApply={canEdit ? onApplyIntel : null} />
+          </Section>
+        )}
+
         {/* 서술형은 규칙으로 못 짚는다. "이런 말이 많았다"는 판단이라 AI 의 일이다.
             ⚠️ 「발견 사항」과 **자리를 갈라 둔다** — 센 것과 읽은 것을 한 목록에 두면
                지어낸 문장이 세어진 사실과 같은 모양으로 앉는다. */}
@@ -429,7 +471,7 @@ const DiagnosisView = ({
             <Title>발견 사항</Title>
             {findings?.length > 0 && <Count>{findings.length}건</Count>}
             <Hint>
-              위의 <strong>관측·지표별 연결·설문</strong>에서 ⚙설정의 기준을 넘은
+              위의 <strong>관측·지표별 연결·설문·기술 근거</strong>에서 ⚙설정의 기준을 넘은
               것만 규칙이 골라 문장으로 세운 것입니다. 줄마다 어디서 나왔는지
               적혀 있습니다. 중요한 것을 아래로 올리세요.
             </Hint>

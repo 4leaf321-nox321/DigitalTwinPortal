@@ -337,8 +337,9 @@ assert not _unmatched, f'임계값 짝이 없는 지표: {_unmatched}'
 
 # ── ③ 분석이 설문에 물을 것 ────────────────────────────────────────────────
 #
-# S·W 는 포탈 데이터에서 나오지만 **O·T 는 포탈에 없다.** 그 자리를 설문이
-# 메운다 — 「3년 안에 마주할 가장 큰 위협은?」은 설문 문항이다.
+# S·W 는 포탈 데이터에서 나온다. O·T 는 **설문**(「3년 안에 마주할 가장 큰
+# 위협은?」)과 **기술 소식**(intel_link — 근거를 건 소식만)이 메운다.
+# 「O·T 는 포탈에 없다」던 시절의 문장은 intel 모듈이 생기며 낡았다.
 #
 # ⚠️ 이렇게 모은 것은 **현장이 인식하는** 기회·위협이지 시장 그 자체가 아니다.
 #    화면이 그 한계를 적어야 한다(ANALYSIS_PLAN 3절).
@@ -364,6 +365,18 @@ MODULE_KEY = 'digital_twin_strategy'
 THRESHOLD_SETTINGS_KEY = 'finding_thresholds'
 
 THRESHOLDS = [
+    # ── 기술정보(intel) 연결 — AUDIT_PLAN 3-1 ─────────────────────────────
+    {'key': 'intel_coverage_low', 'label': '역량 기록률 하한', 'unit': '%',
+     'default': 30.0, 'max': 100,
+     'detail': '기술 레이더에 적은 역량 비율이 이 아래면 짚는다 — '
+               'technical 진단이 근거 없이 서 있다는 신호다.'},
+    {'key': 'intel_stale_rate', 'label': '낡은 근거 비율', 'unit': '%',
+     'default': 50.0, 'max': 100,
+     'detail': '적어 둔 역량 중 근거가 낡은 것의 비율이 이 위면 짚는다.'},
+    {'key': 'intel_min_caps', 'label': '레벨 후보 최소 역량', 'unit': '개',
+     'default': 3.0, 'max': 20,
+     'detail': '한 차원에 이보다 적게 적혔으면 후보 레벨을 안 낸다 — '
+               '역량 한두 개로 차원 하나를 말하면 확대해석이다.'},
     {'key': 'no_performance', 'label': '성과 미정의 비율', 'unit': '%', 'default': 30.0, 'max': 100,
      'detail': '이 비율을 넘으면 짚는다. 성과를 적지 않은 과제가 얼마나 되는가.'},
     {'key': 'no_kpi_link', 'label': 'KPI 미연결 비율', 'unit': '%', 'default': 30.0, 'max': 100,

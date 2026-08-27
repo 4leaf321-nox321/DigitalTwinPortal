@@ -34,6 +34,7 @@ from .survey_voice import is_available as voices_available, summarize as summari
 from .issues import (
     derive_issue_candidates, derive_survey_candidates, summarize_coverage,
 )
+from . import intel_link
 from .elements import (
     derive_element_candidates, derive_survey_candidates as derive_element_survey,
     summarize_elements,
@@ -44,7 +45,8 @@ from .document import (
     SECTIONS as DOC_SECTIONS, SECTION_KEYS, MANUAL_KEYS, assemble, summarize,
 )
 from .definitions import (
-    CATEGORIES, CATEGORY_ORGANIZATION, DIMENSION_KEYS_BY_CATEGORY,
+    CATEGORIES, CATEGORY_ORGANIZATION, CATEGORY_TECHNICAL,
+    DIMENSION_KEYS_BY_CATEGORY,
     ALL_ASSESSMENT_SLOTS,
     METRICS, METRIC_KEYS, LEVEL_MIN, LEVEL_MAX,
     THRESHOLDS, THRESHOLD_KEYS, THRESHOLD_MAX, DEFAULT_THRESHOLDS,
@@ -459,6 +461,21 @@ def build_plan_payload(plan, thresholds=None, source=None):
         )
     # 설문 규칙은 지표를 못 읽어도 돌아야 한다. 둘은 서로 다른 원천이다.
     findings += derive_survey_findings(survey_evidence, thresholds, min_sample)
+
+    """
+    ⚠️ 기술정보(intel)는 **없어도 되는** 원천이다 — 표가 아직 없거나(새 DB) 모듈이
+       빠져도 전략 화면은 떠야 한다. 그래서 조용히 빈 값이 아니라 **무엇이 안
+       됐는지**를 intelError 로 실어 보낸다(metricsError 와 같은 규칙).
+    """
+    try:
+        intel_evidence = intel_link.attach_current(
+            intel_link.collect(divisions, thresholds), assessments)
+        findings += intel_link.derive_findings(
+            intel_evidence, divisions, thresholds)
+        intel_error = None
+    except Exception as e:
+        intel_evidence = {'cells': [], 'divisions': [], 'total_caps': 0}
+        intel_error = str(e)
     findings += derive_choice_findings(plan, thresholds, min_sample, divisions)
     # ⚠️ 정렬은 아래에서 한다. 전략 ↔ 실행 규칙은 솔루션을 읽어야 해서 여기서
     #    낼 수 없고, 여기서 정렬하면 그 규칙만 목록 끝에 붙는다.
@@ -499,11 +516,17 @@ def build_plan_payload(plan, thresholds=None, source=None):
     # 남아, 무엇을 아직 안 봤는지 읽을 수 없다(이슈 후보와 같은 규칙).
     taken_elements = {e['source_ref'] for e in elements if e.get('source_ref')}
 
+    # ⚠️ O·T 는 설문과 **기술 소식**에서 온다. 「포탈에 없다」던 시절의 주석은
+    #    intel 모듈이 생기면서 낡았다 — 근거가 걸린 소식이 곧 기회·위협의 재료다.
+    try:
+        intel_elements = intel_link.derive_element_candidates()
+    except Exception:
+        intel_elements = []
     element_candidates = [
         c for c in (derive_element_candidates(assessments, findings,
                                               divisions, thresholds)
-                    # O·T 는 포탈에 없다. 설문에서만 온다.
-                    + derive_element_survey(plan, min_sample))
+                    + derive_element_survey(plan, min_sample)
+                    + intel_elements)
         if c['key'] not in taken_elements
     ]
 
@@ -530,6 +553,8 @@ def build_plan_payload(plan, thresholds=None, source=None):
     'kpiCoverage': kpi_coverage,
     'findings': findings,
     'surveyEvidence': survey_evidence,
+    'intelEvidence': intel_evidence,
+    'intelError': intel_error,
     # 버튼을 띄울지 정하는 데만 쓴다. 부르는 것은 사람이 누를 때다.
     'surveyVoicesAvailable': voices_available(),
     'cruxes': cruxes,
@@ -1758,6 +1783,102 @@ def apply_survey_evidence(year):
 
             applied.append({
                 'survey_id': cell['survey_id'],
+                'division_id': cell['division_id'],
+                'dimension': cell['dimension'],
+                'level': cell['suggested_level'],
+                'previous_level': before,
+            })
+
+        db.session.commit()
+        return jsonify({'success': True, 'data': {
+            'applied': applied, 'skipped': skipped,
+        }})
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
+@bp.route('/plans/<int:year>/assessments/apply-intel', methods=['POST'])
+@edit_required
+def apply_intel_evidence(year):
+    """기술정보 후보 레벨을 technical 진단에 **반영한다.** (apply-survey 의 짝)
+
+    ⚠️ 같은 규칙 셋 — 조회는 보여주기만 하고 반영은 여기서만 · **사람이 손으로
+       매긴 칸(basis='manual')은 건너뛴다** · 이전 값과 근거를 note 에 덧붙인다.
+       규칙이 설문과 갈리면 「왜 설문은 안 덮는데 인텔은 덮지?」가 된다.
+    """
+    try:
+        plan = StrategyPlan.query.filter_by(year=year).first()
+        if not plan:
+            return _error(f'{year}년 전략이 없습니다.', 404)
+
+        payload = request.get_json() or {}
+        wanted = payload.get('cells')
+        if not isinstance(wanted, list) or not wanted:
+            return _error('반영할 칸(cells)이 필요합니다.', 400)
+
+        divisions = get_target_divisions()
+        thresholds = get_thresholds()
+        collected = intel_link.collect(divisions, thresholds)
+        by_cell = {
+            (c['division_id'], c['dimension']): c
+            for c in collected['cells']
+        }
+
+        applied, skipped = [], []
+        stamp = datetime.now(KST).strftime('%Y-%m-%d')
+
+        for item in wanted:
+            try:
+                key = (int(item.get('division_id')), str(item.get('dimension')))
+            except (TypeError, ValueError):
+                skipped.append({'cell': item, 'reason': '칸 지정이 올바르지 않습니다.'})
+                continue
+
+            cell = by_cell.get(key)
+            if not cell:
+                skipped.append({'cell': item, 'reason': '그 칸에는 후보가 없습니다.'})
+                continue
+            if cell['insufficient'] or cell['suggested_level'] is None:
+                skipped.append({'cell': item, 'reason': cell['insufficient']
+                                or '후보 레벨이 없습니다.'})
+                continue
+
+            assessment = StrategyAssessment.query.filter_by(
+                plan_id=plan.id, division_id=cell['division_id'],
+                category=CATEGORY_TECHNICAL, dimension=cell['dimension'],
+            ).first()
+
+            if assessment and assessment.basis == 'manual' \
+                    and assessment.current_level is not None \
+                    and not payload.get('overwrite_manual'):
+                skipped.append({
+                    'cell': item,
+                    'reason': f'사람이 매긴 값({assessment.current_level})이 있습니다. '
+                              '바꾸시려면 그 칸을 직접 고치세요.',
+                })
+                continue
+
+            if not assessment:
+                assessment = StrategyAssessment(
+                    plan_id=plan.id, division_id=cell['division_id'],
+                    category=CATEGORY_TECHNICAL, dimension=cell['dimension'],
+                )
+                db.session.add(assessment)
+
+            before = assessment.current_level
+            assessment.current_level = cell['suggested_level']
+            assessment.basis = 'auto'
+            stages = ' · '.join(f'{k} {v}' for k, v in
+                                sorted((cell.get('stages') or {}).items()))
+            trace = (f"{stamp} 기술 레이더 반영: 역량 {cell['considered']}개"
+                     f"({stages}) → {cell['suggested_level']}"
+                     + (f", 이전 값 {before}" if before is not None else ""))
+            # 덧붙인다 — 덮어쓰면 이 칸이 어떻게 여기까지 왔는지 되짚을 수 없다.
+            assessment.note = (assessment.note + '\n' + trace
+                               if assessment.note else trace)
+
+            applied.append({
                 'division_id': cell['division_id'],
                 'dimension': cell['dimension'],
                 'level': cell['suggested_level'],

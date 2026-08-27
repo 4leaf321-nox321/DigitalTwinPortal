@@ -61,6 +61,15 @@ export const strategyApi = {
       body: JSON.stringify({ cells, overwrite_manual: overwriteManual }),
     }),
 
+  /** 기술 레이더 후보를 진단에 반영한다. 규칙은 apply-survey 와 같다 —
+   *  사람이 매긴 칸은 서버가 건너뛰고 이유를 돌려준다.
+   *  cells: [{division_id, dimension}] */
+  applyIntelEvidence: (year, cells, overwriteManual = false) =>
+    request(`/plans/${year}/assessments/apply-intel`, {
+      method: 'POST',
+      body: JSON.stringify({ cells, overwrite_manual: overwriteManual }),
+    }),
+
   /** ③ 분석의 전략 요소(SWOT 한 칸). 후보에서 올렸거나 손으로 적은 것이다. */
   createElement: (year, payload) =>
     request(`/plans/${year}/elements`, {

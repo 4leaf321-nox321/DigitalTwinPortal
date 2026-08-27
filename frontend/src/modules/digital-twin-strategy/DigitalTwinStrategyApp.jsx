@@ -395,6 +395,20 @@ function DigitalTwinStrategyApp({ onGoHome }) {
     }
   };
 
+  // 설문 반영과 같은 규칙, 같은 모양이다 — 갈리면 화면이 두 문법을 갖게 된다.
+  const handleApplyIntel = async (cells) => {
+    if (!canEdit) { setError(denied); return false; }
+    setError(null);
+    try {
+      const res = await strategyApi.applyIntelEvidence(currentYear, cells);
+      await fetchPlan(currentYear);
+      return res?.data || null;
+    } catch (e) {
+      setError(e.message);
+      return null;
+    }
+  };
+
   // 결과를 저장하지 않고 돌려주기만 한다. 저장하면 원문이 늘어난 뒤에도 낡은
   // 요약이 남고, 그것이 어느 시점의 것인지 아무도 모른다.
   const handleLoadVoices = async () => {
@@ -597,7 +611,10 @@ function DigitalTwinStrategyApp({ onGoHome }) {
           cruxes={plan.cruxes}
           surveyEvidence={plan.surveyEvidence}
           surveyVoicesAvailable={plan.surveyVoicesAvailable}
+          intelEvidence={plan.intelEvidence}
+          intelError={plan.intelError}
           onApplySurvey={handleApplySurvey}
+          onApplyIntel={handleApplyIntel}
           onLoadVoices={handleLoadVoices}
           onChange={handleAssessmentChange}
           onTargetChange={handleMetricTargetChange}

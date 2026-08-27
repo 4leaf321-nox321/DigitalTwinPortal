@@ -82,7 +82,13 @@ dashboard(과제·KPI)·dx_kpi·survey 뿐이고, **`digital_twin_intel` 을 읽
 
 ## 3. 다음 판 — 순서대로
 
-### 3-1. 인텔 연결 (값어치가 가장 크다)
+### 3-1. 인텔 연결 (값어치가 가장 크다) — ✅ 반영됨 (2026-08-27)
+
+> intel_link.py(수집·후보 환산·발견 사항·O·T 후보) + apply-intel 라우트 +
+> ⚙임계값 셋(intel_coverage_low·intel_stale_rate·intel_min_caps) +
+> ① 진단의 「기술 근거」 패널. 시험 13개(test_intel_strategy_link.py).
+> ⓐⓑⓒ 원안대로 — application 은 후보를 안 내고, 5는 자동으로 안 나오고,
+> 보류는 평균 밖. O·T 후보는 근거 걸린 소식만(남은 결정 그대로).
 
 읽기 전용 결합입니다. evidence.py 가 dashboard 를 읽는 것과 같은 패턴으로
 `digital_twin_intel.services` 를 읽습니다. **인텔 쪽에 전략 로직을 심지

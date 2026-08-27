@@ -9,11 +9,12 @@
 
     S 강점  진단의 높은 레벨 · 사업부 간 격차의 상위 사업부   ← 포탈 데이터
     W 약점  진단의 낮은 레벨 · 발견 사항                      ← 포탈 데이터
-    O 기회  없음                                              ← 설문 또는 사람
-    T 위협  없음                                              ← 설문 또는 사람
+    O 기회  없음                                              ← 설문·기술 소식·사람
+    T 위협  없음                                              ← 설문·기술 소식·사람
 
-   O·T 를 여기서 지어내지 않는다. 포탈에 없는 정보를 규칙이 만들어내면 그건
-   근거가 아니라 창작이다. 그 자리는 설문이 메운다(ANALYSIS_PLAN 3절).
+   O·T 를 여기서 지어내지 않는다. 진단 규칙이 만들어내면 그건 근거가 아니라
+   창작이다. 그 자리는 설문(아래)과 기술 소식(intel_link — 근거를 건 소식만)이
+   메운다.
 """
 from .definitions import (
     ANALYSIS_KIND_BY_KEY, CATEGORIES, CATEGORY_ANALYSIS, LEVEL_MAX, LEVEL_MIN,
@@ -147,9 +148,9 @@ def derive_element_candidates(assessments, findings, divisions, thresholds=None)
 
 
 def derive_survey_candidates(plan, min_sample):
-    """O·T 후보. **설문에서만 나온다.**
+    """O·T 후보 — 설문 쪽. (기술 소식 쪽은 intel_link 가 낸다)
 
-    포탈에 없는 정보라 규칙이 만들어낼 수 없다. 「가장 큰 위협은?」 같은 객관식
+    진단 규칙이 만들어낼 수 없는 정보다. 「가장 큰 위협은?」 같은 객관식
     문항을 `analysis:threat` 에 연결해 두면, 보기 하나하나가 후보가 된다.
 
     ⚠️ **1위만 내지 않는다.** 진단의 쏠림 규칙은 튀는 것 하나를 짚는 일이지만

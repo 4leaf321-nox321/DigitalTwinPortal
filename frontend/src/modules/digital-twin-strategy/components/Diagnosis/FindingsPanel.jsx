@@ -59,9 +59,18 @@ const Source = styled.span`
   border-radius: 0.25rem;
   font-size: 0.6875rem;
   font-weight: 700;
-  background: ${p => (p.$survey ? '#f5f3ff' : '#f1f5f9')};
-  color: ${p => (p.$survey ? '#6d28d9' : '#64748b')};
+  background: ${p => (p.$survey ? '#f5f3ff' : p.$intel ? '#f0fdfa' : '#f1f5f9')};
+  color: ${p => (p.$survey ? '#6d28d9' : p.$intel ? '#0f766e' : '#64748b')};
 `;
+
+// 어디서 나왔나 — key 접두어가 말한다(survey_link.py · intel_link.py).
+const SOURCE = {
+  survey: { label: '설문', title: '설문 응답에서 나온 사실입니다. 응답자 수만큼의 의견입니다.' },
+  intel: { label: '기술', title: '기술 레이더의 사업부 기록에서 나온 사실입니다.' },
+  metric: { label: '지표', title: '포탈 데이터에서 계산된 사실입니다.' },
+};
+const sourceOf = (f) => (String(f.key).startsWith('survey_') ? 'survey'
+  : String(f.key).startsWith('intel_') ? 'intel' : 'metric');
 
 const PromoteButton = styled.button`
   flex-shrink: 0;
@@ -155,12 +164,10 @@ const FindingsPanel = ({ findings, onPromote }) => {
   const row = (f, i) => (
         <Item key={`${f.key}-${f.division_id ?? 'all'}-${i}`} $accent={ACCENT[f.severity]}>
           <Badge $accent={ACCENT[f.severity]}>{LABEL[f.severity]}</Badge>
-          {/* 설문에서 나온 규칙은 key 가 survey_ 로 시작한다(survey_link.py). */}
-          <Source $survey={String(f.key).startsWith('survey_')}
-                  title={String(f.key).startsWith('survey_')
-                    ? '설문 응답에서 나온 사실입니다. 응답자 수만큼의 의견입니다.'
-                    : '포탈 데이터에서 계산된 사실입니다.'}>
-            {String(f.key).startsWith('survey_') ? '설문' : '지표'}
+          <Source $survey={sourceOf(f) === 'survey'}
+                  $intel={sourceOf(f) === 'intel'}
+                  title={SOURCE[sourceOf(f)].title}>
+            {SOURCE[sourceOf(f)].label}
           </Source>
           <Body>
             <Title>{f.title}</Title>
