@@ -226,7 +226,8 @@ def create_agent(actor):
     try:
         row = S.create_agent(p['division_id'], p.get('sector') or 'simulation',
                              p.get('name'), p.get('kind'), p.get('model_kind'),
-                             p.get('project_uuid'), p.get('tools'), p.get('department_id'))
+                             p.get('project_uuid'), p.get('tools'), p.get('department_id'),
+                             p.get('defect_types'))
         db.session.commit()
         return success_response(row.to_dict(), status_code=201)
     except S.Refused as e:

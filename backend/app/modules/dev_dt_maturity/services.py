@@ -108,7 +108,7 @@ def _department_or_refuse(division_id, department_id):
 
 
 def create_agent(division_id, sector, name, kind=None, model_kind=None, project_uuid=None,
-                 tools=None, department_id=None):
+                 tools=None, department_id=None, defect_types=None):
     _sector_or_refuse(sector)
     if not D.SECTOR_BY_KEY[sector]['has_agent']:
         raise Refused('이 부문은 수단 없이 대상에 직접 매깁니다.')
@@ -122,6 +122,7 @@ def create_agent(division_id, sector, name, kind=None, model_kind=None, project_
         kind=(kind or '')[:100] or None, model_kind=model_kind or None,
         project_uuid=(project_uuid or '')[:64] or None,
         tools=_clean_list(tools),
+        defect_types=_clean_list(defect_types),
         department_id=_department_or_refuse(division_id, department_id),
     )
     db.session.add(row)
@@ -147,6 +148,8 @@ def update_agent(row, payload):
         row.project_uuid = (payload.get('project_uuid') or '')[:64] or None
     if 'tools' in payload:
         row.tools = _clean_list(payload.get('tools'))
+    if 'defect_types' in payload:
+        row.defect_types = _clean_list(payload.get('defect_types'))
     if 'department_id' in payload:
         row.department_id = _department_or_refuse(row.division_id, payload.get('department_id'))
     elif 'division_id' in payload and row.department_id:

@@ -479,3 +479,15 @@ def test_정확도는_줄줄이_쌓이고_옛_달은_현재를_덮지_않는다(
     c = out['data']['changes'][0]
     res = client.delete(f'{BASE}/pairs/{p["id"]}/changes/{c["id"]}', headers=auth(mx_user))
     assert res.status_code == 400
+
+
+def test_시뮬레이션의_불량_유형은_도구처럼_인스턴스_목록이다(client, auth, world, mx_user):
+    res = client.post(f'{BASE}/agents', json={'division_id': world['mx'].id, 'name': '열 해석',
+                      'defect_types': [' 크랙 ', '변색', '크랙', '']}, headers=auth(mx_user))
+    assert res.status_code == 201, res.get_json()
+    a = res.get_json()['data']
+    assert a['defect_types'] == ['크랙', '변색']                      # 다듬고 겹침 뺌
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'defect_types': ['접점 마모']}, headers=auth(mx_user))
+    assert res.status_code == 200 and res.get_json()['data']['defect_types'] == ['접점 마모']
+    res = client.put(f'{BASE}/agents/{a["id"]}', json={'name': '열 해석 2'}, headers=auth(mx_user))
+    assert res.get_json()['data']['defect_types'] == ['접점 마모']    # 안 보내면 그대로

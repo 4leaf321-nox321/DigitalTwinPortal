@@ -166,17 +166,17 @@ const toDraft = (kind, item) => (kind === 'subject'
   ? { division_id: item.division_id, name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
       accuracy_rule: item.accuracy_rule || 'auto' }
   : { division_id: item.division_id, name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])],
-      department_id: item.department_id ?? '' });
+      defect_types: [...(item.defect_types || [])], department_id: item.department_id ?? '' });
 
 const toPayload = (kind, d) => (kind === 'subject'
   ? { division_id: d.division_id, name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
-  : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools,
+  : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools, defect_types: d.defect_types,
       department_id: d.department_id === '' ? null : Number(d.department_id) });
 
 /** 일괄 초안의 빈 상태 — 전부 「그대로 두기」. */
 const emptyBulk = (kind) => (kind === 'subject'
   ? { accuracy_rule: KEEP, add_families: [], remove_families: [] }
-  : { kind: KEEP, model_kind: KEEP, department_id: KEEP, add_tools: [], remove_tools: [] });
+  : { kind: KEEP, model_kind: KEEP, department_id: KEEP, add_tools: [], remove_tools: [], add_defects: [], remove_defects: [] });
 
 const ItemManagerModal = ({
   kind, divisionId, allMode = false, divisions = [], items, pairCount, canEdit, denyReason,
@@ -302,7 +302,8 @@ const ItemManagerModal = ({
   // ── 일괄 수정 ──
   const bulkChanged = !!bulk && (kind === 'subject'
     ? (bulk.accuracy_rule !== KEEP || bulk.add_families.length > 0 || bulk.remove_families.length > 0)
-    : (bulk.kind !== KEEP || bulk.model_kind !== KEEP || bulk.department_id !== KEEP || bulk.add_tools.length > 0 || bulk.remove_tools.length > 0));
+    : (bulk.kind !== KEEP || bulk.model_kind !== KEEP || bulk.department_id !== KEEP || bulk.add_tools.length > 0 || bulk.remove_tools.length > 0
+       || bulk.add_defects.length > 0 || bulk.remove_defects.length > 0));
   const bulkPayload = (item) => {
     if (kind === 'subject') {
       const fams = (item.product_families || []).filter(f => !bulk.remove_families.includes(f));
@@ -313,7 +314,9 @@ const ItemManagerModal = ({
     }
     const tools = (item.tools || []).filter(t => !bulk.remove_tools.includes(t));
     bulk.add_tools.forEach(t => { if (!tools.includes(t)) tools.push(t); });
-    const p = { tools };
+    const defects = (item.defect_types || []).filter(t => !bulk.remove_defects.includes(t));
+    bulk.add_defects.forEach(t => { if (!defects.includes(t)) defects.push(t); });
+    const p = { tools, defect_types: defects };
     if (bulk.kind !== KEEP) p.kind = bulk.kind;
     if (bulk.model_kind !== KEEP) p.model_kind = bulk.model_kind || null;
     if (bulk.department_id !== KEEP) p.department_id = bulk.department_id === '' ? null : Number(bulk.department_id);
@@ -331,6 +334,19 @@ const ItemManagerModal = ({
   };
   const familyUnion = useMemo(() => unionOf('product_families'), [picked]); // eslint-disable-line react-hooks/exhaustive-deps
   const toolUnion = useMemo(() => unionOf('tools'), [picked]); // eslint-disable-line react-hooks/exhaustive-deps
+  const defectUnion = useMemo(() => unionOf('defect_types'), [picked]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 불량 유형 제안 — 같은 창의 시뮬레이션들이 이미 적은 것. 사전은 따로 두지 않는다(자유 텍스트).
+  const defectPool = useMemo(
+    () => [...new Set(items.flatMap(i => i.defect_types || []))].sort((a, b) => a.localeCompare(b, 'ko')),
+    [items]);
+  const [newDefect, setNewDefect] = useState('');
+  const addDefect = () => {
+    const t = newDefect.trim();
+    if (!t) return;
+    if (many) { if (!bulk.add_defects.includes(t)) setB({ add_defects: [...bulk.add_defects, t], remove_defects: bulk.remove_defects.filter(x => x !== t) }); }
+    else if (d && !d.defect_types.includes(t)) set({ defect_types: [...d.defect_types, t] });
+    setNewDefect('');
+  };
 
   const addFamily = () => {
     const f = newFamily.trim();
@@ -490,6 +506,24 @@ const ItemManagerModal = ({
           )}
         </Chips>
         <small>이 시뮬레이션에 쓰는 도구를 하나씩 — 예: LS-DYNA, HyperMesh. 모르는 이름은 「찾기」로 분야를 훑어 고르세요. 표준에 없는 사내 도구는 직접 적으면 됩니다.</small>
+      </Field>
+      <Field><span>불량 유형</span>
+        <Chips>
+          {d.defect_types.map(t => (
+            <Chip key={t}>{t}
+              {canEditCur && <button type="button" title="빼기" onClick={() => set({ defect_types: d.defect_types.filter(x => x !== t) })}><X size={11} /></button>}
+            </Chip>
+          ))}
+          {d.defect_types.length === 0 && <small>아직 없습니다.</small>}
+          {canEditCur && (
+            <ChipAdd>
+              <input list="defect-pool" value={newDefect} onChange={e => setNewDefect(e.target.value)} aria-label="불량 유형 추가"
+                     placeholder="불량 유형 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDefect(); } }} />
+              <button type="button" onClick={addDefect} disabled={!newDefect.trim()} title="추가"><Plus size={11} /></button>
+            </ChipAdd>
+          )}
+        </Chips>
+        <small>이 시뮬레이션이 다루는 불량 유형을 하나씩 — 예: 크랙, 변색, 접점 마모. 다른 시뮬레이션이 적은 이름이 제안으로 뜹니다.</small>
       </Field>
       <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
     </>
@@ -675,12 +709,39 @@ const ItemManagerModal = ({
                         '전체에 넣을 도구 — Enter', '기술정보 모듈의 도구 전체를 분야별로 보고 고릅니다')}
                       <small>칩의 ×는 고른 시뮬레이션 전체에서 뺍니다. 점선 칩은 일부만 쓰는 것.</small>
                     </Field>
+                    <Field><span>불량 유형 — 고른 시뮬레이션들이 다루는 것</span>
+                      <Chips>
+                        {defectUnion.map(([v, n]) => {
+                          const removing = bulk.remove_defects.includes(v);
+                          return (
+                            <Chip key={v} $partial={n < picked.length || removing} title={removing ? '저장하면 전체에서 빠집니다' : `${picked.length}개 중 ${n}개`} style={removing ? { textDecoration: 'line-through' } : undefined}>{v} <small>{n}/{picked.length}</small>
+                              {canEditBulk && <button type="button" title={removing ? '빼기 취소' : '전체에서 빼기'}
+                                onClick={() => setB({ remove_defects: removing ? bulk.remove_defects.filter(x => x !== v) : [...bulk.remove_defects, v], add_defects: bulk.add_defects.filter(x => x !== v) })}><X size={11} /></button>}
+                            </Chip>
+                          );
+                        })}
+                        {bulk.add_defects.filter(v => !defectUnion.some(([u]) => u === v)).map(v => (
+                          <Chip key={v} title="저장하면 전체에 들어갑니다">{v}
+                            {canEditBulk && <button type="button" title="추가 취소" onClick={() => setB({ add_defects: bulk.add_defects.filter(x => x !== v) })}><X size={11} /></button>}
+                          </Chip>
+                        ))}
+                        {canEditBulk && (
+                          <ChipAdd>
+                            <input list="defect-pool" value={newDefect} onChange={e => setNewDefect(e.target.value)} aria-label="불량 유형 일괄 추가"
+                                   placeholder="전체에 넣을 불량 유형 — Enter" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDefect(); } }} />
+                            <button type="button" onClick={addDefect} disabled={!newDefect.trim()} title="추가"><Plus size={11} /></button>
+                          </ChipAdd>
+                        )}
+                      </Chips>
+                      <small>칩의 ×는 고른 시뮬레이션 전체에서 뺍니다. 점선 칩은 일부만 다루는 것.</small>
+                    </Field>
                   </>
                 )}
               </>
             )}
             <datalist id="fam-pool">{familyPool.map(f => <option key={f} value={f} />)}</datalist>
             <datalist id="tool-pool">{toolPool.map(t => <option key={t} value={t} />)}</datalist>
+            <datalist id="defect-pool">{defectPool.map(t => <option key={t} value={t} />)}</datalist>
           </Right>
         </Two>
 

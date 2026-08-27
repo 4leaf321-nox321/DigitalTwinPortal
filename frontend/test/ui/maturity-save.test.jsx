@@ -147,9 +147,15 @@ export default async function run() {
     const opt = byText('li', 'CAE그룹(MX)');
     say(!!opt && !byText('li', 'Mecha그룹(MX)'), '⑥ 글자를 치면 좁혀짐');
     await click(opt); await settle();
+    // ⑥-2 불량 유형 — 도구처럼 칩으로 하나씩
+    const defIn = document.querySelector('input[aria-label="불량 유형 추가"]');
+    say(!!defIn, '⑥-2 불량 유형 칸이 있음');
+    await type(defIn, '크랙'); await keydown(defIn, 'Enter'); await settle();
+    say(html().includes('크랙') && defIn.value === '', '⑥-2 Enter 로 칩이 붙고 칸이 비워짐');
     say(!byText('button', '저장').disabled, '⑥ 고르면 저장이 켜짐');
     await click(byText('button', '저장')); await settle();
     const put6 = calls.find(c => c.method === 'PUT' && c.url.includes('/agents/5'));
+    say(JSON.stringify(put6?.body?.defect_types) === '["크랙"]', `⑥-2 PUT 에 defect_types 가 감: ${JSON.stringify(put6?.body?.defect_types)}`);
     say(!!put6 && put6.body.department_id === 3, `⑥ department_id 가 숫자로 감: ${JSON.stringify(put6?.body)}`);
     await unmount();
 

@@ -61,6 +61,9 @@ class MaturityAgent(BaseModel):
     # 이 시뮬레이션에 쓰는 도구들 — 인스턴스 목록(예: LS-DYNA, HyperMesh). 자유 텍스트,
     # 이름으로만 든다. 인텔의 도구 표와 FK 로 묶지 않는다 — 저쪽이 바뀌어도 여기가 안 깨진다.
     tools = db.Column(db.JSON, default=list)
+    # 이 시뮬레이션이 다루는 불량 유형 — 도구처럼 인스턴스 목록(예: 크랙, 변색). 자유 텍스트.
+    # 모델링 수준의 현상 태그(평가 증빙)와는 다르다 — 이것은 시뮬레이션의 속성이다. (f6c4e8a20d53)
+    defect_types = db.Column(db.JSON, default=list)
     # 담당 부서 — 포탈의 부서 표(departments)에서 고른다. 그 시뮬레이션의 사업부에 속한 부서만.
     # FK 는 아니다(부서 표가 정리돼도 여기가 안 깨지게). 이름은 읽을 때 붙인다.
     department_id = db.Column(db.Integer, index=True)
@@ -72,6 +75,7 @@ class MaturityAgent(BaseModel):
     def to_dict(self):
         d = super().to_dict()
         d['tools'] = list(self.tools or [])
+        d['defect_types'] = list(self.defect_types or [])
         d['department_name'] = None
         if self.department_id:
             try:
