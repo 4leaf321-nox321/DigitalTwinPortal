@@ -505,7 +505,7 @@ def main():
                                            note=note or '', actor_name=who)
                         db.session.add(c); db.session.flush()
                         c.created_at = _days_ago(days); counts['changes'] += 1
-        counts['reviews'] = _seed_reviews(divisions)          # 검토 대장 — 스팟 건
+        counts['reviews'] = _seed_reviews(divisions)          # 해석 활용 기록 — 스팟 건
         db.session.commit()
         print(f'지운 시험 {n_old}개 → 넣음:', counts)
         for dname, div in divisions.items():
@@ -515,7 +515,7 @@ def main():
 
 
 
-# ── 검토 대장 씨앗 — 사업부마다 올해·작년 스팟 건 몇 개(2026-08-28) ──────────
+# ── 해석 활용 기록 씨앗 — 사업부마다 올해·작년 스팟 건 몇 개(2026-08-28) ──────────
 REVIEW_SEED = {
     'MX': [
         # 스펙 검토 — 힌지 강성은 되풀이(정착 후보), 방열은 규칙화, 나머지는 단발

@@ -4,9 +4,9 @@ import { Plus, Trash2, Pencil, X, Check, AlertTriangle, Upload, Download } from 
 import maturityApi from '../../services/maturityApi';
 import SearchSelect from '../common/SearchSelect';
 
-// 검토 대장 — 시험과 짝이 없는 스팟성 시뮬레이션(설계 스펙 검토·원인 분석)을 **건(件)**으로 쌓는다(2026-08-28).
+// 해석 활용 기록 — 시험과 짝이 없는 스팟성 시뮬레이션(설계 스펙 검토·원인 분석)을 **건(件)**으로 쌓는다(2026-08-28).
 // 한 줄 = 검토 한 건. 위에 입력 줄(10초 안에 적게 — 택1은 클릭, 시뮬레이션·항목은 제안), 아래에 그 해의 줄들.
-// 오른쪽 위 셈: 건수 · 착수 전 이상 % · 관문 이상 % · 확인됨 % · 리드타임 중앙값 · 정착 후보.
+// 오른쪽 위 셈: 건수 · 스펙 확정 전 이상 % · 관문 이상 % · 검증됨 % · 리드타임 중앙값 · 정착 후보.
 
 const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.75rem; flex: 1; min-height: 0;`;
 const Bar = styled.div`display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;`;
@@ -139,9 +139,9 @@ const ReviewLedger = ({ divisionId, divisions = [], denyReason, review, refreshK
           {(review?.kinds || []).map(x => {
             const s = k(x.key);
             return (
-              <span key={x.key} title="건수 · 착수 전 이상 · 관문 이상 · 확인됨 · 리드타임 중앙값">
+              <span key={x.key} title="건수 · 스펙 확정 전 이상 · 관문 이상 · 검증됨 · 리드타임 중앙값">
                 <Kind $cause={x.key === 'cause'}>{x.label}</Kind> <strong>{s?.count ?? 0}건</strong>
-                {' '}· 착수 전 이상 {pct(s?.early)} · 관문 이상 {pct(s?.gate)} · 확인됨 {pct(s?.confirmed)} · 리드타임 {s?.lead_median != null ? `${s.lead_median}일` : '—'}
+                {' '}· 스펙 확정 전 이상 {pct(s?.early)} · 관문 이상 {pct(s?.gate)} · 검증됨 {pct(s?.confirmed)} · 리드타임 {s?.lead_median != null ? `${s.lead_median}일` : '—'}
                 {(s?.promote || []).length > 0 && <> · <Promote title={s.promote.map(p => `${p.agent_name} × ${p.item} ${p.count}건`).join('\n')}>정착 후보 {s.promote.length}</Promote></>}
               </span>
             );
@@ -241,9 +241,9 @@ const ImportBox = ({ division, onClose, onDone }) => {
   };
   return (
     <Backdrop onClick={onClose}>
-      <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="검토 대장 CSV 가져오기">
+      <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="해석 활용 기록 CSV 가져오기">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <strong style={{ flex: 1 }}>검토 대장 CSV 가져오기</strong>
+          <strong style={{ flex: 1 }}>해석 활용 기록 CSV 가져오기</strong>
           <Button type="button" as="a" href={maturityApi.reviewTemplateUrl()} download><Download size={13} /> 틀 내려받기</Button>
           <Icon onClick={onClose} aria-label="닫기"><X size={16} /></Icon>
         </div>

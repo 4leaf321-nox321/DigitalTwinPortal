@@ -1,6 +1,6 @@
-// 성숙도 — 검토 대장을 실제로 눌러 본다. (2026-08-28)
+// 성숙도 — 해석 활용 기록을 실제로 눌러 본다. (2026-08-28)
 //
-//   ① 열면 그 해의 건과 셈이 보인다 (건수 · 착수 전 이상 % · 정착 후보)
+//   ① 열면 그 해의 건과 셈이 보인다 (건수 · 스펙 확정 전 이상 % · 정착 후보)
 //   ② 위 줄에 한 건 적고 「추가」 → POST /reviews 에 month·kind·agent_id·timing… 이 간다
 //   ③ 연필로 고치기 → PUT · 휴지통 → DELETE
 //   ④ CSV 가져오기 — 미리보기 → 문제 없으면 넣기
@@ -12,9 +12,9 @@ import ReviewLedger from '../../src/modules/dev-dt-maturity/components/Review/Re
 const REVIEW = {
   kinds: [{ key: 'spec', label: '설계 스펙 검토', item_label: '스펙 항목' }, { key: 'cause', label: '원인 분석', item_label: '불량 유형' }],
   fields: {
-    timing: { label: '시점', options: [{ key: 'after_issue', label: '문제 난 뒤' }, { key: 'review_meeting', label: '설계 검토 회의 때' }, { key: 'before_spec', label: '착수 전 스펙 결정 때' }, { key: 'concept', label: '컨셉 단계' }] },
-    decision: { label: '결정 반영', options: [{ key: 'reference', label: '참고' }, { key: 'change_basis', label: '설계 변경 근거' }, { key: 'gate', label: '스펙 확정 관문' }, { key: 'rule', label: '규칙으로 정착' }] },
-    basis: { label: '판정 근거', options: [{ key: 'trend', label: '경향' }, { key: 'margin', label: '정량 마진' }, { key: 'confirmed', label: '실측·시험으로 확인' }] },
+    timing: { label: '시점', options: [{ key: 'after_issue', label: '문제 발생 후' }, { key: 'review_meeting', label: '설계 검토 단계' }, { key: 'before_spec', label: '스펙 확정 전' }, { key: 'concept', label: '컨셉 단계' }] },
+    decision: { label: '결정 반영', options: [{ key: 'reference', label: '참고 자료' }, { key: 'change_basis', label: '설계 변경 근거' }, { key: 'gate', label: '스펙 확정 관문' }, { key: 'rule', label: '설계 규칙 정착' }] },
+    basis: { label: '판정 근거', options: [{ key: 'trend', label: '경향 비교' }, { key: 'margin', label: '정량 마진 산출' }, { key: 'confirmed', label: '실측·시험 검증' }] },
   },
   promote_min: 3,
 };
@@ -42,8 +42,8 @@ export default async function run() {
     await render(<ReviewLedger divisionId={17} divisions={[{ id: 17, name: 'MX' }]} denyReason={null} review={REVIEW} refreshKey={0} />);
     await settle(60);
     const h = html();
-    say(h.includes('힌지 강성') && h.includes('착수 전 스펙 결정 때') && h.includes('스펙 확정 관문'), '① 그 해의 건이 표에 보임(칸은 글자로)');
-    say(h.includes('3건') && h.includes('착수 전 이상 67%') && h.includes('정착 후보 1'), '① 셈 — 건수·착수 전 이상 %·정착 후보');
+    say(h.includes('힌지 강성') && h.includes('스펙 확정 전') && h.includes('스펙 확정 관문'), '① 그 해의 건이 표에 보임(칸은 글자로)');
+    say(h.includes('3건') && h.includes('스펙 확정 전 이상 67%') && h.includes('정착 후보 1'), '① 셈 — 건수·스펙 확정 전 이상 %·정착 후보');
 
     // ② 한 건 추가
     calls.length = 0;
@@ -53,7 +53,7 @@ export default async function run() {
     await type(agentIn, '열'); await settle();
     await click(byText('li', '열 해석')); await settle();
     await click(byText('button', '컨셉 단계'));
-    await click(byText('button', '규칙으로 정착'));
+    await click(byText('button', '설계 규칙 정착'));
     say(byText('button', '컨셉 단계').getAttribute('aria-pressed') === 'true', '② 시점·결정 반영은 토글 — 누른 것이 켜짐');
     await type(document.querySelector('input[aria-label="리드타임(일)"]'), '2');
     await click(byText('button', '추가')); await settle(60);

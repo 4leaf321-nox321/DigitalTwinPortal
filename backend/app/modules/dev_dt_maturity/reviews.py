@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""검토 대장 — 시험과 짝이 없는 스팟성 시뮬레이션을 **건(件)**으로 쌓는다. (2026-08-28)
+"""해석 활용 기록 — 시험과 짝이 없는 스팟성 시뮬레이션을 **건(件)**으로 쌓는다. (2026-08-28)
 
 시험 항목은 상태(쌍마다 사다리 하나)이고, 여기는 사건(건마다 한 줄, 누적)이다.
   · 한 줄 = 시뮬레이션으로 검토한 건 하나: 연-월 · 종류(스펙 검토/원인 분석) · 대상 · 항목 ·
     쓴 시뮬레이션 · 시점 · 결정 반영 · 판정 근거 · 리드타임(일) · 메모
-  · 연간으로 센다: 건수 · 「착수 전 이상」 % · 「관문 이상」 % · 「확인됨」 % · 리드타임 중앙값
+  · 연간으로 센다: 건수 · 「스펙 확정 전 이상」 % · 「관문 이상」 % · 「검증됨」 % · 리드타임 중앙값
   · 같은 시뮬레이션 × 항목이 한 해에 N건(기본 3) 이상이면 「정착 후보」 — 상시 항목으로 올릴 재료
   · 엑셀에 있던 것을 CSV 로 붙여 넣는다(틀 내려받기 → 미리보기 → 넣기)
 """
@@ -169,9 +169,9 @@ def stats(division_id, year, promote_min=None):
         pairs = Counter((r.agent_name or f'#{r.agent_id}', r.item or '') for r in rs if (r.agent_id or r.agent_name) and r.item)
         out['kinds'][kind] = {
             'count': len(rs),
-            'early': _rate(rs, 'timing', 'before_spec'),        # 착수 전 이상
+            'early': _rate(rs, 'timing', 'before_spec'),        # 스펙 확정 전 이상
             'gate': _rate(rs, 'decision', 'gate'),              # 관문 이상
-            'confirmed': _rate(rs, 'basis', 'confirmed'),       # 실측·시험으로 확인됨
+            'confirmed': _rate(rs, 'basis', 'confirmed'),       # 실측·시험 검증됨
             'lead_median': round(statistics.median(leads), 1) if leads else None,
             'promote': [{'agent_name': a, 'item': i, 'count': n} for (a, i), n in pairs.most_common() if n >= promote_min],
         }
@@ -189,9 +189,9 @@ def template_csv():
     w = csv.writer(buf)
     w.writerow([c['label'] for c in D.REVIEW_COLUMNS])
     w.writerow(['2026-03', '설계 스펙 검토', 'Galaxy Z Fold8', '힌지 강성 스펙', '폴딩 응력 해석',
-                '착수 전 스펙 결정 때', '스펙 확정 관문', '정량 마진', '4', '힌지 두께 0.2mm 축소 결정'])
+                '스펙 확정 전', '스펙 확정 관문', '정량 마진 산출', '4', '힌지 두께 0.2mm 축소 결정'])
     w.writerow(['2026-05', '원인 분석', 'QM 이슈 #1234', '커버 글라스 크랙', '낙하 구조 해석',
-                '문제 난 뒤', '설계 변경 근거', '실측·시험으로 확인', '6', '코너 R 확대'])
+                '문제 발생 후', '설계 변경 근거', '실측·시험 검증', '6', '코너 R 확대'])
     return '﻿' + buf.getvalue()
 
 

@@ -107,7 +107,7 @@ const AxisSummary = ({ axis, s }) => {
 };
 
 // 가로가 사업부, 세로가 축 — 한 축을 한 줄로 두고 사업부를 옆으로 늘어놓아야 「이 축에서 누가 앞서나」가 바로 읽힌다(2026-08-28).
-// 검토 대장 줄도 **같은 표**에 붙는다 — 표를 따로 두면 열 폭이 달라 사업부 열과 어긋난다. 맨 오른쪽은 「전체」(평균·누계).
+// 해석 활용 기록 줄도 **같은 표**에 붙는다 — 표를 따로 두면 열 폭이 달라 사업부 열과 어긋난다. 맨 오른쪽은 「전체」(평균·누계).
 const pctText = (v) => (v == null ? '—' : `${v}%`);
 
 const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
@@ -134,7 +134,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
   const rvCell = (s) => (
     <>
       <Big>{s?.count ?? 0}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 건</span></Big>
-      <Small>착수 전 이상 {pctText(s?.early)} · 관문 이상 {pctText(s?.gate)} · 확인됨 {pctText(s?.confirmed)}</Small>
+      <Small>스펙 확정 전 이상 {pctText(s?.early)} · 관문 이상 {pctText(s?.gate)} · 검증됨 {pctText(s?.confirmed)}</Small>
       <Small>리드타임 {s?.lead_median != null ? `${s.lead_median}일` : '—'}{(s?.promote || []).length > 0 && <Pill title={s.promote.map(p => `${p.agent_name} × ${p.item} ${p.count}건`).join('\n')}>정착 후보 {s.promote.length}</Pill>}</Small>
     </>
   );
@@ -172,15 +172,15 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
             <>
               <tr>
                 <SecHead colSpan={boards.length + 2}>
-                  <strong>검토 대장</strong> <span>시험과 짝이 없는 스팟성 시뮬레이션 — 건수로 센다</span>
-                  <select value={year} onChange={e => setYear(Number(e.target.value))} aria-label="검토 대장 연도">
+                  <strong>해석 활용 기록</strong> <span>시험과 짝이 없는 스팟성 시뮬레이션 — 건수로 센다</span>
+                  <select value={year} onChange={e => setYear(Number(e.target.value))} aria-label="해석 활용 기록 연도">
                     {[...new Set([...years, new Date().getFullYear()])].sort((a, b) => b - a).map(y => <option key={y} value={y}>{y}년</option>)}
                   </select>
                 </SecHead>
               </tr>
               {review.kinds.map(k => (
                 <tr key={k.key}>
-                  <Name>{k.label}<Small>{k.key === 'cause' ? '재현 확인 · 대책까지' : '착수 전 · 관문 · 확인'}</Small></Name>
+                  <Name>{k.label}<Small>{k.key === 'cause' ? '재현 · 원인 · 대책' : '스펙 확정 전 · 관문 · 검증'}</Small></Name>
                   {boards.map(b => <td key={b.division_id}>{rvCell(rvBy[b.division_id]?.kinds?.[k.key])}</td>)}
                   <TdAll>{rvCell(rvWhole(k.key))}</TdAll>
                 </tr>

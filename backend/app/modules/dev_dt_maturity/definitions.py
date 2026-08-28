@@ -408,7 +408,7 @@ def get_stale_days():
     return int(v) if isinstance(v, (int, float)) and v > 0 else DEFAULT_STALE_DAYS
 
 
-# ── 검토 대장 — 시험과 짝이 없는 스팟성 시뮬레이션(2026-08-28) ──────────────
+# ── 해석 활용 기록 — 시험과 짝이 없는 스팟성 시뮬레이션(2026-08-28) ──────────────
 #
 # 건(件)의 속성이다 — 사다리 칸이 아니라. 같은 문구를 「이 시뮬레이션은 어느 칸」이 아니라
 # 「이번 건은 이랬다」로 쓴다. 순서는 있고(오른쪽이 앞선 것), 연간 셈은 「k 이상 %」로 낸다.
@@ -419,21 +419,21 @@ REVIEW_KINDS = [
 REVIEW_KIND_KEYS = [k['key'] for k in REVIEW_KINDS]
 REVIEW_FIELDS = {
     'timing': {'label': '시점', 'options': [
-        {'key': 'after_issue', 'label': '문제 난 뒤'},
-        {'key': 'review_meeting', 'label': '설계 검토 회의 때'},
-        {'key': 'before_spec', 'label': '착수 전 스펙 결정 때'},
+        {'key': 'after_issue', 'label': '문제 발생 후'},
+        {'key': 'review_meeting', 'label': '설계 검토 단계'},
+        {'key': 'before_spec', 'label': '스펙 확정 전'},
         {'key': 'concept', 'label': '컨셉 단계'},
     ]},
     'decision': {'label': '결정 반영', 'options': [
-        {'key': 'reference', 'label': '참고'},
+        {'key': 'reference', 'label': '참고 자료'},
         {'key': 'change_basis', 'label': '설계 변경 근거'},
         {'key': 'gate', 'label': '스펙 확정 관문'},
-        {'key': 'rule', 'label': '규칙으로 정착'},
+        {'key': 'rule', 'label': '설계 규칙 정착'},
     ]},
     'basis': {'label': '판정 근거', 'options': [
-        {'key': 'trend', 'label': '경향'},
-        {'key': 'margin', 'label': '정량 마진'},
-        {'key': 'confirmed', 'label': '실측·시험으로 확인'},
+        {'key': 'trend', 'label': '경향 비교'},
+        {'key': 'margin', 'label': '정량 마진 산출'},
+        {'key': 'confirmed', 'label': '실측·시험 검증'},
     ]},
 }
 REVIEW_COLUMNS = [

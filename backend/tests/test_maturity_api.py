@@ -569,7 +569,7 @@ def test_검토_대장은_건으로_쌓고_연간으로_센다(client, auth, wor
     assert r1['month'] == '2026-03-01' and r1['agent_name'] == '폴딩 응력 해석'
     add({'month': '2026-04', 'kind': 'spec', 'item': '힌지 강성', 'agent_name': '폴딩 응력 해석', 'timing': 'concept', 'decision': 'rule', 'basis': 'confirmed', 'lead_days': 2})
     add({'month': '2026-05', 'kind': 'spec', 'item': '힌지 강성', 'agent_name': '폴딩 응력 해석', 'timing': 'after_issue', 'decision': 'reference'})
-    add({'month': '2026-06', 'kind': 'cause', 'item': '크랙', 'agent_name': '이름만 있는 해석', 'timing': 'after_issue', 'decision': 'change_basis', 'basis': '실측·시험으로 확인', 'lead_days': 6})
+    add({'month': '2026-06', 'kind': 'cause', 'item': '크랙', 'agent_name': '이름만 있는 해석', 'timing': 'after_issue', 'decision': 'change_basis', 'basis': '실측·시험 검증', 'lead_days': 6})
     add({'month': '2099-01', 'kind': 'spec', 'agent_name': 'x'}, expect=400)                       # 미래
     add({'month': '2026-01', 'kind': 'spec'}, expect=400)                                          # 시뮬레이션 없음
     add({'month': '2026-01', 'kind': 'spec', 'agent_name': 'x', 'timing': '이상한값'}, expect=400)
@@ -602,13 +602,13 @@ def test_검토_대장_CSV_는_틀_그대로_붙여_넣는다(client, auth, worl
     res = client.get(f'{BASE}/reviews/template', headers=auth(mx_user))
     assert res.status_code == 200 and res.data.decode('utf-8-sig').startswith('연-월,종류,대상,항목,시뮬레이션')
     text = '연-월\t종류\t대상\t항목\t시뮬레이션\t시점\t결정 반영\t판정 근거\t리드타임(일)\t메모\n' \
-           '2026-03\t설계 스펙 검토\tFold8\t힌지 강성\t폴딩 응력 해석\t착수 전 스펙 결정 때\t스펙 확정 관문\t정량 마진\t4\t두께 축소\n' \
-           '2026-04\t원인 분석\t#1234\t크랙\t낙하 구조 해석\t문제 난 뒤\t설계 변경 근거\t\t\t\n' \
+           '2026-03\t설계 스펙 검토\tFold8\t힌지 강성\t폴딩 응력 해석\t스펙 확정 전\t스펙 확정 관문\t정량 마진 산출\t4\t두께 축소\n' \
+           '2026-04\t원인 분석\t#1234\t크랙\t낙하 구조 해석\t문제 발생 후\t설계 변경 근거\t\t\t\n' \
            '2099-01\t설계 스펙 검토\t\t\t해석\t\t\t\t\t\n'
     res = client.post(f'{BASE}/reviews/import/preview', json={'division_id': mx, 'text': text}, headers=auth(mx_user))
     plan = res.get_json()['data']
     assert plan['count'] == 2 and len(plan['problems']) == 1 and plan['problems'][0]['line'] == 4
-    assert plan['items'][0]['payload']['timing'] == '착수 전 스펙 결정 때' and plan['items'][0]['agent_known'] is False
+    assert plan['items'][0]['payload']['timing'] == '스펙 확정 전' and plan['items'][0]['agent_known'] is False
     res = client.post(f'{BASE}/reviews/import/apply', json={'division_id': mx, 'text': text}, headers=auth(mx_user))
     assert res.status_code == 400                                                                   # 문제 줄이 있으면 안 넣는다
     good = '\n'.join(text.split('\n')[:3]) + '\n'

@@ -695,7 +695,7 @@ def set_defect_cell(actor, pair_id, axis):
         return _crashed()
 
 
-# ── 검토 대장 (2026-08-28) ─────────────────────────────────────────────────
+# ── 해석 활용 기록 (2026-08-28) ─────────────────────────────────────────────────
 from . import reviews as R                          # noqa: E402
 from .models import MaturityReviewCase              # noqa: E402
 

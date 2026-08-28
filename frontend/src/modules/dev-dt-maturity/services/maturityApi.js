@@ -59,7 +59,7 @@ export const maturityApi = {
     request(`/pairs/${pairId}/assessments/${axis}`, json('PUT', payload)),
 
   templateUrl: (divisionId) => `${API_BASE}/import/template?division_id=${divisionId}`,
-  // 검토 대장 — 스팟성 시뮬레이션 건(件)
+  // 해석 활용 기록 — 스팟성 시뮬레이션 건(件)
   listReviews: (divisionId, year, kind) => request(`/reviews?division_id=${divisionId}&year=${year}${kind ? `&kind=${kind}` : ''}`),
   reviewYears: (divisionId) => request(`/reviews/years?division_id=${divisionId}`),
   reviewStats: (divisionId, year) => request(`/reviews/stats?division_id=${divisionId}&year=${year}`),

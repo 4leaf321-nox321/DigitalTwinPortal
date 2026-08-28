@@ -132,7 +132,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         <Tabs>
           <Tab $on={tab === 'board'} onClick={() => patch({ tab: null })}>성숙도</Tab>
           <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
-          <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">검토 대장</Tab>
+          <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">해석 활용 기록</Tab>
         </Tabs>
       </StickyBar>
       <Main $fill>
