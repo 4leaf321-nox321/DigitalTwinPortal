@@ -223,7 +223,7 @@ def test_사업부_없이는_판을_못_열고_전체는_사업부마다_묶어_
 def test_현상_태그는_그_사업부_사전에_쌓인다(client, auth, world, mx_user, office):
     _, _, p = _pair(client, auth, mx_user, world['mx'])
     _assess(client, auth, mx_user, p['id'], 'modeling',
-            {'rung': 'defect', 'note': '휨 예측 확인', 'evidence': {'phenomena': ['휨', '깨짐', '휨']}})
+            {'flags': ['performance'], 'note': '휨 예측 확인', 'evidence': {'phenomena': ['휨', '깨짐', '휨']}})
     res = client.get(f'{BASE}/pairs/{p["id"]}', headers=auth(mx_user))
     assert res.get_json()['data']['phenomena'] == ['휨', '깨짐']
     res = client.get(f'{BASE}/settings', headers=auth(office))
@@ -491,3 +491,31 @@ def test_시뮬레이션의_불량_유형은_도구처럼_인스턴스_목록이
     assert res.status_code == 200 and res.get_json()['data']['defect_types'] == ['접점 마모']
     res = client.put(f'{BASE}/agents/{a["id"]}', json={'name': '열 해석 2'}, headers=auth(mx_user))
     assert res.get_json()['data']['defect_types'] == ['접점 마모']    # 안 보내면 그대로
+
+
+def test_모델링_수준은_불량_유형마다_시험_시장_열을_켠다(client, auth, world, mx_user):
+    s = client.post(f'{BASE}/subjects', json={'division_id': world['mx'].id, 'name': '낙하 시험'}, headers=auth(mx_user)).get_json()['data']
+    a = client.post(f'{BASE}/agents', json={'division_id': world['mx'].id, 'name': '구조 해석', 'defect_types': ['크랙', '변색']}, headers=auth(mx_user)).get_json()['data']
+    p = client.post(f'{BASE}/pairs', json={'subject_id': s['id'], 'agent_id': a['id']}, headers=auth(mx_user)).get_json()['data']
+    out = _assess(client, auth, mx_user, p['id'], 'modeling', {
+        'flags': ['performance'], 'note': '낙하 3건 비교',
+        'evidence': {'defects': {'크랙': {'test': '2025-03', 'market': None}, '변색': {'test': True}, '없는유형': {'test': '2025-01'}, '접점': {}}}})
+    m = out['data']['assessments']['modeling']
+    assert m['flags'] == ['performance']
+    assert m['defects']['크랙'] == {'test': '2025-03'}                     # None 열은 빠진다
+    assert 'test' in m['defects']['변색'] and len(m['defects']['변색']['test']) == 7   # True 는 이번 달
+    assert '접점' not in m['defects'] and '없는유형' in m['defects']     # 켠 게 없는 유형은 버림 · 모르는 유형은 남되 안 센다
+    assert m['summary'] == {'test': 2, 'market': 0, 'total': 2} and m['rung'] == 'test_all' and m['rung_index'] == 4
+    assert out['data']['changes'][0]['after'] == 'performance|t3/m0'     # 이력엔 켠 칸 수(모르는 유형 포함)
+    # 시장 열을 켜면 5
+    out = _assess(client, auth, mx_user, p['id'], 'modeling', {
+        'flags': ['performance'], 'note': 'x', 'evidence': {'defects': {'크랙': {'test': '2025-03', 'market': '2026-01'}}}})
+    assert out['data']['assessments']['modeling']['rung_index'] == 5
+    # 미래 달은 거절
+    _assess(client, auth, mx_user, p['id'], 'modeling', {'flags': [], 'note': 'x', 'evidence': {'defects': {'크랙': {'test': '2099-01'}}}}, expect=400)
+    # 불량 유형이 없는 시뮬레이션에 표를 보내면 거절, 바탕만은 된다
+    b = client.post(f'{BASE}/agents', json={'division_id': world['mx'].id, 'name': '열 해석'}, headers=auth(mx_user)).get_json()['data']
+    p2 = client.post(f'{BASE}/pairs', json={'subject_id': s['id'], 'agent_id': b['id']}, headers=auth(mx_user)).get_json()['data']
+    _assess(client, auth, mx_user, p2['id'], 'modeling', {'flags': ['geometry'], 'note': 'x', 'evidence': {'defects': {'크랙': {'test': '2025-03'}}}}, expect=400)
+    out = _assess(client, auth, mx_user, p2['id'], 'modeling', {'flags': ['geometry'], 'note': 'x'})
+    assert out['data']['assessments']['modeling']['rung_index'] == 1

@@ -3,6 +3,24 @@
 // ⚠️ 축은 순서형이다. 평균을 내지 않는다 — 분포와 최고 칸만 센다(PLAN 7-4).
 
 /** 칸 색. 서열(index)이 높을수록 진하다. 미평가는 회색, 낡음은 테두리로 따로. */
+/** 켤 수 있는 항목의 정의 — 묶음 축은 첫 칸을 뺀 칸들, 표(matrix) 축은 바탕. */
+export const flagDefs = (axis) => (axis.kind === 'matrix' ? (axis.base || []) : axis.rungs.slice(1));
+
+/** 표 축을 판의 서열 하나로 — 서버 matrix_level 과 같은 셈(편집 중 미리보기용). */
+export const matrixLevel = (axis, flags, defects, names) => {
+  let level = 0;
+  if ((flags || []).includes('geometry')) level = 1;
+  if ((flags || []).includes('performance')) level = 2;
+  const list = names || [];
+  const d = defects || {};
+  const test = list.filter(n => d[n]?.test).length;
+  const market = list.filter(n => d[n]?.market).length;
+  if (test > 0) level = Math.max(level, 3);
+  if (list.length && test === list.length) level = Math.max(level, 4);
+  if (market > 0) level = Math.max(level, 5);
+  return { level, test, market, total: list.length };
+};
+
 export const RUNG_COLORS = ['#dbeafe', '#93c5fd', '#3b82f6', '#1d4ed8', '#1e3a8a'];
 
 export const colorFor = (rungIndex, rungCount) => {
@@ -116,12 +134,13 @@ export const reachedDates = (changes, axis) => {
   const rows = (changes || []).filter(c => c.axis === axis.key)
     .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id));
   const order = axis.rungs.map(r => r.key);
+  const flagKeys = flagDefs(axis).map(r => r.key);
   rows.forEach(c => {
     const marker = c.before == null && c.note === REACHED_NOTE;
-    if (axis.kind === 'set') {
-      const on = String(c.after || '').split(',').filter(k => k && k !== order[0]);
+    if (axis.kind === 'set' || axis.kind === 'matrix') {
+      const on = String(c.after || '').split('|')[0].split(',').filter(k => k && k !== order[0]);
       if (marker) { on.forEach(k => { out[k] = c.created_at; }); return; }
-      order.slice(1).forEach(k => {
+      flagKeys.forEach(k => {
         if (on.includes(k)) { if (!out[k]) out[k] = c.created_at; } else delete out[k];
       });
       return;

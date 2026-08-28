@@ -242,6 +242,10 @@ def assess(pair, axis_key, payload, actor):
 
     row = MaturityAssessment.query.filter_by(pair_id=pair.id, axis=axis_key).first()
     before = _mark(row) if row else None
+    if axis['kind'] == 'matrix' and not (pair.agent and pair.agent.defect_types):
+        raw_defects = (payload.get('evidence') or {}).get('defects') if isinstance(payload.get('evidence'), dict) else None
+        if raw_defects:
+            raise Refused('이 시뮬레이션에 불량 유형이 없습니다 — 시뮬레이션 관리에서 먼저 넣으세요.')
 
     if axis['kind'] == 'value':
         if 'rung' in payload and payload.get('rung') is not None:
@@ -254,7 +258,7 @@ def assess(pair, axis_key, payload, actor):
         if not (0 <= value <= 100):
             raise Refused('값은 0 에서 100 사이입니다.')
         rung = None
-    elif axis['kind'] == 'set':
+    elif axis['kind'] in ('set', 'matrix'):
         # 묶음 — flags(목록)로 받는다. rung 으로 와도 받는다(옛 화면·씨앗: 'pre,run' 또는 항목 하나).
         flags = payload.get('flags')
         if flags is None:
@@ -304,11 +308,17 @@ def assess(pair, axis_key, payload, actor):
 
 
 def _mark(row):
-    """이력에 적는 한 칸 — rung 축은 칸 key, value 축은 값."""
+    """이력에 적는 한 칸 — rung 축은 칸 key, value 축은 값, matrix 축은 바탕|t시험/m시장."""
     if row is None:
         return None
     if row.value is not None:
         return f'{row.value:g}'
+    ev = row.evidence if isinstance(row.evidence, dict) else {}
+    if 'defects' in ev:
+        cells = list((ev.get('defects') or {}).values())
+        t = sum(1 for c in cells if isinstance(c, dict) and c.get('test'))
+        m = sum(1 for c in cells if isinstance(c, dict) and c.get('market'))
+        return f'{row.rung}|t{t}/m{m}'
     return row.rung
 
 
@@ -323,6 +333,25 @@ def _clean_evidence(axis, raw):
         v = raw[key]
         if key in ('phenomena', 'product_families'):
             out[key] = _clean_list(v)
+        elif key == 'defects':
+            # {유형: {test: '연-월'|None, market: '연-월'|None}} — 켠 열이 하나도 없는 유형은 버린다
+            if not isinstance(v, dict):
+                continue
+            cols = [c['key'] for c in axis.get('columns', [])]
+            kept = {}
+            for name, cells in v.items():
+                if not isinstance(name, str) or not name.strip() or not isinstance(cells, dict):
+                    continue
+                row = {}
+                for c in cols:
+                    m = cells.get(c)
+                    if m in (None, '', False):
+                        continue
+                    when = parse_month(m if isinstance(m, str) else None) if m is not True else datetime.utcnow()
+                    row[c] = when.strftime('%Y-%m')
+                if row:
+                    kept[name.strip()] = row
+            out[key] = kept
         elif key in ('compared_tests', 'tests_saved_per_year'):
             try:
                 out[key] = int(v)
@@ -394,6 +423,18 @@ def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
             d['rung'] = D.rung_for_value(a.value, rule['thresholds'], rule['boundary'])
         if axis['kind'] == 'set':
             d['flags'] = D.set_flags(axis, a.rung) or []
+        if axis['kind'] == 'matrix':
+            d['flags'] = D.set_flags(axis, a.rung) or []
+            ev = a.evidence if isinstance(a.evidence, dict) else {}
+            names = list((pair.agent.defect_types or []) if pair.agent else [])
+            level, summary = D.matrix_level(axis, a.rung, ev.get('defects'), names)
+            d['rung'] = D.rung_keys(axis)[level]
+            d['defects'] = ev.get('defects') or {}
+            d['summary'] = summary
+            d['rung_index'] = level
+            d['stale'] = bool(a.assessed_at and a.assessed_at < cutoff)
+            out_axes[axis['key']] = d
+            continue
         d['rung_index'] = D.rung_index(axis, d['rung'])
         d['stale'] = bool(a.assessed_at and a.assessed_at < cutoff)
         out_axes[axis['key']] = d
@@ -731,12 +772,12 @@ def set_reached(pair, axis_key, rung_key, month, actor):
     cur = MaturityAssessment.query.filter_by(pair_id=pair.id, axis=axis_key).first()
     if cur is None:
         raise Refused('먼저 이 축을 매기세요 — 매기지 않은 칸의 시점은 뜻이 없습니다.')
-    if axis['kind'] == 'set':
+    if axis['kind'] in ('set', 'matrix'):
         if rung_key not in D.set_flag_keys(axis):
             raise Refused('이 축에 없는 항목입니다.')
         if rung_key not in (D.set_flags(axis, cur.rung) or []):
             raise Refused('켜지 않은 항목의 시점은 적을 수 없습니다.')
-        hit = lambda c: rung_key in str(c.after or '').split(',')     # noqa: E731
+        hit = lambda c: rung_key in str(c.after or '').split('|')[0].split(',')     # noqa: E731
     else:
         keys = D.rung_keys(axis)
         if rung_key not in keys:

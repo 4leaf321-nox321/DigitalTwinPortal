@@ -83,7 +83,9 @@ const AxisCell = ({ a, axis, dense, onClick }) => {
     : axis.kind === 'set' ? (idx === 0 ? axis.rungs[0].label : `${idx}/${total}`)
     : axis.rungs[idx]?.label;
   const flagsText = axis.kind === 'set' && a?.flags?.length
-    ? axis.rungs.filter(r => a.flags.includes(r.key)).map(r => r.label).join(' · ') : null;
+    ? axis.rungs.filter(r => a.flags.includes(r.key)).map(r => r.label).join(' · ')
+    : axis.kind === 'matrix' && a?.summary
+      ? `${label} — 시험 ${a.summary.test}/${a.summary.total} · 시장 ${a.summary.market}/${a.summary.total}` : null;
   return (
     <Cell $dense={dense} $color={color} $dark={isDark(color)} $stale={a?.stale}
           title={`${axis.label}: ${flagsText || label}${a?.stale ? ' · 낡음' : ''}${a?.note ? ` — ${a.note}` : ''}`}

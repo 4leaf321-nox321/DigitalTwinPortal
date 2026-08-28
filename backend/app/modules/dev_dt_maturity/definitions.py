@@ -90,19 +90,28 @@ AXES = {
             ],
         },
         {
-            'key': 'modeling', 'label': '모델링 수준', 'kind': 'set',
-            'question': '무엇을 재현하는가',
-            'evidence': ['phenomena'], 'evidence_label': '재현 가능한 현상 태그',
-            # 묶음이다(2026-08-28) — 형상·거동·원인 규명·불량 재현들은 서로 따로 되는 일이라 각각 켠다.
-            # 첫 칸 「없음」은 안 보인다(hide_empty). ⚠️ key 는 고정(이력이 묶여 있다).
+            'key': 'modeling', 'label': '모델링 수준', 'kind': 'matrix',
+            'question': '어느 불량까지 재현하는가',
+            'evidence': ['phenomena', 'defects'], 'evidence_label': '재현 가능한 현상 태그',
+            # 두 층이다(2026-08-28): 바탕(형상·거동)은 시뮬레이션 전체의 토글, 불량 재현은 **시뮬레이션의
+            # 불량 유형마다** 열(시험·시장)을 켠다 — evidence.defects = {유형: {test: '2025-03', market: None}}.
+            # rungs 는 판에 보이는 **서열**이다(matrix_level 이 접는다). ⚠️ base·columns 의 key 는 고정.
             'hide_empty': True,
-            'rungs': [
-                {'key': 'none', 'label': '없음', 'description': '아직 아무것도 재현하지 않는다'},
+            'base': [
                 {'key': 'geometry', 'label': '형상 재현', 'description': '치수·재질·경계 조건이 실물이다'},
                 {'key': 'performance', 'label': '거동 재현', 'description': '변형·온도·유동 같은 물리 거동이 시험과 같이 나온다'},
-                {'key': 'condition', 'label': '원인 규명', 'description': '왜 나는지 — 기여 인자와 경로를 시뮬레이션으로 가려낸다'},
-                {'key': 'defect', 'label': '신뢰성 시험 불량 재현', 'description': '신뢰성 시험에서 난 그 불량이 시뮬레이션에서도 난다'},
-                {'key': 'multi', 'label': '시장 불량 재현', 'description': '시장에서 난 불량(사용 조건·누적 이력)이 시뮬레이션에서도 난다'},
+            ],
+            'columns': [
+                {'key': 'test', 'label': '신뢰성 시험 불량 재현', 'short': '시험', 'description': '신뢰성 시험에서 난 그 불량이 시뮬레이션에서도 난다'},
+                {'key': 'market', 'label': '시장 불량 재현', 'short': '시장', 'description': '시장에서 난 불량(사용 조건·누적 이력)이 시뮬레이션에서도 난다'},
+            ],
+            'rungs': [
+                {'key': 'none', 'label': '없음', 'description': '아직 아무것도 재현하지 않는다'},
+                {'key': 'geometry', 'label': '형상 재현', 'description': '형상만 재현한다'},
+                {'key': 'performance', 'label': '거동 재현', 'description': '물리 거동까지 재현한다'},
+                {'key': 'test_some', 'label': '일부 불량 시험 재현', 'description': '불량 유형 일부의 시험 불량을 재현한다'},
+                {'key': 'test_all', 'label': '전 유형 시험 재현', 'description': '모든 불량 유형의 시험 불량을 재현한다'},
+                {'key': 'market', 'label': '시장 불량까지', 'description': '시장 불량도 재현한다'},
             ],
         },
         {
@@ -142,7 +151,7 @@ AXES = {
     'design_automation': [],
     'digital_thread': [],
 }
-AXIS_KINDS = {'rung', 'value', 'set'}
+AXIS_KINDS = {'rung', 'value', 'set', 'matrix'}   # matrix: 바탕 토글 + 불량 유형 × 열 표(모델링 수준)
 
 
 def sector_is_active(sector_key):
@@ -174,9 +183,39 @@ def rung_index(axis, rung_key):
     return keys.index(rung_key) if rung_key in keys else None
 
 
+def flag_defs(axis):
+    """켤 수 있는 항목의 정의 — set 축은 첫 칸을 뺀 칸들, matrix 축은 바탕(base)."""
+    return axis['base'] if axis.get('kind') == 'matrix' else axis['rungs'][1:]
+
+
 def set_flag_keys(axis):
-    """set 축에서 켤 수 있는 항목들 — 첫 칸(수동)을 뺀 나머지."""
-    return rung_keys(axis)[1:]
+    """set 축에서 켤 수 있는 항목들 — 첫 칸(수동)을 뺀 나머지. matrix 축은 바탕 항목들."""
+    return [r['key'] for r in flag_defs(axis)]
+
+
+def matrix_level(axis, rung, defects, defect_types):
+    """matrix 축을 판의 **서열 하나**로 접는다 — (level, {'test','market','total'}).
+
+      0 없음 → 1 형상 → 2 거동 → 3 일부 유형의 시험 불량 재현 → 4 전 유형 시험 재현 → 5 시장 불량까지
+    불량 유형은 **시뮬레이션의 목록**(agent.defect_types)이 기준이다 — 지운 유형의 기록은 안 센다.
+    """
+    flags = set_flags(axis, rung) or []
+    level = 0
+    if 'geometry' in flags:
+        level = 1
+    if 'performance' in flags:
+        level = 2
+    names = [d for d in (defect_types or []) if isinstance(d, str)]
+    defects = defects if isinstance(defects, dict) else {}
+    test = sum(1 for d in names if (defects.get(d) or {}).get('test'))
+    market = sum(1 for d in names if (defects.get(d) or {}).get('market'))
+    if test > 0:
+        level = max(level, 3)
+    if names and test == len(names):
+        level = max(level, 4)
+    if market > 0:
+        level = max(level, 5)
+    return level, {'test': test, 'market': market, 'total': len(names)}
 
 
 def set_flags(axis, rung_key):

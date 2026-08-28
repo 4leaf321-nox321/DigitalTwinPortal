@@ -119,3 +119,26 @@ test('「시점 적기」 이력은 그 칸만 적고 다른 칸을 내리지 �
   assert.equal(reachedDates(changes, SET_AXIS).pre, at('2025-05'));
   assert.equal(reachedDates(changes, SET_AXIS).run, at('2024-02'));      // 적은 시점이 이어진다
 });
+
+// ── matrixLevel: 바탕 토글 + 불량 유형 표 → 서열 하나 (서버 matrix_level 과 같은 셈) ──
+import { matrixLevel, flagDefs } from './board.js';
+
+const MATRIX_AXIS = { key: 'modeling', kind: 'matrix', base: [{ key: 'geometry' }, { key: 'performance' }],
+  columns: [{ key: 'test' }, { key: 'market' }], rungs: [{ key: 'none' }, { key: 'geometry' }, { key: 'performance' }, { key: 'test_some' }, { key: 'test_all' }, { key: 'market' }] };
+
+test('matrixLevel — 없음 0 · 형상 1 · 거동 2 · 일부 시험 3 · 전 유형 4 · 시장 5', () => {
+  const names = ['크랙', '변색'];
+  assert.equal(matrixLevel(MATRIX_AXIS, [], {}, names).level, 0);
+  assert.equal(matrixLevel(MATRIX_AXIS, ['geometry'], {}, names).level, 1);
+  assert.equal(matrixLevel(MATRIX_AXIS, ['geometry', 'performance'], {}, names).level, 2);
+  assert.equal(matrixLevel(MATRIX_AXIS, ['performance'], { 크랙: { test: '2025-03' } }, names).level, 3);
+  assert.deepEqual(matrixLevel(MATRIX_AXIS, ['performance'], { 크랙: { test: '2025-03' }, 변색: { test: '2025-08' } }, names), { level: 4, test: 2, market: 0, total: 2 });
+  assert.equal(matrixLevel(MATRIX_AXIS, [], { 크랙: { test: '2025-03', market: '2026-01' } }, names).level, 5);
+  assert.equal(matrixLevel(MATRIX_AXIS, [], { 없는유형: { test: '2025-03' } }, names).level, 0);   // 지운 유형은 안 센다
+  assert.equal(matrixLevel(MATRIX_AXIS, ['performance'], {}, []).level, 2);                   // 유형이 없으면 바탕까지만
+});
+
+test('flagDefs — 묶음 축은 첫 칸을 뺀 칸들, 표 축은 바탕', () => {
+  assert.deepEqual(flagDefs(MATRIX_AXIS).map(r => r.key), ['geometry', 'performance']);
+  assert.deepEqual(flagDefs(SET_AXIS).map(r => r.key), ['pre', 'run', 'post']);
+});

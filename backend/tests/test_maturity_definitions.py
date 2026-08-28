@@ -51,12 +51,22 @@ def test_자동화는_묶음이다_서열은_켠_개수():
     assert D.rung_index(axis, 'robot') is None
 
 
-def test_모델링_수준도_묶음이다_원인_규명이_셋째():
+def test_모델링_수준은_바탕_토글과_불량_유형_표를_서열_하나로_접는다():
     axis = D.axis_of('simulation', 'modeling')
-    assert axis['kind'] == 'set' and axis['hide_empty'] is True
-    assert D.set_flag_keys(axis) == ['geometry', 'performance', 'condition', 'defect', 'multi']
-    assert D.set_flags(axis, 'defect') == ['defect']            # 옛 칸 하나짜리 값도 그대로 읽힌다
-    assert D.rung_index(axis, 'geometry,multi') == 2
+    assert axis['kind'] == 'matrix' and axis['hide_empty'] is True
+    assert D.set_flag_keys(axis) == ['geometry', 'performance']
+    assert [c['key'] for c in axis['columns']] == ['test', 'market']
+    assert D.set_rung(axis, ['performance']) == 'performance'
+    names = ['크랙', '변색']
+    lv = lambda rung, defects: D.matrix_level(axis, rung, defects, names)[0]   # noqa: E731
+    assert lv('none', {}) == 0
+    assert lv('geometry', {}) == 1
+    assert lv('geometry,performance', {}) == 2
+    assert lv('performance', {'크랙': {'test': '2025-03'}}) == 3
+    assert lv('performance', {'크랙': {'test': '2025-03'}, '변색': {'test': '2025-08'}}) == 4
+    assert lv('performance', {'크랙': {'test': '2025-03', 'market': '2026-01'}}) == 5
+    assert lv('none', {'없는유형': {'test': '2025-03'}}) == 0                    # 지운 유형은 안 센다
+    assert D.matrix_level(axis, 'performance', {'크랙': {'test': '2025-03'}}, names)[1] == {'test': 1, 'market': 0, 'total': 2}
 
 
 def test_시험_대체도_묶음이다_오른쪽일수록_앞선_것():

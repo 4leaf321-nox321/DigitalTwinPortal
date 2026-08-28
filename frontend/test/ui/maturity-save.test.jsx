@@ -16,13 +16,17 @@ import ItemManagerModal from '../../src/modules/dev-dt-maturity/components/List/
 const AXES = [
   { key: 'accuracy', label: '정확도', kind: 'value', question: '맞는가', evidence: ['compared_tests', 'error_pct'],
     rungs: [{ key: 'trend', label: '경향 일치' }, { key: 'quantitative', label: '원인 분석' }, { key: 'correlated', label: '현상 재현' }] },
+  { key: 'modeling', label: '모델링 수준', kind: 'matrix', question: '어느 불량까지', evidence: ['phenomena', 'defects'], hide_empty: true,
+    base: [{ key: 'geometry', label: '형상 재현' }, { key: 'performance', label: '거동 재현' }],
+    columns: [{ key: 'test', label: '신뢰성 시험 불량 재현' }, { key: 'market', label: '시장 불량 재현' }],
+    rungs: [{ key: 'none', label: '없음' }, { key: 'geometry', label: '형상 재현' }, { key: 'performance', label: '거동 재현' }, { key: 'test_some', label: '일부 불량 시험 재현' }, { key: 'test_all', label: '전 유형 시험 재현' }, { key: 'market', label: '시장 불량까지' }] },
   { key: 'automation', label: '자동화', kind: 'set', question: '돌아가는가', evidence: ['hours_per_run'],
     rungs: [{ key: 'manual', label: '수동' }, { key: 'pre', label: '전처리 자동' }, { key: 'run', label: '실행 자동' }, { key: 'post', label: '후처리 자동' }] },
   { key: 'scope', label: '적용 범위', kind: 'rung', question: '어디까지', evidence: [],
     rungs: [{ key: 'issue', label: '이슈 모델' }, { key: 'basic', label: '기본 모델' }, { key: 'all', label: '전 제품군' }] },
 ];
 const PAIR = {
-  id: 101, subject_id: 1, agent_id: 10, subject: { name: '낙하 시험', product_families: [] }, agent: { name: '구조 해석', tools: [] },
+  id: 101, subject_id: 1, agent_id: 10, subject: { name: '낙하 시험', product_families: [] }, agent: { name: '구조 해석', tools: [], defect_types: ['크랙', '변색'] },
   assessments: {
     automation: { rung: 'pre', flags: ['pre'], rung_index: 1, stale: false, note: '스크립트', evidence: {}, assessed_at: '2026-01-01T00:00:00', assessed_by_name: '홍' },
     scope: { rung: 'basic', rung_index: 1, stale: false, note: '기본만', evidence: {}, assessed_at: '2026-01-01T00:00:00', assessed_by_name: '홍' },
@@ -41,6 +45,7 @@ export default async function run() {
       let idx, rung, flags;
       if (a.kind === 'value') { idx = body.value >= 90 ? 2 : body.value >= 70 ? 1 : 0; rung = a.rungs[idx].key; }
       else if (a.kind === 'set') { flags = a.rungs.slice(1).map(r => r.key).filter(k => body.flags.includes(k)); idx = flags.length; rung = flags.join(',') || 'manual'; }
+      else if (a.kind === 'matrix') { flags = a.base.map(r => r.key).filter(k => body.flags.includes(k)); idx = flags.length; rung = a.rungs[idx].key; }
       else { idx = a.rungs.findIndex(r => r.key === body.rung); rung = body.rung; }
       return { ...PAIR,
         assessments: { ...PAIR.assessments, [axis]: { rung, flags, rung_index: idx, value: body.value ?? null, note: body.note, evidence: body.evidence || {}, assessed_at: '2026-08-28T00:00:00', assessed_by_name: '나', stale: false } },
@@ -101,6 +106,20 @@ export default async function run() {
     const reachedCall = calls.find(c => c.url.includes('/reached/scope/issue'));
     say(!!reachedCall && reachedCall.body.month === '2024-09', `②-2 PUT reached 가 감: ${JSON.stringify(reachedCall?.body)}`);
     say(html().includes('2024-09'), '②-2 사다리가 그 달을 그림');
+
+    // ②-3 모델링 수준 — 바탕 토글 + 불량 유형 표
+    calls.length = 0;
+    say(html().includes('크랙') && html().includes('변색') && !!document.querySelector('[aria-label="크랙 신뢰성 시험 불량 재현"]'), '②-3 시뮬레이션의 불량 유형이 표의 행으로 보임');
+    await click(byText('[role="button"]', '거동 재현'));
+    const cellBtn = document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]');
+    await click(cellBtn); await settle();
+    say(cellBtn.getAttribute('aria-pressed') === 'true' && !!document.querySelector('input[aria-label="크랙 신뢰성 시험 불량 재현 시점"]'), '②-3 표의 칸을 누르면 켜지고 달 입력이 붙음');
+    say(html().includes('시험 1/2'), '②-3 머리 요약이 「시험 1/2」로 바뀜');
+    await type(document.querySelector('input[placeholder^="근거"]'), '낙하 3건 비교');
+    await click(byText('button', '저장')); await settle();
+    const putM = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/modeling'));
+    say(!!putM && JSON.stringify(putM.body.flags) === '["performance"]' && !!putM.body.evidence?.defects?.['크랙']?.test && !putM.body.evidence?.defects?.['크랙']?.market,
+        `②-3 PUT 에 바탕과 표가 같이 감: ${JSON.stringify(putM?.body?.evidence?.defects)}`);
 
     // ③ 정확도 값
     calls.length = 0;

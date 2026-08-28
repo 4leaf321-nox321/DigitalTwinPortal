@@ -52,6 +52,36 @@ PEOPLE = ['김해석', '박시험', '이구조', '최열유동', '정데이터']
 # 시뮬레이션: (이름, 종류, 모델종류, {축: (칸|값, 근거, 증빙, 며칠 전)}, [이력 (며칠 전, 전, 후, 근거)…])
 # 축 key 는 definitions.AXES['simulation'] 의 것. 값이 없는 축은 미평가로 남긴다.
 
+# 시뮬레이션의 불량 유형 — 종류(kind)별로 그럴듯한 것들
+DEFECTS_BY_KIND = {
+    '구조': ['크랙', '파손', '영구 변형'], '열': ['변색', '과열', '열화'], '유동': ['소음', '누수'],
+    '전자기': ['오동작', '노이즈'], '진동': ['공진 파손', '체결 풀림'], '음향': ['이음', '떨림'],
+    '열구조': ['열변형', '납 균열'], '동역학': ['걸림', '마모'], '광학': ['얼룩', '빛샘'],
+    '공차': ['간섭', '단차'], '시스템': ['오동작'], 'ML': ['오판정'],
+}
+
+
+def _modeling_seed(val, defect_types, evidence, days):
+    """옛 묶음 값('geometry,performance,defect,multi')을 바탕 + 불량 유형 표로 옮긴다."""
+    parts = set(str(val or '').split(','))
+    base = [k for k in ('geometry', 'performance') if k in parts]
+    names = list(defect_types or [])
+    defects = {}
+    when = _days_ago(days).strftime('%Y-%m')
+    if 'condition' in parts:
+        for n in names:
+            defects[n] = {'test': when}
+    elif 'defect' in parts:
+        for n in names[: max(1, (len(names) + 1) // 2)]:
+            defects[n] = {'test': when}
+    if 'multi' in parts and names:
+        defects.setdefault(names[0], {'test': when})['market'] = when
+    ev = dict(evidence or {})
+    if defects:
+        ev['defects'] = defects
+    return (','.join(base) or 'none'), ev
+
+
 def _s(name, kind, model, assess, history=()):
     return (name, kind, model, assess, list(history))
 
@@ -372,7 +402,8 @@ def main():
                     agent = agents.get(sname)
                     if agent is None:
                         agent = MaturityAgent(division_id=div.id, sector='simulation', name=sname, kind=kind, model_kind=model,
-                                              tools=TOOLS_BY_KIND.get(kind, []), department_id=(dep.id if dep else None))
+                                              tools=TOOLS_BY_KIND.get(kind, []), defect_types=DEFECTS_BY_KIND.get(kind, []),
+                                              department_id=(dep.id if dep else None))
                         db.session.add(agent); db.session.flush(); agents[sname] = agent; counts['agents'] += 1
                     pair = MaturityPair(subject_id=subject.id, agent_id=agent.id)
                     db.session.add(pair); db.session.flush(); counts['pairs'] += 1
@@ -383,6 +414,9 @@ def main():
                             if val is None:
                                 continue                       # 값 없음 = 미검증(미평가)
                             rung, value = None, float(val)
+                        elif axis['kind'] == 'matrix':
+                            rung, value = None, None
+                            rung, evidence = _modeling_seed(val, agent.defect_types, evidence, days)
                         else:
                             rung, value = val, None
                         a = MaturityAssessment(pair_id=pair.id, axis=axis_key, rung=rung, value=value,
