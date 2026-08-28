@@ -21,11 +21,12 @@ const Panel = styled.div`
   background: white; border-radius: 0.75rem; width: min(980px, 100%); max-height: 92vh;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden;
 `;
+// 머리 — 옅은 파랑 띠와 왼쪽 굵은 띠. 축 카드보다 한 단계 짙어 「이 판의 제목」이 보인다(2026-08-28).
 const Head = styled.div`
-  display: flex; align-items: flex-start; gap: 0.75rem; padding: 1.125rem 1.25rem 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
+  display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.9rem 1.25rem 0.75rem;
+  background: #eff6ff; border-bottom: 1px solid #bfdbfe; border-left: 4px solid #1d4ed8;
 `;
-const Title = styled.h3`margin: 0; font-size: 1.05rem; font-weight: 700; color: #1e293b;`;
+const Title = styled.h3`margin: 0; font-size: 1.05rem; font-weight: 700; color: #1e3a8a;`;
 const Sub = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.2rem;`;
 const CloseButton = styled.button`
   margin-left: auto; border: none; background: transparent; color: #94a3b8; cursor: pointer;
