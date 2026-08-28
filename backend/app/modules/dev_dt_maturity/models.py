@@ -204,6 +204,12 @@ class ThreadSegmentDef(BaseModel):
     from_stage = db.Column(db.String(30), nullable=False)
     to_stage = db.Column(db.String(30), nullable=False)
     order = db.Column(db.Integer, nullable=False, default=0)
+    data_kinds = db.Column(db.JSON, default=list)           # 이 구간으로 흐르는 것의 기본값
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['data_kinds'] = list(self.data_kinds or [])
+        return d
 
 
 class ThreadSystem(BaseModel):
@@ -247,6 +253,7 @@ class ThreadSegment(BaseModel):
     via_system_id = db.Column(db.Integer)
     to_org_id = db.Column(db.Integer)
     to_system_id = db.Column(db.Integer)
+    data_kinds = db.Column(db.JSON, default=list)           # 무엇이 흐르나 — 표준 어휘 key 또는 직접 적은 글
     note = db.Column(db.Text)
     subject = db.relationship('MaturitySubject', backref=db.backref('thread_segment', uselist=False, cascade='all, delete-orphan', passive_deletes=True))
     thread = db.relationship('ThreadDef')

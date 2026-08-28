@@ -658,6 +658,9 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert s1.status_code == 201, s1.get_json()
     s1 = s1.get_json()['data']
     assert s1['name'] == d1['name'] and s1['thread_key'] == 'cost' and s1['pair_id'] and s1['via_informal'] is False
+    assert s1['data_kinds'] == ['cost', 'bom'] and s1['data_kind_labels'] == ['원가·단가', 'BOM']      # 표준 구간의 기본값
+    res = client.put(f'{BASE}/segments/{s1["id"]}', json={'data_kinds': ['bom', '단가표(엑셀)', 'bom']}, headers=auth(mx_user))
+    assert res.get_json()['data']['data_kind_labels'] == ['BOM', '단가표(엑셀)']                       # 직접 적은 것도, 겹침은 뺌
     s2 = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': d2['id'], 'from_org_id': dev['id'], 'from_system_id': plm['id'], 'via_system_id': mail['id'], 'to_org_id': fin['id'], 'to_system_id': costsys['id']}, headers=auth(mx_user)).get_json()['data']
     assert s2['via_informal'] is True
     # 매기기 — 기존 평가 API 그대로. 비공식 매개면 연결 방식은 둘째 칸까지

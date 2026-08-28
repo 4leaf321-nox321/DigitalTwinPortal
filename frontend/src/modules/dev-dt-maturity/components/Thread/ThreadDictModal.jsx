@@ -36,7 +36,7 @@ const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; f
 const Muted = styled.div`font-size: 0.8125rem; color: #94a3b8;`;
 const Tabs = styled.div`display: flex; gap: 0.25rem;`;
 const Tab = styled.button`padding: 0.3rem 0.8rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#e2e8f0')}; border-radius: 999px; background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')}; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;`;
-const SegRow = styled.div`display: grid; grid-template-columns: minmax(0, 1fr) 7rem 1rem 7rem 1.6rem; gap: 0.3rem; align-items: center; font-size: 0.8125rem; input, select { padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; min-width: 0; }`;
+const SegRow = styled.div`display: grid; grid-template-columns: minmax(0, 1fr) 7rem 1rem 7rem 1.6rem; & + & { margin-top: 0.15rem; } gap: 0.3rem; align-items: center; font-size: 0.8125rem; input, select { padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; min-width: 0; }`;
 
 const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions = [], thread, axes = [], canCurate = false, denyReason, onClose, onChanged }) => {
   const [kind, setKind] = useState(initialKind);
@@ -93,8 +93,8 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
         await maturityApi.updateThread(draft.id, { name: draft.name, description: draft.description, axes_off: draft.axes_off, is_active: draft.is_active });
         for (const s of draft.segments || []) {
           const was = (current.segments || []).find(x => x.id === s.id);
-          if (s.id < 0) await maturityApi.addSegmentDef(draft.id, { key: s.key || `s${Date.now()}`, name: s.name, from_stage: s.from_stage, to_stage: s.to_stage });
-          else if (was && JSON.stringify(was) !== JSON.stringify(s)) await maturityApi.updateSegmentDef(s.id, { name: s.name, from_stage: s.from_stage, to_stage: s.to_stage });
+          if (s.id < 0) await maturityApi.addSegmentDef(draft.id, { key: s.key || `s${Date.now()}`, name: s.name, from_stage: s.from_stage, to_stage: s.to_stage, data_kinds: s.data_kinds || [] });
+          else if (was && JSON.stringify(was) !== JSON.stringify(s)) await maturityApi.updateSegmentDef(s.id, { name: s.name, from_stage: s.from_stage, to_stage: s.to_stage, data_kinds: s.data_kinds || [] });
         }
         for (const was of current.segments || []) if (!(draft.segments || []).some(s => s.id === was.id)) await maturityApi.deleteSegmentDef(was.id);
       }
@@ -243,6 +243,10 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
                     <span>→</span>
                     <select value={s.to_stage} onChange={e => set({ segments: draft.segments.map((x, j) => (j === i ? { ...x, to_stage: e.target.value } : x)) })}>{stages.map(st => <option key={st.key} value={st.key}>{st.label}</option>)}</select>
                     <IconBtn type="button" title="빼기" onClick={() => set({ segments: draft.segments.filter((_, j) => j !== i) })}><Trash2 size={12} /></IconBtn>
+                    <Chips style={{ gridColumn: '1 / -1', marginBottom: '0.3rem' }}>
+                      {(thread?.data_kinds || []).map(k => <Chip key={k.key} type="button" $on={(s.data_kinds || []).includes(k.key)}
+                        onClick={() => set({ segments: draft.segments.map((x, j) => (j === i ? { ...x, data_kinds: (x.data_kinds || []).includes(k.key) ? x.data_kinds.filter(y => y !== k.key) : [...(x.data_kinds || []), k.key] } : x)) })}>{k.label}</Chip>)}
+                    </Chips>
                   </SegRow>
                 ))}
                 <Button type="button" onClick={() => set({ segments: [...(draft.segments || []), { id: -Date.now(), key: '', name: '', from_stage: stages[1]?.key || '', to_stage: stages[2]?.key || '' }] })}><Plus size={13} /> 표준 구간 더하기</Button>

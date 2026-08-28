@@ -227,45 +227,56 @@ LINK_MEANS_KEYS = [k['key'] for k in LINK_MEANS]
 SYSTEM_STATUS = [{'key': 'active', 'label': '운영'}, {'key': 'adopting', 'label': '도입 중'}, {'key': 'retiring', 'label': '폐지 예정'}]
 SYSTEM_STATUS_KEYS = [k['key'] for k in SYSTEM_STATUS]
 
+# 데이터 종류 — 구간으로 무엇이 흐르나. 매기는 축이 아니라 구간의 속성(2026-08-28). 없는 것은 직접 적는다.
+DATA_KINDS = [
+    {'key': 'requirement', 'label': '요구사항·스펙'}, {'key': 'geometry', 'label': '설계 형상(CAD)'}, {'key': 'material', 'label': '재질·물성'},
+    {'key': 'sim_model', 'label': '해석 모델'}, {'key': 'sim_result', 'label': '해석 결과'}, {'key': 'test_result', 'label': '시험 결과'},
+    {'key': 'bom', 'label': 'BOM'}, {'key': 'eco', 'label': '설계 변경(ECO)'}, {'key': 'cost', 'label': '원가·단가'},
+    {'key': 'process', 'label': '공정·설비 파라미터'}, {'key': 'yield', 'label': '생산 실적·수율'}, {'key': 'inspection', 'label': '검사 결과'},
+    {'key': 'defect', 'label': '불량·이슈'}, {'key': 'field', 'label': '시장 품질·CS'}, {'key': 'other', 'label': '기타'},
+]
+DATA_KIND_KEYS = [k['key'] for k in DATA_KINDS]
+DATA_KIND_LABELS = {k['key']: k['label'] for k in DATA_KINDS}
+
 # 표준 스레드의 첫 판 — 표가 비어 있을 때 넣는 초안. 사무국이 화면에서 고친다(key 는 고정).
 THREAD_DEFAULTS = [
     {'key': 'simulation', 'name': '시뮬레이션 스레드', 'description': '요구사항에서 해석 조건·모델·결과·설계 판정·시험 비교까지', 'axes_off': ['consistency'],
      'segments': [
-         {'key': 'req_to_cond', 'name': '요구사항 → 해석 조건', 'from': 'planning', 'to': 'development'},
-         {'key': 'cad_to_model', 'name': '설계 형상 → 해석 모델', 'from': 'development', 'to': 'development'},
-         {'key': 'result_to_review', 'name': '해석 결과 → 설계 판정', 'from': 'development', 'to': 'development'},
-         {'key': 'test_vs_result', 'name': '시험 결과 ↔ 해석 결과', 'from': 'quality', 'to': 'development'},
-         {'key': 'eco_to_rerun', 'name': '설계 변경 → 해석 재수행', 'from': 'development', 'to': 'development'},
+         {'key': 'req_to_cond', 'data': ['requirement'], 'name': '요구사항 → 해석 조건', 'from': 'planning', 'to': 'development'},
+         {'key': 'cad_to_model', 'data': ['geometry', 'material'], 'name': '설계 형상 → 해석 모델', 'from': 'development', 'to': 'development'},
+         {'key': 'result_to_review', 'data': ['sim_result'], 'name': '해석 결과 → 설계 판정', 'from': 'development', 'to': 'development'},
+         {'key': 'test_vs_result', 'data': ['test_result', 'sim_result'], 'name': '시험 결과 ↔ 해석 결과', 'from': 'quality', 'to': 'development'},
+         {'key': 'eco_to_rerun', 'data': ['eco'], 'name': '설계 변경 → 해석 재수행', 'from': 'development', 'to': 'development'},
      ]},
     {'key': 'cost', 'name': '재료비 스레드', 'description': '목표 원가에서 설계 BOM·예상 원가·구매 단가·실적 원가·손익까지',
      'segments': [
-         {'key': 'target_to_bom', 'name': '목표 원가 → 설계 BOM', 'from': 'planning', 'to': 'development'},
-         {'key': 'bom_to_estimate', 'name': '설계 BOM → 예상 원가', 'from': 'development', 'to': 'management'},
-         {'key': 'estimate_to_price', 'name': '예상 원가 → 구매 단가', 'from': 'management', 'to': 'purchasing'},
-         {'key': 'price_to_actual', 'name': '구매 단가 → 실적 원가', 'from': 'purchasing', 'to': 'manufacturing'},
-         {'key': 'actual_to_pl', 'name': '실적 원가 → 손익', 'from': 'manufacturing', 'to': 'management'},
+         {'key': 'target_to_bom', 'data': ['cost', 'bom'], 'name': '목표 원가 → 설계 BOM', 'from': 'planning', 'to': 'development'},
+         {'key': 'bom_to_estimate', 'data': ['bom', 'cost'], 'name': '설계 BOM → 예상 원가', 'from': 'development', 'to': 'management'},
+         {'key': 'estimate_to_price', 'data': ['cost'], 'name': '예상 원가 → 구매 단가', 'from': 'management', 'to': 'purchasing'},
+         {'key': 'price_to_actual', 'data': ['cost'], 'name': '구매 단가 → 실적 원가', 'from': 'purchasing', 'to': 'manufacturing'},
+         {'key': 'actual_to_pl', 'data': ['cost'], 'name': '실적 원가 → 손익', 'from': 'manufacturing', 'to': 'management'},
      ]},
     {'key': 'quality', 'name': '품질 스레드', 'description': '스펙에서 신뢰성 시험·양산 검사·시장 불량·원인 분석·설계 변경까지(폐루프)',
      'segments': [
-         {'key': 'spec_to_test', 'name': '스펙 → 신뢰성 시험 결과', 'from': 'development', 'to': 'quality'},
-         {'key': 'test_to_inspection', 'name': '시험 결과 → 양산 검사', 'from': 'quality', 'to': 'manufacturing'},
-         {'key': 'inspection_to_field', 'name': '양산 검사 → 시장 불량', 'from': 'manufacturing', 'to': 'market'},
-         {'key': 'field_to_cause', 'name': '시장 불량 → 원인 분석', 'from': 'market', 'to': 'development'},
-         {'key': 'cause_to_eco', 'name': '원인 분석 → 설계 변경', 'from': 'development', 'to': 'development'},
+         {'key': 'spec_to_test', 'data': ['requirement', 'test_result'], 'name': '스펙 → 신뢰성 시험 결과', 'from': 'development', 'to': 'quality'},
+         {'key': 'test_to_inspection', 'data': ['test_result', 'inspection'], 'name': '시험 결과 → 양산 검사', 'from': 'quality', 'to': 'manufacturing'},
+         {'key': 'inspection_to_field', 'data': ['inspection', 'field'], 'name': '양산 검사 → 시장 불량', 'from': 'manufacturing', 'to': 'market'},
+         {'key': 'field_to_cause', 'data': ['field', 'defect'], 'name': '시장 불량 → 원인 분석', 'from': 'market', 'to': 'development'},
+         {'key': 'cause_to_eco', 'data': ['defect', 'eco'], 'name': '원인 분석 → 설계 변경', 'from': 'development', 'to': 'development'},
      ]},
     {'key': 'manufacturing', 'name': '제조 스레드', 'description': '설계 형상·공차에서 공정 설계·설비 파라미터·생산 실적·설계 피드백까지',
      'segments': [
-         {'key': 'design_to_process', 'name': '설계 형상·공차 → 공정 설계', 'from': 'development', 'to': 'mfg_eng'},
-         {'key': 'process_to_equipment', 'name': '공정 설계 → 설비 파라미터', 'from': 'mfg_eng', 'to': 'manufacturing'},
-         {'key': 'equipment_to_yield', 'name': '설비 파라미터 → 생산 실적·수율', 'from': 'manufacturing', 'to': 'manufacturing'},
-         {'key': 'yield_to_design', 'name': '생산 실적 → 설계 피드백', 'from': 'manufacturing', 'to': 'development'},
+         {'key': 'design_to_process', 'data': ['geometry', 'process'], 'name': '설계 형상·공차 → 공정 설계', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'process_to_equipment', 'data': ['process'], 'name': '공정 설계 → 설비 파라미터', 'from': 'mfg_eng', 'to': 'manufacturing'},
+         {'key': 'equipment_to_yield', 'data': ['process', 'yield'], 'name': '설비 파라미터 → 생산 실적·수율', 'from': 'manufacturing', 'to': 'manufacturing'},
+         {'key': 'yield_to_design', 'data': ['yield', 'defect'], 'name': '생산 실적 → 설계 피드백', 'from': 'manufacturing', 'to': 'development'},
      ]},
     {'key': 'bom_change', 'name': 'BOM·설계 변경 스레드', 'description': '설계 BOM에서 제조 BOM·구매·설계 변경 전파까지',
      'segments': [
-         {'key': 'ebom_to_mbom', 'name': '설계 BOM → 제조 BOM', 'from': 'development', 'to': 'mfg_eng'},
-         {'key': 'mbom_to_purchase', 'name': '제조 BOM → 구매 요청', 'from': 'mfg_eng', 'to': 'purchasing'},
-         {'key': 'eco_to_mbom', 'name': '설계 변경 → 제조 BOM 반영', 'from': 'development', 'to': 'mfg_eng'},
-         {'key': 'eco_to_field', 'name': '설계 변경 → 서비스 부품 반영', 'from': 'development', 'to': 'market'},
+         {'key': 'ebom_to_mbom', 'data': ['bom'], 'name': '설계 BOM → 제조 BOM', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'mbom_to_purchase', 'data': ['bom', 'cost'], 'name': '제조 BOM → 구매 요청', 'from': 'mfg_eng', 'to': 'purchasing'},
+         {'key': 'eco_to_mbom', 'data': ['eco', 'bom'], 'name': '설계 변경 → 제조 BOM 반영', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'eco_to_field', 'data': ['eco', 'field'], 'name': '설계 변경 → 서비스 부품 반영', 'from': 'development', 'to': 'market'},
      ]},
 ]
 
@@ -282,7 +293,7 @@ THREAD_CASE_STATUS_KEYS = [s['key'] for s in THREAD_CASE_STATUS]
 
 def thread_definitions():
     return {'stages': THREAD_STAGES, 'system_kinds': SYSTEM_KINDS, 'informal_items': INFORMAL_ITEMS,
-            'link_means': LINK_MEANS, 'system_status': SYSTEM_STATUS,
+            'link_means': LINK_MEANS, 'system_status': SYSTEM_STATUS, 'data_kinds': DATA_KINDS,
             'case_actions': THREAD_CASE_ACTIONS, 'case_status': THREAD_CASE_STATUS}
 AXIS_KINDS = {'rung', 'value', 'set', 'matrix'}   # matrix: 바탕 토글 + 불량 유형 × 열 표(모델링 수준)
 

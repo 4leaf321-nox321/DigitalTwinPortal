@@ -53,7 +53,9 @@ const Button = styled.button`
 `;
 const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.5rem 0.75rem; margin: 0.5rem 0.75rem 0; border-radius: 0.5rem; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.8125rem;`;
 
-const empty = () => ({ thread_id: '', segment_def_id: '', name: '', from_org_id: '', from_system_id: '', via_system_id: '', to_org_id: '', to_system_id: '', note: '' });
+const empty = () => ({ thread_id: '', segment_def_id: '', name: '', from_org_id: '', from_system_id: '', via_system_id: '', to_org_id: '', to_system_id: '', data_kinds: [], custom_kind: '', note: '' });
+const KindTag = styled.span`display: inline-block; margin: 0 0.15rem 0.1rem 0; padding: 0 0.4rem; border-radius: 999px; font-size: 0.6875rem; background: #f1f5f9; color: #475569;`;
+const Tog = styled.button`padding: 0.15rem 0.5rem; border-radius: 999px; font-family: inherit; font-size: 0.75rem; cursor: pointer; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#cbd5e1')}; background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};`;
 
 const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, thread, onOpenPair, onClosePair, onChanged, refreshKey, onManage }) => {
   const allMode = divisionId === 'all';
@@ -92,7 +94,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
     if (!canEdit) return;
     setBusy(true);
     try {
-      const payload = { thread_id: num(draft.thread_id), segment_def_id: num(draft.segment_def_id), name: draft.name, note: draft.note,
+      const payload = { thread_id: num(draft.thread_id), segment_def_id: num(draft.segment_def_id), name: draft.name, note: draft.note, data_kinds: draft.data_kinds,
         from_org_id: num(draft.from_org_id), from_system_id: num(draft.from_system_id), via_system_id: num(draft.via_system_id), to_org_id: num(draft.to_org_id), to_system_id: num(draft.to_system_id) };
       if (editId) await maturityApi.updateSegment(editId, payload);
       else await maturityApi.createSegment(division, payload);
@@ -103,7 +105,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
   };
   const startEdit = (s) => {
     setEditId(s.id);
-    setDraft({ thread_id: s.thread_id ?? '', segment_def_id: s.segment_def_id ?? '', name: s.name || '', note: s.note || '',
+    setDraft({ thread_id: s.thread_id ?? '', segment_def_id: s.segment_def_id ?? '', name: s.name || '', note: s.note || '', data_kinds: [...(s.data_kinds || [])], custom_kind: '',
       from_org_id: s.from_org_id ?? '', from_system_id: s.from_system_id ?? '', via_system_id: s.via_system_id ?? '', to_org_id: s.to_org_id ?? '', to_system_id: s.to_system_id ?? '' });
   };
   const remove = async (s) => {
@@ -155,6 +157,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
                       {s.name}
                       {s.segment_def && <small>{thread?.stages?.find(x => x.key === s.segment_def.from_stage)?.label} → {thread?.stages?.find(x => x.key === s.segment_def.to_stage)?.label}</small>}
                       {s.pair?.unassessed?.length > 0 && <small>미평가 {s.pair.unassessed.length}개</small>}
+                      {(s.data_kind_labels || []).length > 0 && <div>{s.data_kind_labels.map(k => <KindTag key={k}>{k}</KindTag>)}</div>}
                       {canEdit && <EditBtn type="button" title="구간 고치기" aria-label={`${s.name} 편집`} onClick={e => { e.stopPropagation(); startEdit(s); }}><Pencil size={11} /></EditBtn>}
                     </SegCell>
                     <Flow>
@@ -178,7 +181,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
                 <option value="">— 고르세요 —</option>
                 {threads.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
-              <select value={draft.segment_def_id} onChange={e => set({ segment_def_id: e.target.value })} aria-label="표준 구간" disabled={!draft.thread_id}>
+              <select value={draft.segment_def_id} onChange={e => { const d = defOptions.find(x => String(x.id) === e.target.value); set({ segment_def_id: e.target.value, data_kinds: d && !draft.data_kinds.length ? [...(d.data_kinds || [])] : draft.data_kinds }); }} aria-label="표준 구간" disabled={!draft.thread_id}>
                 <option value="">표준 구간 — 고르면 이름을 씁니다</option>
                 {defOptions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
@@ -190,6 +193,20 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
               <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={sysOpts} value={draft.from_system_id} onChange={(id) => set({ from_system_id: id ?? '' })} placeholder="시스템 찾기" hint="시스템 관리에서 먼저 넣으세요." /></span>
               <Lab>매개</Lab>
               <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={sysOpts} value={draft.via_system_id} onChange={(id) => set({ via_system_id: id ?? '' })} placeholder="매개 시스템 (메일·엑셀이면 비공식)" hint="시스템 관리에서 먼저 넣으세요." /></span>
+            </Line>
+            <Line>
+              <Lab>데이터</Lab>
+              <span style={{ display: 'inline-flex', gap: '0.2rem', flexWrap: 'wrap' }} role="group" aria-label="데이터 종류">
+                {(thread?.data_kinds || []).map(k => (
+                  <Tog key={k.key} type="button" $on={draft.data_kinds.includes(k.key)} aria-pressed={draft.data_kinds.includes(k.key)}
+                       onClick={() => set({ data_kinds: draft.data_kinds.includes(k.key) ? draft.data_kinds.filter(x => x !== k.key) : [...draft.data_kinds, k.key] })}>{k.label}</Tog>
+                ))}
+                {draft.data_kinds.filter(k => !(thread?.data_kinds || []).some(x => x.key === k)).map(k => (
+                  <Tog key={k} type="button" $on onClick={() => set({ data_kinds: draft.data_kinds.filter(x => x !== k) })} title="누르면 뺍니다">{k} ×</Tog>
+                ))}
+              </span>
+              <input value={draft.custom_kind} onChange={e => set({ custom_kind: e.target.value })} placeholder="없는 종류 — Enter" aria-label="데이터 종류 직접 적기" style={{ width: '10rem' }}
+                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const v = draft.custom_kind.trim(); if (v && !draft.data_kinds.includes(v)) set({ data_kinds: [...draft.data_kinds, v], custom_kind: '' }); } }} />
             </Line>
             <Line>
               <Lab>도착</Lab>

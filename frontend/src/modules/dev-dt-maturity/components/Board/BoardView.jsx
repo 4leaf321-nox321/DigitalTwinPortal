@@ -323,6 +323,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
                     {s.division_name && <DivTag>{s.division_name}</DivTag>}
                     {isThread && s.segment?.thread_name && <div><Sub>{s.segment.thread_name}</Sub></div>}
                     <Name>{s.name}</Name>
+                    {isThread && (s.segment?.data_kind_labels || []).length > 0 && <div><Sub>{s.segment.data_kind_labels.join(' · ')}</Sub></div>}
                     {!isThread && <div><Sub>연계 {s.pairs.length}</Sub>{acc && s.summary.accuracy != null && <Sub> · 항목 정확도 {accuracyLabel(s.summary)}</Sub>}</div>}
                   </SubjectTd>
                 );

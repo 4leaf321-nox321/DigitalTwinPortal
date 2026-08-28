@@ -38,9 +38,13 @@ def ensure_defaults():
             db.session.flush()
             made += 1
         for so, seg in enumerate(t.get('segments') or [], 1):
-            if not ThreadSegmentDef.query.filter_by(thread_id=row.id, key=seg['key']).first():
+            sd = ThreadSegmentDef.query.filter_by(thread_id=row.id, key=seg['key']).first()
+            if sd is None:
                 db.session.add(ThreadSegmentDef(thread_id=row.id, key=seg['key'], name=seg['name'],
-                                                from_stage=seg['from'], to_stage=seg['to'], order=so))
+                                                from_stage=seg['from'], to_stage=seg['to'], order=so, data_kinds=list(seg.get('data') or [])))
+                made += 1
+            elif not sd.data_kinds and seg.get('data'):
+                sd.data_kinds = list(seg['data'])          # 옛 줄에 기본값만 채운다
                 made += 1
     for name in D.INFORMAL_ITEMS:
         if not ThreadSystem.query.filter_by(name=name).first():
@@ -120,7 +124,7 @@ def add_segment_def(thread, payload):
     last = max([s.order for s in thread.segment_defs] or [0])
     row = ThreadSegmentDef(thread_id=thread.id, key=key, name=name,
                            from_stage=_stage_or_refuse(payload.get('from_stage')), to_stage=_stage_or_refuse(payload.get('to_stage')),
-                           order=last + 1)
+                           order=last + 1, data_kinds=_data_kinds(payload.get('data_kinds')))
     db.session.add(row)
     db.session.flush()
     return row
@@ -136,12 +140,24 @@ def update_segment_def(row, payload):
         row.from_stage = _stage_or_refuse(payload.get('from_stage'))
     if 'to_stage' in payload:
         row.to_stage = _stage_or_refuse(payload.get('to_stage'))
+    if 'data_kinds' in payload:
+        row.data_kinds = _data_kinds(payload.get('data_kinds'))
     if 'order' in payload:
         try:
             row.order = int(payload.get('order'))
         except (TypeError, ValueError):
             raise Refused('순서는 정수입니다.')
     return row
+
+
+def _data_kinds(v):
+    """표준 key 는 그대로, 아닌 것은 직접 적은 글로(다듬어서). 겹침 뺌."""
+    out = []
+    for x in _clean_list(v):
+        x = x.strip()
+        if x and x not in out:
+            out.append(x[:60])
+    return out
 
 
 # 시스템 — 전사 하나. 스레드 주체(개발 조직)가 자기 구간을 적으며 채운다. 처음 적은 사업부나 사무국이 고친다.
@@ -324,6 +340,8 @@ def _fill_segment(seg, payload, division_id):
         if f in payload:
             o = _org(payload.get(f), division_id)
             setattr(seg, f, o.id if o else None)
+    if 'data_kinds' in payload:
+        seg.data_kinds = _data_kinds(payload.get('data_kinds'))
     if 'note' in payload:
         seg.note = (payload.get('note') or '').strip() or None
     if seg.thread_id is None:
@@ -343,6 +361,8 @@ def create_segment(division_id, payload):
     pair = create_pair(subject, None)
     seg = ThreadSegment(subject_id=subject.id, division_id=int(division_id))
     _fill_segment(seg, {**payload, 'thread_id': payload.get('thread_id') or (sd.thread_id if sd else None)}, division_id)
+    if not seg.data_kinds and sd is not None:
+        seg.data_kinds = list(sd.data_kinds or [])        # 표준 구간을 골랐으면 그 기본값
     db.session.add(seg)
     db.session.flush()
     return seg, subject, pair
@@ -378,6 +398,8 @@ def segment_dict(seg, systems=None, orgs=None, with_pair=True):
     for f in ('from_system', 'via_system', 'to_system'):
         d[f'{f}_name'] = name(systems, getattr(seg, f'{f}_id'))
     d['via_informal'] = bool(seg.via_system_id and seg.via_system_id in systems and systems[seg.via_system_id].kind == 'informal')
+    d['data_kinds'] = list(seg.data_kinds or [])
+    d['data_kind_labels'] = [D.DATA_KIND_LABELS.get(k, k) for k in d['data_kinds']]
     for f in ('from_org', 'to_org'):
         d[f'{f}_name'] = name(orgs, getattr(seg, f'{f}_id'))
     if with_pair:

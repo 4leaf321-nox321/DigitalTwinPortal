@@ -20,12 +20,13 @@ const THREAD = {
   system_kinds: [{ key: 'plm', label: 'PLM' }, { key: 'cost', label: '원가' }, { key: 'informal', label: '비공식 매개' }, { key: 'other', label: '기타' }],
   link_means: [{ key: 'api', label: 'API 있음' }, { key: 'file', label: '파일 배치' }, { key: 'none', label: '없음' }, { key: 'unknown', label: '미확인' }],
   system_status: [{ key: 'active', label: '운영' }, { key: 'adopting', label: '도입 중' }],
+  data_kinds: [{ key: 'bom', label: 'BOM' }, { key: 'cost', label: '원가·단가' }, { key: 'other', label: '기타' }],
   case_actions: [{ key: 'integrate', label: '연동' }, { key: 'adopt', label: '도입' }, { key: 'harmonize', label: '정합화' }],
   case_status: [{ key: 'planned', label: '계획' }, { key: 'doing', label: '진행 중' }, { key: 'done', label: '완료' }],
 };
 const THREADS = [
   { id: 1, key: 'cost', name: '재료비 스레드', axes_off: [], segments: [
-    { id: 11, key: 'target_to_bom', name: '목표 원가 → 설계 BOM', from_stage: 'planning', to_stage: 'development' },
+    { id: 11, key: 'target_to_bom', name: '목표 원가 → 설계 BOM', from_stage: 'planning', to_stage: 'development', data_kinds: ['cost', 'bom'] },
     { id: 12, key: 'bom_to_estimate', name: '설계 BOM → 예상 원가', from_stage: 'development', to_stage: 'management' } ] },
   { id: 2, key: 'quality', name: '품질 스레드', axes_off: [], segments: [] },
 ];
@@ -33,6 +34,7 @@ const SYSTEMS = [{ id: 5, name: 'Teamcenter', kind: 'plm', link_means: 'api', st
 const ORGS = [{ id: 21, name: 'MX 설계그룹', role: 'development', division_id: 17, source_kind: 'manual' }, { id: 22, name: '원가팀', role: 'management', division_id: 17, source_kind: 'manual' }];
 const SEG = { id: 101, subject_id: 501, division_id: 17, thread_id: 1, thread_name: '재료비 스레드', segment_def_id: 12, segment_def: THREADS[0].segments[1], name: '설계 BOM → 예상 원가',
   from_org_id: 21, from_org_name: 'MX 설계그룹', from_system_id: 5, from_system_name: 'Teamcenter', via_system_id: 9, via_system_name: '메일', via_informal: true, to_org_id: 22, to_org_name: '원가팀', to_system_id: 6, to_system_name: '원가 산정 시스템',
+  data_kinds: ['bom', 'cost'], data_kind_labels: ['BOM', '원가·단가'],
   pair_id: 901, pair: { id: 901, assessments: { link_mode: { rung: 'manual_file', rung_index: 1 } }, unassessed: ['scope'] } };
 
 export default async function run() {
@@ -65,6 +67,7 @@ export default async function run() {
     say(h.includes('재료비 스레드') && h.includes('품질 스레드') && h.includes('설계 BOM → 예상 원가'), '① 스레드 묶음과 구간이 보임');
     say(h.includes('MX 설계그룹') && h.includes('원가팀') && byText('span', '메일') != null, '① 출발 → 매개 → 도착 (비공식 매개 「메일」)');
     say(h.includes('수동 파일 교환') && h.includes('미평가 1개'), '① 연결 방식 배지와 미평가 수');
+    say(h.includes('>BOM<') && h.includes('>원가·단가<'), '① 데이터 종류 꼬리표');
 
     // ② 구간 추가
     calls.length = 0;
@@ -79,6 +82,7 @@ export default async function run() {
     const post = calls.find(c => c.method === 'POST' && c.url.endsWith('/segments'));
     say(!!post && post.body.thread_id === 1 && post.body.segment_def_id === 11 && post.body.from_org_id === 21 && post.body.from_system_id === 5 && post.body.via_system_id === 9 && post.body.to_org_id === 22,
         `② POST /segments: ${JSON.stringify(post?.body)}`);
+    say(JSON.stringify(post?.body?.data_kinds) === '["cost","bom"]', '② 표준 구간을 고르면 데이터 종류 기본값이 채워져 감');
     await unmount();
 
     // ③ 사전 창
