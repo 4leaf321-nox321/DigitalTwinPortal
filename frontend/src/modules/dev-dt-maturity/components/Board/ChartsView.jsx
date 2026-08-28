@@ -15,7 +15,7 @@ const Chip = styled.button`
   background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};
 `;
 // 6:4 — 왼쪽에 여섯 판(2 × 3), 오른쪽에 「상세」(연계마다 선). 겹치지 않는다(2026-08-28).
-const Body = styled.div`display: grid; grid-template-columns: 6fr 4fr; gap: 0.75rem; flex: 1; min-height: 0;`;
+const Body = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; flex: 1; min-height: 0;`;   // 5:5
 const Grid = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 0.6rem; min-height: 0; overflow: auto;
 `;
@@ -31,14 +31,15 @@ const Detail = styled.button`
   margin-left: auto; padding: 0.15rem 0.55rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#cbd5e1')}; border-radius: 999px; font-family: inherit; font-size: 0.6875rem; cursor: pointer;
   background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};
 `;
-const Split = styled.div`display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 0.5rem; flex: 1; min-height: 0;`;
+// 상세 = 그래프 + 오른쪽 끝의 세로 범례(연계 목록). 범례는 높이를 다 쓰고 안에서 스크롤한다(2026-08-28).
+const Split = styled.div`display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 0.6rem; flex: 1; min-height: 0;`;
 const Picker = styled.div`
-  display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.75rem; overflow: auto; max-height: 11rem; border-top: 1px solid #e2e8f0; padding-top: 0.4rem;
+  display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.75rem; overflow: auto; min-height: 0; height: 100%; border-left: 1px solid #e2e8f0; padding-left: 0.6rem;
   input[type=text] { padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.75rem; margin-bottom: 0.2rem; }
   label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   i { display: inline-block; width: 0.7rem; height: 0.2rem; border-radius: 2px; flex-shrink: 0; }
 `;
-const PickBar = styled.div`display: flex; gap: 0.3rem; font-size: 0.6875rem; color: #64748b; button { border: none; background: transparent; color: #1d4ed8; cursor: pointer; font-family: inherit; font-size: 0.6875rem; padding: 0; }`;
+const PickBar = styled.div`display: flex; gap: 0.3rem; flex-wrap: wrap; font-size: 0.6875rem; color: #64748b; position: sticky; top: 0; background: #f8fbff; padding-bottom: 0.2rem; button { border: none; background: transparent; color: #1d4ed8; cursor: pointer; font-family: inherit; font-size: 0.6875rem; padding: 0; }`;
 const Now = styled.div`font-size: 1.35rem; font-weight: 700; color: #1e293b; line-height: 1.1; margin: 0.2rem 0 0.3rem; small { font-size: 0.75rem; color: #64748b; font-weight: 500; margin-left: 0.3rem; }`;
 const ChartBox = styled.div`flex: 1; min-height: 7rem;`;
 
@@ -83,7 +84,7 @@ const PairDetail = ({ axis, series, months }) => {
         </ResponsiveContainer>
       </ChartBox>
       <Picker aria-label={`${axis.label} 연계 고르기`}>
-        <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="연계 찾기" aria-label="연계 찾기" />
+        <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="연계 찾기" aria-label="연계 찾기" style={{ position: 'sticky', top: 0 }} />
         <PickBar>
           <span>{shown.length}/{lines.length} 선</span>
           <button type="button" onClick={() => setOn(new Set(visible.map(l => l.key)))}>보이는 것 전부</button>
