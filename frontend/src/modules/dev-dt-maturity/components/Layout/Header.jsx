@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2 } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -17,6 +17,25 @@ const HeaderButton = styled.button`
   &:hover { background: ${p => (p.$variant === 'primary' ? '#1e40af' : '#f1f5f9')}; color: ${p => (p.$variant === 'primary' ? 'white' : '#475569')}; }
 `;
 const Count = styled.span`font-size: 0.7rem; color: #94a3b8; font-weight: 500;`;
+
+// 부문 토글 — 대시보드 헤더의 「대시보드 / 과제 진행 현황」과 같은 모양(2026-08-28).
+// 시뮬레이션만 열려 있고 나머지 셋은 자리만(PLAN 3절: 자료 조사 뒤 · 3차).
+const SectorToggle = styled.div`
+  display: flex; gap: 2px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 4px; margin-left: 0.75rem; flex-shrink: 0;
+`;
+const SectorBtn = styled.button`
+  display: flex; align-items: center; gap: 6px; padding: 7px 10px; border: none; border-radius: 6px; font-family: inherit; font-size: 0.8rem; font-weight: 600; white-space: nowrap;
+  background: ${p => (p.$on ? '#1d4ed8' : 'transparent')}; color: ${p => (p.$on ? 'white' : '#666')}; cursor: ${p => (p.$on ? 'default' : 'pointer')};
+  box-shadow: ${p => (p.$on ? '0 2px 4px rgba(29, 78, 216, 0.25)' : 'none')};
+  &:hover:not(:disabled) { background: ${p => (p.$on ? '#1e40af' : '#e9ecef')}; }
+  &:disabled { color: #b0b7c0; cursor: not-allowed; opacity: 0.8; }
+`;
+const SECTORS = [
+  { key: 'simulation', label: '시뮬레이션', icon: Activity, open: true },
+  { key: 'design_automation', label: '설계 자동화', icon: PenTool, open: false },
+  { key: 'verification_automation', label: '검증 자동화', icon: CheckSquare, open: false },
+  { key: 'digital_thread', label: '디지털 스레드', icon: Link2, open: false },
+];
 
 const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample }) => (
   <CommonHeader
@@ -37,6 +56,14 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
         <HeaderButton $variant="primary" onClick={() => onOpen('import')} title="틀 내려받기 → 채워서 붙여넣기 → 미리보기 → 넣기">
           <Upload size={16} /> 가져오기
         </HeaderButton>
+        <SectorToggle role="group" aria-label="부문">
+          {SECTORS.map(x => (
+            <SectorBtn key={x.key} type="button" $on={x.key === 'simulation'} disabled={!x.open} aria-pressed={x.key === 'simulation'}
+                       title={x.open ? `${x.label} 부문` : `${x.label} 부문 — 준비 중`}>
+              <x.icon size={15} strokeWidth={2} /> {x.label}
+            </SectorBtn>
+          ))}
+        </SectorToggle>
         {canCurate && (
           <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자" style={{ marginLeft: '0.5rem' }}>
             <Settings size={16} /> 설정
