@@ -45,9 +45,9 @@ export default async function run() {
     await settle(60);
     say(html().includes('해석 활용 기록') && html().includes('4') && html().includes('스펙 확정 전 이상 75%') && html().includes('정착 후보 1'), '① 맨 아래 해석 활용 기록 블록 — 건수·스펙 확정 전 이상·정착 후보');
     say(!!byText('th', 'MX') && !!byText('th', 'VD') && !!byText('td', '정확도'), '① 전체 판은 「요약」으로 열리고 사업부가 열, 축이 행');
-    say(!!byText('th', '전체') && html().includes('값 있음 2/3'), '① 맨 오른쪽 「전체」 열 — 사업부를 합쳐 다시 센 것(정확도 값 있음 2/3)');
+    say(!!byText('th', '전체') && html().includes('평가 완료 2/3'), '① 맨 오른쪽 「전체」 열 — 사업부를 합쳐 다시 센 것(정확도 평가 완료 2/3)');
     const h = html();
-    say(h.includes('80%') && h.includes('값 있음 2/2'), '② 정확도: 평균 80% · 값 있음 2/2');
+    say(h.includes('80%') && h.includes('평가 완료 2/2'), '② 정확도: 평균 80% · 평가 완료 2/2');
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');
     say(h.includes('1/2') && h.includes('적용 단계 수 (평균)'), '② 자동화: 적용 단계 수 (평균) 1/2');
     say(h.includes('시험 불량 재현') && h.includes('불량 유형 4'), '② 모델링: 시험 불량 재현률 · 불량 유형 수');

@@ -63,7 +63,7 @@ const AxisSummary = ({ axis, s }) => {
     return (
       <>
         <Big>{s.mean != null ? `${s.mean}%` : '—'}</Big>
-        <Small>값 있음 {s.filled}/{s.total}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
+        <Small>평가 완료 {s.filled}/{s.total}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Bar title={axis.rungs.map((r, i) => `${r.label} ${s.counts[i]}`).join(' · ')}>
           {axis.rungs.map((r, i) => <Seg key={r.key} $pct={pct(s.counts[i], s.filled) || 0} $color={colorFor(i, axis.rungs.length)} />)}
         </Bar>

@@ -62,7 +62,7 @@ const scoreOf = (axis, p) => {
 
 const Headline = ({ axis, s }) => {
   if (!s || s.total === 0) return <Big>—<small>연계 없음</small></Big>;
-  if (axis.kind === 'value') return <Big>{s.mean != null ? `${s.mean}%` : '—'}<small>평균 정확도 · 값 있음 {s.filled}/{s.total}</small></Big>;
+  if (axis.kind === 'value') return <Big>{s.mean != null ? `${s.mean}%` : '—'}<small>평균 정확도 · 평가 완료 {s.filled}/{s.total}</small></Big>;
   if (axis.kind === 'rung') {
     const k = Math.max(0, axis.rungs.length - 2);
     return <Big>{s.atLeast[k] != null ? `${s.atLeast[k]}%` : '—'}<small>{axis.rungs[k]?.label} 이상</small></Big>;
