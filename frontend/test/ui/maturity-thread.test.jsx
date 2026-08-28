@@ -8,6 +8,7 @@ import React from 'react';
 import { render, click, type, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import ThreadListView from '../../src/modules/dev-dt-maturity/components/Thread/ThreadListView';
 import ThreadDictModal from '../../src/modules/dev-dt-maturity/components/Thread/ThreadDictModal';
+import { BoardBody } from '../../src/modules/dev-dt-maturity/components/Board/BoardView';
 
 const AXES = [
   { key: 'link_mode', label: '연결 방식', kind: 'rung', rungs: [{ key: 'verbal', label: '문서·구두 전달' }, { key: 'manual_file', label: '수동 파일 교환' }, { key: 'auto_file', label: '자동 파일 교환' }, { key: 'api', label: 'API 연동' }, { key: 'sync', label: '자동 동기' }, { key: 'closed_loop', label: '폐루프' }] },
@@ -34,6 +35,9 @@ const SEG = { id: 101, subject_id: 501, division_id: 17, thread_id: 1, thread_na
 export default async function run() {
   const { say, done } = suite();
   const calls = fakeFetch(({ url, method, body }) => {
+    if (url.includes('/threads/stats')) return { division_id: 17, threads: [{ thread_id: 1, thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_stage: null, reach_label: null, weakest: { id: 101, name: '설계 BOM → 예상 원가', link_index: 1, link_label: '수동 파일 교환' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }, { thread_id: 2, thread_key: 'quality', thread_name: '품질 스레드', def_count: 0, segment_count: 0, assessed: 0, continuity: null, reach_label: null, weakest: null, closed_loop: false, informal_ratio: null, unassessed: 0 }], divisions: [{ division_id: 17, division_name: 'MX', threads: [{ thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_label: null, weakest: { name: '설계 BOM → 예상 원가', link_label: '수동 파일 교환' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }] }] };
+    if (url.includes('/threads/org-matrix')) return [{ from_org_id: 21, from_org: 'MX 설계그룹', to_org_id: 22, to_org: '원가팀', count: 1, min_link: 1, min_link_label: '수동 파일 교환', systems: ['Teamcenter', '메일', '원가 산정 시스템'], informal: 1 }];
+    if (url.includes('/systems/hubs')) return [{ id: 5, name: 'Teamcenter', kind: 'plm', threads: 1, segments: 1, avg_link: 1, link_means: 'api', unknown_means: false }];
     if (url.includes('/threads')) return THREADS;
     if (url.includes('/segments') && method === 'POST') return { ...SEG, id: 102, ...body, name: body.name || '목표 원가 → 설계 BOM' };
     if (url.includes('/segments')) return [SEG];
@@ -87,6 +91,23 @@ export default async function run() {
     const po = calls.find(c => c.method === 'POST' && c.url.endsWith('/orgs'));
     say(!!po && po.body.source_kind === 'portal' && po.body.source_id === '3' && po.body.name === 'CAE그룹(MX)', `③ POST /orgs(portal): ${JSON.stringify(po?.body)}`);
     say(!!byText('button', '스레드 사전'), '③ 사무국에는 스레드 사전 탭');
+    await unmount();
+
+    // ④ 사업부 요약 — 스레드 줄 그림 · 조직 연계표 · 시스템 허브도
+    const SUBJ = { id: 501, name: '설계 BOM → 예상 원가', product_families: [], segment: { thread_id: 1, thread_name: '재료비 스레드', segment_def_id: 12, via_informal: true, from_org_name: 'MX 설계그룹', from_system_name: 'Teamcenter', via_system_name: '메일', to_org_name: '원가팀', to_system_name: '원가 산정 시스템' },
+      pairs: [{ id: 901, agent: null, unassessed: ['scope'], assessments: { link_mode: { rung: 'manual_file', rung_index: 1 }, scope: null } }], summary: { unassessed: 1, stale: 0, pair_count: 1, best_rung_index: {} } };
+    const BOARD = { division_id: 17, subjects: [SUBJ], totals: { subjects: 1, pairs: 1, unassessed: 1, stale: 0 }, stale_days: 365, deny_reason: null };
+    let opened = null;
+    await render(<BoardBody board={BOARD} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={(id) => { opened = id; }} onPickDivision={() => {}} review={null} sector="digital_thread" sectorDef={{ subject_label: '연계 구간' }} />);
+    await settle(80);
+    await click(byText('button', '요약')); await settle(80);
+    const h4 = html();
+    say(h4.includes('재료비 스레드') && !!byText('button', '설계 BOM → 예상 원가') && !!byText('button', '목표 원가 → 설계 BOM'), '④ 스레드 줄 그림 — 적은 구간은 색, 안 적은 구간은 점선');
+    say(h4.includes('조직 간 연계') && h4.includes('원가팀') && h4.includes('시스템 허브도') && h4.includes('Teamcenter'), '④ 조직 연계표와 시스템 허브도');
+    await click(byText('button', '설계 BOM → 예상 원가'));
+    say(opened === 901, '④ 줄의 구간을 누르면 그 구간 상세');
+    await click(byText('button', '상세')); await settle();
+    say(html().includes('스레드 · 구간') && html().includes('출발 → 매개 → 도착') && html().includes('MX 설계그룹'), '④ 상세 표의 첫 두 열이 구간과 출발 → 매개 → 도착');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

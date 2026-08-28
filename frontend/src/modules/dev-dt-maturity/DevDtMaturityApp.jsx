@@ -166,7 +166,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           {/* 탭을 옮기면 고른 연계은 푼다 — 목록에서 고른 채 성숙도로 가면 모달이 떠 있었다(2026-08-28) */}
           <Tab $on={tab === 'board'} onClick={() => patch({ tab: null, pair: null })}>성숙도</Tab>
           <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list', pair: null })}>목록</Tab>
-          <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">해석 활용 기록</Tab>
+          {!isThread && <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">해석 활용 기록</Tab>}
         </Tabs>
       </StickyBar>
       <Main $fill>

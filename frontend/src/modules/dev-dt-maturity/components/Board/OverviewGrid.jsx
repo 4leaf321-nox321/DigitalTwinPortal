@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import maturityApi from '../../services/maturityApi';
+import { ThreadOverviewRows } from '../Thread/ThreadSummary';
 import styled from 'styled-components';
 import { colorFor, divisionSummary } from '../../utils/board';
 
@@ -118,7 +119,7 @@ const AxisSummary = ({ axis, s }) => {
 // 해석 활용 기록 줄도 **같은 표**에 붙는다 — 표를 따로 두면 열 폭이 달라 사업부 열과 어긋난다. 맨 오른쪽은 「전체」(평균·누계).
 const pctText = (v) => (v == null ? '—' : `${v}%`);
 
-const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
+const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulation' }) => {
   const sums = boards.map(b => divisionSummary(b, axes));
   const whole = divisionSummary({ subjects: boards.flatMap(b => b.subjects || []) }, axes);   // 전체 = 사업부를 합쳐 다시 센다
   const [year, setYear] = useState(new Date().getFullYear());
@@ -176,6 +177,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
             ))}
             <TdAll><Big>{whole.pairs}</Big><Small>미평가 항목 {whole.unassessed} · 재평가 필요 {whole.stale}</Small></TdAll>
           </tr>
+          {sector === 'digital_thread' && boards.length > 0 && <ThreadOverviewRows boards={boards} />}
           {review && (
             <>
               <tr>

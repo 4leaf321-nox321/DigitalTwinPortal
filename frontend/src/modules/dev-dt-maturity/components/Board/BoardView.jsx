@@ -5,6 +5,7 @@ import maturityApi from '../../services/maturityApi';
 import OverviewGrid from './OverviewGrid';
 import DivisionSummary from './DivisionSummary';
 import ChartsView from './ChartsView';
+import ThreadDivisionPanels from '../Thread/ThreadSummary';
 import {
   colorFor, distribution, applyFilters, accuracyLabel,
 } from '../../utils/board';
@@ -82,6 +83,7 @@ const Cell = styled.button`
   color: ${p => (p.$dark ? 'white' : '#1e293b')}; cursor: pointer; text-align: center;
 `;
 const Muted = styled.span`color: #94a3b8;`;
+const ScrollCol = styled.div`flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 0.75rem; & > :first-child { flex: 0 0 auto; min-height: 34rem; }`;
 const InformalTag = styled.span`display: inline-block; padding: 0 0.4rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; background: #fef3c7; color: #92400e;`;
 // 상세의 묶음·표 축 — 선택한 것들의 배지 묶음. 왼쪽 띠가 서열 색, 배지는 그 색으로 채운다.
 const Badges = styled.div`
@@ -287,10 +289,18 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
 
       {mode === 'scan' && board.boards ? (
         // 전체 「요약」 — 사업부 × 축. 한 화면에 사업부 여섯. 행을 누르면 그 사업부로.
-        <OverviewGrid boards={board.boards} axes={axes} review={review} onPickDivision={onPickDivision} />
+        <OverviewGrid boards={board.boards} axes={axes} review={review} onPickDivision={onPickDivision} sector={sector} />
       ) : mode === 'scan' ? (
         // 사업부 하나의 「요약」 — 축마다 판 하나, 화면 가득. 앞선 연계·취약 연계가 근거로 붙는다.
-        <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
+        isThread ? (
+          // 스레드 부문 — 축 판 아래에 스레드 줄 그림 · 조직 연계표 · 시스템 허브도
+          <ScrollCol>
+            <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
+            <ThreadDivisionPanels divisionId={board.division_id} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
+          </ScrollCol>
+        ) : (
+          <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
+        )
       ) : mode !== 'progress' ? (
         // 「상세」 — 늘 펼친 표. 한 줄에 시뮬레이션 하나, 시험 항목은 셀을 합친다(목록 탭과 같은 문법, 2026-08-28).
         <TableWrap>
