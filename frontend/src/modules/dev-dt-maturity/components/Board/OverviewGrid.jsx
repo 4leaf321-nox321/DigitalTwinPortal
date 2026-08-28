@@ -22,8 +22,9 @@ const Table = styled.table`
 `;
 // 사업부 머리 — 색 헤더. 누르면 그 사업부 판으로(2026-08-28).
 const ThDiv = styled.th`
-  cursor: pointer; font-size: 1.05rem !important; color: white !important; background: #1d4ed8 !important; text-align: center !important; border-radius: 0.4rem 0.4rem 0 0;
-  &:hover { background: #1e40af !important; text-decoration: underline; }
+  cursor: pointer; padding: 0 0.3rem 0.3rem !important; background: white !important; border-bottom: none !important;
+  & > span { display: block; font-size: 1.05rem; color: white; background: #1d4ed8; text-align: center; border-radius: 0.4rem 0.4rem 0 0; padding: 0.5rem 0.6rem; }
+  &:hover > span { background: #1e40af; text-decoration: underline; }
 `;
 const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem;`;
 const Big = styled.div`font-size: 1.75rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
@@ -46,7 +47,10 @@ const SecHead = styled.td`
   select { float: right; padding: 0.2rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; }
 `;
 // 맨 오른쪽 「전체」 — 작고 옅게, 사업부 열과 구분되게
-const ThAll = styled.th`width: 11rem; border-left: 2px solid #e2e8f0; color: white !important; background: #334155 !important; text-align: center !important; border-radius: 0.4rem 0.4rem 0 0;`;
+const ThAll = styled.th`
+  width: 11rem; padding: 0 0.3rem 0.3rem !important; background: white !important; border-bottom: none !important; border-left: 2px solid #e2e8f0;
+  & > span { display: block; font-size: 1.05rem; color: white; background: #334155; text-align: center; border-radius: 0.4rem 0.4rem 0 0; padding: 0.5rem 0.6rem; }
+`;
 const TdAll = styled.td`border-left: 2px solid #e2e8f0; background: #fafafa;`;
 
 const pct = (n, d) => (d ? Math.round((n * 100) / d) : null);
@@ -149,9 +153,9 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
           <tr>
             <th style={{ width: '9rem' }}>축</th>
             {boards.map(b => (
-              <ThDiv key={b.division_id} onClick={() => onPickDivision && onPickDivision(b.division_id)} title="누르면 이 사업부 판으로">{b.division_name}</ThDiv>
+              <ThDiv key={b.division_id} onClick={() => onPickDivision && onPickDivision(b.division_id)} title="누르면 이 사업부 판으로"><span>{b.division_name}</span></ThDiv>
             ))}
-            <ThAll title="사업부를 합쳐 다시 센 것 — 평균·누계">전체</ThAll>
+            <ThAll title="사업부를 합쳐 다시 센 것 — 평균·누계"><span>전체</span></ThAll>
           </tr>
         </thead>
         <tbody>
