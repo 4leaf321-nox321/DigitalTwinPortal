@@ -19,7 +19,7 @@ const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0;`;
 const Table = styled.table`
   width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem; table-layout: fixed;   /* 아래 남는 공간 없이 채운다 · 열 폭은 내용과 무관하게 같다(2026-08-28) */
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-  td { padding: 0.75rem 0.9rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; text-align: center; }   /* 값은 열 가운데 — 사업부끼리 세로로 비교된다(2026-08-28) */
+  td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; text-align: center; }   /* 한 화면에 들어가게 — 칸 여백을 줄인다(2026-08-28) */   /* 값은 열 가운데 — 사업부끼리 세로로 비교된다(2026-08-28) */
 `;
 // 사업부 머리 — 색 헤더. 누르면 그 사업부 판으로(2026-08-28).
 const ThDiv = styled.th`
@@ -27,9 +27,9 @@ const ThDiv = styled.th`
   & > span { display: block; font-size: 1.05rem; color: white; background: #1d4ed8; text-align: center; border-radius: 0.4rem 0.4rem 0 0; padding: 0.5rem 0.6rem; }
   &:hover > span { background: #1e40af; text-decoration: underline; }
 `;
-const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem; text-align: left !important;`;
-const Big = styled.div`font-size: 1.75rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
-const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: normal; overflow-wrap: anywhere;`;
+const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 0.9375rem; text-align: left !important;`;
+const Big = styled.div`font-size: 1.5rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
+const Small = styled.div`font-size: 0.75rem; color: #64748b; margin-top: 0.2rem; white-space: normal; overflow-wrap: anywhere;`;
 const Bar = styled.div`display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin: 0.5rem auto 0; min-width: 7rem; max-width: 14rem;`;
 const Seg = styled.div`width: ${p => p.$pct}%; background: ${p => p.$color};`;
 const Strip = styled.div`display: flex; gap: 3px; margin-top: 0.5rem; justify-content: center;`;
@@ -151,9 +151,9 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
     <Wrap>
       <Table>
         <colgroup>
-          <col style={{ width: '10rem' }} />
+          <col style={{ width: '8.5rem' }} />
           {boards.map(b => <col key={b.division_id} />)}
-          <col style={{ width: '11rem' }} />
+          <col style={{ width: '13rem' }} />
         </colgroup>
         <thead>
           <tr>
