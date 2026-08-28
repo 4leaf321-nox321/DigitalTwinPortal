@@ -34,6 +34,8 @@ export default async function run() {
     const tds = [...document.querySelectorAll('tbody tr td')].map(x => x.textContent.trim());
     say(tds.includes('LS-DYNA, HyperMesh'), `①-2 사용 툴이 제 열에: ${tds}`);
     say(tds.includes('낙하 해석 자동화') && !tds.some(x => x.includes('MX-1')), '①-2 과제는 코드가 아니라 이름으로 제 열에');
+    const badge = [...document.querySelectorAll('td span')].find(x => x.textContent === '낙하 해석 자동화');
+    say(!!badge && (badge.getAttribute('title') || '').includes('MX-1'), '①-2 과제는 배지로 — 코드·연도는 마우스를 올렸을 때');
     await click(byText('button', '연계 추가')); await settle();
     const dlg = document.querySelector('[role="dialog"][aria-label="연계 추가"]');
     say(!!dlg, '① 「연계 추가」를 누르면 모달');

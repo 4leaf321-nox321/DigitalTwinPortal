@@ -78,7 +78,17 @@ const Muted = styled.td`color: #94a3b8; font-style: italic;`;
 const DeptCell = styled.td`color: #475569; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; }`;
 // 사용 툴 · 디지털 트윈 연결 과제 — 제 열로 뺐다(2026-08-29). 과제는 코드가 아니라 **이름**으로.
 const ToolCell = styled.td`color: #64748b; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; }`;
-const ProjCell = styled.td`color: #475569; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; } em { font-style: normal; color: #cbd5e1; }`;
+const ProjCell = styled.td`
+  small { color: #cbd5e1; font-size: 0.75rem; }
+  display: flex; flex-wrap: wrap; gap: 0.2rem; align-items: center;   /* 과제가 여럿이면 배지가 줄줄이 감긴다 */
+`;
+// 디지털 트윈 연결 과제 — 배지로(2026-08-29). 없어진 과제는 옅은 회색 점선.
+const ProjBadge = styled.span`
+  display: inline-block; max-width: 100%; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600;
+  background: ${p => (p.$gone ? '#f8fafc' : '#eff6ff')}; color: ${p => (p.$gone ? '#94a3b8' : '#1e40af')};
+  border: 1px ${p => (p.$gone ? 'dashed' : 'solid')} ${p => (p.$gone ? '#e2e8f0' : '#bfdbfe')};
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+`;
 const Icon = styled.button`
   border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem;
   &:hover { color: #b91c1c; background: #fef2f2; } &:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -219,10 +229,13 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                           {(p.agent?.tools || []).length > 0 ? p.agent.tools.join(', ') : <small>—</small>}
                         </ToolCell>
                         <DeptCell>{p.agent?.department_name || <small>—</small>}</DeptCell>
-                        <ProjCell title={(p.agent?.projects || []).map(x => `${x.code ? `${x.code} · ` : ''}${x.title || x.uuid}`).join(' / ')}>
+                        <ProjCell>
                           {(p.agent?.projects || []).length > 0
-                            ? p.agent.projects.map(x => x.title || <em key={x.uuid}>(없어진 과제)</em>).map((t, i) => (
-                              <span key={i}>{i > 0 && ', '}{t}</span>))
+                            ? p.agent.projects.map(x => (
+                              <ProjBadge key={x.uuid} $gone={!x.title}
+                                         title={`${x.code ? `${x.code} · ` : ''}${x.title || '없어진 과제'}${x.year ? ` · ${x.year}` : ''}${x.status ? ` · ${x.status}` : ''}`}>
+                                {x.title || '없어진 과제'}
+                              </ProjBadge>))
                             : <small>—</small>}
                         </ProjCell>
                         <Go $on={p.id === pairId}><ChevronRight size={14} /></Go>
