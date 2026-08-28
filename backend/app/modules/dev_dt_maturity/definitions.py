@@ -219,7 +219,7 @@ AXES = {
 # ── 디지털 스레드의 사전 어휘 ──────────────────────────────────────────────
 THREAD_STAGES = [
     {'key': 'planning', 'label': '기획'}, {'key': 'development', 'label': '개발'},
-    {'key': 'mfg_eng', 'label': '제조기술'}, {'key': 'manufacturing', 'label': '제조'},
+    {'key': 'mfg_eng', 'label': '제품기술'}, {'key': 'manufacturing', 'label': '제조'},
     {'key': 'quality', 'label': '품질'}, {'key': 'purchasing', 'label': '구매'},
     {'key': 'market', 'label': '시장(CS)'}, {'key': 'management', 'label': '경영'},
 ]

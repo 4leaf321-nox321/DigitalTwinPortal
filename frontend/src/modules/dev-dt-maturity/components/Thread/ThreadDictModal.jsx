@@ -130,11 +130,6 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label={title}>
         <Head>
-          {kind === 'org' && divisionId === 'all' && (
-            <select value={division ?? ''} onChange={e => setDivision(Number(e.target.value))} aria-label="사업부" style={{ marginRight: '0.4rem', fontFamily: 'inherit', fontSize: '0.8125rem', padding: '0.2rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}>
-              {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          )}
           <h3>{title}</h3>
           <Tabs>
             <Tab type="button" $on={kind === 'system'} onClick={() => setKind('system')}>시스템</Tab>
@@ -145,6 +140,11 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
         </Head>
         <Body>
           <Left>
+            {kind === 'org' && divisionId === 'all' && (
+              <select value={division ?? ''} onChange={e => setDivision(Number(e.target.value))} aria-label="사업부" style={{ margin: '0.5rem 0.5rem 0', fontFamily: 'inherit', fontSize: '0.8125rem', padding: '0.2rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}>
+                {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            )}
             {canEditKind && (
               <Quick onSubmit={add}>
                 {kind === 'system' && (
