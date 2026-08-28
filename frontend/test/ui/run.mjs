@@ -22,7 +22,7 @@ for (const f of files) {
   await build({
     entryPoints: [join(here, f)],
     bundle: true, format: 'esm', platform: 'node', outfile, logLevel: 'error',
-    alias: { 'styled-components': join(here, 'sc-stub.js') },
+    alias: { 'styled-components': join(here, 'sc-stub.js'), 'react-force-graph-2d': join(here, 'fg-stub.js') },
     external: ['jsdom'],
     jsx: 'automatic',
   });
