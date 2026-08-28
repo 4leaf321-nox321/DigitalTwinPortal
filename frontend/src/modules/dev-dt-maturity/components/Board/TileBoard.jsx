@@ -29,7 +29,7 @@ const GroupLabel = styled.div`
 const Frame = styled.button`
   position: absolute; font-family: inherit; cursor: pointer; padding: 0; overflow: hidden; text-align: left; border-radius: 2px;
   background: ${p => p.$c}; border: ${p => (p.$empty ? '1.5px dashed #64748b' : '1px solid rgba(15, 23, 42, 0.55)')};
-  box-shadow: ${p => (p.$stale ? 'inset 0 0 0 2px #f59e0b' : 'inset 0 0 0 1px rgba(255, 255, 255, 0.25)')};
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);   /* 재평가 필요 표시는 모판엔 없다(2026-08-29) — 색이 곧 정보 */
   &:hover { outline: 2px solid white; z-index: 2; }
 `;
 const FName = styled.span`
@@ -101,7 +101,6 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
         <Legend aria-label="범례">
           {axis.rungs.map((r, i) => (axis.hide_empty && i === 0 ? null : <span key={r.key}><Sw $c={colorFor(i, total)} />{r.label}</span>))}
           <span><Sw $dashed />미평가</span>
-          <span><Sw style={{ background: EMPTY, boxShadow: 'inset 0 0 0 2px #f59e0b' }} />재평가 필요</span>
         </Legend>
       </Bar>
       {pairsCount === 0 ? <Muted>아직 {isThread ? '구간' : '연계'}이 없습니다 — 목록 탭에서 더하세요.</Muted> : (
@@ -124,9 +123,9 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
             const showName = w > 6 && h > 3.2;
             const lines = h > 8 ? 3 : h > 5 ? 2 : 1;
             return (
-              <Frame key={d.id} type="button" $c={c} $empty={d.idx == null} $stale={d.stale}
+              <Frame key={d.id} type="button" $c={c} $empty={d.idx == null}
                      style={{ left: `${n.x0}%`, top: `${n.y0}%`, width: `${w}%`, height: `${h}%` }}
-                     title={`${d.name}${d.sub ? ` — ${d.sub}` : ''} · ${axis.label}: ${label}${d.stale ? ' · 재평가 필요' : ''}`}
+                     title={`${d.name}${d.sub ? ` — ${d.sub}` : ''} · ${axis.label}: ${label}`}
                      onClick={() => onOpenPair && onOpenPair(d.id)}>
                 {showName && <FName $dark={isDark(c)} $lines={lines}>{d.name}</FName>}
                 {showName && d.text && h > 5 && <FBadge $dark={isDark(c)}>{d.text}</FBadge>}
