@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import maturityApi from '../../services/maturityApi';
 import { PairPanel } from './PairModal';
 
-// 쌍 상세를 **옆에** 심는다 — 목록 탭에서 시뮬레이션 칸을 누르면 오른쪽에 뜬다.
+// 연계 상세를 **옆에** 심는다 — 목록 탭에서 시뮬레이션 칸을 누르면 오른쪽에 뜬다.
 // 속(PairPanel)은 모달과 같은 부품이다. 읽기만 여기서 하고, 저장은 속이 한다.
 
 const Box = styled.section`

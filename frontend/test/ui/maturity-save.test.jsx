@@ -1,9 +1,9 @@
 // 성숙도 — 저장 흐름을 실제로 눌러 본다. (2026-08-28 「근거를 적어도 저장이 안 된다」 점검에서 시작)
 //
-//   ① 쌍 상세: 칸 누르기 → 근거 적기 → 저장 → PUT 이 가고 사다리가 새 칸을 그린다
-//   ② 쌍 상세: 근거 칸에서 Enter 로도 저장된다
-//   ③ 쌍 상세: 정확도 「값 적기」 → 값·근거 → value 로 간다(rung 없음)
-//   ④ 쌍 상세: 서버가 거절하면 그 이유가 저장 단추 옆에 보인다
+//   ① 연계 상세: 칸 누르기 → 근거 적기 → 저장 → PUT 이 가고 사다리가 새 칸을 그린다
+//   ② 연계 상세: 근거 칸에서 Enter 로도 저장된다
+//   ③ 연계 상세: 정확도 「정확도 기록 추가」 → 값·근거 → value 로 간다(rung 없음)
+//   ④ 연계 상세: 서버가 거절하면 그 이유가 저장 단추 옆에 보인다
 //   ⑤ 관리 창: 항목 고르기 → 세부 고치기 → 저장
 //   ⑥ 관리 창: 담당 부서를 찾아 고르고 저장 → department_id 가 숫자로 간다
 //   ⑦ 관리 창: 표의 연필로 열면 그 항목이 골라진 채 열린다(initialId)
@@ -69,7 +69,7 @@ export default async function run() {
   try {
     // ① 칸 → 근거 → 저장
     await render(<PairSide pairId={101} axes={AXES} onChanged={() => {}} onClose={() => {}} />);
-    say(html().includes('낙하 시험 × 구조 해석'), '① 쌍이 불러와짐');
+    say(html().includes('낙하 시험 × 구조 해석'), '① 연계이 불러와짐');
     say(!html().includes('아직 바뀐 것이 없습니다') && !!document.querySelector('[aria-label="이력"]'), '⓪ 이력은 접혀 있고 머리에 단추만');
     await click(document.querySelector('[aria-label="이력"]'));
     say(html().includes('아직 바뀐 것이 없습니다'), '⓪ 단추를 누르면 이력 판이 열림');
@@ -78,14 +78,14 @@ export default async function run() {
     const note = document.querySelector('input[placeholder^="근거"]');
     say(!!note, '① 칸을 누르면 근거 칸이 열림');
     say(note.value === '스크립트', '① 편집 칸에 기존 근거가 채워져 있음');
-    say(html().includes('전처리 자동 · 실행 자동'), '① 묶음: 실행 자동을 켜면 전처리에 더해진다(선후 없음)');
+    say(html().includes('전처리 자동 · 실행 자동'), '① 묶음: 실행 자동을 선택하면 전처리에 더해진다(선후 없음)');
     await click(byText('[role="button"]', '✓ 전처리 자동')); await settle();
-    say(html().includes('→ <strong>실행 자동</strong>'), '① 묶음: 켠 것을 다시 누르면 꺼진다');
+    say(html().includes('→ <strong>실행 자동</strong>'), '① 묶음: 선택한 것을 다시 누르면 꺼진다');
     await click(byText('[role="button"]', '전처리 자동')); await settle();
     await type(note, '');
     say(byText('button', '저장').disabled && html().includes('근거를 적어야 저장됩니다'), '① 근거를 지우면 저장이 잠기고 이유가 옆에 보임');
     await type(note, '템플릿 도입');
-    say(!byText('button', '저장').disabled, '① 근거를 적으면 저장이 켜짐');
+    say(!byText('button', '저장').disabled, '① 근거를 적으면 저장이 선택됨');
     await click(byText('button', '저장')); await settle();
     const put = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/automation'));
     say(!!put && JSON.stringify(put.body.flags) === '["pre","run"]' && put.body.note === '템플릿 도입', `① PUT 이 flags 로 감: ${JSON.stringify(put?.body)}`);
@@ -119,7 +119,7 @@ export default async function run() {
     const cellPut = calls.find(c => c.method === 'PUT' && c.url.includes('/defects/modeling'));
     say(!!cellPut && cellPut.body.name === '크랙' && cellPut.body.col === 'test' && /^\d{4}-\d{2}$/.test(cellPut.body.month), `②-3 칸을 누르면 근거 없이 PUT defects 가 감: ${JSON.stringify(cellPut?.body)}`);
     say(!document.querySelector('input[placeholder^="근거"]'), '②-3 표의 칸은 근거 상자를 열지 않음');
-    say(document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]').getAttribute('aria-pressed') === 'true' && html().includes('시험 1/2'), '②-3 켜진 칸과 「시험 1/2」 요약');
+    say(document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]').getAttribute('aria-pressed') === 'true' && html().includes('시험 1/2'), '②-3 선택된 칸과 「시험 1/2」 요약');
     await click(document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]')); await settle();
     const offPut = calls.filter(c => c.url.includes('/defects/modeling')).pop();
     say(offPut?.body.month === null, '②-3 다시 누르면 끔(month null)');
@@ -133,7 +133,7 @@ export default async function run() {
 
     // ③ 정확도 값
     calls.length = 0;
-    await click(byText('button', '줄 추가'));
+    await click(byText('button', '정확도 기록 추가'));
     const num = document.querySelector('input[type="number"]');
     say(!!num && html().includes('값을 적어야 저장됩니다') === false, '③ 값 칸이 열림');
     await type(num, '91');
@@ -142,9 +142,9 @@ export default async function run() {
     const put3 = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/accuracy'));
     say(!!put3 && put3.body.value === 91 && !('rung' in put3.body), `③ value 로 감: ${JSON.stringify(put3?.body)}`);
     say(html().includes('91%') && html().includes('현상 재현'), '③ 값이 막대의 영역(현상 재현)으로 그려짐');
-    say(!!document.querySelector('[aria-label="정확도 줄 지우기"]') && html().includes('12건 비교'), '③ 정확도가 줄로 붙어 보임');
+    say(!!document.querySelector('[aria-label="정확도 기록 지우기"]') && html().includes('12건 비교'), '③ 정확도가 줄로 붙어 보임');
     window.confirm = () => true;
-    await click(document.querySelector('[aria-label="정확도 줄 지우기"]')); await settle();
+    await click(document.querySelector('[aria-label="정확도 기록 지우기"]')); await settle();
     say(calls.some(c => c.method === 'DELETE' && c.url.includes('/changes/9')), '③ 줄의 휴지통이 DELETE 를 보냄');
 
     // ④ 서버 거절 — 이유가 단추 옆에 (칸 축으로)
@@ -185,7 +185,7 @@ export default async function run() {
     say(!!defIn, '⑥-2 불량 유형 칸이 있음');
     await type(defIn, '크랙'); await keydown(defIn, 'Enter'); await settle();
     say(html().includes('크랙') && defIn.value === '', '⑥-2 Enter 로 칩이 붙고 칸이 비워짐');
-    say(!byText('button', '저장').disabled, '⑥ 고르면 저장이 켜짐');
+    say(!byText('button', '저장').disabled, '⑥ 고르면 저장이 선택됨');
     await click(byText('button', '저장')); await settle();
     const put6 = calls.find(c => c.method === 'PUT' && c.url.includes('/agents/5'));
     say(JSON.stringify(put6?.body?.defect_types) === '["크랙"]', `⑥-2 PUT 에 defect_types 가 감: ${JSON.stringify(put6?.body?.defect_types)}`);

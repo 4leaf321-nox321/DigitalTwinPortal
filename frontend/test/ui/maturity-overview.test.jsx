@@ -1,7 +1,7 @@
 // 성숙도 — 전체 「요약」의 사업부 × 축 표를 실제로 그려 본다. (2026-08-28)
 //
 //   ① 전체 판이면 「요약」이 기본이고 가로가 사업부, 세로가 축이다
-//   ② 축마다 다른 대표 수치 — 정확도 평균 · 적용 범위 「이상 %」 · 자동화 평균 켠 수 · 모델링 시험 재현률
+//   ② 축마다 다른 대표 수치 — 정확도 평균 · 적용 범위 「이상 %」 · 자동화 적용 단계 수 (평균) · 모델링 시험 재현률
 //   ③ 사업부 머리를 누르면 그 사업부로 내려간다 · 「상세」로 바꾸면 시험 표가 나온다
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
@@ -49,7 +49,7 @@ export default async function run() {
     const h = html();
     say(h.includes('80%') && h.includes('값 있음 2/2'), '② 정확도: 평균 80% · 값 있음 2/2');
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');
-    say(h.includes('1/2') && h.includes('평균 켠 수'), '② 자동화: 평균 켠 수 1/2');
+    say(h.includes('1/2') && h.includes('적용 단계 수 (평균)'), '② 자동화: 적용 단계 수 (평균) 1/2');
     say(h.includes('시험 불량 재현') && h.includes('불량 유형 4'), '② 모델링: 시험 불량 재현률 · 불량 유형 수');
     say(h.includes('미검증 1'), '② VD 정확도에 「미검증 1」 배지');
     await click(byText('th', 'VD'));
@@ -58,7 +58,7 @@ export default async function run() {
     say(html().includes('낙하 시험') && html().includes('진동 시험'), '③ 「상세」로 바꾸면 시험 표');
     await click(byText('button', '전부 펼침')); await settle();
     const h3 = html();
-    say(h3.includes('>전처리<') && h3.includes('>실행<') && h3.includes('시험 2/2') && h3.includes('>형상 재현<'), '③ 상세의 묶음·표 축은 켠 것들이 배지로 늘어섬(전처리·실행 · 형상 재현 · 시험 2/2)');
+    say(h3.includes('>전처리<') && h3.includes('>실행<') && h3.includes('시험 2/2') && h3.includes('>형상 재현<'), '③ 상세의 묶음·표 축은 선택한 것들이 배지로 늘어섬(전처리·실행 · 형상 재현 · 시험 2/2)');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

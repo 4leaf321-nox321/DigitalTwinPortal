@@ -239,7 +239,7 @@ def test_닫힌_부문에는_대상을_못_만든다(client, auth, world, office
     assert '열리지' in out['message']
 
 
-def test_사업부_이력은_쌍_이름을_달고_최근순이다(client, auth, world, mx_user):
+def test_사업부_이력은_연계_이름을_달고_최근순이다(client, auth, world, mx_user):
     _, _, p = _pair(client, auth, mx_user, world['mx'])
     _assess(client, auth, mx_user, p['id'], 'automation', {'rung': 'pre', 'note': 'a'})
     _assess(client, auth, mx_user, p['id'], 'automation', {'rung': 'run', 'note': 'b'})
@@ -349,12 +349,12 @@ def test_제품군은_로드맵_설정이_표준이고_찾기_정돈_바꾸기�
     assert all('S시리즈' not in s['product_families'] and 'S 시리즈' in s['product_families'] for s in subs)
 
 
-def test_사업부는_속성이고_걸린_쌍이_없을_때만_옮긴다(client, auth, world, mx_user, office):
+def test_사업부는_속성이고_걸린_연계이_없을_때만_옮긴다(client, auth, world, mx_user, office):
     s, a, p = _pair(client, auth, mx_user, world['mx'])
     assert s['division_id'] == world['mx'].id and a['division_id'] == world['mx'].id
-    # 쌍이 걸린 채로는 못 옮긴다
+    # 연계이 걸린 채로는 못 옮긴다
     res = client.put(f'{BASE}/subjects/{s["id"]}', json={'division_id': world['vd'].id}, headers=auth(office))
-    assert res.status_code == 400 and '먼저 쌍을 끊으세요' in res.get_json()['message']
+    assert res.status_code == 400 and '먼저 연계을 끊으세요' in res.get_json()['message']
     client.delete(f'{BASE}/pairs/{p["id"]}', headers=auth(mx_user))
     # MX 사람은 VD 로 못 보낸다 — 가는 쪽도 손댈 수 있어야 한다
     res = client.put(f'{BASE}/subjects/{s["id"]}', json={'division_id': world['vd'].id}, headers=auth(mx_user))
@@ -430,7 +430,7 @@ def test_칸의_도달_시점을_그_자리에서_적는다(client, auth, world,
     res = client.put(f'{BASE}/pairs/{p["id"]}/reached/accuracy/trend', json={'month': '2024-01'}, headers=auth(mx_user))
     assert res.status_code == 400
 
-    # 묶음 축: 켠 항목만, 그 항목을 켠 이력의 날짜를 옮긴다
+    # 묶음 축: 선택한 항목만, 그 항목을 켠 이력의 날짜를 옮긴다
     _assess(client, auth, mx_user, p['id'], 'automation', {'flags': ['pre', 'run'], 'note': 'x'})
     res = client.put(f'{BASE}/pairs/{p["id"]}/reached/automation/run', json={'month': '2025-02'}, headers=auth(mx_user))
     assert res.status_code == 200
@@ -496,8 +496,8 @@ def test_모델링_수준은_불량_유형마다_시험_시장_열을_켠다(cli
     assert 'test' in m['defects']['변색'] and len(m['defects']['변색']['test']) == 7   # True 는 이번 달
     assert '접점' not in m['defects'] and '없는유형' in m['defects']     # 켠 게 없는 유형은 버림 · 모르는 유형은 남되 안 센다
     assert m['summary'] == {'test': 2, 'market': 0, 'total': 2} and m['rung'] == 'test_all' and m['rung_index'] == 4
-    assert out['data']['changes'][0]['after'] == 'performance|t3/m0'     # 이력엔 켠 칸 수(모르는 유형 포함)
-    # 시장 열을 켜면 5
+    assert out['data']['changes'][0]['after'] == 'performance|t3/m0'     # 이력엔 선택한 칸 수(모르는 유형 포함)
+    # 시장 열을 선택하면 5
     out = _assess(client, auth, mx_user, p['id'], 'modeling', {
         'flags': ['performance'], 'note': 'x', 'evidence': {'defects': {'크랙': {'test': '2025-03', 'market': '2026-01'}}}})
     assert out['data']['assessments']['modeling']['rung_index'] == 5
@@ -524,7 +524,7 @@ def test_불량_유형_표의_칸은_근거_없이_바로_켜고_끈다(client, 
     d = cell('크랙', 'test', '2025-03')                                   # 평가 줄이 없어도 「없음」 바탕으로 생긴다
     m = d['assessments']['modeling']
     assert m['flags'] == [] and m['defects'] == {'크랙': {'test': '2025-03'}} and m['rung_index'] == 3
-    assert d['changes'][0]['after'] == 'none|t1/m0' and '켬' in d['changes'][0]['note']
+    assert d['changes'][0]['after'] == 'none|t1/m0' and '선택' in d['changes'][0]['note']
     d = cell('크랙', 'market', True)                                        # True 는 이번 달
     assert d['assessments']['modeling']['rung_index'] == 5
     d = cell('크랙', 'test', None)                                          # 끔

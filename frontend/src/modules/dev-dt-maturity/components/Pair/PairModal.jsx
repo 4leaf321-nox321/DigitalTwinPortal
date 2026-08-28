@@ -5,12 +5,12 @@ import maturityApi from '../../services/maturityApi';
 import { colorFor, reachedDates, flagDefs, matrixLevel } from '../../utils/board';
 import { AccuracyPreview, DEFAULT_RULE } from '../Settings/SettingsModal';
 
-// 쌍 상세 — 사다리를 **그 안에서** 그린다. (PLAN 7-1)
+// 연계 상세 — 사다리를 **그 안에서** 그린다. (PLAN 7-1)
 //
 // 축마다 가로 스텝: 지나온 칸엔 도달일, 현재 칸은 채움. 칸을 누르면 그 칸으로
 // 옮기는 편집이 열리고 근거를 적는다. 정확도만 다르다 — 값을 적고 칸은 환산된다.
 //
-// ⚠️ 다른 사업부 쌍은 단추가 사라지는 게 아니라 **이유가 적힌 채 꺼진다**(deny_reason).
+// ⚠️ 다른 사업부 연계은 단추가 사라지는 게 아니라 **이유가 적힌 채 꺼진다**(deny_reason).
 // ⚠️ 근거 없이는 저장이 안 된다. 서버가 거절하고, 화면도 미리 막는다.
 
 const Backdrop = styled.div`
@@ -50,7 +50,7 @@ const MatrixWrap = styled.div`
   td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
   td:first-child { color: #1e293b; font-weight: 600; }
 `;
-// 칸 — 켠 것은 파랗게 채우고, 안 켠 것은 빈 상자로. 둘 다 같은 크기라 눌러야 할 자리가 보인다.
+// 칸 — 선택한 것은 파랗게 채우고, 안 선택한 것은 빈 상자로. 둘 다 같은 크기라 눌러야 할 자리가 보인다.
 const MCell = styled.button`
   display: inline-flex; align-items: center; gap: 0.3rem; border-radius: 0.375rem; padding: 0.3rem 0.6rem; min-width: 4.6rem; justify-content: center;
   font-size: 0.75rem; font-weight: 600; font-family: inherit; cursor: pointer;
@@ -121,8 +121,8 @@ const fmtDate = (iso) => (iso ? iso.slice(0, 7) : '');
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const isDark = (color) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(color);
 
-/** 불량 유형 × (시험·시장) 표 — 시뮬레이션의 불량 유형이 행. 칸은 **근거 없이 바로** 켜고 끈다(2026-08-28).
- *  근거는 바탕(형상·거동)을 매길 때만 묻는다. 켠 칸엔 달이 붙고, 달을 눌러 고친다. */
+/** 불량 유형 × (시험·시장) 표 — 시뮬레이션의 불량 유형이 행. 칸은 **근거 없이 바로** 선택·해제한다(2026-08-28).
+ *  근거는 바탕(형상·거동)을 매길 때만 묻는다. 선택한 칸엔 달이 붙고, 달을 눌러 고친다. */
 const DefectMatrix = ({ axis, names, defects, canEdit, busy, onCell }) => {
   const [monthFor, setMonthFor] = useState(null);   // { name, col } — 달을 고치는 중인 칸
   if (!names.length) {
@@ -144,7 +144,7 @@ const DefectMatrix = ({ axis, names, defects, canEdit, busy, onCell }) => {
                   <td key={c.key}>
                     <MCell type="button" $on={!!month} disabled={!canEdit || busy} aria-label={label} aria-pressed={!!month}
                            onClick={() => { setMonthFor(null); onCell(name, c.key, month ? null : thisMonth()); }}
-                           title={!canEdit ? undefined : month ? '누르면 끕니다' : '누르면 이번 달로 켭니다'}>
+                           title={!canEdit ? undefined : month ? '누르면 해제합니다' : '누르면 이번 달로 선택합니다'}>
                       {month ? <><Check size={12} strokeWidth={3} /> 재현</> : <><Square size={12} /> 안 됨</>}
                     </MCell>
                     {month && !dating && (
@@ -196,7 +196,7 @@ const AccuracyBar = ({ axis, a, rule }) => {
   );
 };
 
-/** 정확도 줄 — 저장마다 한 줄. 최근 것만 보이고, 나머지는 「자세히」. 지우면 남은 줄의 가장 늦은 것이 현재가 된다. */
+/** 정확도 기록 — 저장마다 한 줄. 최근 것만 보이고, 나머지는 「자세히」. 지우면 남은 줄의 가장 늦은 것이 현재가 된다. */
 const Entries = ({ entries, canEdit, busy, onRemove }) => {
   const [open, setOpen] = useState(false);
   if (!entries.length) return null;
@@ -217,7 +217,7 @@ const Entries = ({ entries, canEdit, busy, onRemove }) => {
           <span style={{ color: '#94a3b8' }}>{c.actor_name}</span>
           {c.note && <span>“{c.note}”</span>}
           {canEdit && (
-            <button type="button" disabled={busy} onClick={() => onRemove(c.id)} aria-label="정확도 줄 지우기" title="이 줄 지우기"
+            <button type="button" disabled={busy} onClick={() => onRemove(c.id)} aria-label="정확도 기록 지우기" title="이 줄 지우기"
                     style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}>
               <Trash2 size={12} />
             </button>
@@ -253,7 +253,7 @@ const ReachedAt = ({ axis, rung, reached, canEdit, date, dating, setDating, save
   );
 };
 
-/** 묶음 축의 토글 — 「수동」을 누르면 전부 끈다. 다른 항목은 켜고 끈다(선후 없음). */
+/** 묶음 축의 토글 — 「수동」을 누르면 전부 해제한다. 다른 항목은 선택·해제한다(선후 없음). */
 const toggleFlag = (flags, key, axis) => {
   if (key == null) return [...flags];
   const manual = axis.rungs[0].key;
@@ -316,7 +316,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
   // 이력은 머리의 ⓘ 단추로 여닫는다 — 아래에 늘 펼쳐 두면 사다리 자리를 먹는다(2026-08-28).
   const [histOpen, setHistOpen] = useState(false);
   const removeEntry = async (changeId) => {
-    if (!window.confirm('이 정확도 줄을 지울까요? 남은 줄 가운데 가장 늦은 것이 현재가 됩니다.')) return;
+    if (!window.confirm('이 정확도 기록을 지울까요? 남은 줄 가운데 가장 늦은 것이 현재가 됩니다.')) return;
     setBusy(true);
     try {
       const res = await maturityApi.deleteChange(pairId, changeId);
@@ -414,7 +414,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
         </Head>
         {pair && histOpen && (
           <HistPanel>
-            <AxisHead><History size={14} /> <AxisName>이력</AxisName><AxisQ>정확도 줄은 정확도 축 안에서 봅니다.</AxisQ></AxisHead>
+            <AxisHead><History size={14} /> <AxisName>이력</AxisName><AxisQ>정확도 기록은 정확도 축 안에서 봅니다.</AxisQ></AxisHead>
             {(pair.changes || []).filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').length === 0 ? (
               <AxisQ>아직 바뀐 것이 없습니다.</AxisQ>
             ) : (
@@ -466,14 +466,14 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                       {axis.kind === 'matrix' && <strong>{matrixSummary(axis, isEditing ? editing.flags : a.flags, a.defects, pair.agent?.defect_types)}</strong>}{' '}
                       {axis.kind === 'value' && <strong>{a.value}%</strong>}{' '}
                       {fmtDate(a.assessed_at)} · {a.assessed_by_name || '—'}
-                      {a.stale && <> <Stale>낡음</Stale></>}
+                      {a.stale && <> <Stale>재평가 필요</Stale></>}
                     </Meta>
                   ) : <Meta>{axis.kind === 'matrix' && isEditing ? <strong>{matrixSummary(axis, editing.flags, {}, pair.agent?.defect_types)}</strong> : '미평가'}</Meta>}
                 </AxisHead>
 
                 {isFlagKind(axis.kind) ? (
-                  // 묶음 — 선후 없음. 켠 항목은 채움, 「수동」은 아무것도 안 켰을 때 채움.
-                  // 색은 켠 개수(서열)로 — 다 켜면 가장 진하다. 편집 중엔 초안의 묶음을 그린다.
+                  // 묶음 — 선후 없음. 선택한 항목은 채움, 「수동」은 아무것도 안 켰을 때 채움.
+                  // 색은 켠 개수(서열)로 — 다 선택하면 가장 진하다. 편집 중엔 초안의 묶음을 그린다.
                   // 표(matrix) 축은 타일이 바탕(형상·거동)이고 색은 접힌 서열, 그 밑에 불량 유형 표가 붙는다.
                   (() => {
                     const flags = isEditing ? editing.flags : (a?.flags || null);
@@ -486,13 +486,13 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                       <FlagRow $matrix={axis.kind === 'matrix'}>
                       <Ladder $stack={axis.kind === 'matrix'}>
                         {tiles.map((r, i) => {
-                          if (i === 0 && axis.hide_empty) return null;      // 「없음」 칸은 안 보인다 — 다 끄면 그 상태
+                          if (i === 0 && axis.hide_empty) return null;      // 「없음」 칸은 안 보인다 — 다 해제하면 그 상태
                           const on = flags != null && (i === 0 ? flags.length === 0 : flags.includes(r.key));
                           return (
                             <Rung key={r.key} role="button" tabIndex={0}
                                   $current={on} $reached={on} $color={i === 0 ? '#e2e8f0' : color} $dark={i !== 0 && isDark(color)}
                                   $editable={canEdit}
-                                  title={`${r.description}${isEditing ? ' — 누르면 켜고 끕니다' : ''}`}
+                                  title={`${r.description}${isEditing ? ' — 누르면 선택·해제합니다' : ''}`}
                                   onClick={() => {
                                     if (!canEdit) return;
                                     if (isEditing) setEditing(s => ({ ...s, flags: toggleFlag(s.flags, r.key, axis) }));
@@ -551,7 +551,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                 )}
                 {canEdit && axis.kind === 'value' && !isEditing && (
                   <Row style={{ marginTop: '0.5rem' }}>
-                    <Button onClick={() => startEdit(axis)}>줄 추가</Button>
+                    <Button onClick={() => startEdit(axis)}>정확도 기록 추가</Button>
                     <AxisQ>저장마다 한 줄이 쌓입니다 — 가장 늦은 달이 현재, 칸은 값에서(사업부 문턱)</AxisQ>
                   </Row>
                 )}
@@ -569,7 +569,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     ) : isFlagKind(editing.kind) ? (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
                         → <strong>{flagLabels(axis, editing.flags)}</strong>
-                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다.{!axis.hide_empty && <> 「{axis.rungs[0].label}」은 전부 끕니다.</>}{axis.implies?.full && <> 「완전 대체」를 켜면 나머지가 다 켜집니다.</>}{axis.kind === 'matrix' && <> 오른쪽 표의 칸은 근거 없이 바로 저장됩니다.</>}</AxisQ>
+                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 선택·해제합니다.{!axis.hide_empty && <> 「{axis.rungs[0].label}」은 전부 해제합니다.</>}{axis.implies?.full && <> 「완전 대체」를 선택하면 나머지가 다 켜집니다.</>}{axis.kind === 'matrix' && <> 오른쪽 표의 칸은 근거 없이 바로 저장됩니다.</>}</AxisQ>
                       </span></Row>
                     ) : (
                       <Row><span style={{ fontSize: '0.8125rem' }}>

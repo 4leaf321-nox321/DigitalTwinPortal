@@ -8,7 +8,7 @@ import { colorFor, divisionSummary } from '../../utils/board';
 // 축마다 대표 수치가 다르다 — 축이 다 순서형이 아니라서 「n단계 이상 %」 하나로 못 잰다.
 //   정확도(값)     평균 % · 미검증 수                  + 세 영역 분포 막대
 //   적용 범위(택1) 「신규 개발 전 모델」 이상 %          + 칸 분포 막대
-//   자동화(묶음)   항목별 채택률 띠 (전처리·실행·후처리·보고·파이프라인)  + 평균 켠 수
+//   자동화(묶음)   항목별 채택률 띠 (전처리·실행·후처리·보고·파이프라인)  + 적용 단계 수 (평균)
 //   시험 대체(묶음) 항목별 채택률 띠                     + 완전 대체 수
 //   모델링(표)     시험 불량 재현률 · 시장 재현률        + 바탕(형상·거동) 채택률
 // 사업부 머리를 누르면 그 사업부 판으로 내려간다.
@@ -50,7 +50,7 @@ const shade = (p) => (p == null ? '#e2e8f0' : p >= 75 ? '#1d4ed8' : p >= 50 ? '#
 const dark = (c) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(c);
 
 const AxisSummary = ({ axis, s }) => {
-  if (!s || s.total === 0) return <Muted as="div">쌍 없음</Muted>;
+  if (!s || s.total === 0) return <Muted as="div">연계 없음</Muted>;
   if (axis.kind === 'value') {
     return (
       <>
@@ -79,7 +79,7 @@ const AxisSummary = ({ axis, s }) => {
     return (
       <>
         <Big>{s.avg != null ? `${s.avg}/${s.flags.length}` : '—'}</Big>
-        <Small>평균 켠 수{full != null && <> · 완전 대체 {s.adoptionCount.full}</>}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
+        <Small>적용 단계 수 (평균){full != null && <> · 완전 대체 {s.adoptionCount.full}</>}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Strip>
           {s.flags.map(f => {
             const p = s.adoption[f.key];
@@ -159,14 +159,14 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
             </tr>
           ))}
           <tr>
-            <Name>쌍 · 미평가 · 낡음</Name>
+            <Name>연계 · 미평가 · 재평가 필요</Name>
             {sums.map((s, i) => (
               <td key={boards[i].division_id}>
                 <Big>{s.pairs}</Big>
-                <Small>미평가 칸 {s.unassessed} · 낡음 {s.stale}</Small>
+                <Small>미평가 항목 {s.unassessed} · 재평가 필요 {s.stale}</Small>
               </td>
             ))}
-            <TdAll><Big>{whole.pairs}</Big><Small>미평가 칸 {whole.unassessed} · 낡음 {whole.stale}</Small></TdAll>
+            <TdAll><Big>{whole.pairs}</Big><Small>미평가 항목 {whole.unassessed} · 재평가 필요 {whole.stale}</Small></TdAll>
           </tr>
           {review && (
             <>

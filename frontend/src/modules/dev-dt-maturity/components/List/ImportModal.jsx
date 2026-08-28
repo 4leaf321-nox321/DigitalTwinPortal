@@ -118,7 +118,7 @@ const ImportModal = ({ divisionId, divisionName, canEdit, denyReason, reconcile,
             <>
               <div>
                 새 시험 <strong>{preview.summary.new_subjects}</strong> · 새 시뮬레이션 <strong>{preview.summary.new_agents}</strong> ·
-                새 쌍 <strong>{preview.summary.new_pairs}</strong> · 이미 있는 쌍 {preview.summary.existing_pairs} ·
+                새 연계 <strong>{preview.summary.new_pairs}</strong> · 이미 있는 연계 {preview.summary.existing_pairs} ·
                 정확도 값 {preview.summary.accuracy_values} · <span style={{ color: preview.summary.errors ? '#b91c1c' : undefined }}>오류 {preview.summary.errors}</span>
               </div>
               <Preview>
@@ -146,7 +146,7 @@ const ImportModal = ({ divisionId, divisionName, canEdit, denyReason, reconcile,
           {result && (
             <Notice $ok>
               <Check size={14} />
-              <span>넣었습니다 — 시험 {result.done.subjects} · 시뮬레이션 {result.done.agents} · 쌍 {result.done.pairs} · 정확도 {result.done.accuracy}
+              <span>넣었습니다 — 시험 {result.done.subjects} · 시뮬레이션 {result.done.agents} · 연계 {result.done.pairs} · 정확도 {result.done.accuracy}
                 {result.done.skipped ? ` · 오류라 건너뛴 줄 ${result.done.skipped}` : ''}</span>
             </Notice>
           )}

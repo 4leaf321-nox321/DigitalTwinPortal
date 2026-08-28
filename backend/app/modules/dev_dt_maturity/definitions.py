@@ -9,7 +9,7 @@
    그렇지 않으면 3절의 설계가 틀린 것이다.
 
 ⚠️ **축은 세 종류다.** `rung`(칸을 고른다) · `value`(값을 적고 문턱으로 칸이 정해진다) ·
-   `set`(선후 없는 항목을 켜고 끈다 — 자동화). 정확도가 value 다. 값과 칸이 따로 놀면
+   `set`(선후 없는 항목을 선택·해제한다 — 자동화). 정확도가 value 다. 값과 칸이 따로 놀면
    정확도가 둘이 된다 — 칸을 바꾸려면 값을 바꿔야 한다. set 은 첫 칸(수동)이 「아무것도
    안 켬」이고 서열은 켠 개수다 — 전처리·실행·후처리에는 순서가 없다(2026-08-28).
 
@@ -25,7 +25,7 @@ MODULE_KEY = 'dev_dt_maturity'
 # ── 부문 ───────────────────────────────────────────────────────────────────
 #
 # 상부 보고 구분 셋 + 디지털 스레드. 시뮬레이션만 1차로 만든다(PLAN 3-1·3-2).
-# `has_agent=False` 인 부문은 「수단 없는 쌍」 — 대상 하나에 직접 매긴다.
+# `has_agent=False` 인 부문은 「수단 없는 연계」 — 대상 하나에 직접 매긴다.
 SECTORS = [
     {'key': 'simulation', 'label': '시뮬레이션', 'has_agent': True,
      'subject_label': '시험 항목', 'agent_label': '시뮬레이션', 'phase': 1},
@@ -78,7 +78,7 @@ AXES = {
             # ⚠️ 이것은 **해석 파이프라인**의 자동화다. 「검증 자동화」 부문(로직 검증)과
             #    다른 것을 잰다 — 같은 시험에 둘 다 걸려도 겹치지 않는다(PLAN 3-1).
             # ⚠️ 사다리가 아니라 **묶음**이다. 전처리·실행·후처리·보고·파이프라인은 선후가
-            #    없어 따로 켜고 끈다. 「수동」은 아무것도 안 켠 상태. 서열(색)은 켠 개수다.
+            #    없어 따로 선택·해제한다. 「수동」은 아무것도 안 켠 상태. 서열(색)은 켠 개수다.
             'rungs': [
                 {'key': 'manual', 'label': '수동', 'short': '수동', 'description': '아무 단계도 자동이 아니다 — 전 과정을 사람이 한다'},
                 {'key': 'pre', 'label': '전처리 자동', 'short': '전처리', 'description': '형상·메시·조건 준비가 자동'},
@@ -133,7 +133,7 @@ AXES = {
             'evidence': ['tests_saved_per_year'], 'evidence_label': '줄어든 시험 횟수/년',
             # 묶음이다(2026-08-28) — 시험 병행·원인 분석·사전 검증·인증 게이트·완전 대체는 사다리가 아니라
             # **쓰임새**라 겹칠 수 있다. 첫 칸 「없음」은 아무것도 안 켠 상태이고 화면엔 안 보인다(hide_empty).
-            # 「완전 대체」를 켜면 나머지가 다 켜진다(implies). 오른쪽일수록 앞선 것.
+            # 「완전 대체」를 선택하면 나머지가 다 켜진다(implies). 오른쪽일수록 앞선 것.
             'hide_empty': True,
             'implies': {'full': ['reference', 'cause_analysis', 'screening', 'cert_gate']},
             'rungs': [
@@ -173,7 +173,7 @@ def rung_keys(axis):
 def rung_index(axis, rung_key):
     """칸의 서열. 없는 칸이면 None — 0 으로 두면 「첫 칸」과 「미평가」가 섞인다.
 
-    set 축은 rung 이 켠 항목들의 묶음('pre,run,post')이고 서열은 **켠 개수**다.
+    set 축은 rung 이 선택한 항목들의 묶음('pre,run,post')이고 서열은 **켠 개수**다.
     'manual'(아무것도 안 켬)은 0.
     """
     if axis.get('kind') == 'set':
@@ -219,7 +219,7 @@ def matrix_level(axis, rung, defects, defect_types):
 
 
 def set_flags(axis, rung_key):
-    """set 축의 rung 문자열 → 켠 항목 목록. 'manual' 이나 '' 은 []. 모르는 항목이 섞이면 None."""
+    """set 축의 rung 문자열 → 선택한 항목 목록. 'manual' 이나 '' 은 []. 모르는 항목이 섞이면 None."""
     if rung_key is None:
         return None
     if rung_key in ('', rung_keys(axis)[0]):
@@ -232,7 +232,7 @@ def set_flags(axis, rung_key):
 
 
 def set_rung(axis, flags):
-    """켠 항목 목록 → 저장할 rung 문자열. 빈 묶음은 첫 칸(수동)."""
+    """선택한 항목 목록 → 저장할 rung 문자열. 빈 묶음은 첫 칸(수동)."""
     allowed = set_flag_keys(axis)
     picked = set(flags or [])
     for key, implied in (axis.get('implies') or {}).items():     # 「완전 대체」는 나머지를 다 켠다
@@ -306,7 +306,7 @@ def aggregate_accuracy(values, rule='auto'):
     return round(sum(filled) / len(filled), 1), len(filled), total
 
 
-# ── 낡음 ───────────────────────────────────────────────────────────────────
+# ── 재평가 필요 ───────────────────────────────────────────────────────────────────
 DEFAULT_STALE_DAYS = 365          # 12개월(PLAN 8절). ⚙설정.
 
 # ── 가져오기 틀 ────────────────────────────────────────────────────────────

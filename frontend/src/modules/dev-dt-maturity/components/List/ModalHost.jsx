@@ -7,7 +7,7 @@ import ImportModal from './ImportModal';
 // 어느 탭에 있든 헤더에서 열리므로, 목록 화면이 아니라 여기가 목록을 든다.
 //
 // 「전체」(divisionId === 'all')면 모든 사업부의 항목을 든다 — 목록은 사업부 없이 받고,
-// 쌍은 전체 판에서 편다. 제품군 찾기의 재료는 사업부마다 다르므로 사업부별로 받아 map 으로 준다.
+// 연계은 전체 판에서 편다. 제품군 찾기의 재료는 사업부마다 다르므로 사업부별로 받아 map 으로 준다.
 // 가져오기는 사업부 하나가 있어야 한다(틀이 사업부 것이다) — 전체면 창 안에서 고른다.
 
 const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason, modelKinds, initialId = null, onClose, onChanged }) => {

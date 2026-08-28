@@ -1,4 +1,4 @@
-// 판 셈의 규칙 — 축은 순서형이라 평균을 내지 않고, 필터는 쌍이 안 남는 시험을 뺀다.
+// 판 셈의 규칙 — 축은 순서형이라 평균을 내지 않고, 필터는 연계이 안 남는 시험을 뺀다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -35,7 +35,7 @@ test('분포는 칸마다 세고 미평가를 따로 센다 — 평균이 없다
   assert.deepEqual(d.scope, { counts: [0, 1], unassessed: 2 });
 });
 
-test('필터는 쌍을 좁히고, 쌍이 안 남는 시험은 뺀다', () => {
+test('필터는 연계을 좁히고, 연계이 안 남는 시험은 뺀다', () => {
   // 12 는 두 축을 다 매겼다 — 미평가가 없으니 빠진다
   assert.deepEqual(applyFilters(SUBJECTS, { unassessedOnly: true }).map(s => s.pairs.map(p => p.id)),
     [[11], [21]]);
@@ -44,7 +44,7 @@ test('필터는 쌍을 좁히고, 쌍이 안 남는 시험은 뺀다', () => {
   assert.deepEqual(applyFilters(SUBJECTS, { modelKind: 'physics' }).map(s => s.pairs.map(p => p.id)), [[11]]);
   assert.deepEqual(applyFilters(SUBJECTS, { axis: 'automation', minRung: 1 }).map(s => s.pairs.map(p => p.id)), [[11]]);
   assert.deepEqual(applyFilters(SUBJECTS, {}).length, 2);
-  // 쌍 없는 시험 — 조건이 없으면 보이고, 쌍 조건이 켜지면 빠진다
+  // 연계 없는 시험 — 조건이 없으면 보이고, 연계 조건이 켜지면 빠진다
   const withEmpty = [...SUBJECTS, { id: 3, name: '빈 시험', product_families: [], pairs: [] }];
   assert.deepEqual(applyFilters(withEmpty, {}).map(s => s.id), [1, 2, 3]);
   assert.deepEqual(applyFilters(withEmpty, { unassessedOnly: true }).map(s => s.id), [1, 2]);
@@ -65,7 +65,7 @@ test('항목 정확도 한 줄 — 부분 채움과 미입력을 말한다', () 
   assert.equal(accuracyLabel({ accuracy: null, accuracy_filled: 0, accuracy_total: 0 }), '—');
 });
 
-test('이력은 쌍·달로 묶인다', () => {
+test('이력은 연계·달로 묶인다', () => {
   const m = changesByMonth([
     { pair_id: 1, created_at: '2026-02-03T10:00:00' },
     { pair_id: 1, created_at: '2026-02-20T10:00:00' },
@@ -76,14 +76,14 @@ test('이력은 쌍·달로 묶인다', () => {
   assert.equal(m[1]['2026-02'].length, 2);
 });
 
-// ── reachedDates: 「지금 이어지고 있는 도달의 시작」 — 껐다 켠 것·내려온 칸은 시점이 없다 ──
+// ── reachedDates: 「지금 이어지고 있는 도달의 시작」 — 껐다 선택한 것·내려온 칸은 시점이 없다 ──
 import { reachedDates, REACHED_NOTE } from './board.js';
 
 const SET_AXIS = { key: 'automation', kind: 'set', rungs: [{ key: 'manual' }, { key: 'pre' }, { key: 'run' }, { key: 'post' }] };
 const RUNG_AXIS = { key: 'scope', kind: 'rung', rungs: [{ key: 'issue' }, { key: 'basic' }, { key: 'all' }] };
 const at = (m) => `${m}-01T12:00:00`;
 
-test('묶음 축: 켰다 끈 항목은 시점이 없고, 다시 켜면 그 달부터', () => {
+test('묶음 축: 선택했다 해제한 항목은 시점이 없고, 다시 선택하면 그 달부터', () => {
   const changes = [
     { id: 1, axis: 'automation', before: null, after: 'pre,run', created_at: at('2025-01') },
     { id: 2, axis: 'automation', before: 'pre,run', after: 'pre', created_at: at('2025-03') },      // run 끔

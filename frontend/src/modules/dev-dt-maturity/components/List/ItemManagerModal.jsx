@@ -13,11 +13,11 @@ import { nextSelection, dragSelection } from '../../utils/selection';
 //            드래그(범위)로 여럿을 고르면 오른쪽이 **일괄 수정**이 된다
 //   오른쪽   그 항목의 칸들. 고치면 저장이 켜진다
 //
-// ⚠️ 시험 항목도 시뮬레이션도 **사업부에 매인다.** 상세 맨 위가 사업부이고, 걸린 쌍이
-//    없을 때만 옮긴다(쌍은 같은 사업부끼리만). 「전체」로 열면 모든 사업부 것이 사업부별로
+// ⚠️ 시험 항목도 시뮬레이션도 **사업부에 매인다.** 상세 맨 위가 사업부이고, 걸린 연계이
+//    없을 때만 옮긴다(연계은 같은 사업부끼리만). 「전체」로 열면 모든 사업부 것이 사업부별로
 //    묶여 보이고, 손댈 수 있는지는 항목마다 그 사업부로 판단한다.
 // ⚠️ 일괄 수정에서 **고유한 칸은 뺀다** — 이름·세부·사업부. 나머지는 「그대로 두기」가 기본.
-// ⚠️ 지우면 걸린 쌍·평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
+// ⚠️ 지우면 걸린 연계·평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
 // ⚠️ 이름표는 label 이 아니라 div 다(인텔 점검 2026-08-26 — label 은 안의 첫 단추를 대신 누른다).
 
 const Overlay = styled.div`
@@ -139,15 +139,15 @@ const Err = styled.div`
   background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.8125rem;
 `;
 
-// 사업부 — 시험 항목도 시뮬레이션도 사업부에 매인다. 쌍은 같은 사업부끼리만 잇기 때문에,
-// 걸린 쌍이 있으면 옮길 수 없다(먼저 끊는다). 다른 사업부로 보내는 것은 가는 쪽도 손댈 수 있어야 한다.
+// 사업부 — 시험 항목도 시뮬레이션도 사업부에 매인다. 연계은 같은 사업부끼리만 잇기 때문에,
+// 걸린 연계이 있으면 옮길 수 없다(먼저 끊는다). 다른 사업부로 보내는 것은 가는 쪽도 손댈 수 있어야 한다.
 const DivisionField = ({ d, set, canEdit, divisions, pairs }) => (
   <Field>
     <span>사업부</span>
     <select value={d.division_id ?? ''} disabled={!canEdit || pairs > 0} onChange={e => set({ division_id: Number(e.target.value) })}>
       {divisions.map(x => <option key={x.id} value={x.id}>{x.name}{x.deny_reason ? ' (손댈 수 없음)' : ''}</option>)}
     </select>
-    <small>{pairs > 0 ? `걸린 쌍이 ${pairs}개 있어 옮길 수 없습니다 — 옮기려면 먼저 쌍을 끊으세요.` : '쌍이 없을 때만 다른 사업부로 옮길 수 있습니다. 쌍은 같은 사업부끼리만 잇습니다.'}</small>
+    <small>{pairs > 0 ? `걸린 연계이 ${pairs}개 있어 옮길 수 없습니다 — 옮기려면 먼저 연계을 끊으세요.` : '연계이 없을 때만 다른 사업부로 옮길 수 있습니다. 연계은 같은 사업부끼리만 잇습니다.'}</small>
   </Field>
 );
 
@@ -294,7 +294,7 @@ const ItemManagerModal = ({
   const removeSelected = async () => {
     const n = picked.reduce((s, i) => s + (pairCount[i.id] || 0), 0);
     const what = picked.length === 1 ? `「${picked[0].name}」` : `${meta.unit} ${picked.length}개`;
-    if (!window.confirm(`${what}을 지웁니다. 걸린 쌍 ${n}개와 그 평가·이력이 같이 사라집니다.`)) return;
+    if (!window.confirm(`${what}을 지웁니다. 걸린 연계 ${n}개와 그 평가·이력이 같이 사라집니다.`)) return;
     const r = await run('del', () => Promise.all(picked.map(i => api.remove(i.id))));
     if (r) { setSelected([]); setDraft(null); setBulk(null); }
   };
@@ -422,8 +422,8 @@ const ItemManagerModal = ({
           <em title={`도구: ${item.tools.join(' · ')}`}><Wrench size={10} />{item.tools.length}</em>
         )}
         {n > 0
-          ? <em title="걸린 쌍"><Link2 size={10} />{n}</em>
-          : <Quiet title="아직 아무 쌍에도 안 걸렸습니다"><AlertTriangle size={10} /></Quiet>}
+          ? <em title="걸린 연계"><Link2 size={10} />{n}</em>
+          : <Quiet title="아직 아무 연계에도 안 걸렸습니다"><AlertTriangle size={10} /></Quiet>}
       </Pick>
     );
   };
@@ -461,7 +461,7 @@ const ItemManagerModal = ({
         </Chips>
         <small>하나씩 넣습니다. 「찾기」로 이 사업부·로드맵 정보·다른 사업부의 제품군을 보고 고르세요 — 적용 범위 축의 비율은 이 목록을 사업부 전체 제품군과 대봐 셉니다.</small>
       </Field>
-      <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
+      <Info>걸린 연계 <strong>{pairCount[current.id] || 0}</strong>개. 연계을 잇거나 끊는 것은 목록 탭에서.</Info>
     </>
   );
 
@@ -525,7 +525,7 @@ const ItemManagerModal = ({
         </Chips>
         <small>이 시뮬레이션이 다루는 불량 유형을 하나씩 — 예: 크랙, 변색, 접점 마모. 다른 시뮬레이션이 적은 이름이 제안으로 뜹니다.</small>
       </Field>
-      <Info>걸린 쌍 <strong>{pairCount[current.id] || 0}</strong>개. 쌍을 잇거나 끊는 것은 목록 탭에서.</Info>
+      <Info>걸린 연계 <strong>{pairCount[current.id] || 0}</strong>개. 연계을 잇거나 끊는 것은 목록 탭에서.</Info>
     </>
   );
 

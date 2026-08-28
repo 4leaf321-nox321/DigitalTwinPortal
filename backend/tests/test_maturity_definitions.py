@@ -33,7 +33,7 @@ def test_시뮬레이션만_살아_있고_나머지는_자리만_있다():
     assert D.sector_is_active('simulation')
     for k in ('verification_automation', 'design_automation', 'digital_thread'):
         assert not D.sector_is_active(k)
-    assert D.SECTOR_BY_KEY['digital_thread']['has_agent'] is False   # 수단 없는 쌍
+    assert D.SECTOR_BY_KEY['digital_thread']['has_agent'] is False   # 수단 없는 연계
 
 
 def test_자동화는_묶음이다_서열은_켠_개수():
@@ -180,7 +180,7 @@ def test_깨진_문턱_설정은_기본으로_돌아간다(monkeypatch):
     assert rule['boundary'] == D.DEFAULT_ACCURACY_BOUNDARY
 
 
-def test_낡음_기간은_양수만_받는다(monkeypatch):
+def test_재평가_필요_기간은_양수만_받는다(monkeypatch):
     monkeypatch.setattr(D, '_setting', lambda key: -3 if key == 'stale_days' else None)
     assert D.get_stale_days() == D.DEFAULT_STALE_DAYS
     monkeypatch.setattr(D, '_setting', lambda key: 180 if key == 'stale_days' else None)

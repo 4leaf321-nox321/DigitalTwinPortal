@@ -58,7 +58,7 @@ const rowOf = (conf, key) => {
   return { q: m.quantitative ?? 70, c: m.correlated ?? 90, boundary: r.boundary === 'gt' ? 'gt' : 'gte' };
 };
 
-/** 세 영역 미리보기 — 설정 창과 쌍 상세가 같은 그림을 쓴다. */
+/** 세 영역 미리보기 — 설정 창과 연계 상세가 같은 그림을 쓴다. */
 export const AccuracyPreview = ({ q, c, boundary, rungs, value = null }) => {
   const segs = [[0, q], [q, c], [c, 100]];
   const label = (i) => rungs?.[i]?.label || ['경향 일치', '원인 분석', '현상 재현'][i];

@@ -54,7 +54,7 @@ export default async function run() {
     await click(byText('li', '열 해석')); await settle();
     await click(byText('button', '컨셉 단계'));
     await click(byText('button', '설계 규칙 정착'));
-    say(byText('button', '컨셉 단계').getAttribute('aria-pressed') === 'true', '② 시점·결정 반영은 토글 — 누른 것이 켜짐');
+    say(byText('button', '컨셉 단계').getAttribute('aria-pressed') === 'true', '② 시점·결정 반영은 토글 — 누른 것이 선택됨');
     await type(document.querySelector('input[aria-label="리드타임(일)"]'), '2');
     await click(byText('button', '추가')); await settle(60);
     const post = calls.find(c => c.method === 'POST' && c.url.endsWith('/reviews'));

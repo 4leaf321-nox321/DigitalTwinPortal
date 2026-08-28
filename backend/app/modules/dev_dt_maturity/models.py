@@ -7,14 +7,14 @@
     assessment   pair × axis 한 줄            rung | value · 근거 · 증빙 · 평가일/평가자
     change       이력                         before → after · 근거 · 누가 · 언제
 
-⚠️⚠️ **쌍이 일급이다.** 로드맵 정보처럼 JSON 배열에 연결을 넣으면 연결을 고칠 때마다
-   배열이 통째로 갈리고 평가가 사라진다. 쌍에 id 가 있어야 URL(?pair=) 도 생긴다.
+⚠️⚠️ **연계이 일급이다.** 로드맵 정보처럼 JSON 배열에 연결을 넣으면 연결을 고칠 때마다
+   배열이 통째로 갈리고 평가가 사라진다. 연계에 id 가 있어야 URL(?pair=) 도 생긴다.
 
 ⚠️ **축마다 한 줄.** 여섯 컬럼이 아니다. 셋만 매긴 상태가 자연스럽고, 축마다
    평가일이 따로 남고, 축을 더 붙여도 표가 안 바뀐다.
 
-⚠️ **파생값은 저장하지 않는다.** 항목 정확도(평균)·적용 범위 비율·낡음·분포는
-   매번 센다. 저장하면 원본이 바뀐 뒤에도 낡은 값이 남는다(전략 모듈과 같은 규칙).
+⚠️ **파생값은 저장하지 않는다.** 항목 정확도(평균)·적용 범위 비율·재평가 필요·분포는
+   매번 센다. 저장하면 원본이 바뀐 뒤에도 재평가 필요한 값이 남는다(전략 모듈과 같은 규칙).
 
 ⚠️ 로드맵 항목·대시보드 과제로 가는 링크는 **FK 가 아니다.** 저쪽이 바뀌어도 여기가
    안 깨진다. 있으면 「로드맵에서 보기」「과제 열기」 문이 열릴 뿐이다.
@@ -91,7 +91,7 @@ class MaturityPair(BaseModel):
     """대상 × 수단. 디지털 스레드처럼 수단 없는 부문은 agent_id 가 비어 있다.
 
     ⚠️ (subject_id, agent_id) 유일 제약은 agent_id 가 NULL 이면 안 잡는다(SQL 의 NULL).
-       수단 없는 쌍이 한 대상에 둘 생기지 않게 하는 것은 services.create_pair 가 한다.
+       수단 없는 연계이 한 대상에 둘 생기지 않게 하는 것은 services.create_pair 가 한다.
     """
     __tablename__ = 'dt_maturity_pair'
     __table_args__ = (
@@ -110,7 +110,7 @@ class MaturityPair(BaseModel):
 
 
 class MaturityAssessment(BaseModel):
-    """쌍 × 축 한 줄. rung 축은 rung 만, value 축은 value 만 쓴다(칸은 값에서 환산)."""
+    """연계 × 축 한 줄. rung 축은 rung 만, value 축은 value 만 쓴다(칸은 값에서 환산)."""
     __tablename__ = 'dt_maturity_assessment'
     __table_args__ = (
         db.UniqueConstraint('pair_id', 'axis', name='uq_dt_maturity_assessment'),
@@ -119,7 +119,7 @@ class MaturityAssessment(BaseModel):
     pair_id = db.Column(db.Integer, db.ForeignKey('dt_maturity_pair.id', ondelete='CASCADE'),
                         nullable=False, index=True)
     axis = db.Column(db.String(40), nullable=False)
-    rung = db.Column(db.String(120))     # set 축은 켠 항목들을 쉼표로 쌓는다(e5b3d7f19c42)
+    rung = db.Column(db.String(120))     # set 축은 선택한 항목들을 쉼표로 쌓는다(e5b3d7f19c42)
     value = db.Column(db.Float)
     note = db.Column(db.Text, nullable=False, default='')     # 근거 — 비우고는 저장 못 한다
     evidence = db.Column(db.JSON, default=dict)              # 축마다 모양이 다르다
@@ -151,7 +151,7 @@ class MaturityChange(BaseModel):
 class MaturityReviewCase(BaseModel):
     """해석 활용 기록의 한 줄 — 시험과 짝이 없는 스팟성 시뮬레이션 한 건(2026-08-28, a7d5f3c81e64).
 
-    쌍·평가와는 표가 다르다: 저쪽은 상태(갱신·이력), 여기는 사건(누적). 연간으로 센다.
+    연계·평가와는 표가 다르다: 저쪽은 상태(갱신·이력), 여기는 사건(누적). 연간으로 센다.
     """
     __tablename__ = 'dt_maturity_review_case'
 

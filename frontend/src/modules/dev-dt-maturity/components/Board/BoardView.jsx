@@ -73,7 +73,7 @@ const Cell = styled.button`
   color: ${p => (p.$dark ? 'white' : '#1e293b')}; cursor: pointer; text-align: center;
 `;
 const Muted = styled.span`color: #94a3b8;`;
-// 상세의 묶음·표 축 — 켠 것들의 배지 묶음. 왼쪽 띠가 서열 색, 배지는 그 색으로 채운다.
+// 상세의 묶음·표 축 — 선택한 것들의 배지 묶음. 왼쪽 띠가 서열 색, 배지는 그 색으로 채운다.
 const Badges = styled.div`
   display: inline-flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.15rem 0.3rem 0.15rem 0.45rem; border-radius: 0.3rem; cursor: pointer; min-width: 4.5rem;
   border-left: 4px solid ${p => p.$color}; border-top: 2px solid ${p => (p.$stale ? '#f59e0b' : 'transparent')}; border-bottom: 2px solid ${p => (p.$stale ? '#f59e0b' : 'transparent')};
@@ -98,8 +98,8 @@ const AxisCell = ({ a, axis, dense, onClick }) => {
     ? axis.rungs.filter(r => a.flags.includes(r.key)).map(r => r.label).join(' · ')
     : axis.kind === 'matrix' && a?.summary
       ? `${label} — 시험 ${a.summary.test}/${a.summary.total} · 시장 ${a.summary.market}/${a.summary.total}` : null;
-  const title = `${axis.label}: ${flagsText || label}${a?.stale ? ' · 낡음' : ''}${a?.note ? ` — ${a.note}` : ''}`;
-  // 「상세」에서 묶음·표 축은 켠 것들을 **배지로 늘어놓는다** — 「3/5」로는 무엇을 켰는지 안 보인다(2026-08-28).
+  const title = `${axis.label}: ${flagsText || label}${a?.stale ? ' · 재평가 필요' : ''}${a?.note ? ` — ${a.note}` : ''}`;
+  // 「상세」에서 묶음·표 축은 선택한 것들을 **배지로 늘어놓는다** — 「3/5」로는 무엇을 켰는지 안 보인다(2026-08-28).
   if (!dense && idx != null && (axis.kind === 'set' || axis.kind === 'matrix')) {
     const defs = axis.kind === 'matrix' ? (axis.base || []) : axis.rungs.slice(1);
     const on = defs.filter(r => (a.flags || []).includes(r.key));
@@ -147,7 +147,7 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
     (async () => {
       try {
         if (divisionId === 'all') {
-          // 전체 — 사업부마다의 판을 묶는다. 셈(문턱·낡음)은 사업부별로 이미 돼 있다.
+          // 전체 — 사업부마다의 판을 묶는다. 셈(문턱·재평가 필요)은 사업부별로 이미 돼 있다.
           const b = await maturityApi.getBoard('all');
           const boards = b.data.boards || [];
           const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id).catch(() => ({ data: [] }))));
@@ -216,7 +216,7 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
         <ModeBtn $on={mode === 'progress'} onClick={() => setMode('progress')} title="올해 어느 칸이 언제 올라갔나">변화</ModeBtn>
         <span style={{ width: '0.5rem' }} />
         <Chip $on={filters.unassessedOnly} onClick={() => set({ unassessedOnly: !filters.unassessedOnly })}>미평가만</Chip>
-        <Chip $on={filters.staleOnly} onClick={() => set({ staleOnly: !filters.staleOnly })}>낡은 것만</Chip>
+        <Chip $on={filters.staleOnly} onClick={() => set({ staleOnly: !filters.staleOnly })}>재평가 필요만</Chip>
         <Select value={filters.family} onChange={e => set({ family: e.target.value })}>
           <option value="">제품군 전체</option>
           {families.map(f => <option key={f} value={f}>{f}</option>)}
@@ -248,9 +248,9 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
 
       <Totals>
         <span>시험 <strong>{subjects.length}</strong>/{board.totals.subjects}</span>
-        <span>쌍 <strong>{subjects.reduce((n, s) => n + s.pairs.length, 0)}</strong>/{board.totals.pairs}</span>
-        <span>미평가 칸 <strong>{board.totals.unassessed}</strong></span>
-        <span>낡은 평가 <strong>{board.totals.stale}</strong> ({board.stale_days}일 기준)</span>
+        <span>연계 <strong>{subjects.reduce((n, s) => n + s.pairs.length, 0)}</strong>/{board.totals.pairs}</span>
+        <span>미평가 항목 <strong>{board.totals.unassessed}</strong></span>
+        <span>재평가 필요 <strong>{board.totals.stale}</strong> ({board.stale_days}일 기준)</span>
         {board.deny_reason && <Muted>· {board.deny_reason}</Muted>}
       </Totals>
 
@@ -357,7 +357,7 @@ const ProgressView = ({ subjects, axes, byMonth, onOpenPair }) => {
   const cols = months();
   const rows = subjects.flatMap(s => s.pairs.map(p => ({ s, p })));
   const any = rows.some(({ p }) => byMonth[p.id]);
-  if (!any) return <Empty>지난 12개월에 바뀐 칸이 없습니다. 쌍 상세에서 칸을 옮기면 여기에 찍힙니다.</Empty>;
+  if (!any) return <Empty>지난 12개월에 바뀐 칸이 없습니다. 연계 상세에서 칸을 옮기면 여기에 찍힙니다.</Empty>;
   return (
     <TableWrap>
       <Table>

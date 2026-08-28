@@ -4,14 +4,14 @@
 ⚠️⚠️ 운영에 돌리면 안 된다. 이 자료는 지어낸 것이다 — 임계값 보정이나 시점 판단을
    여기서 하면 안 된다(memory: dev-db-is-seeded). 로컬 DB 가 아니면 멈춘다.
 
-무엇을 만드나 (사업부 5 · 시험 44 · 시뮬레이션 50 · 쌍 50 · 평가 142 · 이력 151)
+무엇을 만드나 (사업부 5 · 시험 44 · 시뮬레이션 50 · 연계 50 · 평가 142 · 이력 151)
     MX(모바일)   낙하·굽힘·발열·안테나·카메라 …      물리+데이터 모델 섞임, 가장 성숙
     VD(TV)       패널 열변형·백라이트·스탠드·음향 …     중간
     DA(가전)     냉장고 단열·세탁기 진동·모터 소음 …    자동화 낮음, 대체는 일부
     NW(네트워크)  기지국 방열·진동·EMI …                 시험 적음, 정확도 미입력 많음
     의료기기     초음파 프로브·X-ray 검출기 …           막 시작 — 대부분 미평가
 
-일부러 남긴 것: 미평가 칸(다음 채울 곳) · 낡은 평가(14개월 전) · 부분 채움 정확도 ·
+일부러 남긴 것: 미평가 항목(다음 채울 곳) · 재평가 필요(14개월 전) · 부분 채움 정확도 ·
 단일/평균 규칙이 갈리는 항목 · 이력(칸이 올라온 날). 화면이 이런 것을 말해야 해서다.
 
 돌리기
@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(_HERE))
-logging.disable(logging.INFO)          # 엔진 에코까지 끈다 — 안 끄면 SQL 이 수백 KB 쏟아진다
+logging.disable(logging.INFO)          # 엔진 에코까지 끈다 — 안 해제하면 SQL 이 수백 KB 쏟아진다
 
 from app import create_app                                                   # noqa: E402
 from app.extensions import db                                                # noqa: E402

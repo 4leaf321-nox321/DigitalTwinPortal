@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""쌍 · 평가 · 이력 · 사업부 판 셈. **판단의 규칙은 전부 여기**, 라우트는 배선만.
+"""연계 · 평가 · 이력 · 사업부 판 셈. **판단의 규칙은 전부 여기**, 라우트는 배선만.
 
-⚠️ 파생값은 매번 센다(항목 정확도 · 축별 최고 칸 · 미평가 · 낡음). 저장하지 않는다.
+⚠️ 파생값은 매번 센다(항목 정확도 · 축별 최고 칸 · 미평가 · 재평가 필요). 저장하지 않는다.
 """
 from datetime import datetime, timedelta
 
@@ -47,8 +47,8 @@ def create_subject(division_id, sector, name, detail=None, product_families=None
 
 
 def _move_division(row, payload):
-    """사업부를 옮긴다 — **걸린 쌍이 없을 때만.** 쌍은 같은 사업부끼리만 잇는다(create_pair).
-    쌍이 걸린 채 옮기면 MX 시험에 VD 시뮬레이션이 걸린 꼴이 되어 어느 사업부의 평가인지 사라진다.
+    """사업부를 옮긴다 — **걸린 연계이 없을 때만.** 연계은 같은 사업부끼리만 잇는다(create_pair).
+    연계이 걸린 채 옮기면 MX 시험에 VD 시뮬레이션이 걸린 꼴이 되어 어느 사업부의 평가인지 사라진다.
     """
     if 'division_id' not in payload or payload['division_id'] in (None, ''):
         return
@@ -59,7 +59,7 @@ def _move_division(row, payload):
     if target == row.division_id:
         return
     if row.pairs:
-        raise Refused(f'걸린 쌍이 {len(row.pairs)}개 있어 사업부를 옮길 수 없습니다. 먼저 쌍을 끊으세요.')
+        raise Refused(f'걸린 연계이 {len(row.pairs)}개 있어 사업부를 옮길 수 없습니다. 먼저 연계을 끊으세요.')
     row.division_id = target
 
 
@@ -159,7 +159,7 @@ def update_agent(row, payload):
     return row
 
 
-# ── 쌍 ─────────────────────────────────────────────────────────────────────
+# ── 연계 ─────────────────────────────────────────────────────────────────────
 
 def create_pair(subject, agent=None):
     """대상 × 수단. **같은 사업부·같은 부문**이어야 한다.
@@ -228,7 +228,7 @@ def assess(pair, axis_key, payload, actor):
 
     rung 축:  payload.rung  (그 축의 칸 key)
     value 축: payload.value (숫자) — 칸은 사업부 문턱으로 환산된다. rung 을 보내면 거절.
-    set 축:   payload.flags (켠 항목 목록)
+    set 축:   payload.flags (선택한 항목 목록)
     assessed_at(선택): 연-월. 옛 자료를 그 시점으로 넣는다 — 평가일과 이력 날짜가 그 달이 된다.
     """
     when = parse_month(payload.get('assessed_at'))
@@ -382,7 +382,7 @@ def _clean_list(v):
 # ── 읽기 · 사업부 판 ───────────────────────────────────────────────────────
 
 def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
-    """쌍 하나. 평가는 축 key 로 묶고, value 축은 칸을 같이 환산해 준다."""
+    """연계 하나. 평가는 축 key 로 묶고, value 축은 칸을 같이 환산해 준다."""
     subject = pair.subject
     axes = D.get_axes(subject.sector)
     rule = rule or D.get_accuracy_rule(subject.division_id)
@@ -431,9 +431,9 @@ def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
 
 
 def board(division_id, sector):
-    """사업부 판 — 대상마다 쌍을 접고, 항목 집계를 센다.
+    """사업부 판 — 대상마다 연계을 접고, 항목 집계를 센다.
 
-    항목 정확도는 쌍들의 값을 subject.accuracy_rule 로 집계한다(값 있는 것만).
+    항목 정확도는 연계들의 값을 subject.accuracy_rule 로 집계한다(값 있는 것만).
     축별 최고 칸은 「이 시험은 어디까지 왔나」의 요약이다 — 평균이 아니다.
     """
     rule = D.get_accuracy_rule(division_id)
@@ -485,7 +485,7 @@ def board(division_id, sector):
 def recent_changes(division_id, sector, days=365, limit=500):
     """사업부의 최근 이력 — 타임라인(「올해 어느 칸이 언제 올라갔나」)의 재료.
 
-    쌍의 이름(시험 × 시뮬레이션)을 같이 실어 화면이 다시 찾지 않게 한다.
+    연계의 이름(시험 × 시뮬레이션)을 같이 실어 화면이 다시 찾지 않게 한다.
     """
     since = datetime.utcnow() - timedelta(days=int(days))
     rows = (MaturityChange.query
@@ -677,7 +677,7 @@ def rename_family(division_id, old, new, sector='simulation'):
 def board_all(sector='simulation'):
     """전 사업부 판 — 사업부마다 board() 를 돌려 묶는다. 사업부 이름을 실어 화면이 다시 찾지 않게.
 
-    ⚠️ 판의 셈(항목 정확도·낡음)은 **사업부 문턱**으로 하므로 사업부별로 돌린다. 한 번에
+    ⚠️ 판의 셈(항목 정확도·재평가 필요)은 **사업부 문턱**으로 하므로 사업부별로 돌린다. 한 번에
        섞어 세면 MX 문턱으로 VD 를 재게 된다.
     """
     from app.modules.digital_twin_dashboard.models import Division
@@ -704,7 +704,7 @@ REACHED_NOTE = '시점 적기'     # 칸의 시점만 적은 이력 — 화면�
 
 
 def delete_entry(pair, change_id, actor):
-    """정확도 줄 하나를 지운다. 남은 줄 가운데 가장 늦은 것이 현재가 된다 — 없으면 미평가."""
+    """정확도 기록 하나를 지운다. 남은 줄 가운데 가장 늦은 것이 현재가 된다 — 없으면 미평가."""
     change = next((c for c in pair.changes if c.id == change_id), None)
     if change is None:
         raise Refused('없는 줄입니다.')
@@ -738,7 +738,7 @@ def set_reached(pair, axis_key, rung_key, month, actor):
 
     한 평가에 시점 하나면 사다리를 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야
     한다. 대신 도달한 칸의 연-월을 그 자리에서 고친다 — 이력(change)이 그 칸의 시점이다.
-      · 그 칸을 만든 이력이 있으면(after 가 그 칸 / 묶음이면 그 항목을 켠 것) 가장 이른 것의 날짜를 옮긴다
+      · 그 칸을 만든 이력이 있으면(after 가 그 칸 / 묶음이면 그 항목을 선택한 것) 가장 이른 것의 날짜를 옮긴다
       · 없으면(가져온 자료 등) 그 칸을 적는 이력을 하나 만든다 — 근거는 「시점 적기」
     현재 칸보다 위의 칸에는 못 적는다 — 아직 안 올라온 칸의 시점은 뜻이 없다.
     """
@@ -756,7 +756,7 @@ def set_reached(pair, axis_key, rung_key, month, actor):
         if rung_key not in D.set_flag_keys(axis):
             raise Refused('이 축에 없는 항목입니다.')
         if rung_key not in (D.set_flags(axis, cur.rung) or []):
-            raise Refused('켜지 않은 항목의 시점은 적을 수 없습니다.')
+            raise Refused('선택하지 않은 항목의 시점은 적을 수 없습니다.')
         hit = lambda c: rung_key in str(c.after or '').split('|')[0].split(',')     # noqa: E731
     else:
         keys = D.rung_keys(axis)
@@ -823,6 +823,6 @@ def set_defect_cell(pair, axis_key, name, col, month, actor):
     if before != after:
         db.session.add(MaturityChange(
             pair_id=pair.id, axis=axis_key, before=before, after=after,
-            note=f'{name} · {col}' + (' 켬' if when else ' 끔'),
+            note=f'{name} · {col}' + (' 선택' if when else ' 해제'),
             actor_user_id=getattr(actor, 'id', None), actor_name=getattr(actor, 'name', None)))
     return row

@@ -4,15 +4,15 @@ import { Trash2, Link2, AlertTriangle, Pencil } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import PairSide from '../Pair/PairSide';
 
-// 목록 — 왼쪽은 시험 × 시뮬레이션 표(시험 칸은 같은 것끼리 합침), 오른쪽은 고른 쌍의 상세.
+// 목록 — 왼쪽은 시험 × 시뮬레이션 표(시험 칸은 같은 것끼리 합침), 오른쪽은 고른 연계의 상세.
 // (PLAN 7-5, 2026-08-28 요청)
 //
-//   왼쪽   1열 시험(셀 합치기) · 2열 시뮬레이션(누르면 오른쪽에 그 쌍) · 끊기
+//   왼쪽   1열 시험(셀 합치기) · 2열 시뮬레이션(누르면 오른쪽에 그 연계) · 끊기
 //          아래에 잇기 폼. 표가 길어지면 표만 스크롤된다.
-//   오른쪽 쌍 상세 — 모달의 속(PairPanel)을 그대로 심는다. 모달은 안 띄운다.
+//   오른쪽 연계 상세 — 모달의 속(PairPanel)을 그대로 심는다. 모달은 안 띄운다.
 //
 // 시험 항목·시뮬레이션의 추가·수정·삭제와 가져오기는 **헤더 단추**가 여는 창에서 한다.
-// 「전체」면 사업부별로 묶여 보이고, 잇기는 사업부를 먼저 고른다(쌍은 같은 사업부끼리만).
+// 「전체」면 사업부별로 묶여 보이고, 잇기는 사업부를 먼저 고른다(연계은 같은 사업부끼리만).
 // ⚠️ 연결을 끊으면 평가·이력이 같이 간다 — 확인 문구에 그 수를 넣는다.
 
 const Wrap = styled.div`
@@ -41,7 +41,7 @@ const SubjectCell = styled.td`
   small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }
   position: relative; padding-right: 1.8rem !important;
 `;
-// 호버하면 뜨는 연필 — 누르면 그 항목이 골라진 채 관리 창이 열린다. 칸의 클릭(쌍 고르기)과는 따로.
+// 호버하면 뜨는 연필 — 누르면 그 항목이 골라진 채 관리 창이 열린다. 칸의 클릭(연계 고르기)과는 따로.
 const EditBtn = styled.button`
   position: absolute; top: 0.3rem; right: 0.3rem; border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 0.3rem;
   width: 1.4rem; height: 1.4rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0;
@@ -112,7 +112,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
 
   const run = async (fn) => { try { await fn(); load(); if (onChanged) onChanged(); } catch (e) { setError(e.message); } };
 
-  // 표의 줄 — 시험마다 그 쌍들. 쌍 없는 시험도 한 줄 차지한다(잇는 것을 잊지 않게).
+  // 표의 줄 — 시험마다 그 연계들. 연계 없는 시험도 한 줄 차지한다(잇는 것을 잊지 않게).
   const rows = useMemo(() => {
     const bySubject = {};
     pairs.forEach(p => { (bySubject[p.subject_id] = bySubject[p.subject_id] || []).push(p); });
@@ -143,7 +143,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
     <Wrap>
       <Left>
         <BoxHead>
-          <Link2 size={14} /> 시험 × 시뮬레이션 <Count>쌍 {pairs.length}</Count>
+          <Link2 size={14} /> 시험 × 시뮬레이션 <Count>연계 {pairs.length}</Count>
           <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 관리·가져오기는 헤더 단추에서</Hint>
         </BoxHead>
         {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
@@ -182,7 +182,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                     {ps.map((p, i) => (
                       <tr key={p.id}>
                         {i === 0 && cell}
-                        <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 쌍의 사다리가 나옵니다">
+                        <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 사다리가 나옵니다">
                           {p.agent?.name}
                           {(p.agent?.tools || []).length > 0 && <small>{p.agent.tools.join(', ')}</small>}
                           {p.unassessed.length > 0 && <Badge title={`아직 안 매긴 축: ${p.unassessed.length}`}>미평가 {p.unassessed.length}개</Badge>}
@@ -226,7 +226,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
               {linkAgents.filter(a => !linkedAgents.has(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
             <Button type="submit" disabled={!canLink || !link.subject_id || !link.agent_id}><Link2 size={13} /> 잇기</Button>
-            {allMode && <Sub>쌍은 같은 사업부끼리만 잇습니다.</Sub>}
+            {allMode && <Sub>연계은 같은 사업부끼리만 잇습니다.</Sub>}
           </Form>
         )}
       </Left>

@@ -2,7 +2,7 @@
 //
 // ⚠️ 축은 순서형이다. 평균을 내지 않는다 — 분포와 최고 칸만 센다(PLAN 7-4).
 
-/** 칸 색. 서열(index)이 높을수록 진하다. 미평가는 회색, 낡음은 테두리로 따로. */
+/** 칸 색. 서열(index)이 높을수록 진하다. 미평가는 회색, 재평가 필요은 테두리로 따로. */
 /** 켤 수 있는 항목의 정의 — 묶음 축은 첫 칸을 뺀 칸들, 표(matrix) 축은 바탕. */
 export const flagDefs = (axis) => (axis.kind === 'matrix' ? (axis.base || []) : axis.rungs.slice(1));
 
@@ -49,13 +49,13 @@ export const distribution = (subjects, axes) => {
 /**
  * 필터. 전부 「좁히기」다 — 이 화면에서 사람이 하는 일은 전부 보기가 아니라
  * 채울 것 찾기와 자랑할 것 찾기라서, 필터가 스크롤보다 먼저 온다.
- *   unassessedOnly  미평가 축이 하나라도 있는 쌍
- *   staleOnly       낡은 평가가 하나라도 있는 쌍
+ *   unassessedOnly  미평가 축이 하나라도 있는 연계
+ *   staleOnly       재평가 필요가 하나라도 있는 연계
  *   family          적용 제품군에 이 값이 든 시험
  *   modelKind       수단의 모델 종류
- *   axis + minRung  그 축이 이 칸 이상인 쌍
- * 쌍 조건(미평가·낡음·모델 종류·축)이 하나라도 켜져 있을 때만, 쌍이 안 남는 시험을 뺀다 —
- * 시험만 남기면 「왜 비었지」가 된다. 조건이 없으면 **쌍 없는 시험도 보인다**(2026-08-28):
+ *   axis + minRung  그 축이 이 칸 이상인 연계
+ * 연계 조건(미평가·재평가 필요·모델 종류·축)이 하나라도 켜져 있을 때만, 연계이 안 남는 시험을 뺀다 —
+ * 시험만 남기면 「왜 비었지」가 된다. 조건이 없으면 **연계 없는 시험도 보인다**(2026-08-28):
  * 아직 시뮬레이션을 안 이은 시험이 판에서 사라지면 잇는 것을 잊는다.
  */
 export const applyFilters = (subjects, f = {}) => {
@@ -127,7 +127,7 @@ export const changesByMonth = (changes) => {
 export const REACHED_NOTE = '시점 적기';   // 서버가 칸의 시점만 적은 이력 — 다른 칸을 내린 것으로 읽지 않는다
 
 /** 이력에서 「이 칸에 언제 올라왔나」 — **지금 이어지고 있는 도달의 시작**.
- *  켰다 끈 항목·내려온 칸은 시점이 없고, 다시 올라오면 그 날부터다(2026-08-28). 이력을 시간순으로
+ *  선택했다 해제한 항목·내려온 칸은 시점이 없고, 다시 올라오면 그 날부터다(2026-08-28). 이력을 시간순으로
  *  훑으며, 그 칸을 잃은 이력이 나오면 지운다. 묶음(set) 축은 after 가 'pre,run' 꼴. */
 export const reachedDates = (changes, axis) => {
   const out = {};
@@ -158,9 +158,9 @@ export const reachedDates = (changes, axis) => {
 /**
  * 사업부 판 하나를 축별 대표 수치로 접는다 — 전체 「요약」 표의 재료(2026-08-28).
  * 축이 다 순서형이 아니라 종류마다 다르게 센다:
- *   value  { mean, filled, total, unassessed, counts[칸] }              평균 %(값 있는 쌍) · 세 영역 분포
- *   rung   { counts[칸], assessed, unassessed, total, atLeast[i]=% }     i번째 칸 이상인 쌍의 %
- *   set    { flags, adoption{key:%}, adoptionCount{key:n}, avg, assessed, unassessed, total }   항목별 채택률 · 평균 켠 수
+ *   value  { mean, filled, total, unassessed, counts[칸] }              평균 %(값 있는 연계) · 세 영역 분포
+ *   rung   { counts[칸], assessed, unassessed, total, atLeast[i]=% }     i번째 칸 이상인 연계의 %
+ *   set    { flags, adoption{key:%}, adoptionCount{key:n}, avg, assessed, unassessed, total }   항목별 채택률 · 적용 단계 수 (평균)
  *   matrix { adoption{base:%}, testRate, marketRate, defectTotal, assessed, unassessed, total } 바탕 채택률 · 시험/시장 재현률(유형 칸 기준)
  */
 export const divisionSummary = (board, axes) => {

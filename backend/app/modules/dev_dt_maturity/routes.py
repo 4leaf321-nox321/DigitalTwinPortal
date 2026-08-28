@@ -5,7 +5,7 @@
     GET  /divisions                         사업부 목록 + 내가 손댈 수 있는지(deny_reason)
     GET  /board?division_id&sector          사업부 판
     GET  /subjects|/agents ?division_id&sector     POST · PUT/<id> · DELETE/<id>
-    GET  /pairs/<id>                        쌍 상세(이력 포함)
+    GET  /pairs/<id>                        연계 상세(이력 포함)
     POST /pairs  {subject_id, agent_id}     DELETE /pairs/<id>  → 같이 지워진 평가·이력 수
     PUT  /pairs/<id>/assessments/<axis>     {rung|value, note, evidence}
     GET  /settings · PUT /settings          사무국
@@ -283,14 +283,14 @@ def delete_agent(actor, row_id):
         return _crashed()
 
 
-# ── 쌍 ─────────────────────────────────────────────────────────────────────
+# ── 연계 ─────────────────────────────────────────────────────────────────────
 
 @bp.route('/pairs/<int:pair_id>', methods=['GET'])
 @read_required
 def get_pair(actor, pair_id):
     pair = MaturityPair.query.get(pair_id)
     if not pair:
-        return error_response('없는 쌍입니다.', status_code=404)
+        return error_response('없는 연계입니다.', status_code=404)
     try:
         d = S.pair_dict(pair, with_changes=True)
         d['deny_reason'] = P.deny_reason(actor, pair.subject.division_id,
@@ -329,7 +329,7 @@ def create_pair(actor):
 def delete_pair(actor, pair_id):
     pair = MaturityPair.query.get(pair_id)
     if not pair:
-        return error_response('없는 쌍입니다.', status_code=404)
+        return error_response('없는 연계입니다.', status_code=404)
     denied = _deny(actor, pair.subject.division_id)
     if denied:
         return denied
@@ -346,7 +346,7 @@ def delete_pair(actor, pair_id):
 def assess(actor, pair_id, axis):
     pair = MaturityPair.query.get(pair_id)
     if not pair:
-        return error_response('없는 쌍입니다.', status_code=404)
+        return error_response('없는 연계입니다.', status_code=404)
     denied = _deny(actor, pair.subject.division_id)
     if denied:
         return denied
@@ -494,7 +494,7 @@ def changes(actor):
 def tool_names(actor):
     """도구 이름 제안 — 인텔 모듈의 도구 표(이름만). **읽기 전용 결합.**
 
-    ⚠️ 인텔의 /tech 는 근거 건수·낡음까지 계산해 무겁다. 여기서는 이름만 뽑는다.
+    ⚠️ 인텔의 /tech 는 근거 건수·재평가 필요까지 계산해 무겁다. 여기서는 이름만 뽑는다.
        FK 로 묶지 않는다 — 제안일 뿐이고, 인텔에 없는 이름도 적을 수 있다.
     """
     try:
@@ -637,7 +637,7 @@ def set_reached(actor, pair_id, axis, rung):
     """칸의 도달 시점(연-월)을 그 자리에서 적는다. {month: '2025-03'}"""
     pair = MaturityPair.query.get(pair_id)
     if not pair:
-        return error_response('없는 쌍입니다.', status_code=404)
+        return error_response('없는 연계입니다.', status_code=404)
     denied = _deny(actor, pair.subject.division_id)
     if denied:
         return denied
@@ -655,10 +655,10 @@ def set_reached(actor, pair_id, axis, rung):
 @bp.route('/pairs/<int:pair_id>/changes/<int:change_id>', methods=['DELETE'])
 @read_required
 def delete_entry(actor, pair_id, change_id):
-    """정확도 줄 하나를 지운다 — 값 축만. 남은 줄의 가장 늦은 것이 현재가 된다."""
+    """정확도 기록 하나를 지운다 — 값 축만. 남은 줄의 가장 늦은 것이 현재가 된다."""
     pair = MaturityPair.query.get(pair_id)
     if not pair:
-        return error_response('없는 쌍입니다.', status_code=404)
+        return error_response('없는 연계입니다.', status_code=404)
     denied = _deny(actor, pair.subject.division_id)
     if denied:
         return denied
@@ -679,7 +679,7 @@ def set_defect_cell(actor, pair_id, axis):
     """불량 유형 표의 칸 하나 — {name, col, month|null}. 근거 없이 바로 저장한다."""
     pair = MaturityPair.query.get(pair_id)
     if not pair:
-        return error_response('없는 쌍입니다.', status_code=404)
+        return error_response('없는 연계입니다.', status_code=404)
     denied = _deny(actor, pair.subject.division_id)
     if denied:
         return denied
