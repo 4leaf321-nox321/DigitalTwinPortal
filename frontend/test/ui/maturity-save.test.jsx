@@ -60,6 +60,10 @@ export default async function run() {
     // ① 칸 → 근거 → 저장
     await render(<PairSide pairId={101} axes={AXES} onChanged={() => {}} onClose={() => {}} />);
     say(html().includes('낙하 시험 × 구조 해석'), '① 쌍이 불러와짐');
+    say(!html().includes('아직 바뀐 것이 없습니다') && !!document.querySelector('[aria-label="이력"]'), '⓪ 이력은 접혀 있고 머리에 단추만');
+    await click(document.querySelector('[aria-label="이력"]'));
+    say(html().includes('아직 바뀐 것이 없습니다'), '⓪ 단추를 누르면 이력 판이 열림');
+    await click(document.querySelector('[aria-label="이력"]'));
     await click(byText('[role="button"]', '실행 자동'));
     const note = document.querySelector('input[placeholder^="근거"]');
     say(!!note, '① 칸을 누르면 근거 칸이 열림');

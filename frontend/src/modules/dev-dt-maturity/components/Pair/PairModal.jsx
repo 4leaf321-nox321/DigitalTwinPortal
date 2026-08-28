@@ -37,6 +37,12 @@ const Notice = styled.div`
   background: ${p => (p.$bad ? '#fef2f2' : '#fffbeb')}; border: 1px solid ${p => (p.$bad ? '#fecaca' : '#fde68a')};
   color: ${p => (p.$bad ? '#991b1b' : '#92400e')}; font-size: 0.8125rem; line-height: 1.5;
 `;
+const HistBtn = styled.button`
+  display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#e2e8f0')}; background: ${p => (p.$on ? '#eff6ff' : 'white')};
+  color: ${p => (p.$on ? '#1d4ed8' : '#64748b')}; border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-family: inherit; cursor: pointer; margin-right: 0.4rem;
+  &:hover { border-color: #1d4ed8; color: #1d4ed8; }
+`;
+const HistPanel = styled.div`border: 1px solid #bfdbfe; background: #f8fbff; border-radius: 0.5rem; padding: 0.6rem 0.875rem; margin: 0.5rem 0; max-height: 14rem; overflow: auto;`;
 const AxisBlock = styled.div`border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem 0.875rem;`;
 const AxisHead = styled.div`display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;`;
 const AxisName = styled.span`font-weight: 700; color: #1e293b;`;
@@ -228,6 +234,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
   // 칸의 도달 시점을 그 자리에서 고친다 — { axis, rung, month }. 한 평가에 시점 하나면
   // 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야 해서(2026-08-28).
   const [dating, setDating] = useState(null);
+  // 이력은 머리의 ⓘ 단추로 여닫는다 — 아래에 늘 펼쳐 두면 사다리 자리를 먹는다(2026-08-28).
+  const [histOpen, setHistOpen] = useState(false);
   const removeEntry = async (changeId) => {
     if (!window.confirm('이 정확도 줄을 지울까요? 남은 줄 가운데 가장 늦은 것이 현재가 됩니다.')) return;
     setBusy(true);
@@ -269,6 +277,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
     });
   };
 
+  const histCount = (pair?.changes || []).filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').length;
+
   const save = async () => {
     if (!editing?.note?.trim()) return;
     setBusy(true);
@@ -308,8 +318,41 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
               <Sub>{(pair.agent?.tools || []).length > 0 ? pair.agent.tools.join(', ') : '\u00a0'}</Sub>
             )}
           </div>
+          {pair && (
+            <HistBtn type="button" $on={histOpen} onClick={() => setHistOpen(o => !o)} aria-expanded={histOpen} aria-label="이력"
+                     title={histOpen ? '이력 닫기' : '이력 — 언제 누가 무엇을 바꿨나'}>
+              <History size={15} /> {histCount}
+            </HistBtn>
+          )}
           <CloseButton onClick={onClose} title="닫기"><X size={18} /></CloseButton>
         </Head>
+        {pair && histOpen && (
+          <HistPanel>
+            <AxisHead><History size={14} /> <AxisName>이력</AxisName><AxisQ>정확도 줄은 정확도 축 안에서 봅니다.</AxisQ></AxisHead>
+            {(pair.changes || []).filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').length === 0 ? (
+              <AxisQ>아직 바뀐 것이 없습니다.</AxisQ>
+            ) : (
+              <HistoryList>
+                {pair.changes.filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').map(c => {
+                  const axis = axes.find(x => x.key === c.axis);
+                  const lab = (k) => {
+                    if (!k) return '—';
+                    if (axis?.kind === 'set') return flagLabels(axis, String(k).split(',').filter(x => x !== 'manual' && x));
+                    return axis?.rungs.find(r => r.key === k)?.label || k;
+                  };
+                  return (
+                    <HistoryRow key={c.id}>
+                      <When>{fmtDate(c.created_at)}</When>
+                      <span><strong>{axis?.label || c.axis}</strong> {lab(c.before)} → {lab(c.after)}</span>
+                      <span style={{ color: '#94a3b8' }}>{c.actor_name}</span>
+                      {c.note && <span>“{c.note}”</span>}
+                    </HistoryRow>
+                  );
+                })}
+              </HistoryList>
+            )}
+          </HistPanel>
+        )}
 
         <Body>
           {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
@@ -490,33 +533,6 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
             );
           })}
 
-          {pair && (
-            <AxisBlock>
-              <AxisHead><History size={14} /> <AxisName>이력</AxisName></AxisHead>
-              {(pair.changes || []).filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').length === 0 ? (
-                <AxisQ>아직 바뀐 것이 없습니다.</AxisQ>
-              ) : (
-                <HistoryList>
-                  {pair.changes.filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').map(c => {
-                    const axis = axes.find(x => x.key === c.axis);
-                    const lab = (k) => {
-                      if (!k) return '—';
-                      if (axis?.kind === 'set') return flagLabels(axis, String(k).split(',').filter(x => x !== 'manual' && x));
-                      return axis?.rungs.find(r => r.key === k)?.label || k;
-                    };
-                    return (
-                      <HistoryRow key={c.id}>
-                        <When>{fmtDate(c.created_at)}</When>
-                        <span><strong>{axis?.label || c.axis}</strong> {lab(c.before)} → {lab(c.after)}</span>
-                        <span style={{ color: '#94a3b8' }}>{c.actor_name}</span>
-                        {c.note && <span>“{c.note}”</span>}
-                      </HistoryRow>
-                    );
-                  })}
-                </HistoryList>
-              )}
-            </AxisBlock>
-          )}
         </Body>
     </>
   );
