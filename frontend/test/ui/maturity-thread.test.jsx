@@ -69,8 +69,11 @@ export default async function run() {
     say(h.includes('사람이 옮김') && h.includes('미평가 1개'), '① 연결 방식 배지와 미평가 수');
     say(h.includes('>BOM<') && h.includes('>원가·단가<'), '① 데이터 종류 꼬리표');
 
-    // ② 구간 추가
+    // ② 구간 추가 — 단추를 누르면 모달
     calls.length = 0;
+    say(!document.querySelector('select[aria-label="스레드"]'), '② 추가 양식은 평소엔 안 보임');
+    await click(byText('button', '구간 추가')); await settle();
+    say(!!document.querySelector('[role="dialog"][aria-label="구간 추가"]'), '② 「구간 추가」를 누르면 모달');
     await select(document.querySelector('select[aria-label="스레드"]'), '1');
     await select(document.querySelector('select[aria-label="표준 구간"]'), '11');
     const sels = document.querySelectorAll('input[data-search-select]');
@@ -78,7 +81,8 @@ export default async function run() {
     await type(sels[1], 'Team'); await settle(); await click(byText('li', 'Teamcenter')); await settle();
     await type(sels[2], '메일'); await settle(); await click(byText('li', '메일 (비공식)')); await settle();
     await type(sels[3], '원가'); await settle(); await click(byText('li', '원가팀')); await settle();
-    await click(byText('button', '구간 추가')); await settle(60);
+    await click(byText('button', '추가')); await settle(60);
+    say(!document.querySelector('[role="dialog"][aria-label="구간 추가"]'), '② 넣으면 모달이 닫힘');
     const post = calls.find(c => c.method === 'POST' && c.url.endsWith('/segments'));
     say(!!post && post.body.thread_id === 1 && post.body.segment_def_id === 11 && post.body.from_org_id === 21 && post.body.from_system_id === 5 && post.body.via_system_id === 9 && post.body.to_org_id === 22,
         `② POST /segments: ${JSON.stringify(post?.body)}`);

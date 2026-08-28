@@ -40,8 +40,11 @@ const Informal = styled.span`display: inline-block; padding: 0 0.4rem; border-ra
 const Badge = styled.span`display: inline-block; padding: 0 0.45rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; background: #dbeafe; color: #1e40af;`;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
 const Icon = styled.button`border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem; &:hover { color: #b91c1c; background: #fef2f2; } &:disabled { opacity: 0.3; cursor: not-allowed; }`;
+const Backdrop = styled.div`position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 60;`;
+const Box = styled.div`width: min(60rem, 94vw); max-height: 90vh; overflow: auto; display: flex; flex-direction: column; gap: 0.6rem; background: white; border-radius: 0.75rem; padding: 1rem 1.25rem; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);`;
+const BoxHead = styled.div`display: flex; align-items: center; gap: 0.5rem; font-size: 1rem; color: #1e293b;`;
 const Form = styled.form`
-  flex-shrink: 0; display: flex; flex-direction: column; gap: 0.4rem; padding: 0.6rem 0.75rem; border-top: 1px solid #e2e8f0; background: #f8fbff;
+  flex-shrink: 0; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.2rem 0;
   input, select { padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; background: white; min-width: 0; }
 `;
 const Line = styled.div`display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;`;
@@ -67,6 +70,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
   const [orgs, setOrgs] = useState([]);
   const [draft, setDraft] = useState(empty());
   const [editId, setEditId] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);   // 구간 추가·고치기는 모달에서 — 왼쪽 아래에 늘 펼쳐 두면 화면이 복잡하다(2026-08-28)
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const canEdit = !denyReason && division != null;
@@ -98,12 +102,13 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
         from_org_id: num(draft.from_org_id), from_system_id: num(draft.from_system_id), via_system_id: num(draft.via_system_id), to_org_id: num(draft.to_org_id), to_system_id: num(draft.to_system_id) };
       if (editId) await maturityApi.updateSegment(editId, payload);
       else await maturityApi.createSegment(division, payload);
-      setDraft(empty()); setEditId(null); setError(null);
+      setDraft(empty()); setEditId(null); setError(null); setFormOpen(false);
       await load(); if (onChanged) onChanged();
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
   const startEdit = (s) => {
+    setFormOpen(true);
     setEditId(s.id);
     setDraft({ thread_id: s.thread_id ?? '', segment_def_id: s.segment_def_id ?? '', name: s.name || '', note: s.note || '', data_kinds: [...(s.data_kinds || [])], custom_kind: '',
       from_org_id: s.from_org_id ?? '', from_system_id: s.from_system_id ?? '', via_system_id: s.via_system_id ?? '', to_org_id: s.to_org_id ?? '', to_system_id: s.to_system_id ?? '' });
@@ -130,6 +135,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
             </select>
           )}
           구간 {segments.length}
+          {canEdit && <Button type="button" $primary onClick={() => { setEditId(null); setDraft(empty()); setFormOpen(true); }} style={{ marginLeft: '0.5rem' }}><Plus size={13} /> 구간 추가</Button>}
           <Hint>시스템 {systems.filter(s => s.kind !== 'informal').length} · 조직 {orgs.length} — 관리는 헤더 단추에서</Hint>
         </Top>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
@@ -173,8 +179,14 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
             </tbody>
           </Table>
         </Scroll>
-        {canEdit && (
-          <Form onSubmit={submit} aria-label={editId ? '구간 고치기' : '구간 추가'}>
+      </Left>
+      <PairSide pairId={pairId} axes={axes} onChanged={() => { load(); if (onChanged) onChanged(); }} onClose={onClosePair} />
+      {canEdit && formOpen && (
+        <Backdrop onClick={() => setFormOpen(false)}>
+          <Box onClick={e => e.stopPropagation()} role="dialog" aria-label={editId ? '구간 고치기' : '구간 추가'}>
+          <BoxHead><strong>{editId ? '구간 고치기' : '구간 추가'}</strong><span style={{ flex: 1 }} /><Icon type="button" onClick={() => setFormOpen(false)} aria-label="닫기" title="닫기" style={{ color: '#64748b' }}><X size={16} /></Icon></BoxHead>
+          {error && <Notice style={{ margin: 0 }}><AlertTriangle size={14} /> <span>{error}</span></Notice>}
+          <Form onSubmit={submit} aria-label={editId ? '구간 고치기 양식' : '구간 추가 양식'}>
             <Line>
               <Lab>스레드</Lab>
               <select value={draft.thread_id} onChange={e => set({ thread_id: e.target.value, segment_def_id: '' })} aria-label="스레드" required>
@@ -213,15 +225,18 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
               <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={orgOpts} value={draft.to_org_id} onChange={(id) => set({ to_org_id: id ?? '' })} placeholder="조직 찾기" hint="조직 관리에서 먼저 넣으세요." /></span>
               <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={sysOpts} value={draft.to_system_id} onChange={(id) => set({ to_system_id: id ?? '' })} placeholder="시스템 찾기" hint="시스템 관리에서 먼저 넣으세요." /></span>
               <input value={draft.note} onChange={e => set({ note: e.target.value })} placeholder="메모" aria-label="메모" style={{ flex: 1 }} />
-              <Button type="submit" $primary disabled={busy || !draft.thread_id || (!draft.segment_def_id && !draft.name.trim())}>{editId ? <><Check size={13} /> 고침</> : <><Plus size={13} /> 구간 추가</>}</Button>
-              {editId && <Button type="button" onClick={() => { setEditId(null); setDraft(empty()); }}><X size={13} /> 취소</Button>}
+            </Line>
+            <Line style={{ justifyContent: 'flex-end', marginTop: '0.3rem' }}>
               {onManage && <Button type="button" onClick={() => onManage('system')}>시스템 관리</Button>}
               {onManage && <Button type="button" onClick={() => onManage('org')}>조직 관리</Button>}
+              <span style={{ flex: 1 }} />
+              <Button type="button" onClick={() => setFormOpen(false)}><X size={13} /> 취소</Button>
+              <Button type="submit" $primary disabled={busy || !draft.thread_id || (!draft.segment_def_id && !draft.name.trim())}>{editId ? <><Check size={13} /> 고침</> : <><Plus size={13} /> 추가</>}</Button>
             </Line>
           </Form>
-        )}
-      </Left>
-      <PairSide pairId={pairId} axes={axes} onChanged={() => { load(); if (onChanged) onChanged(); }} onClose={onClosePair} />
+          </Box>
+        </Backdrop>
+      )}
     </Wrap>
   );
 };
