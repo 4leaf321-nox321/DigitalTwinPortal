@@ -4,7 +4,7 @@ import maturityApi from '../../services/maturityApi';
 import SystemMap from './SystemMap';
 
 // 디지털 스레드의 셈을 그리는 부품 둘(2026-08-28).
-//   ThreadOverviewRows — 전체 요약 표의 아래 줄: 스레드마다 사업부별 자동 전달률 % · 도달 단계 (최약 표시는 뺐다 2026-08-29)
+//   ThreadOverviewRows — 전체 요약 표의 아래 줄: 스레드마다 사업부별 자동 전달률 % (도달·최약 표시는 뺐다 2026-08-29)
 //   ThreadDivisionPanels — 사업부 요약의 아래: 스레드 줄 그림(단계를 가로로, 구간을 연결 방식 색으로) · 조직 연계표 · 시스템 허브도
 // 축 판(정확도 자리의 연결 방식 …)은 시뮬레이션 부문과 같은 부품이 그리고, 여기는 「줄」 단위만 더한다.
 
@@ -24,7 +24,7 @@ const cellOf = (t) => {
   return (
     <>
       <Big>{t.continuity != null ? `${t.continuity}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 자동 전달</span></Big>
-      <Small>도달 {t.reach_label || '—'} · 수집 {t.capture_rate != null ? `${t.capture_rate}%` : '—'} · 활용 {t.usage_rate != null ? `${t.usage_rate}%` : '—'}{t.closed_loop && <Pill $good>폐루프</Pill>}</Small>
+      <Small>수집 {t.capture_rate != null ? `${t.capture_rate}%` : '—'} · 활용 {t.usage_rate != null ? `${t.usage_rate}%` : '—'}{t.closed_loop && <Pill $good>폐루프</Pill>}</Small>
       <Small>구간 {t.assessed}/{t.segment_count}{t.unassessed > 0 && <Pill $warn>미평가 {t.unassessed}</Pill>}{t.unknown > 0 && <Pill $warn>확인 필요 {t.unknown}</Pill>}{t.informal_ratio > 0 && <Pill $warn>비공식 {t.informal_ratio}%</Pill>}</Small>
     </>
   );
@@ -47,7 +47,7 @@ export const ThreadOverviewRows = ({ boards }) => {
   };
   return (
     <>
-      <tr><SecHead colSpan={boards.length + 2}><strong>스레드</strong>구간을 모아 줄로 — 자동 전달률(연결이 자동 전달 이상인 구간 %) · 도달 단계 · 수집률 · 활용률</SecHead></tr>
+      <tr><SecHead colSpan={boards.length + 2}><strong>스레드</strong>구간을 모아 줄로 — 자동 전달률(연결이 자동 전달 이상인 구간 %) · 수집률 · 활용률</SecHead></tr>
       {threads.map(t => (
         <tr key={t.thread_key}>
           <Name>{t.thread_name}<small>표준 구간 {t.def_count}</small></Name>
@@ -106,7 +106,7 @@ export const ThreadDivisionPanels = ({ divisionId, subjects = [], axes = [], onO
           const st = (stats?.threads || []).find(x => x.thread_key === t.key);
           return (
             <Line key={t.key}>
-              <ThreadLabel>{t.name}<small>{st ? `자동 전달 ${st.continuity != null ? `${st.continuity}%` : '—'} · 도달 ${st.reach_label || '—'}${st.closed_loop ? ' · 폐루프' : ''}` : ''}</small></ThreadLabel>
+              <ThreadLabel>{t.name}<small>{st ? `자동 전달 ${st.continuity != null ? `${st.continuity}%` : '—'}${st.closed_loop ? ' · 폐루프' : ''}` : ''}</small></ThreadLabel>
               {t.segments.map(sd => {
                 const inst = subjects.find(s => s.segment?.segment_def_id === sd.id);
                 const idx = inst ? linkIdx(inst) : null;
