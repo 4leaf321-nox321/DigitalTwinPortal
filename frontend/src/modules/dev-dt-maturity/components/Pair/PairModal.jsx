@@ -44,7 +44,7 @@ const HistBtn = styled.button`
 `;
 const HistPanel = styled.div`border: 1px solid #bfdbfe; background: #f8fbff; border-radius: 0.5rem; padding: 0.6rem 0.875rem; margin: 0.5rem 0; max-height: 14rem; overflow: auto;`;
 const MatrixWrap = styled.div`
-  margin-top: 0.5rem; max-height: 13rem; overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.375rem;
+  margin-top: 0; min-width: 0; max-height: 13rem; overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.375rem;
   table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
   th { position: sticky; top: 0; background: #f8fafc; text-align: left; font-weight: 700; color: #64748b; padding: 0.3rem 0.5rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
@@ -64,7 +64,11 @@ const Stale = styled.span`
   font-size: 0.6875rem; font-weight: 700; color: #b45309; background: #fffbeb; border: 1px solid #fde68a;
   border-radius: 0.25rem; padding: 0.05rem 0.35rem;
 `;
-const Ladder = styled.div`display: flex; gap: 0.35rem; flex-wrap: wrap;`;
+// 표 축은 왼쪽 1/3 에 바탕(형상·거동)을 위아래로, 오른쪽 2/3 에 불량 유형 표(2026-08-28).
+const FlagRow = styled.div`
+  display: ${p => (p.$matrix ? 'grid' : 'block')}; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0.6rem; align-items: start;
+`;
+const Ladder = styled.div`display: flex; gap: 0.35rem; flex-wrap: wrap; ${p => (p.$stack ? 'flex-direction: column;' : '')}`;
 // div 다 — 칸 밑에 시점을 고치는 입력·단추가 들어가서(button 안에 button 은 안 된다).
 const Rung = styled.div`
   user-select: none; min-width: 0; overflow: hidden;
@@ -461,8 +465,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     const color = colorFor(n, axis.rungs.length);
                     const tiles = axis.kind === 'matrix' ? [axis.rungs[0], ...axis.base] : axis.rungs;
                     return (
-                      <>
-                      <Ladder>
+                      <FlagRow $matrix={axis.kind === 'matrix'}>
+                      <Ladder $stack={axis.kind === 'matrix'}>
                         {tiles.map((r, i) => {
                           if (i === 0 && axis.hide_empty) return null;      // 「없음」 칸은 안 보인다 — 다 끄면 그 상태
                           const on = flags != null && (i === 0 ? flags.length === 0 : flags.includes(r.key));
@@ -496,7 +500,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                                         ...s, evidence: { ...s.evidence, defects: { ...(s.evidence.defects || {}), [name]: { ...((s.evidence.defects || {})[name] || {}), [col]: month } } } }))}
                                       onStart={() => startEdit(axis, null)} />
                       )}
-                      </>
+                      </FlagRow>
                     );
                   })()
                 ) : axis.kind === 'value' ? (
