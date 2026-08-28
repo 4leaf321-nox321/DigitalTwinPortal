@@ -25,7 +25,7 @@ const Overlay = styled.div`
   display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1.5rem;
 `;
 const Panel = styled.div`
-  background: white; border-radius: 0.75rem; width: min(70rem, 94vw); height: min(40rem, 86vh);
+  background: white; border-radius: 0.75rem; width: min(88rem, 97vw); height: min(52rem, 94vh);   /* 칸이 많아 넓고 높게(2026-08-29) */
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden;
 `;
 const Head = styled.div`display: flex; align-items: center; gap: 0.5rem; padding: 0.875rem 1.125rem; border-bottom: 1px solid #e2e8f0;`;
@@ -36,7 +36,7 @@ const CloseButton = styled.button`
   padding: 0.25rem; border-radius: 0.25rem; &:hover { color: #475569; background: #f1f5f9; }
 `;
 const Two = styled.div`
-  flex: 1; min-height: 0; display: grid; grid-template-columns: 22rem 1fr;
+  flex: 1; min-height: 0; display: grid; grid-template-columns: 26rem 1fr;
   @media (max-width: 900px) { grid-template-columns: 1fr; }
 `;
 const Left = styled.div`border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; min-height: 0;`;

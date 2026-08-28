@@ -13,21 +13,31 @@ import { KIND_COLORS } from '../../utils/systemGraph';
 // 자료는 연결도가 이미 불러 둔 구간·시스템을 그대로 쓰고, 기록만 창을 열 때 따로 부른다.
 
 const Backdrop = styled.div`position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 60;`;
-const Box = styled.div`width: min(58rem, 96vw); height: min(40rem, 90vh); display: flex; flex-direction: column; background: white; border-radius: 0.75rem; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3); overflow: hidden;`;
+const Box = styled.div`width: min(88rem, 97vw); height: min(52rem, 94vh); display: flex; flex-direction: column; background: white; border-radius: 0.75rem; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3); overflow: hidden;`;
 const Head = styled.div`display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.1rem; border-bottom: 1px solid #e2e8f0;`;
 const Ball = styled.span`width: 0.9rem; height: 0.9rem; border-radius: 999px; background: ${p => p.$c}; flex: none;`;
 const Title = styled.h3`margin: 0; font-size: 1.05rem; color: #1e293b; flex: 1; small { font-weight: 400; font-size: 0.8125rem; color: #94a3b8; margin-left: 0.4rem; }`;
 const IconBtn = styled.button`border: none; background: transparent; color: #64748b; cursor: pointer; padding: 0.25rem; border-radius: 0.3rem; &:hover { background: #f1f5f9; }`;
-const Body = styled.div`flex: 1; min-height: 0; overflow: auto; padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.9rem;`;
+// 몸통을 좌우로 — 왼쪽(지표·이웃)은 **늘 보이고**, 오른쪽 표만 스크롤한다(2026-08-29 요청).
+const Body = styled.div`flex: 1; min-height: 0; display: grid; grid-template-columns: 22rem minmax(0, 1fr); @media (max-width: 900px) { grid-template-columns: 1fr; }`;
+const Side = styled.div`padding: 0.9rem 1.1rem; border-right: 1px solid #e2e8f0; background: #f8fafc; display: flex; flex-direction: column; gap: 0.9rem; overflow: auto;`;
+const Main = styled.div`min-height: 0; display: grid; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);`;
+const Panel = styled.section`
+  min-height: 0; display: flex; flex-direction: column; padding: 0.7rem 1.1rem 0.9rem;
+  & + & { border-top: 1px solid #e2e8f0; }
+  h4 { margin: 0 0 0.35rem; font-size: 0.875rem; color: #1e293b; flex: none; }
+  h4 span { font-weight: 400; font-size: 0.75rem; color: #94a3b8; margin-left: 0.35rem; }
+`;
+const Scroll = styled.div`flex: 1; min-height: 0; overflow: auto;`;
 const Tag = styled.span`display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: ${p => p.$bg || '#f1f5f9'}; color: ${p => p.$fg || '#475569'};`;
 const Tags = styled.div`display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center;`;
-const Stats = styled.div`display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem;`;
+const Stats = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem;`;
 const Stat = styled.div`border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.5rem 0.6rem; text-align: center; b { display: block; font-size: 1.35rem; color: #1e293b; } span { font-size: 0.75rem; color: #64748b; }`;
 const Bar = styled.div`display: flex; height: 0.6rem; border-radius: 999px; overflow: hidden; background: #f1f5f9;`;
 const Seg = styled.div`width: ${p => p.$pct}%; background: ${p => p.$c};`;
 const Sec = styled.section`display: flex; flex-direction: column; gap: 0.35rem; h4 { margin: 0; font-size: 0.875rem; color: #1e293b; } h4 span { font-weight: 400; font-size: 0.75rem; color: #94a3b8; margin-left: 0.35rem; }`;
 const Table = styled.table`width: 100%; border-collapse: collapse; font-size: 0.8125rem;
-  th { text-align: left; font-size: 0.6875rem; color: #64748b; font-weight: 700; padding: 0.25rem 0.4rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  th { position: sticky; top: 0; background: white; z-index: 1; text-align: left; font-size: 0.6875rem; color: #64748b; font-weight: 700; padding: 0.25rem 0.4rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 0.3rem 0.4rem; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: middle; }
 `;
 const RowBtn = styled.button`border: none; background: transparent; font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; cursor: pointer; padding: 0; text-align: left; &:hover { color: #1d4ed8; text-decoration: underline; }`;
@@ -97,6 +107,7 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
           <IconBtn type="button" onClick={onClose} aria-label="닫기"><X size={18} /></IconBtn>
         </Head>
         <Body>
+          <Side>
           <Tags>
             <Tag $bg={statusBg} $fg={statusFg}>{statusLabel}</Tag>
             <Tag>{MEANS[system.link_means] || system.link_means}</Tag>
@@ -129,7 +140,7 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
           )}
 
           <Sec>
-            <h4>맞닿은 시스템<span>같은 구간 안에서 바로 이어지는 것</span></h4>
+            <h4>맞닿은 시스템<span>바로 이어지는 것</span></h4>
             {neighbors.length === 0 ? <Muted>맞닿은 시스템이 없습니다.</Muted> : (
               <Tags>
                 {neighbors.map(n => (
@@ -141,9 +152,12 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
               </Tags>
             )}
           </Sec>
+          </Side>
 
-          <Sec>
+          <Main>
+          <Panel>
             <h4>지나는 구간<span>누르면 그 구간의 평가판</span></h4>
+            <Scroll>
             {mine.length === 0 ? <Muted>이 시스템을 적은 구간이 없습니다.</Muted> : (
               <Table>
                 <thead><tr><th>사업부</th><th>스레드</th><th>구간</th><th>역할</th><th>조직</th><th>연결</th></tr></thead>
@@ -166,10 +180,12 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
                 </tbody>
               </Table>
             )}
-          </Sec>
+            </Scroll>
+          </Panel>
 
-          <Sec>
+          <Panel>
             <h4>연계 개발 기록<span>이 시스템으로 한 일</span></h4>
+            <Scroll>
             {cases == null ? <Muted>불러오는 중…</Muted> : myCases.length === 0 ? <Muted>이 시스템의 기록이 없습니다.</Muted> : (
               <Table>
                 <thead><tr><th>시점</th><th>무엇을</th><th>상태</th><th>대상</th><th>연결</th><th>메모</th></tr></thead>
@@ -187,7 +203,9 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
                 </tbody>
               </Table>
             )}
-          </Sec>
+            </Scroll>
+          </Panel>
+          </Main>
         </Body>
       </Box>
     </Backdrop>
