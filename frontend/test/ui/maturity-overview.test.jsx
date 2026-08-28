@@ -61,7 +61,7 @@ export default async function run() {
     say(h6.includes('80%') || h6.includes('90%'), '⑥ 정확도 축이면 네모에 % 배지');
     await click(byText('button', '자동화')); await settle();
     say(html().includes('2/2') || html().includes('1/2'), '⑥ 축을 자동화로 바꾸면 배지가 켠 수로');
-    await click(document.querySelector('[aria-label="부서 미지정 펼치기"]')); await settle();   // sc-stub 은 as="button" 을 무시한다
+    await click(document.querySelector('[aria-label$="펼치기"]')); await settle();   // 전체 모드라 「MX · 부서 미지정」 — 끝맺음으로 찾는다
     say(!!byText('button', '← 전체') && html().includes('부서 미지정'), '⑥ 묶음 이름표를 누르면 드릴다운, 「← 전체」가 생김');
     await click(byText('button', '← 전체')); await settle();
     say(!byText('button', '← 전체'), '⑥ 「← 전체」로 벽 전체로 돌아옴');
