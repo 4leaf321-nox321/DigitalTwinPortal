@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
+import OverviewGrid from './OverviewGrid';
 import {
   colorFor, distribution, applyFilters, accuracyLabel, changesByMonth,
 } from '../../utils/board';
@@ -110,7 +111,7 @@ const BestCell = ({ idx, axis, dense }) => {
 };
 
 // 읽기와 그리기를 가른다 — 그리기(BoardBody)는 props 만 받아 시험·SSR 로 그릴 수 있다.
-const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, refreshKey }) => {
+const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey }) => {
   const [board, setBoard] = useState(null);
   const [changes, setChanges] = useState([]);
   const [error, setError] = useState(null);
@@ -151,13 +152,13 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, ref
   if (error) return <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>;
   if (!board) return <Empty>불러오는 중…</Empty>;
   return (
-    <BoardBody board={board} changes={changes} axes={axes} filters={filters}
+    <BoardBody board={board} changes={changes} axes={axes} filters={filters} onPickDivision={onPickDivision}
                onFiltersChange={onFiltersChange} onOpenPair={onOpenPair} />
   );
 };
 
-export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOpenPair }) => {
-  const [mode, setMode] = useState('read');       // scan | read | progress
+export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOpenPair, onPickDivision }) => {
+  const [mode, setMode] = useState(board?.boards ? 'scan' : 'read');       // scan | read | progress — 전체는 요약부터
   const [open, setOpen] = useState({});           // subject_id → 펼침
   const subjects = useMemo(() => applyFilters(board?.subjects || [], filters), [board, filters]);
   const dist = useMemo(() => distribution(subjects, axes), [subjects, axes]);
@@ -245,7 +246,10 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
         })}
       </Dist>
 
-      {mode !== 'progress' ? (
+      {mode === 'scan' && board.boards ? (
+        // 전체 「요약」 — 사업부 × 축. 한 화면에 사업부 여섯. 행을 누르면 그 사업부로.
+        <OverviewGrid boards={board.boards} axes={axes} onPickDivision={onPickDivision} />
+      ) : mode !== 'progress' ? (
         <TableWrap>
           <Table>
             <thead>

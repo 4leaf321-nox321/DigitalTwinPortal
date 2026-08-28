@@ -154,3 +154,57 @@ export const reachedDates = (changes, axis) => {
   });
   return out;
 };
+
+/**
+ * 사업부 판 하나를 축별 대표 수치로 접는다 — 전체 「요약」 표의 재료(2026-08-28).
+ * 축이 다 순서형이 아니라 종류마다 다르게 센다:
+ *   value  { mean, filled, total, unassessed, counts[칸] }              평균 %(값 있는 쌍) · 세 영역 분포
+ *   rung   { counts[칸], assessed, unassessed, total, atLeast[i]=% }     i번째 칸 이상인 쌍의 %
+ *   set    { flags, adoption{key:%}, adoptionCount{key:n}, avg, assessed, unassessed, total }   항목별 채택률 · 평균 켠 수
+ *   matrix { adoption{base:%}, testRate, marketRate, defectTotal, assessed, unassessed, total } 바탕 채택률 · 시험/시장 재현률(유형 칸 기준)
+ */
+export const divisionSummary = (board, axes) => {
+  const pairs = (board?.subjects || []).flatMap(s => s.pairs || []);
+  const out = { pairs: pairs.length, unassessed: 0, stale: 0, axes: {} };
+  pairs.forEach(p => {
+    out.unassessed += (p.unassessed || []).length;
+    out.stale += Object.values(p.assessments || {}).filter(a => a && a.stale).length;
+  });
+  axes.forEach(axis => {
+    const rows = pairs.map(p => p.assessments?.[axis.key] || null);
+    const got = rows.filter(a => a && a.rung_index != null);
+    const total = rows.length, unassessed = total - got.length;
+    if (axis.kind === 'value') {
+      const vals = got.map(a => Number(a.value)).filter(v => !Number.isNaN(v));
+      const counts = axis.rungs.map((_, i) => got.filter(a => a.rung_index === i).length);
+      out.axes[axis.key] = { total, unassessed, filled: vals.length, counts,
+        mean: vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null };
+    } else if (axis.kind === 'rung') {
+      const counts = axis.rungs.map((_, i) => got.filter(a => a.rung_index === i).length);
+      const atLeast = axis.rungs.map((_, i) => (got.length ? Math.round((got.filter(a => a.rung_index >= i).length * 100) / got.length) : null));
+      out.axes[axis.key] = { total, unassessed, assessed: got.length, counts, atLeast };
+    } else if (axis.kind === 'set') {
+      const flags = flagDefs(axis);
+      const adoptionCount = {}, adoption = {};
+      flags.forEach(f => {
+        adoptionCount[f.key] = got.filter(a => (a.flags || []).includes(f.key)).length;
+        adoption[f.key] = got.length ? Math.round((adoptionCount[f.key] * 100) / got.length) : null;
+      });
+      const avg = got.length ? Math.round((got.reduce((n, a) => n + (a.flags || []).length, 0) / got.length) * 10) / 10 : null;
+      out.axes[axis.key] = { total, unassessed, assessed: got.length, flags, adoption, adoptionCount, avg };
+    } else if (axis.kind === 'matrix') {
+      const adoption = {};
+      (axis.base || []).forEach(b => { adoption[b.key] = got.length ? Math.round((got.filter(a => (a.flags || []).includes(b.key)).length * 100) / got.length) : null; });
+      let cells = 0, test = 0, market = 0;
+      pairs.forEach((p, i) => {
+        const names = p.agent?.defect_types || [];
+        const a = rows[i];
+        cells += names.length;
+        if (a?.summary) { test += a.summary.test || 0; market += a.summary.market || 0; }
+      });
+      out.axes[axis.key] = { total, unassessed, assessed: got.length, adoption, defectTotal: cells,
+        testRate: cells ? Math.round((test * 100) / cells) : null, marketRate: cells ? Math.round((market * 100) / cells) : null };
+    }
+  });
+  return out;
+};

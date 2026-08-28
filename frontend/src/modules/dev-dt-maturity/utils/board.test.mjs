@@ -142,3 +142,31 @@ test('flagDefs — 묶음 축은 첫 칸을 뺀 칸들, 표 축은 바탕', () =
   assert.deepEqual(flagDefs(MATRIX_AXIS).map(r => r.key), ['geometry', 'performance']);
   assert.deepEqual(flagDefs(SET_AXIS).map(r => r.key), ['pre', 'run', 'post']);
 });
+
+
+// ── divisionSummary: 축 종류마다 다른 대표 수치 ──
+import { divisionSummary } from './board.js';
+
+test('divisionSummary — 값은 평균, 택1은 「이상 %」, 묶음은 채택률, 표는 재현률', () => {
+  const axes = [
+    { key: 'accuracy', kind: 'value', rungs: [{ key: 'trend' }, { key: 'quantitative' }, { key: 'correlated' }] },
+    { key: 'scope', kind: 'rung', rungs: [{ key: 'issue' }, { key: 'basic' }, { key: 'derived_some' }, { key: 'all' }] },
+    { key: 'automation', kind: 'set', rungs: [{ key: 'manual' }, { key: 'pre' }, { key: 'run' }] },
+    MATRIX_AXIS,
+  ];
+  const board = { subjects: [{ pairs: [
+    { unassessed: [], agent: { defect_types: ['a', 'b'] }, assessments: {
+      accuracy: { value: 80, rung_index: 1, stale: false }, scope: { rung_index: 3, stale: true },
+      automation: { flags: ['pre', 'run'], rung_index: 2 }, modeling: { flags: ['geometry'], rung_index: 3, summary: { test: 1, market: 0, total: 2 } } } },
+    { unassessed: ['accuracy', 'modeling'], agent: { defect_types: ['c'] }, assessments: {
+      accuracy: null, scope: { rung_index: 1 }, automation: { flags: [], rung_index: 0 }, modeling: null } },
+  ] }] };
+  const s = divisionSummary(board, axes);
+  assert.equal(s.pairs, 2); assert.equal(s.unassessed, 2); assert.equal(s.stale, 1);
+  assert.deepEqual(s.axes.accuracy, { total: 2, unassessed: 1, filled: 1, counts: [0, 1, 0], mean: 80 });
+  assert.deepEqual(s.axes.scope.atLeast, [100, 100, 50, 50]);
+  assert.equal(s.axes.automation.avg, 1);
+  assert.deepEqual(s.axes.automation.adoption, { pre: 50, run: 50 });
+  assert.equal(s.axes.modeling.testRate, 33);            // 유형 칸 3개 중 1
+  assert.deepEqual(s.axes.modeling.adoption, { geometry: 100, performance: 0 });
+});

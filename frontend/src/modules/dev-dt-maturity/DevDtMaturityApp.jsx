@@ -137,7 +137,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters}
-                     onOpenPair={(id) => patch({ pair: id })} refreshKey={refreshKey} />
+                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} />
         ) : (
           <ListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null}
                     axes={axes} pairId={pairId}
