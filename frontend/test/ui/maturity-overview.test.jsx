@@ -45,6 +45,7 @@ export default async function run() {
     await settle(60);
     say(html().includes('검토 대장') && html().includes('4') && html().includes('착수 전 이상 75%') && html().includes('정착 후보 1'), '① 맨 아래 검토 대장 블록 — 건수·착수 전 이상·정착 후보');
     say(!!byText('th', 'MX') && !!byText('th', 'VD') && !!byText('td', '정확도'), '① 전체 판은 「요약」으로 열리고 사업부가 열, 축이 행');
+    say(!!byText('th', '전체') && html().includes('값 있음 2/3'), '① 맨 오른쪽 「전체」 열 — 사업부를 합쳐 다시 센 것(정확도 값 있음 2/3)');
     const h = html();
     say(h.includes('80%') && h.includes('값 있음 2/2'), '② 정확도: 평균 80% · 값 있음 2/2');
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');

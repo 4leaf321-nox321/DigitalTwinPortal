@@ -6,7 +6,7 @@
 //   ④ CSV 가져오기 — 미리보기 → 문제 없으면 넣기
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
-import { render, click, type, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import { render, click, type, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import ReviewLedger from '../../src/modules/dev-dt-maturity/components/Review/ReviewLedger';
 
 const REVIEW = {
@@ -52,8 +52,9 @@ export default async function run() {
     const agentIn = document.querySelector('input[data-search-select]');
     await type(agentIn, '열'); await settle();
     await click(byText('li', '열 해석')); await settle();
-    await select(document.querySelector('select[aria-label="시점"]'), 'concept');
-    await select(document.querySelector('select[aria-label="결정 반영"]'), 'rule');
+    await click(byText('button', '컨셉 단계'));
+    await click(byText('button', '규칙으로 정착'));
+    say(byText('button', '컨셉 단계').getAttribute('aria-pressed') === 'true', '② 시점·결정 반영은 토글 — 누른 것이 켜짐');
     await type(document.querySelector('input[aria-label="리드타임(일)"]'), '2');
     await click(byText('button', '추가')); await settle(60);
     const post = calls.find(c => c.method === 'POST' && c.url.endsWith('/reviews'));

@@ -36,8 +36,14 @@ const Pill = styled.span`
   background: ${p => (p.$warn ? '#fef3c7' : '#f1f5f9')}; color: ${p => (p.$warn ? '#92400e' : '#64748b')};
 `;
 const Muted = styled.td`color: #94a3b8; font-size: 0.75rem;`;
-const ReviewWrap = styled.div`margin-top: 1rem; border-top: 2px solid #e2e8f0; padding-top: 0.5rem;`;
-const ReviewHead = styled.div`display: flex; align-items: center; gap: 0.6rem; font-size: 0.8125rem; color: #64748b; padding: 0.3rem 0.9rem; strong { color: #1e293b; font-size: 0.9375rem; } select { margin-left: auto; padding: 0.2rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; }`;
+const SecHead = styled.td`
+  background: #f8fafc !important; border-top: 2px solid #e2e8f0; padding: 0.4rem 0.9rem !important; font-size: 0.8125rem; color: #64748b;
+  strong { color: #1e293b; font-size: 0.9375rem; margin-right: 0.5rem; }
+  select { float: right; padding: 0.2rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; }
+`;
+// 맨 오른쪽 「전체」 — 작고 옅게, 사업부 열과 구분되게
+const ThAll = styled.th`width: 11rem; border-left: 2px solid #e2e8f0; color: #1e293b !important;`;
+const TdAll = styled.td`border-left: 2px solid #e2e8f0; background: #fafafa;`;
 
 const pct = (n, d) => (d ? Math.round((n * 100) / d) : null);
 const shade = (p) => (p == null ? '#e2e8f0' : p >= 75 ? '#1d4ed8' : p >= 50 ? '#3b82f6' : p >= 25 ? '#93c5fd' : '#dbeafe');
@@ -101,8 +107,37 @@ const AxisSummary = ({ axis, s }) => {
 };
 
 // 가로가 사업부, 세로가 축 — 한 축을 한 줄로 두고 사업부를 옆으로 늘어놓아야 「이 축에서 누가 앞서나」가 바로 읽힌다(2026-08-28).
+// 검토 대장 줄도 **같은 표**에 붙는다 — 표를 따로 두면 열 폭이 달라 사업부 열과 어긋난다. 맨 오른쪽은 「전체」(평균·누계).
+const pctText = (v) => (v == null ? '—' : `${v}%`);
+
 const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
   const sums = boards.map(b => divisionSummary(b, axes));
+  const whole = divisionSummary({ subjects: boards.flatMap(b => b.subjects || []) }, axes);   // 전체 = 사업부를 합쳐 다시 센다
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [years, setYears] = useState([]);
+  const [rv, setRv] = useState(null);
+  useEffect(() => { if (review) maturityApi.reviewYears('').then(r => setYears(r.data || [])).catch(() => {}); }, [review]);
+  useEffect(() => {
+    if (!review) return;
+    maturityApi.reviewStats('all', year).then(r => setRv(r.data)).catch(() => setRv(null));
+  }, [year, review]);
+  const rvBy = Object.fromEntries((rv?.divisions || []).map(d => [d.division_id, d]));
+  // 전체 열의 검토 셈 — 건수는 누계, 비율은 건수로 가중, 리드타임은 사업부 중앙값의 평균
+  const rvWhole = (kind) => {
+    const ss = boards.map(b => rvBy[b.division_id]?.kinds?.[kind]).filter(Boolean);
+    const count = ss.reduce((n, x) => n + (x.count || 0), 0);
+    const w = (k) => { const xs = ss.filter(x => x[k] != null && x.count); const d = xs.reduce((n, x) => n + x.count, 0); return d ? Math.round(xs.reduce((n, x) => n + x[k] * x.count, 0) / d) : null; };
+    const leads = ss.map(x => x.lead_median).filter(v => v != null);
+    return { count, early: w('early'), gate: w('gate'), confirmed: w('confirmed'), lead_median: leads.length ? Math.round((leads.reduce((a, b) => a + b, 0) / leads.length) * 10) / 10 : null,
+      promote: ss.flatMap(x => x.promote || []) };
+  };
+  const rvCell = (s) => (
+    <>
+      <Big>{s?.count ?? 0}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 건</span></Big>
+      <Small>착수 전 이상 {pctText(s?.early)} · 관문 이상 {pctText(s?.gate)} · 확인됨 {pctText(s?.confirmed)}</Small>
+      <Small>리드타임 {s?.lead_median != null ? `${s.lead_median}일` : '—'}{(s?.promote || []).length > 0 && <Pill title={s.promote.map(p => `${p.agent_name} × ${p.item} ${p.count}건`).join('\n')}>정착 후보 {s.promote.length}</Pill>}</Small>
+    </>
+  );
   return (
     <Wrap>
       <Table>
@@ -112,6 +147,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
             {boards.map(b => (
               <ThDiv key={b.division_id} onClick={() => onPickDivision && onPickDivision(b.division_id)} title="누르면 이 사업부 판으로">{b.division_name}</ThDiv>
             ))}
+            <ThAll title="사업부를 합쳐 다시 센 것 — 평균·누계">전체</ThAll>
           </tr>
         </thead>
         <tbody>
@@ -119,6 +155,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
             <tr key={a.key}>
               <Name>{a.label}<Small>{a.question}</Small></Name>
               {boards.map((b, i) => <td key={b.division_id}><AxisSummary axis={a} s={sums[i].axes[a.key]} /></td>)}
+              <TdAll><AxisSummary axis={a} s={whole.axes[a.key]} /></TdAll>
             </tr>
           ))}
           <tr>
@@ -129,56 +166,31 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
                 <Small>미평가 칸 {s.unassessed} · 낡음 {s.stale}</Small>
               </td>
             ))}
+            <TdAll><Big>{whole.pairs}</Big><Small>미평가 칸 {whole.unassessed} · 낡음 {whole.stale}</Small></TdAll>
           </tr>
+          {review && (
+            <>
+              <tr>
+                <SecHead colSpan={boards.length + 2}>
+                  <strong>검토 대장</strong> <span>시험과 짝이 없는 스팟성 시뮬레이션 — 건수로 센다</span>
+                  <select value={year} onChange={e => setYear(Number(e.target.value))} aria-label="검토 대장 연도">
+                    {[...new Set([...years, new Date().getFullYear()])].sort((a, b) => b - a).map(y => <option key={y} value={y}>{y}년</option>)}
+                  </select>
+                </SecHead>
+              </tr>
+              {review.kinds.map(k => (
+                <tr key={k.key}>
+                  <Name>{k.label}<Small>{k.key === 'cause' ? '재현 확인 · 대책까지' : '착수 전 · 관문 · 확인'}</Small></Name>
+                  {boards.map(b => <td key={b.division_id}>{rvCell(rvBy[b.division_id]?.kinds?.[k.key])}</td>)}
+                  <TdAll>{rvCell(rvWhole(k.key))}</TdAll>
+                </tr>
+              ))}
+            </>
+          )}
           {boards.length === 0 && <tr><Muted colSpan={2}>보이는 사업부가 없습니다 — 설정 「사업부 표시」를 확인하세요.</Muted></tr>}
         </tbody>
       </Table>
-      <ReviewBlock boards={boards} review={review} />
     </Wrap>
-  );
-};
-
-/** 맨 아래 — 검토 대장(스팟성 시뮬레이션)의 연간 셈. 시험 축과는 다른 척도라 따로 둔다(2026-08-28). */
-const ReviewBlock = ({ boards, review }) => {
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [years, setYears] = useState([]);
-  const [data, setData] = useState(null);
-  useEffect(() => { maturityApi.reviewYears('').then(r => setYears(r.data || [])).catch(() => {}); }, []);
-  useEffect(() => {
-    maturityApi.reviewStats('all', year).then(r => setData(r.data)).catch(() => setData(null));
-  }, [year]);
-  if (!review) return null;
-  const by = Object.fromEntries((data?.divisions || []).map(d => [d.division_id, d]));
-  const pct = (v) => (v == null ? '—' : `${v}%`);
-  return (
-    <ReviewWrap>
-      <ReviewHead>
-        <strong>검토 대장</strong>
-        <span>시험과 짝이 없는 스팟성 시뮬레이션 — 건수로 센다</span>
-        <select value={year} onChange={e => setYear(Number(e.target.value))} aria-label="검토 대장 연도">
-          {[...new Set([...years, new Date().getFullYear()])].sort((a, b) => b - a).map(y => <option key={y} value={y}>{y}년</option>)}
-        </select>
-      </ReviewHead>
-      <Table style={{ height: 'auto' }}>
-        <tbody>
-          {review.kinds.map(k => (
-            <tr key={k.key}>
-              <Name>{k.label}<Small>{k.key === 'cause' ? '재현 확인 · 대책까지' : '착수 전 · 관문 · 확인'}</Small></Name>
-              {boards.map(b => {
-                const s = by[b.division_id]?.kinds?.[k.key];
-                return (
-                  <td key={b.division_id}>
-                    <Big>{s?.count ?? 0}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 건</span></Big>
-                    <Small>착수 전 이상 {pct(s?.early)} · 관문 이상 {pct(s?.gate)} · 확인됨 {pct(s?.confirmed)}</Small>
-                    <Small>리드타임 {s?.lead_median != null ? `${s.lead_median}일` : '—'}{(s?.promote || []).length > 0 && <Pill title={s.promote.map(p => `${p.agent_name} × ${p.item} ${p.count}건`).join('\n')}>정착 후보 {s.promote.length}</Pill>}</Small>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </ReviewWrap>
   );
 };
 

@@ -17,13 +17,21 @@ const Chip = styled.button`
 const Select = styled.select`padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; background: white;`;
 const Stats = styled.div`display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8125rem; color: #475569; strong { color: #1e293b; font-size: 1rem; }`;
 const Promote = styled.span`display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 600;`;
+// 입력 줄 — 택1은 드롭다운이 아니라 **토글 묶음**: 선택지가 한눈에 보이고 한 번 눌러 정한다(2026-08-28).
 const Form = styled.form`
-  display: grid; grid-template-columns: 7rem 8rem 1fr 1fr 1fr 9rem 9rem 8rem 5rem auto; gap: 0.4rem; align-items: center;
+  display: flex; flex-direction: column; gap: 0.4rem;
   padding: 0.6rem 0.75rem; border: 1px solid #bfdbfe; background: #f8fbff; border-radius: 0.5rem;
-  input, select { padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; min-width: 0; background: white; }
-  @media (max-width: 1400px) { grid-template-columns: repeat(5, 1fr); }
+  input { padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; min-width: 0; background: white; }
 `;
-const Note = styled.input`grid-column: 1 / -2;`;
+const Line = styled.div`display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;`;
+const Lab = styled.span`font-size: 0.75rem; font-weight: 700; color: #64748b; min-width: 4.5rem;`;
+const Toggles = styled.div`display: inline-flex; gap: 0.25rem; flex-wrap: wrap;`;
+const Tog = styled.button`
+  padding: 0.28rem 0.65rem; border-radius: 999px; font-family: inherit; font-size: 0.8125rem; cursor: pointer; white-space: nowrap;
+  border: 1px solid ${p => (p.$on ? (p.$cause ? '#d97706' : '#1d4ed8') : '#cbd5e1')};
+  background: ${p => (p.$on ? (p.$cause ? '#f59e0b' : '#1d4ed8') : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};
+  &:hover { border-color: ${p => (p.$cause ? '#d97706' : '#1d4ed8')}; }
+`;
 const Button = styled.button`
   padding: 0.35rem 0.8rem; border: 1px solid ${p => (p.$primary ? '#1d4ed8' : '#cbd5e1')}; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;
   background: ${p => (p.$primary ? '#1d4ed8' : 'white')}; color: ${p => (p.$primary ? 'white' : '#475569')}; display: inline-flex; gap: 0.3rem; align-items: center; white-space: nowrap;
@@ -146,26 +154,40 @@ const ReviewLedger = ({ divisionId, divisions = [], denyReason, review, refreshK
 
       {canEdit && (
         <Form onSubmit={submit} aria-label={editId ? '검토 건 고치기' : '검토 건 추가'}>
-          <input type="month" value={draft.month} max={thisMonth()} onChange={e => set({ month: e.target.value })} aria-label="연-월" required />
-          <select value={draft.kind} onChange={e => set({ kind: e.target.value })} aria-label="종류">
-            {(review?.kinds || []).map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
-          </select>
-          <input list="rv-targets" value={draft.target} onChange={e => set({ target: e.target.value })} placeholder="대상 — 제품·과제" aria-label="대상" />
-          <input list="rv-items" value={draft.item} onChange={e => set({ item: e.target.value })} placeholder={draft.kind === 'cause' ? '불량 유형' : '스펙 항목'} aria-label="항목" />
-          <SearchSelect options={agents} value={draft.agent_id} onChange={(id) => set({ agent_id: id == null ? '' : id, agent_name: id == null ? draft.agent_name : '' })}
-                        placeholder="시뮬레이션 찾기" hint="관리 목록에 없으면 메모에 이름을 적으세요." />
-          <select value={draft.timing} onChange={e => set({ timing: e.target.value })} aria-label="시점"><option value="">시점…</option>{opt('timing').map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select>
-          <select value={draft.decision} onChange={e => set({ decision: e.target.value })} aria-label="결정 반영"><option value="">결정 반영…</option>{opt('decision').map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select>
-          <select value={draft.basis} onChange={e => set({ basis: e.target.value })} aria-label="판정 근거"><option value="">판정 근거…</option>{opt('basis').map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select>
-          <input type="number" min="0" step="0.5" value={draft.lead_days} onChange={e => set({ lead_days: e.target.value })} placeholder="일" aria-label="리드타임(일)" title="리드타임(일)" />
-          <div style={{ display: 'flex', gap: '0.3rem' }}>
+          <Line>
+            <input type="month" value={draft.month} max={thisMonth()} onChange={e => set({ month: e.target.value })} aria-label="연-월" required style={{ width: '8rem' }} />
+            <Toggles role="group" aria-label="종류">
+              {(review?.kinds || []).map(x => <Tog key={x.key} type="button" $on={draft.kind === x.key} $cause={x.key === 'cause'} onClick={() => set({ kind: x.key })}>{x.label}</Tog>)}
+            </Toggles>
+            <input list="rv-targets" value={draft.target} onChange={e => set({ target: e.target.value })} placeholder="대상 — 제품·과제" aria-label="대상" style={{ flex: 1 }} />
+            <input list="rv-items" value={draft.item} onChange={e => set({ item: e.target.value })} placeholder={draft.kind === 'cause' ? '불량 유형' : '스펙 항목'} aria-label="항목" style={{ flex: 1 }} />
+            <span style={{ flex: 1.2, minWidth: '11rem' }}>
+              <SearchSelect options={agents} value={draft.agent_id} onChange={(id) => set({ agent_id: id == null ? '' : id, agent_name: id == null ? draft.agent_name : '' })}
+                            placeholder="시뮬레이션 찾기" hint="관리 목록에 없으면 아래에 이름만 적으세요." />
+            </span>
+            {draft.agent_id === '' && (
+              <input value={draft.agent_name} onChange={e => set({ agent_name: e.target.value })} placeholder="시뮬레이션 이름(목록에 없을 때)" aria-label="시뮬레이션 이름" style={{ flex: 1 }} />
+            )}
+          </Line>
+          {['timing', 'decision', 'basis'].map(field => (
+            <Line key={field}>
+              <Lab>{review?.fields?.[field]?.label}</Lab>
+              <Toggles role="group" aria-label={review?.fields?.[field]?.label}>
+                {opt(field).map(o => (
+                  <Tog key={o.key} type="button" $on={draft[field] === o.key} aria-pressed={draft[field] === o.key}
+                       onClick={() => set({ [field]: draft[field] === o.key ? '' : o.key })}>{o.label}</Tog>
+                ))}
+              </Toggles>
+            </Line>
+          ))}
+          <Line>
+            <Lab>리드타임</Lab>
+            <input type="number" min="0" step="0.5" value={draft.lead_days} onChange={e => set({ lead_days: e.target.value })} placeholder="일" aria-label="리드타임(일)" title="리드타임(일)" style={{ width: '5rem' }} />
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>일</span>
+            <input value={draft.note} onChange={e => set({ note: e.target.value })} placeholder="한 줄 메모 — 무엇을 보고 무엇을 정했나" aria-label="메모" style={{ flex: 1 }} />
             <Button type="submit" $primary disabled={busy || !draft.month || (draft.agent_id === '' && !draft.agent_name.trim())}>{editId ? <><Check size={13} /> 고침</> : <><Plus size={13} /> 추가</>}</Button>
-            {editId && <Button type="button" onClick={() => { setEditId(null); setDraft(empty(draft.kind)); }}><X size={13} /></Button>}
-          </div>
-          <Note value={draft.note} onChange={e => set({ note: e.target.value })} placeholder="한 줄 메모 — 무엇을 보고 무엇을 정했나 (관리 목록에 없는 시뮬레이션이면 이름도)" aria-label="메모" />
-          {draft.agent_id === '' && (
-            <input value={draft.agent_name} onChange={e => set({ agent_name: e.target.value })} placeholder="시뮬레이션 이름(목록에 없을 때)" aria-label="시뮬레이션 이름" />
-          )}
+            {editId && <Button type="button" onClick={() => { setEditId(null); setDraft(empty(draft.kind)); }}><X size={13} /> 취소</Button>}
+          </Line>
           <datalist id="rv-targets">{targets.map(t => <option key={t} value={t} />)}</datalist>
           <datalist id="rv-items">{items.map(t => <option key={t} value={t} />)}</datalist>
         </Form>
