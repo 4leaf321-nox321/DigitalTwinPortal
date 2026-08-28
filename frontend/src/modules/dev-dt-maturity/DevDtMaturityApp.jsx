@@ -77,13 +77,14 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   }, [refreshKey]);
 
   // 사업부: URL → 내 사업부 → 첫 사업부. 'all' 은 전체.
+  // 들어오면 「성숙도 · 전체 · 요약」이 기본이다(2026-08-28) — URL 에 사업부가 있을 때만 그 사업부.
   const divisionId = useMemo(() => {
-    if (params.get('division') === 'all') return 'all';
-    const fromUrl = Number(params.get('division'));
+    const raw = params.get('division');
+    if (!raw || raw === 'all') return divisions.length ? 'all' : null;
+    const fromUrl = Number(raw);
     if (fromUrl && divisions.some(d => d.id === fromUrl)) return fromUrl;
-    if (defs?.my_division_id && divisions.some(d => d.id === defs.my_division_id)) return defs.my_division_id;
-    return divisions[0]?.id ?? null;
-  }, [params, divisions, defs]);
+    return 'all';
+  }, [params, divisions]);
   const division = divisions.find(d => d.id === divisionId);
   const tab = ['list', 'reviews'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
