@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { LineChart, Line, BarChart, Bar as RBar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import maturityApi from '../../services/maturityApi';
-import { monthlySeries, monthKeys, pairSeries } from '../../utils/board';
+import { monthlySeries, monthKeys, monthRange, pairSeries } from '../../utils/board';
 
 // 「변화」 — 축마다 선 그래프 하나(2026-08-28). 표는 없다.
 // 이력을 달마다 되감아 「그 달 말의 상태」를 복원하고 요약과 같은 셈으로 대표 수치를 낸다 —
@@ -132,9 +132,11 @@ const useReviewMonthly = (series, months) => {
 };
 
 const ChartsView = ({ series, axes, review }) => {
-  const [span, setSpan] = useState(12);
+  const [span, setSpan] = useState(12);                       // 12 | 24 | 'custom'
+  const nowKey = monthKeys(1)[0];
+  const [range, setRange] = useState({ from: monthKeys(12)[0], to: nowKey });   // 「기간 설정」의 두 연-월
   const [detail, setDetail] = useState(axes[0]?.key || null);   // 오른쪽 「상세」에 보일 축
-  const months = useMemo(() => monthKeys(span), [span]);
+  const months = useMemo(() => (span === 'custom' ? monthRange(range.from, range.to) : monthKeys(span)), [span, range]);
   const data = useMemo(() => series.map(s => ({ name: s.name, rows: monthlySeries(s.subjects, s.changes, axes, months) })), [series, axes, months]);
   const reviewRows = useReviewMonthly(series, months);
   const reviewTotal = reviewRows.reduce((n, r) => n + r.spec + r.cause, 0);
@@ -145,6 +147,15 @@ const ChartsView = ({ series, axes, review }) => {
         <span>기간</span>
         <Chip $on={span === 12} onClick={() => setSpan(12)}>12개월</Chip>
         <Chip $on={span === 24} onClick={() => setSpan(24)}>24개월</Chip>
+        <Chip $on={span === 'custom'} onClick={() => setSpan('custom')} title="두 연-월 사이로 본다 (최대 60달)">기간 설정</Chip>
+        {span === 'custom' && (
+          <>
+            <input type="month" value={range.from} max={nowKey} aria-label="시작 연-월" onChange={e => setRange(r => ({ ...r, from: e.target.value }))} style={{ fontFamily: 'inherit', fontSize: '0.8125rem', padding: '0.2rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }} />
+            <span>~</span>
+            <input type="month" value={range.to} max={nowKey} aria-label="끝 연-월" onChange={e => setRange(r => ({ ...r, to: e.target.value }))} style={{ fontFamily: 'inherit', fontSize: '0.8125rem', padding: '0.2rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }} />
+            <span>{months.length ? `${months.length}달` : '연-월을 둘 다 고르세요'}</span>
+          </>
+        )}
         <span style={{ marginLeft: '0.5rem' }}>달마다 「그 달 말의 상태」를 이력에서 되감아 셉니다 — 마지막 점이 요약의 지금 값입니다. 점에 대면 그 달의 변화 수.</span>
       </Bar>
       <Body>
@@ -186,7 +197,7 @@ const ChartsView = ({ series, axes, review }) => {
         })}
         <Panel aria-label="해석 활용 기록">
           <h4>해석 활용 기록<span>달마다 건수 — {review?.kinds?.map(k => k.label).join(' · ') || '설계 스펙 검토 · 원인 분석'}</span></h4>
-          {data.length >= 1 && <Now>{reviewTotal}<small>건 / {span}개월</small></Now>}
+          {data.length >= 1 && <Now>{reviewTotal}<small>건 / {months.length}개월</small></Now>}
           <ChartBox>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={reviewRows} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>

@@ -167,7 +167,7 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
           // 전체 — 사업부마다의 판을 묶는다. 셈(문턱·재평가 필요)은 사업부별로 이미 돼 있다.
           const b = await maturityApi.getBoard('all');
           const boards = b.data.boards || [];
-          const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id, 'simulation', 730).catch(() => ({ data: [] }))));
+          const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id, 'simulation', 1825).catch(() => ({ data: [] }))));
           if (!alive) return;
           setBoard({
             ...b.data,
@@ -182,7 +182,7 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
         }
         const [b, c] = await Promise.all([
           maturityApi.getBoard(divisionId),
-          maturityApi.getChanges(divisionId, 'simulation', 730),
+          maturityApi.getChanges(divisionId, 'simulation', 1825),
         ]);
         if (!alive) return;
         setBoard(b.data); setChanges(c.data || []); setChangeSets({}); setError(null);

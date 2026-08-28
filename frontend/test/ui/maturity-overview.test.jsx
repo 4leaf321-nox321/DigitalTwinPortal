@@ -5,7 +5,7 @@
 //   ③ 사업부 머리를 누르면 그 사업부로 내려간다 · 「상세」로 바꾸면 시험 표가 나온다
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
-import { render, click, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import { render, click, type, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import { BoardBody } from '../../src/modules/dev-dt-maturity/components/Board/BoardView';
 
 const AXES = [
@@ -77,6 +77,11 @@ export default async function run() {
     const h5 = html();
     say(['정확도', '자동화', '모델링 수준', '적용 범위', '해석 활용 기록'].every(l => !!document.querySelector(`section[aria-label="${l}"]`)) && h5.includes('12개월') && h5.includes('24개월'), '⑤ 변화는 축마다 그래프 판 + 해석 활용 기록 막대 + 기간 12/24개월');
     say(!h5.includes('<table'), '⑤ 표는 없다');
+    await click(byText('button', '기간 설정')); await settle();
+    const fromIn = document.querySelector('input[aria-label="시작 연-월"]');
+    say(!!fromIn && !!document.querySelector('input[aria-label="끝 연-월"]'), '⑤ 「기간 설정」을 누르면 시작·끝 연-월');
+    await type(fromIn, '2026-03'); await type(document.querySelector('input[aria-label="끝 연-월"]'), '2026-05'); await settle();
+    say(html().includes('3달'), '⑤ 두 연-월 사이(3달)로 그린다');
     await click(document.querySelector('section[aria-label="자동화"] button[aria-pressed]')); await settle();
     say(!!document.querySelector('[aria-label="자동화 연계 고르기"]') && html().includes('자동화 — 연계마다 선 하나'), '⑤ 「상세」를 누르면 오른쪽 판에 그 축의 연계마다 선 + 고르기 목록');
     await unmount();

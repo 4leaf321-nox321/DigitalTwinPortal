@@ -216,3 +216,11 @@ test('pairSeries — 연계마다 선 하나, 이력 없는 연계는 빠진다'
   const rows = pairSeries(subjects, changes, axis, ['2026-04', '2026-05', '2026-06', '2026-07']);
   assert.deepEqual(rows, [{ id: 1, name: '낙하 × 구조', points: [null, 70, 70, 90] }]);
 });
+
+import { monthRange } from './board.js';
+test('monthRange — 두 연-월 사이, 거꾸로면 바로잡고, 60달 상한', () => {
+  assert.deepEqual(monthRange('2025-11', '2026-02'), ['2025-11', '2025-12', '2026-01', '2026-02']);
+  assert.deepEqual(monthRange('2026-02', '2025-12'), ['2025-12', '2026-01', '2026-02']);
+  assert.deepEqual(monthRange('2026-02', ''), []);
+  assert.equal(monthRange('2015-01', '2026-08').length, 60);
+});

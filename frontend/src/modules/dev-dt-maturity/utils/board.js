@@ -221,6 +221,21 @@ export const monthKeys = (n = 12, now = new Date()) => {
   return out;
 };
 
+/** 두 연-월 사이(양 끝 포함)의 'YYYY-MM' 목록. 거꾸로면 바로잡고, 60달을 넘으면 뒤에서 60달만. */
+export const monthRange = (from, to) => {
+  const ok = (v) => /^\d{4}-\d{2}$/.test(v || '');
+  if (!ok(from) || !ok(to)) return [];
+  let [a, b] = [from, to].sort();
+  const out = [];
+  let [y, m] = a.split('-').map(Number);
+  const [ey, em] = b.split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1; if (m > 12) { m = 1; y += 1; }
+  }
+  return out.slice(-60);
+};
+
 /** 이력 한 줄의 after 를 그 축의 상태로 — value 는 숫자, set/matrix 는 켠 목록(+시험·시장 수), rung 은 칸 index. */
 const stateOf = (axis, after) => {
   if (after == null || after === '') return null;
