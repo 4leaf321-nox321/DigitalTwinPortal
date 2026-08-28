@@ -160,6 +160,11 @@ export default async function run() {
     const edges = [...document.querySelectorAll('[data-fg-link]')];
     say(edges.length === 2 && edges.every(e => e.dataset.color === '#2563eb' && e.dataset.dash === '1'), '⑥ 간선 둘 — 스레드 색, 사람이 옮김이라 점선');
     say(edges[0].dataset.curve !== edges[1].dataset.curve || edges[0].dataset.curve === '0.1', '⑥ 휘는 정도가 매겨짐');
+    say(document.querySelector('[data-labels="off"]') != null, '⑥ 스레드 이름은 처음엔 꺼져 있음');
+    await click(byText('button', '스레드 이름')); await settle();
+    say(document.querySelector('[data-labels="on"]') != null, '⑥ 누르면 간선에 이름이 붙음');
+    await click(byText('button', '스레드 이름')); await settle();
+    say(document.querySelector('[data-labels="off"]') != null, '⑥ 다시 누르면 뗌');
     await click(edges[0]); await settle();
     say(graphPair === 901, '⑥ 간선을 누르면 그 구간의 평가판');
     await unmount();

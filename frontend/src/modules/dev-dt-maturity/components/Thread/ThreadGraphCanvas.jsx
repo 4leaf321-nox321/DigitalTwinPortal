@@ -28,7 +28,7 @@ const Tool = styled.button`padding: 0.2rem 0.6rem; border: 1px solid #cbd5e1; bo
 const FALLBACK = { width: 960, height: 520 };
 const nodeRadius = (n) => 4 + Math.min(n.count || 0, 8) * 1.1;
 
-const ThreadGraphCanvas = ({ nodes, links, focusThread = null, onOpenPair }) => {
+const ThreadGraphCanvas = ({ nodes, links, focusThread = null, showLabels = false, onOpenPair }) => {
   const wrapRef = useRef(null);
   const fgRef = useRef(null);
   const fittedFor = useRef(null);
@@ -96,7 +96,43 @@ const ThreadGraphCanvas = ({ nodes, links, focusThread = null, onOpenPair }) => 
 
   // 고른 스레드가 아닌 선은 **숨기지 않고 흐린 회색으로** 둔다 — 숨기면 그 자리에 무엇이
   // 있었는지가 사라져서 "이 줄만 이렇게 지난다" 가 아니라 "여기엔 아무것도 없다" 로 읽힌다.
-  const linkColor = useCallback((l) => (focusThread != null && l.thread_id !== focusThread ? '#e2e8f0' : l.color), [focusThread]);
+  const dimmedLink = useCallback((l) => focusThread != null && l.thread_id !== focusThread, [focusThread]);
+  const linkColor = useCallback((l) => (dimmedLink(l) ? '#e2e8f0' : l.color), [dimmedLink]);
+
+  /*
+    간선의 스레드 이름 — 켜고 끈다(2026-08-29 요청).
+
+    선 위에 **선을 따라 눕혀** 그린다. 가로로 눕히면 비스듬한 선에서 어느 선의 이름인지
+    가려지지 않는다. 글자가 거꾸로 서지 않게 왼쪽으로 가는 선은 뒤집어 준다.
+    자리는 휜 선의 한가운데다 — force-graph 가 그리며 남기는 제어점(`__controlPoints`)으로
+    2차 베지에의 t=0.5 를 셈한다. 곧은 선이면 두 끝의 가운데.
+  */
+  const paintLinkLabel = useCallback((link, ctx, scale) => {
+    if (!showLabels || scale < 0.35) return;                 // 많이 줄이면 글씨가 서로 겹쳐 못 읽는다
+    const text = link.thread_name || '스레드 없음';
+    const s = link.source, t = link.target;
+    if (!s || !t || typeof s !== 'object' || typeof t !== 'object') return;
+    const cp = link.__controlPoints;
+    const mid = cp
+      ? { x: 0.25 * s.x + 0.5 * cp[0] + 0.25 * t.x, y: 0.25 * s.y + 0.5 * cp[1] + 0.25 * t.y }
+      : { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2 };
+    let angle = Math.atan2(t.y - s.y, t.x - s.x);
+    if (angle > Math.PI / 2) angle -= Math.PI;               // 거꾸로 선 글자를 바로 세운다
+    if (angle < -Math.PI / 2) angle += Math.PI;
+    const size = Math.max(3, 9 / scale);
+    ctx.save();
+    ctx.translate(mid.x, mid.y);
+    ctx.rotate(angle);
+    ctx.font = `600 ${size}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.82)';               // 선 위에 얹히므로 바탕을 깐다
+    ctx.fillRect(-w / 2 - size * 0.2, -size * 0.62, w + size * 0.4, size * 1.24);
+    ctx.fillStyle = dimmedLink(link) ? '#cbd5e1' : link.color;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }, [showLabels, dimmedLink]);
 
   useEffect(() => {
     const fg = fgRef.current;
@@ -130,7 +166,7 @@ const ThreadGraphCanvas = ({ nodes, links, focusThread = null, onOpenPair }) => 
   }, [graphData]);
 
   return (
-    <Wrap ref={wrapRef} data-graph-canvas aria-label="시스템 연결도">
+    <Wrap ref={wrapRef} data-graph-canvas data-labels={showLabels ? 'on' : 'off'} aria-label="시스템 연결도">
       <Tools>
         <Tool type="button" onClick={doRelayout} title="고정을 전부 풀고 자리를 다시 잡습니다">배치 다시 계산</Tool>
         <Tool type="button" onClick={() => { try { fgRef.current?.zoomToFit(400, 40); } catch { /* 준비 전 */ } }}>화면에 맞추기</Tool>
@@ -151,6 +187,8 @@ const ThreadGraphCanvas = ({ nodes, links, focusThread = null, onOpenPair }) => 
             linkCurvature={(l) => l.curvature}
             linkLineDash={(l) => (l.dashed ? [4, 3] : null)}
             linkLabel={(l) => `${l.thread_name || '스레드 없음'} — ${l.name}`}
+            linkCanvasObject={paintLinkLabel}
+            linkCanvasObjectMode={() => 'after'}
             onLinkClick={(l) => l?.pair_id && onOpenPair && onOpenPair(l.pair_id)}
             onNodeHover={(n) => setHoverId(n?.id ?? null)}
             onNodeDragEnd={handleDragEnd}
