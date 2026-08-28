@@ -21,7 +21,9 @@ from .services import Refused, _clean_list, create_pair, create_subject, pair_di
 SECTOR = 'digital_thread'
 STAGE_ORDER = {s['key']: i for i, s in enumerate(D.THREAD_STAGES)}
 LINK_AXIS = 'link_mode'
-AUTO_FROM = 'auto_file'          # 이 칸 이상이면 「이어진」 구간
+AUTO_FROM = 'auto_transfer'      # 이 칸 이상이면 「이어진」 구간
+CAPTURE_FROM = 'partial'         # 이 칸 이상이면 「확보된」 구간
+USAGE_FROM = 'decision'          # 이 칸 이상이면 「쓰이는」 구간
 
 
 # ── 기본 사전 — 표가 비어 있으면 코드의 초안을 넣는다(멱등) ──────────────────
@@ -435,21 +437,32 @@ def guard_assess(pair, axis_key, payload):
     axis = D.axis_of(SECTOR, LINK_AXIS)
     keys = D.rung_keys(axis)
     rung = payload.get('rung')
-    if rung in keys and keys.index(rung) > 1:
-        raise Refused(f'매개가 「{via.name}」(비공식 매개)이면 연결 방식은 「{axis["rungs"][1]["label"]}」까지만 고를 수 있습니다 — 매개 시스템을 먼저 바꾸세요.')
+    if rung in keys and keys.index(rung) > 0:
+        raise Refused(f'매개가 「{via.name}」(비공식 매개)이면 연결은 「{axis["rungs"][0]["label"]}」만 고를 수 있습니다 — 매개 시스템을 먼저 바꾸세요.')
 
 
 # ── 스레드 단위의 셈 ───────────────────────────────────────────────────────
 
-def _link_idx(seg_d):
-    a = (seg_d.get('pair') or {}).get('assessments', {}).get(LINK_AXIS) if seg_d.get('pair') else None
+def _axis_idx(seg_d, axis_key):
+    a = (seg_d.get('pair') or {}).get('assessments', {}).get(axis_key) if seg_d.get('pair') else None
     return a['rung_index'] if a and a.get('rung_index') is not None else None
+
+
+def _link_idx(seg_d):
+    return _axis_idx(seg_d, LINK_AXIS)
+
+
+def _unknown_count(seg_d):
+    return sum(1 for a in ((seg_d.get('pair') or {}).get('assessments') or {}).values() if a and a.get('unknown'))
 
 
 def thread_stats(division_id):
     """사업부의 스레드마다 — 구간 수·매긴 수·연속성 %·도달 단계·최약 구간·폐루프·비공식 매개 비율."""
     axis = D.axis_of(SECTOR, LINK_AXIS)
     auto_idx = D.rung_keys(axis).index(AUTO_FROM)
+    cap_axis, use_axis = D.axis_of(SECTOR, 'capture'), D.axis_of(SECTOR, 'usage')
+    cap_idx, use_idx = D.rung_keys(cap_axis).index(CAPTURE_FROM), D.rung_keys(use_axis).index(USAGE_FROM)
+    all_axes = D.AXES[SECTOR]
     segs = list_segments(division_id)
     by_thread = defaultdict(list)
     for s in segs:
@@ -468,6 +481,21 @@ def thread_stats(division_id):
                 break
             reach = sd['to_stage']
         weakest = min(assessed, key=_link_idx) if assessed else None
+        # 최약 축 — 넷 가운데 칸 비율이 가장 낮은 것(구간마다), 그 가운데 가장 낮은 구간
+        weak_axis = None
+        for s in rows:
+            for ax in all_axes:
+                idx = _axis_idx(s, ax['key'])
+                if idx is None:
+                    continue
+                ratio = idx / max(1, len(ax['rungs']) - 1)
+                if weak_axis is None or ratio < weak_axis['ratio']:
+                    weak_axis = {'ratio': ratio, 'segment_id': s['id'], 'segment': s['name'], 'axis': ax['key'], 'axis_label': ax['label'], 'rung_label': ax['rungs'][idx]['label']}
+        captured = [s for s in rows if (_axis_idx(s, 'capture') or -1) >= cap_idx]
+        cap_assessed = [s for s in rows if _axis_idx(s, 'capture') is not None]
+        used = [s for s in rows if (_axis_idx(s, 'usage') or -1) >= use_idx]
+        use_assessed = [s for s in rows if _axis_idx(s, 'usage') is not None]
+        unknown = sum(_unknown_count(s) for s in rows)
         closed = any(STAGE_ORDER.get((s.get('segment_def') or {}).get('to_stage'), 99) < STAGE_ORDER.get((s.get('segment_def') or {}).get('from_stage'), -1)
                      for s in linked)
         informal = sum(1 for s in rows if s.get('via_informal'))
@@ -481,6 +509,10 @@ def thread_stats(division_id):
             'closed_loop': closed,
             'informal_ratio': round(100 * informal / len(rows)) if rows else None,
             'unassessed': len(rows) - len(assessed),
+            'capture_rate': round(100 * len(captured) / len(cap_assessed)) if cap_assessed else None,
+            'usage_rate': round(100 * len(used) / len(use_assessed)) if use_assessed else None,
+            'unknown': unknown,
+            'weak_axis': weak_axis,
         })
     return {'division_id': int(division_id), 'threads': out}
 

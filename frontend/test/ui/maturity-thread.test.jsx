@@ -12,8 +12,8 @@ import { BoardBody } from '../../src/modules/dev-dt-maturity/components/Board/Bo
 import ThreadCaseLedger from '../../src/modules/dev-dt-maturity/components/Thread/ThreadCaseLedger';
 
 const AXES = [
-  { key: 'link_mode', label: '연결 방식', kind: 'rung', rungs: [{ key: 'verbal', label: '문서·구두 전달' }, { key: 'manual_file', label: '수동 파일 교환' }, { key: 'auto_file', label: '자동 파일 교환' }, { key: 'api', label: 'API 연동' }, { key: 'sync', label: '자동 동기' }, { key: 'closed_loop', label: '폐루프' }] },
-  { key: 'scope', label: '적용 범위', kind: 'rung', rungs: [{ key: 'issue', label: '이슈 대응' }, { key: 'basic', label: '대표 모델' }, { key: 'derived_some', label: '신규 개발 전 모델' }, { key: 'all', label: '파생까지' }] },
+  { key: 'capture', label: '데이터 확보', kind: 'rung', unknown_ok: true, headline_min: 'partial', rungs: [{ key: 'none', label: '없음·종이' }, { key: 'personal', label: '개인 엑셀·문서' }, { key: 'partial', label: '시스템에 일부' }, { key: 'full', label: '시스템에 전부' }] },
+  { key: 'link_mode', label: '연결', kind: 'rung', unknown_ok: true, headline_min: 'auto_transfer', rungs: [{ key: 'manual', label: '사람이 옮김' }, { key: 'auto_transfer', label: '자동 전달' }, { key: 'integrated', label: '시스템 연동' }, { key: 'closed_loop', label: '폐루프' }] },
 ];
 const THREAD = {
   stages: [{ key: 'planning', label: '기획' }, { key: 'development', label: '개발' }, { key: 'management', label: '경영' }, { key: 'purchasing', label: '구매' }],
@@ -35,18 +35,18 @@ const ORGS = [{ id: 21, name: 'MX 설계그룹', role: 'development', division_i
 const SEG = { id: 101, subject_id: 501, division_id: 17, thread_id: 1, thread_name: '재료비 스레드', segment_def_id: 12, segment_def: THREADS[0].segments[1], name: '설계 BOM → 예상 원가',
   from_org_id: 21, from_org_name: 'MX 설계그룹', from_system_id: 5, from_system_name: 'Teamcenter', via_system_id: 9, via_system_name: '메일', via_informal: true, to_org_id: 22, to_org_name: '원가팀', to_system_id: 6, to_system_name: '원가 산정 시스템',
   data_kinds: ['bom', 'cost'], data_kind_labels: ['BOM', '원가·단가'],
-  pair_id: 901, pair: { id: 901, assessments: { link_mode: { rung: 'manual_file', rung_index: 1 } }, unassessed: ['scope'] } };
+  pair_id: 901, pair: { id: 901, assessments: { link_mode: { rung: 'manual', rung_index: 0 } }, unassessed: ['capture'] } };
 
 export default async function run() {
   const { say, done } = suite();
   const calls = fakeFetch(({ url, method, body }) => {
     if (url.includes('/thread-cases/years')) return [2026];
     if (url.includes('/thread-cases/stats')) return { count: 1, by_action: { integrate: 1 }, by_status: { done: 1 }, lift: 2, systems: [{ name: 'Teamcenter', count: 1 }] };
-    if (url.includes('/thread-cases') && method === 'POST') return { id: 8, ...body, month: `${body.month}-01`, thread_name: '재료비 스레드', segment_name: '설계 BOM → 예상 원가', system_name: 'Teamcenter', link_from_label: '수동 파일 교환', link_to_label: 'API 연동', lift: 2, actor_name: '나' };
-    if (url.includes('/thread-cases')) return [{ id: 7, month: '2026-03-01', action: 'integrate', status: 'done', thread_id: 1, thread_name: '재료비 스레드', segment_id: 101, segment_name: '설계 BOM → 예상 구간', system_id: 5, system_name: 'Teamcenter', link_from: 'manual_file', link_to: 'api', link_from_label: '수동 파일 교환', link_to_label: 'API 연동', lift: 2, note: '허브 연동', actor_name: '홍' }];
-    if (url.includes('/threads/stats')) return { division_id: 17, threads: [{ thread_id: 1, thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_stage: null, reach_label: null, weakest: { id: 101, name: '설계 BOM → 예상 원가', link_index: 1, link_label: '수동 파일 교환' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }, { thread_id: 2, thread_key: 'quality', thread_name: '품질 스레드', def_count: 0, segment_count: 0, assessed: 0, continuity: null, reach_label: null, weakest: null, closed_loop: false, informal_ratio: null, unassessed: 0 }], divisions: [{ division_id: 17, division_name: 'MX', threads: [{ thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_label: null, weakest: { name: '설계 BOM → 예상 원가', link_label: '수동 파일 교환' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }] }] };
-    if (url.includes('/threads/org-matrix')) return [{ from_org_id: 21, from_org: 'MX 설계그룹', to_org_id: 22, to_org: '원가팀', count: 1, min_link: 1, min_link_label: '수동 파일 교환', systems: ['Teamcenter', '메일', '원가 산정 시스템'], informal: 1 }];
-    if (url.includes('/systems/hubs')) return [{ id: 5, name: 'Teamcenter', kind: 'plm', threads: 1, segments: 1, avg_link: 1, link_means: 'api', unknown_means: false }];
+    if (url.includes('/thread-cases') && method === 'POST') return { id: 8, ...body, month: `${body.month}-01`, thread_name: '재료비 스레드', segment_name: '설계 BOM → 예상 원가', system_name: 'Teamcenter', link_from_label: '사람이 옮김', link_to_label: '시스템 연동', lift: 2, actor_name: '나' };
+    if (url.includes('/thread-cases')) return [{ id: 7, month: '2026-03-01', action: 'integrate', status: 'done', thread_id: 1, thread_name: '재료비 스레드', segment_id: 101, segment_name: '설계 BOM → 예상 구간', system_id: 5, system_name: 'Teamcenter', link_from: 'manual', link_to: 'integrated', link_from_label: '사람이 옮김', link_to_label: '시스템 연동', lift: 2, note: '허브 연동', actor_name: '홍' }];
+    if (url.includes('/threads/stats')) return { division_id: 17, threads: [{ thread_id: 1, thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_stage: null, reach_label: null, weakest: { id: 101, name: '설계 BOM → 예상 원가', link_index: 0, link_label: '사람이 옮김' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }, { thread_id: 2, thread_key: 'quality', thread_name: '품질 스레드', def_count: 0, segment_count: 0, assessed: 0, continuity: null, reach_label: null, weakest: null, closed_loop: false, informal_ratio: null, unassessed: 0 }], divisions: [{ division_id: 17, division_name: 'MX', threads: [{ thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_label: null, weakest: { name: '설계 BOM → 예상 원가', link_label: '사람이 옮김' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }] }] };
+    if (url.includes('/threads/org-matrix')) return [{ from_org_id: 21, from_org: 'MX 설계그룹', to_org_id: 22, to_org: '원가팀', count: 1, min_link: 0, min_link_label: '사람이 옮김', systems: ['Teamcenter', '메일', '원가 산정 시스템'], informal: 1 }];
+    if (url.includes('/systems/hubs')) return [{ id: 5, name: 'Teamcenter', kind: 'plm', threads: 1, segments: 1, avg_link: 0, link_means: 'api', unknown_means: false }];
     if (url.includes('/threads')) return THREADS;
     if (url.includes('/segments') && method === 'POST') return { ...SEG, id: 102, ...body, name: body.name || '목표 원가 → 설계 BOM' };
     if (url.includes('/segments')) return [SEG];
@@ -55,7 +55,7 @@ export default async function run() {
     if (url.includes('/orgs/from-departments')) return [{ id: 3, name: 'CAE그룹(MX)', org_id: null }, { id: 4, name: 'Mecha그룹(MX)', org_id: 21 }];
     if (url.includes('/orgs') && method === 'POST') return { id: 23, name: body.name, division_id: 17, source_kind: body.source_kind || 'manual', source_id: body.source_id || null };
     if (url.includes('/orgs')) return ORGS;
-    if (url.includes('/pairs/901')) return { id: 901, subject: { name: '설계 BOM → 예상 원가' }, agent: null, assessments: { link_mode: { rung: 'manual_file', rung_index: 1, note: '엑셀 메일', evidence: {}, assessed_at: '2026-06-01T00:00:00' } }, unassessed: ['scope'], changes: [], deny_reason: null };
+    if (url.includes('/pairs/901')) return { id: 901, subject: { name: '설계 BOM → 예상 원가' }, agent: null, assessments: { link_mode: { rung: 'manual', rung_index: 0, note: '엑셀 메일', evidence: {}, assessed_at: '2026-06-01T00:00:00' } }, unassessed: ['capture'], changes: [], deny_reason: null };
     return {};
   });
 
@@ -66,7 +66,7 @@ export default async function run() {
     const h = html();
     say(h.includes('재료비 스레드') && h.includes('품질 스레드') && h.includes('설계 BOM → 예상 원가'), '① 스레드 묶음과 구간이 보임');
     say(h.includes('MX 설계그룹') && h.includes('원가팀') && byText('span', '메일') != null, '① 출발 → 매개 → 도착 (비공식 매개 「메일」)');
-    say(h.includes('수동 파일 교환') && h.includes('미평가 1개'), '① 연결 방식 배지와 미평가 수');
+    say(h.includes('사람이 옮김') && h.includes('미평가 1개'), '① 연결 방식 배지와 미평가 수');
     say(h.includes('>BOM<') && h.includes('>원가·단가<'), '① 데이터 종류 꼬리표');
 
     // ② 구간 추가
@@ -106,7 +106,7 @@ export default async function run() {
 
     // ④ 사업부 요약 — 스레드 줄 그림 · 조직 연계표 · 시스템 허브도
     const SUBJ = { id: 501, name: '설계 BOM → 예상 원가', product_families: [], segment: { thread_id: 1, thread_name: '재료비 스레드', segment_def_id: 12, via_informal: true, from_org_name: 'MX 설계그룹', from_system_name: 'Teamcenter', via_system_name: '메일', to_org_name: '원가팀', to_system_name: '원가 산정 시스템' },
-      pairs: [{ id: 901, agent: null, unassessed: ['scope'], assessments: { link_mode: { rung: 'manual_file', rung_index: 1 }, scope: null } }], summary: { unassessed: 1, stale: 0, pair_count: 1, best_rung_index: {} } };
+      pairs: [{ id: 901, agent: null, unassessed: ['scope'], assessments: { link_mode: { rung: 'manual', rung_index: 0 }, capture: null } }], summary: { unassessed: 1, stale: 0, pair_count: 1, best_rung_index: {} } };
     const BOARD = { division_id: 17, subjects: [SUBJ], totals: { subjects: 1, pairs: 1, unassessed: 1, stale: 0 }, stale_days: 365, deny_reason: null };
     let opened = null;
     await render(<BoardBody board={BOARD} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={(id) => { opened = id; }} onPickDivision={() => {}} review={null} sector="digital_thread" sectorDef={{ subject_label: '연계 구간' }} />);
@@ -127,20 +127,20 @@ export default async function run() {
     await render(<ThreadCaseLedger divisionId={17} divisions={[{ id: 17, name: 'MX' }]} denyReason={null} thread={THREAD} axes={AXES} refreshKey={0} />);
     await settle(80);
     const h5 = html();
-    say(h5.includes('1건') && h5.includes('올라간 칸') && h5.includes('허브 연동') && h5.includes('수동 파일 교환') && h5.includes('API 연동'), '⑤ 셈과 건이 보임(전 → 후, +2)');
+    say(h5.includes('1건') && h5.includes('올라간 칸') && h5.includes('허브 연동') && h5.includes('사람이 옮김') && h5.includes('시스템 연동'), '⑤ 셈과 건이 보임(전 → 후, +2)');
     await click(byText('button', '정합화'));
     await click([...document.querySelector('[aria-label="상태"]').querySelectorAll('button')].find(b => b.textContent === '진행 중'));
     const segIn = document.querySelectorAll('input[data-search-select]');
     await type(segIn[0], '예상'); await settle(); await click(byText('li', '재료비 스레드 · 설계 BOM → 예상 원가')); await settle();
     await type(document.querySelectorAll('input[data-search-select]')[1], 'Team'); await settle(); await click(byText('li', 'Teamcenter')); await settle();
     const fromGroup = document.querySelector('[aria-label="연결 방식 전"]');
-    await click([...fromGroup.querySelectorAll('button')].find(b => b.textContent === '수동 파일 교환'));
+    await click([...fromGroup.querySelectorAll('button')].find(b => b.textContent === '사람이 옮김'));
     const toGroup = document.querySelector('[aria-label="연결 방식 후"]');
-    await click([...toGroup.querySelectorAll('button')].find(b => b.textContent === 'API 연동'));
+    await click([...toGroup.querySelectorAll('button')].find(b => b.textContent === '시스템 연동'));
     await type(document.querySelector('input[aria-label="메모"]'), '코드 통일');
     await click(byText('button', '추가')); await settle(80);
     const pc = calls.find(c => c.method === 'POST' && c.url.endsWith('/thread-cases'));
-    say(!!pc && pc.body.action === 'harmonize' && pc.body.status === 'doing' && pc.body.segment_id === 101 && pc.body.system_id === 5 && pc.body.link_from === 'manual_file' && pc.body.link_to === 'api',
+    say(!!pc && pc.body.action === 'harmonize' && pc.body.status === 'doing' && pc.body.segment_id === 101 && pc.body.system_id === 5 && pc.body.link_from === 'manual' && pc.body.link_to === 'integrated',
         `⑤ POST /thread-cases: ${JSON.stringify(pc?.body)}`);
     await unmount();
   } catch (e) {

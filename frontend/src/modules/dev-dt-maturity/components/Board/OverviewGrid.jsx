@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import maturityApi from '../../services/maturityApi';
 import { ThreadOverviewRows } from '../Thread/ThreadSummary';
 import styled from 'styled-components';
-import { colorFor, divisionSummary } from '../../utils/board';
+import { colorFor, divisionSummary, headlineIndex } from '../../utils/board';
 
 // 전체 「요약」 — 축 × 사업부 표(가로가 사업부). 한 화면에 사업부 여섯이 들어가야 하고, **세로로 화면을 채운다**(2026-08-28).
 //
@@ -72,7 +72,7 @@ const AxisSummary = ({ axis, s }) => {
     );
   }
   if (axis.kind === 'rung') {
-    const k = Math.max(0, axis.rungs.length - 2);   // 「끝에서 두 번째 칸」 이상 — 적용 범위면 「신규 개발 전 모델」 이상
+    const k = headlineIndex(axis);   // 축의 headline_min, 없으면 끝에서 둘째 칸
     return (
       <>
         <Big>{s.atLeast[k] != null ? `${s.atLeast[k]}%` : '—'}</Big>

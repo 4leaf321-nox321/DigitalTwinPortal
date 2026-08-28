@@ -197,11 +197,11 @@ def test_가져오기_틀은_필수_열_셋이다():
 
 def test_디지털_스레드_축과_사전_어휘():
     axes = {a['key']: a for a in D.AXES['digital_thread']}
-    assert list(axes) == ['link_mode', 'traceability', 'consistency', 'stability']      # 적용 범위는 뺐다(2026-08-28)
-    assert D.rung_keys(axes['link_mode']) == ['verbal', 'manual_file', 'auto_file', 'api', 'sync', 'closed_loop']
-    assert axes['traceability']['kind'] == 'set' and D.set_flag_keys(axes['traceability']) == ['identity', 'version', 'provenance', 'up_link', 'down_link']
-    assert axes['stability']['kind'] == 'value' and D.rung_for_value(92, axes['stability']['thresholds']) == 'auto'
-    assert D.rung_for_value(50, axes['stability']['thresholds']) == 'partly'
+    assert list(axes) == ['capture', 'link_mode', 'quality', 'usage']          # 확보 → 연결 → 품질·표준 → 활용(2026-08-28)
+    assert all(a['kind'] == 'rung' and a.get('unknown_ok') for a in axes.values())
+    assert D.rung_keys(axes['link_mode']) == ['manual', 'auto_transfer', 'integrated', 'closed_loop']
+    assert D.rung_keys(axes['quality']) == ['manual_match', 'mapped', 'master']
+    assert [a['headline_min'] in D.rung_keys(a) for a in axes.values()] == [True] * 4
     keys = [t['key'] for t in D.THREAD_DEFAULTS]
     assert keys == ['simulation', 'cost', 'quality', 'manufacturing', 'bom_change']
     stages = {s['key'] for s in D.THREAD_STAGES}

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { LineChart, Line, BarChart, Bar as RBar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import maturityApi from '../../services/maturityApi';
-import { monthlySeries, monthKeys, monthRange, pairSeries } from '../../utils/board';
+import { monthlySeries, monthKeys, monthRange, pairSeries, headlineIndex } from '../../utils/board';
 
 // 「변화」 — 축마다 선 그래프 하나(2026-08-28). 표는 없다.
 // 이력을 달마다 되감아 「그 달 말의 상태」를 복원하고 요약과 같은 셈으로 대표 수치를 낸다 —
@@ -105,7 +105,7 @@ const PairDetail = ({ axis, series, months }) => {
 
 export const metricOf = (axis) => {
   if (axis.kind === 'value') return { label: '평균 정확도', unit: '%', domain: [0, 100] };
-  if (axis.kind === 'rung') return { label: `${axis.rungs[Math.max(0, axis.rungs.length - 2)]?.label} 이상`, unit: '%', domain: [0, 100] };
+  if (axis.kind === 'rung') return { label: `${axis.rungs[headlineIndex(axis)]?.label} 이상`, unit: '%', domain: [0, 100] };
   if (axis.kind === 'matrix') return { label: '시험 불량 재현', unit: '%', domain: [0, 100] };
   const n = (axis.base || axis.rungs.slice(1)).length;
   return { label: '적용 단계 수 (평균)', unit: `/${n}`, domain: [0, n] };

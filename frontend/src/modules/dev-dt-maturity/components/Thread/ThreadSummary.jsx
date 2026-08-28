@@ -24,8 +24,9 @@ const cellOf = (t) => {
   return (
     <>
       <Big>{t.continuity != null ? `${t.continuity}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 연속</span></Big>
-      <Small>도달 {t.reach_label || '—'} · 구간 {t.assessed}/{t.segment_count}{t.unassessed > 0 && <Pill $warn>미평가 {t.unassessed}</Pill>}{t.closed_loop && <Pill $good>폐루프</Pill>}</Small>
-      <Small>최약 {t.weakest ? `${t.weakest.name} · ${t.weakest.link_label}` : '—'}{t.informal_ratio > 0 && <Pill $warn>비공식 {t.informal_ratio}%</Pill>}</Small>
+      <Small>도달 {t.reach_label || '—'} · 수집 {t.capture_rate != null ? `${t.capture_rate}%` : '—'} · 활용 {t.usage_rate != null ? `${t.usage_rate}%` : '—'}{t.closed_loop && <Pill $good>폐루프</Pill>}</Small>
+      <Small>구간 {t.assessed}/{t.segment_count}{t.unassessed > 0 && <Pill $warn>미평가 {t.unassessed}</Pill>}{t.unknown > 0 && <Pill $warn>확인 필요 {t.unknown}</Pill>}{t.informal_ratio > 0 && <Pill $warn>비공식 {t.informal_ratio}%</Pill>}</Small>
+      <Small>최약 {t.weak_axis ? `${t.weak_axis.segment} · ${t.weak_axis.axis_label} ${t.weak_axis.rung_label}` : (t.weakest ? `${t.weakest.name} · ${t.weakest.link_label}` : '—')}</Small>
     </>
   );
 };
@@ -42,11 +43,12 @@ export const ThreadOverviewRows = ({ boards }) => {
     const assessed = ts.reduce((n, t) => n + t.assessed, 0);
     const linked = ts.reduce((n, t) => n + (t.continuity != null ? Math.round(t.continuity * t.assessed / 100) : 0), 0);
     return { segment_count: segs, assessed, unassessed: segs - assessed, continuity: assessed ? Math.round(100 * linked / assessed) : null,
-      reach_label: null, weakest: null, closed_loop: ts.some(t => t.closed_loop), informal_ratio: null };
+      reach_label: null, weakest: null, weak_axis: null, closed_loop: ts.some(t => t.closed_loop), informal_ratio: null, unknown: ts.reduce((n, t) => n + (t.unknown || 0), 0),
+      capture_rate: null, usage_rate: null };
   };
   return (
     <>
-      <tr><SecHead colSpan={boards.length + 2}><strong>스레드</strong>구간을 모아 줄로 — 연속성(자동 파일 교환 이상 %) · 도달 단계 · 최약 구간</SecHead></tr>
+      <tr><SecHead colSpan={boards.length + 2}><strong>스레드</strong>구간을 모아 줄로 — 연속성(자동 전달 이상 %) · 도달 단계 · 수집률 · 활용률 · 최약</SecHead></tr>
       {threads.map(t => (
         <tr key={t.thread_key}>
           <Name>{t.thread_name}<small>표준 구간 {t.def_count}</small></Name>

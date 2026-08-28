@@ -3,6 +3,12 @@
 // ⚠️ 축은 순서형이다. 평균을 내지 않는다 — 분포와 최고 칸만 센다(PLAN 7-4).
 
 /** 칸 색. 서열(index)이 높을수록 진하다. 미평가는 회색, 재평가 필요은 테두리로 따로. */
+/** 택1 축의 「이상 %」 기준 칸 — 축에 headline_min 이 있으면 그 칸, 없으면 끝에서 둘째 칸. */
+export const headlineIndex = (axis) => {
+  if (axis.headline_min) { const i = axis.rungs.findIndex(r => r.key === axis.headline_min); if (i >= 0) return i; }
+  return Math.max(0, axis.rungs.length - 2);
+};
+
 /** 켤 수 있는 항목의 정의 — 묶음 축은 첫 칸을 뺀 칸들, 표(matrix) 축은 바탕. */
 export const flagDefs = (axis) => (axis.kind === 'matrix' ? (axis.base || []) : axis.rungs.slice(1));
 
@@ -283,7 +289,7 @@ export const monthlySeries = (subjects, changes, axes, months) => {
       let value = null;
       if (n) {
         if (axis.kind === 'value') value = Math.round((states.reduce((a, x) => a + x.st.value, 0) / n) * 10) / 10;
-        else if (axis.kind === 'rung') { const k = Math.max(0, axis.rungs.length - 2); value = Math.round((states.filter(x => x.st.idx >= k).length * 100) / n); }
+        else if (axis.kind === 'rung') { const k = headlineIndex(axis); value = Math.round((states.filter(x => x.st.idx >= k).length * 100) / n); }
         else if (axis.kind === 'set') value = Math.round((states.reduce((a, x) => a + x.st.flags.length, 0) / n) * 10) / 10;
         else if (axis.kind === 'matrix') { const cells = states.reduce((a, x) => a + x.total, 0); value = cells ? Math.round((states.reduce((a, x) => a + x.st.test, 0) * 100) / cells) : null; }
       }

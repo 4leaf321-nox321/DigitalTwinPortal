@@ -151,55 +151,54 @@ AXES = {
     'design_automation': [],
     # ── 디지털 스레드(2026-08-28) — 대상은 「구간」(데이터가 조직·시스템을 건너는 자리), 수단 없음 ──
     'digital_thread': [
+        # 스레드 = 데이터가 생기고(확보) → 건너고(연결) → 믿을 수 있고(품질·표준) → 쓰이는(활용) 네 고리(2026-08-28).
+        # 전부 택1, 칸은 셋~넷 — 「보면 아는 것」만. 「모름」은 따로(unknown_ok) 두어 「확인 필요」로 센다.
         {
-            'key': 'link_mode', 'label': '연결 방식', 'kind': 'rung',
-            'question': '데이터가 어떻게 건너가는가',
-            'evidence': ['attachment'], 'evidence_label': '근거 링크',
-            # 매개가 「비공식 매개」면 둘째 칸까지만(threads.guard_assess)
+            'key': 'capture', 'label': '데이터 확보', 'kind': 'rung', 'unknown_ok': True,
+            'question': '출발 쪽에 데이터가 디지털로 있는가',
+            'evidence': ['attachment'], 'evidence_label': '어디서 확인했나(화면·담당자)',
+            'headline_min': 'partial',
             'rungs': [
-                {'key': 'verbal', 'label': '문서·구두 전달', 'description': '사람이 문서나 말로 넘긴다'},
-                {'key': 'manual_file', 'label': '수동 파일 교환', 'description': '사람이 파일을 내려 보낸다(메일·공유폴더)'},
-                {'key': 'auto_file', 'label': '자동 파일 교환', 'description': '정해진 폴더·포맷으로 자동 배치'},
-                {'key': 'api', 'label': 'API 연동', 'description': '시스템끼리 API·링크로 바로 잇는다'},
-                {'key': 'sync', 'label': '자동 동기', 'description': '바뀌면 저절로 따라간다'},
+                {'key': 'none', 'label': '없음·종이', 'description': '데이터가 없거나 종이·머릿속에만'},
+                {'key': 'personal', 'label': '개인 엑셀·문서', 'description': '담당자의 파일에만 있다'},
+                {'key': 'partial', 'label': '시스템에 일부', 'description': '시스템에 있지만 일부 항목·일부 과제만'},
+                {'key': 'full', 'label': '시스템에 전부', 'description': '시스템에 전부 있다(자동 수집 포함)'},
+            ],
+        },
+        {
+            'key': 'link_mode', 'label': '연결', 'kind': 'rung', 'unknown_ok': True,
+            'question': '데이터가 어떻게 건너가는가',
+            'evidence': ['attachment'], 'evidence_label': '어디서 확인했나(화면·담당자)',
+            'headline_min': 'auto_transfer',
+            # 매개가 「비공식 매개」면 첫 칸만(threads.guard_assess)
+            'rungs': [
+                {'key': 'manual', 'label': '사람이 옮김', 'description': '구두·메일·파일로 사람이 넘긴다'},
+                {'key': 'auto_transfer', 'label': '자동 전달', 'description': '정해진 배치·파일 교환으로 저절로 넘어간다'},
+                {'key': 'integrated', 'label': '시스템 연동', 'description': 'API·동기로 시스템끼리 바로 잇는다'},
                 {'key': 'closed_loop', 'label': '폐루프', 'description': '하류의 결과가 상류를 갱신한다'},
             ],
         },
         {
-            'key': 'traceability', 'label': '추적성(데이터 계보)', 'kind': 'set', 'hide_empty': True,
-            'question': '건너면서 무엇을 잃지 않는가',
-            'evidence': ['attachment'], 'evidence_label': '근거 링크',
+            'key': 'quality', 'label': '품질·표준', 'kind': 'rung', 'unknown_ok': True,
+            'question': '건너간 데이터를 그대로 믿고 쓸 수 있는가 — 같은 코드·ID·버전인가',
+            'evidence': ['attachment'], 'evidence_label': '어디서 확인했나(같은 항목을 두 시스템에서)',
+            'headline_min': 'master',
             'rungs': [
-                {'key': 'none', 'label': '없음', 'description': '아무것도 유지되지 않는다'},
-                {'key': 'identity', 'label': '고유 식별자(ID) 유지', 'short': 'ID', 'description': '건너도 같은 ID 로 같은 물건을 안다'},
-                {'key': 'version', 'label': '버전·리비전 관리', 'short': '버전', 'description': '어느 판(리비전)인지 안다'},
-                {'key': 'provenance', 'label': '출처 메타데이터', 'short': '출처', 'description': '누가·언제·어느 시스템에서 만들었는지가 데이터에 붙어 있다'},
-                {'key': 'up_link', 'label': '원천 참조', 'short': '원천', 'description': '결과에서 원천 데이터로 거슬러 간다(상류 계보)'},
-                {'key': 'down_link', 'label': '영향 참조', 'short': '영향', 'description': '원천에서 쓰인 곳으로 내려간다(하류 계보) — 영향 분석의 재료'},
+                {'key': 'manual_match', 'label': '손으로 맞춤', 'description': '코드·ID 가 달라 사람이 맞춘다'},
+                {'key': 'mapped', 'label': '매핑표로 맞춤', 'description': '다른 코드를 표로 맞춘다'},
+                {'key': 'master', 'label': '같은 마스터·ID·버전', 'description': '같은 기준 자료를 보고 ID·리비전이 이어진다'},
             ],
         },
         {
-            'key': 'consistency', 'label': '데이터 정합', 'kind': 'rung',
-            'question': '두 쪽이 같은 뜻으로 읽는가',
-            'evidence': ['attachment'], 'evidence_label': '근거 링크',
+            'key': 'usage', 'label': '활용', 'kind': 'rung', 'unknown_ok': True,
+            'question': '도착 쪽이 그 데이터로 실제로 결정하는가',
+            'evidence': ['attachment'], 'evidence_label': '어디서 확인했나(도착 담당자)',
+            'headline_min': 'decision',
             'rungs': [
-                {'key': 'retyped', 'label': '사람이 옮겨 적음', 'description': '값을 손으로 다시 넣는다'},
-                {'key': 'mapped', 'label': '매핑표', 'description': '같은 뜻 다른 코드를 표로 맞춘다'},
-                {'key': 'master', 'label': '같은 마스터 참조', 'description': '둘 다 같은 기준 자료를 본다'},
-                {'key': 'single_source', 'label': '단일 원천', 'description': '한 곳에만 있고 나머지는 참조'},
-            ],
-        },
-        {
-            'key': 'stability', 'label': '운영 안정성', 'kind': 'value', 'unit': '%',
-            'question': '수동 개입 없이 흐른 비율',
-            'evidence': ['attachment'], 'evidence_label': '근거 링크',
-            # 값 축 — 정확도처럼 기록이 줄줄이 쌓인다. 문턱은 축 자체에(사업부 설정 아님).
-            'thresholds': [{'rung': 'manual_heavy', 'min': 0}, {'rung': 'partly', 'min': 50}, {'rung': 'auto', 'min': 90}],
-            'boundary': 'gte',
-            'rungs': [
-                {'key': 'manual_heavy', 'label': '손이 많이 감', 'description': '절반 넘게 사람이 고친다'},
-                {'key': 'partly', 'label': '대체로 자동', 'description': '가끔 손을 댄다'},
-                {'key': 'auto', 'label': '자동 운영', 'description': '거의 손을 안 댄다'},
+                {'key': 'reference', 'label': '참고만', 'description': '보긴 하지만 없어도 된다'},
+                {'key': 'review', 'label': '검토·보고에 씀', 'description': '검토 회의·보고 자료에 들어간다'},
+                {'key': 'decision', 'label': '의사결정의 근거', 'description': '승인·게이트가 이 데이터로 정해진다'},
+                {'key': 'automatic', 'label': '자동 판단·트리거', 'description': '사람 없이 다음 일이 시작된다'},
             ],
         },
     ],
@@ -240,7 +239,7 @@ DATA_KIND_LABELS = {k['key']: k['label'] for k in DATA_KINDS}
 
 # 표준 스레드의 첫 판 — 표가 비어 있을 때 넣는 초안. 사무국이 화면에서 고친다(key 는 고정).
 THREAD_DEFAULTS = [
-    {'key': 'simulation', 'name': '시뮬레이션 스레드', 'description': '요구사항에서 해석 조건·모델·결과·설계 판정·시험 비교까지', 'axes_off': ['consistency'],
+    {'key': 'simulation', 'name': '시뮬레이션 스레드', 'description': '요구사항에서 해석 조건·모델·결과·설계 판정·시험 비교까지', 'axes_off': [],
      'segments': [
          {'key': 'req_to_cond', 'data': ['requirement'], 'name': '요구사항 → 해석 조건', 'from': 'planning', 'to': 'development'},
          {'key': 'cad_to_model', 'data': ['geometry', 'material'], 'name': '설계 형상 → 해석 모델', 'from': 'development', 'to': 'development'},

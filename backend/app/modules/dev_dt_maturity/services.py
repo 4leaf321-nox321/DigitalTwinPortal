@@ -271,7 +271,8 @@ def assess(pair, axis_key, payload, actor):
         value = None
     else:
         rung = payload.get('rung')
-        if rung not in D.rung_keys(axis):
+        # 「모름」 — 확인이 필요한 상태. 칸은 아니지만 저장은 된다(rung_index None, unknown True).
+        if not (rung == 'unknown' and axis.get('unknown_ok')) and rung not in D.rung_keys(axis):
             raise Refused(f'「{axis["label"]}」에 없는 칸입니다.')
         value = None
 
@@ -414,6 +415,7 @@ def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
             out_axes[axis['key']] = d
             continue
         d['rung_index'] = D.rung_index(axis, d['rung'])
+        d['unknown'] = bool(axis.get('unknown_ok') and a.rung == 'unknown')
         d['stale'] = bool(a.assessed_at and a.assessed_at < cutoff)
         out_axes[axis['key']] = d
     d = {

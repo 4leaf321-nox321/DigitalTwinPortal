@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { colorFor, divisionSummary, flagDefs } from '../../utils/board';
+import { colorFor, divisionSummary, flagDefs, headlineIndex } from '../../utils/board';
 
 // 사업부 하나의 「요약」 — 축마다 판 하나, 화면 가득(2026-08-28).
 // 큰 숫자(대표 수치) + 분포 + **근거**: 어느 연계가 앞서고(기여) 어느 연계가 처지는지(취약)를 한눈에.
@@ -46,6 +46,7 @@ const dark = (c) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(c);
 /** 연계마다 이 축의 「점수」와 한 줄 설명 — 앞선 것·처진 것을 고르는 재료. */
 const scoreOf = (axis, p) => {
   const a = p.assessments?.[axis.key];
+  if (a && a.unknown) return { score: -1, text: '확인 필요(모름)', stale: false };
   if (!a || a.rung_index == null) return { score: -1, text: '미평가', stale: false };
   if (axis.kind === 'value') return { score: Number(a.value), text: `${a.value}% · ${axis.rungs[a.rung_index]?.label || ''}`, stale: a.stale };
   if (axis.kind === 'set') {
@@ -64,7 +65,7 @@ const Headline = ({ axis, s }) => {
   if (!s || s.total === 0) return <Big>—<small>연계 없음</small></Big>;
   if (axis.kind === 'value') return <Big>{s.mean != null ? `${s.mean}%` : '—'}<small>평균 정확도 · 평가 완료 {s.filled}/{s.total}</small></Big>;
   if (axis.kind === 'rung') {
-    const k = Math.max(0, axis.rungs.length - 2);
+    const k = headlineIndex(axis);
     return <Big>{s.atLeast[k] != null ? `${s.atLeast[k]}%` : '—'}<small>{axis.rungs[k]?.label} 이상</small></Big>;
   }
   if (axis.kind === 'set') return <Big>{s.avg != null ? `${s.avg}` : '—'}<small>/ {s.flags.length} 적용 단계 수 (평균)</small></Big>;

@@ -664,20 +664,26 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     s2 = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': d2['id'], 'from_org_id': dev['id'], 'from_system_id': plm['id'], 'via_system_id': mail['id'], 'to_org_id': fin['id'], 'to_system_id': costsys['id']}, headers=auth(mx_user)).get_json()['data']
     assert s2['via_informal'] is True
     # 매기기 — 기존 평가 API 그대로. 비공식 매개면 연결 방식은 둘째 칸까지
-    _assess(client, auth, mx_user, s1['pair_id'], 'link_mode', {'rung': 'api', 'note': 'PLM 내부 링크'})
-    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'api', 'note': 'x'}, expect=400)
-    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'manual_file', 'note': '엑셀 메일'})
-    _assess(client, auth, mx_user, s1['pair_id'], 'traceability', {'flags': ['identity', 'version'], 'note': 'BOM id·리비전'})
-    out = _assess(client, auth, mx_user, s1['pair_id'], 'stability', {'value': 95, 'note': '월 1회 손봄'})
-    assert out['data']['assessments']['stability']['rung'] == 'auto'          # 축 자체의 문턱(90)
-    # 스레드 셈 — 재료비: 구간 2, 이어진 1(50%), 도달 단계는 첫 구간의 to(개발), 최약은 s2, 비공식 50%
+    _assess(client, auth, mx_user, s1['pair_id'], 'link_mode', {'rung': 'integrated', 'note': 'PLM 내부 링크'})
+    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'auto_transfer', 'note': 'x'}, expect=400)     # 비공식 매개면 첫 칸만
+    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'manual', 'note': '엑셀 메일'})
+    _assess(client, auth, mx_user, s1['pair_id'], 'capture', {'rung': 'full', 'note': 'PLM 에 전부'})
+    _assess(client, auth, mx_user, s2['pair_id'], 'capture', {'rung': 'personal', 'note': '담당자 엑셀'})
+    _assess(client, auth, mx_user, s1['pair_id'], 'usage', {'rung': 'decision', 'note': '원가 승인 근거'})
+    out = _assess(client, auth, mx_user, s2['pair_id'], 'quality', {'rung': 'unknown', 'note': '마스터 담당 확인 필요'})   # 「모름」
+    q = out['data']['assessments']['quality']
+    assert q['rung'] == 'unknown' and q['rung_index'] is None and q['unknown'] is True
+    _assess(client, auth, mx_user, s2['pair_id'], 'quality', {'rung': 'nope', 'note': 'x'}, expect=400)
+    # 스레드 셈 — 재료비: 구간 2, 이어진 1(50%), 도달 단계는 첫 구간의 to(개발), 최약은 s2, 비공식 50%, 수집률 50, 활용률 100(매긴 것 중), 확인 필요 1
     st = client.get(f'{BASE}/threads/stats?division_id={mx}', headers=auth(mx_user)).get_json()['data']['threads']
     c = next(t for t in st if t['thread_key'] == 'cost')
     assert c['segment_count'] == 2 and c['assessed'] == 2 and c['continuity'] == 50
     assert c['reach_stage'] == 'development' and c['weakest']['id'] == s2['id'] and c['informal_ratio'] == 50 and c['closed_loop'] is False
+    assert c['capture_rate'] == 50 and c['usage_rate'] == 100 and c['unknown'] == 1
+    assert c['weak_axis']['segment_id'] == s2['id'] and c['weak_axis']['axis'] in ('link_mode', 'capture')
     # 조직 연계표 · 시스템 허브
     m = client.get(f'{BASE}/threads/org-matrix?division_id={mx}', headers=auth(mx_user)).get_json()['data']
-    assert any(x['from_org'] == 'MX 설계그룹' and x['to_org'] == '원가팀' and x['count'] == 1 and x['min_link_label'] == '수동 파일 교환' and '메일' in x['systems'] for x in m)
+    assert any(x['from_org'] == 'MX 설계그룹' and x['to_org'] == '원가팀' and x['count'] == 1 and x['min_link_label'] == '사람이 옮김' and '메일' in x['systems'] for x in m)
     hubs = client.get(f'{BASE}/systems/hubs?division_id={mx}', headers=auth(mx_user)).get_json()['data']
     assert hubs[0]['name'] == 'Teamcenter' and hubs[0]['segments'] == 4 and hubs[0]['threads'] == 1
     # 판에도 구간이 대상으로 뜬다(수단 없는 연계)
@@ -685,7 +691,7 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert {s['name'] for s in b['subjects']} == {d1['name'], d2['name']} and b['subjects'][0]['pairs'][0]['agent'] is None
     # 매개를 공식 시스템으로 바꾸면 API 를 고를 수 있다
     client.put(f'{BASE}/segments/{s2["id"]}', json={'via_system_id': plm['id']}, headers=auth(mx_user))
-    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'api', 'note': '허브 연동'})
+    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'integrated', 'note': '허브 연동'})
     # 정돈 — TC 를 Teamcenter 로 합치면 구간이 옮겨 가고 TC 는 사라진다
     tc = client.post(f'{BASE}/systems', json={'name': 'TC', 'kind': 'plm'}, headers=auth(mx_user)).get_json()['data']
     client.put(f'{BASE}/segments/{s1["id"]}', json={'to_system_id': tc['id']}, headers=auth(mx_user))
@@ -694,7 +700,7 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert res.status_code == 200 and res.get_json()['data']['moved'] == 1
     assert 'TC' not in {s['name'] for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']}
     # 지우면 대상·연계·평가가 같이 간다
-    assert client.delete(f'{BASE}/segments/{s1["id"]}', headers=auth(mx_user)).get_json()['data']['assessments'] == 3
+    assert client.delete(f'{BASE}/segments/{s1["id"]}', headers=auth(mx_user)).get_json()['data']['assessments'] == 3   # 연결·확보·활용
 
 
 def test_연계_개발_기록은_건으로_쌓고_올라간_칸을_센다(client, auth, world, mx_user, vd_user):
@@ -709,10 +715,10 @@ def test_연계_개발_기록은_건으로_쌓고_올라간_칸을_센다(client
         assert res.status_code == expect, res.get_json()
         return res.get_json().get('data')
 
-    c1 = add({'month': '2026-03', 'action': 'integrate', 'segment_id': seg['id'], 'system_id': plm['id'], 'link_from': 'manual_file', 'link_to': 'api', 'note': '허브 연동'})
+    c1 = add({'month': '2026-03', 'action': 'integrate', 'segment_id': seg['id'], 'system_id': plm['id'], 'link_from': 'manual', 'link_to': 'integrated', 'note': '허브 연동'})
     assert c1['thread_name'] == '재료비 스레드' and c1['segment_name'] == seg['name'] and c1['lift'] == 2 and c1['status'] == 'done'
     add({'month': '2026-05', 'action': 'adopt', 'system_name': 'SPDM(새 시스템)', 'status': 'doing'})
-    add({'month': '2026-06', 'action': 'harmonize', 'system_id': plm['id'], 'link_from': 'api', 'link_to': 'sync', 'status': 'planned'})
+    add({'month': '2026-06', 'action': 'harmonize', 'system_id': plm['id'], 'link_from': 'integrated', 'link_to': 'closed_loop', 'status': 'planned'})
     add({'month': '2026-01', 'action': 'weird', 'system_id': plm['id']}, expect=400)
     add({'month': '2026-01', 'action': 'integrate'}, expect=400)                                   # 시스템도 구간도 없음
     add({'month': '2026-01', 'action': 'integrate', 'system_id': plm['id'], 'link_to': 'nope'}, expect=400)
@@ -724,6 +730,6 @@ def test_연계_개발_기록은_건으로_쌓고_올라간_칸을_센다(client
     assert st['lift'] == 2 and st['systems'][0] == {'name': 'Teamcenter', 'count': 2}     # 완료 건의 올라간 칸만
     assert client.get(f'{BASE}/thread-cases/years?division_id={mx}', headers=auth(mx_user)).get_json()['data'] == [2026]
     assert client.put(f'{BASE}/thread-cases/{c1["id"]}', json={'note': 'x'}, headers=auth(vd_user)).status_code == 403
-    res = client.put(f'{BASE}/thread-cases/{c1["id"]}', json={'status': 'doing', 'link_to': 'sync'}, headers=auth(mx_user))
+    res = client.put(f'{BASE}/thread-cases/{c1["id"]}', json={'status': 'doing', 'link_to': 'closed_loop'}, headers=auth(mx_user))
     assert res.status_code == 200 and res.get_json()['data']['lift'] == 3
     assert client.delete(f'{BASE}/thread-cases/{c1["id"]}', headers=auth(mx_user)).status_code == 200

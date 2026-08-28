@@ -104,7 +104,7 @@ const AxisCell = ({ a, axis, dense, onClick }) => {
   const color = colorFor(idx, axis.rungs.length);
   // 묶음 축은 「켠 수/전체」 — 서열이 칸 이름이 아니라 개수다. 어느 것을 켰는지는 대면 보인다.
   const total = axis.rungs.length - 1;
-  const label = idx == null ? '미평가'
+  const label = a?.unknown ? '확인 필요' : idx == null ? '미평가'
     : axis.kind === 'set' ? (idx === 0 ? axis.rungs[0].label : `${idx}/${total}`)
     : axis.rungs[idx]?.label;
   const flagsText = axis.kind === 'set' && a?.flags?.length
@@ -138,7 +138,7 @@ const AxisCell = ({ a, axis, dense, onClick }) => {
     );
   }
   return (
-    <Cell $dense={dense} $color={color} $dark={isDark(color)} $stale={a?.stale} title={title} onClick={onClick}>
+    <Cell $dense={dense} $color={a?.unknown ? '#fef3c7' : color} $dark={isDark(color) && !a?.unknown} $stale={a?.stale} title={title} onClick={onClick}>
       {dense ? '' : (axis.kind === 'value' && a?.value != null ? `${a.value}%` : label)}
     </Cell>
   );

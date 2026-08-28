@@ -663,6 +663,21 @@ THREAD_SEED = {
 }
 
 
+LINK_REMAP = {'verbal': 'manual', 'manual_file': 'manual', 'auto_file': 'auto_transfer', 'api': 'integrated', 'sync': 'integrated', 'closed_loop': 'closed_loop'}
+QUALITY_REMAP = {'retyped': 'manual_match', 'mapped': 'mapped', 'master': 'master', 'single_source': 'master'}
+
+
+def _remap_thread_marks(marks):
+    """옛 축(연결 6칸·추적성·정합·안정성)을 새 축 넷(확보·연결·품질·활용)으로 — 씨앗 표를 다시 쓰지 않고 읽을 때 옮긴다(2026-08-28)."""
+    link = LINK_REMAP.get(marks.get('link_mode'), 'manual')
+    li = ['manual', 'auto_transfer', 'integrated', 'closed_loop'].index(link)
+    quality = QUALITY_REMAP.get(marks.get('consistency')) or ('master' if li >= 2 else 'mapped' if li == 1 else 'manual_match')
+    stab = marks.get('stability') or 0
+    capture = 'full' if li >= 2 else 'partial' if li == 1 else 'personal'
+    usage = 'automatic' if link == 'closed_loop' else 'decision' if stab >= 85 else 'review' if stab >= 60 else 'reference'
+    return {'capture': capture, 'link_mode': link, 'quality': quality, 'usage': usage}
+
+
 def _seed_threads(divisions):
     from app.modules.dev_dt_maturity import threads as T
     from app.modules.dev_dt_maturity import definitions as D
@@ -698,6 +713,7 @@ def _seed_threads(divisions):
                 'from_org_id': org(from_org).id, 'from_system_id': systems[from_sys].id, 'via_system_id': systems[via_sys].id,
                 'to_org_id': org(to_org).id, 'to_system_id': systems[to_sys].id})
             who = PEOPLE[n % len(PEOPLE)]
+            marks = _remap_thread_marks(marks)
             for axis_key, val in marks.items():
                 axis = axes[axis_key]
                 if axis['kind'] == 'value':
@@ -721,22 +737,22 @@ def _seed_threads(divisions):
 # 사업부 → [(연-월, 무엇을, 상태, 스레드 key, 구간 key|None, 시스템, 전, 후, 메모)]
 THREAD_CASE_SEED = {
     'MX': [
-        ('2026-02', 'integrate', 'done', 'simulation', 'cad_to_model', 'SPDM', 'manual_file', 'api', 'NX → SPDM 형상 자동 등록'),
+        ('2026-02', 'integrate', 'done', 'simulation', 'cad_to_model', 'SPDM', 'manual', 'integrated', 'NX → SPDM 형상 자동 등록'),
         ('2026-04', 'adopt', 'doing', 'simulation', None, 'SPDM', None, None, 'SPDM 2차 — 결과 관리 모듈'),
-        ('2026-05', 'integrate', 'planned', 'cost', 'bom_to_estimate', '데이터 허브', 'manual_file', 'auto_file', 'BOM → 원가 허브 배치'),
-        ('2026-06', 'harmonize', 'done', 'bom_change', 'ebom_to_mbom', 'SAP ERP', 'auto_file', 'api', '부품 코드 마스터 통일'),
-        ('2025-10', 'integrate', 'done', 'manufacturing', 'design_to_process', 'Teamcenter', 'api', 'sync', '공정 설계 동기화'),
+        ('2026-05', 'integrate', 'planned', 'cost', 'bom_to_estimate', '데이터 허브', 'manual', 'auto_transfer', 'BOM → 원가 허브 배치'),
+        ('2026-06', 'harmonize', 'done', 'bom_change', 'ebom_to_mbom', 'SAP ERP', 'auto_transfer', 'integrated', '부품 코드 마스터 통일'),
+        ('2025-10', 'integrate', 'done', 'manufacturing', 'design_to_process', 'Teamcenter', 'auto_transfer', 'integrated', '공정 설계 동기화'),
     ],
     'VD': [
         ('2026-03', 'adopt', 'doing', 'simulation', None, 'SPDM', None, None, 'SPDM 도입 검토'),
-        ('2026-05', 'integrate', 'planned', 'quality', 'spec_to_test', 'QMS', 'manual_file', 'auto_file', '스펙 → QMS 배치'),
+        ('2026-05', 'integrate', 'planned', 'quality', 'spec_to_test', 'QMS', 'manual', 'auto_transfer', '스펙 → QMS 배치'),
     ],
     '생활가전': [
-        ('2026-01', 'automate', 'done', 'manufacturing', 'process_to_equipment', 'MES', 'auto_file', 'api', '설비 파라미터 API'),
-        ('2026-06', 'integrate', 'doing', 'manufacturing', 'yield_to_design', '데이터 허브', 'manual_file', 'auto_file', '수율 → 설계 피드백'),
+        ('2026-01', 'automate', 'done', 'manufacturing', 'process_to_equipment', 'MES', 'auto_transfer', 'integrated', '설비 파라미터 API'),
+        ('2026-06', 'integrate', 'doing', 'manufacturing', 'yield_to_design', '데이터 허브', 'manual', 'auto_transfer', '수율 → 설계 피드백'),
     ],
-    'NW': [('2026-04', 'harmonize', 'planned', 'cost', 'bom_to_estimate', '원가 산정 시스템', 'manual_file', 'auto_file', '원가 항목 매핑표')],
-    '의료기기': [('2026-02', 'integrate', 'done', 'quality', 'field_to_cause', 'QMS', 'manual_file', 'auto_file', 'CS → QMS 배치')],
+    'NW': [('2026-04', 'harmonize', 'planned', 'cost', 'bom_to_estimate', '원가 산정 시스템', 'manual', 'auto_transfer', '원가 항목 매핑표')],
+    '의료기기': [('2026-02', 'integrate', 'done', 'quality', 'field_to_cause', 'QMS', 'manual', 'auto_transfer', 'CS → QMS 배치')],
 }
 
 

@@ -556,6 +556,13 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                   <Entries entries={(pair.changes || []).filter(c => c.axis === axis.key)}
                            canEdit={canEdit} busy={busy} onRemove={removeEntry} />
                 )}
+                {canEdit && axis.kind === 'rung' && axis.unknown_ok && !isEditing && (
+                  <Row style={{ marginTop: '0.4rem' }}>
+                    <Button onClick={() => startEdit(axis, 'unknown')} title="아직 확인하지 못했다 — 「확인 필요」로 남긴다" style={a?.unknown ? { borderColor: '#f59e0b', color: '#92400e' } : undefined}>
+                      {a?.unknown ? '확인 필요(모름)로 적혀 있음' : '모름 — 확인 필요'}
+                    </Button>
+                  </Row>
+                )}
                 {canEdit && axis.kind === 'value' && !isEditing && (
                   <Row style={{ marginTop: '0.5rem' }}>
                     <Button onClick={() => startEdit(axis)}>정확도 기록 추가</Button>
@@ -580,7 +587,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                       </span></Row>
                     ) : (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
-                        → <strong>{axis.rungs.find(r => r.key === editing.rung)?.label}</strong>
+                        → <strong>{editing.rung === 'unknown' ? '확인 필요(모름)' : axis.rungs.find(r => r.key === editing.rung)?.label}</strong>
+                        {editing.rung === 'unknown' && <AxisQ style={{ marginLeft: '0.5rem' }}>누구에게·어디서 확인해야 하는지를 근거에 적어 두세요.</AxisQ>}
                       </span></Row>
                     )}
                     <Row>
