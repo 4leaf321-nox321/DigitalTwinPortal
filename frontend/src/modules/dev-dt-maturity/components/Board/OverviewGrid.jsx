@@ -17,7 +17,7 @@ import { colorFor, divisionSummary } from '../../utils/board';
 // 남는 높이를 이 칸이 갖고 스크롤도 여기 걸린다. 표는 그 80% 만 — 아래 20% 는 비워 둔다.
 const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0;`;
 const Table = styled.table`
-  width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem;   /* 아래 남는 공간 없이 채운다(2026-08-28) */
+  width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem; table-layout: fixed;   /* 아래 남는 공간 없이 채운다 · 열 폭은 내용과 무관하게 같다(2026-08-28) */
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 0.75rem 0.9rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; text-align: center; }   /* 값은 열 가운데 — 사업부끼리 세로로 비교된다(2026-08-28) */
 `;
@@ -29,7 +29,7 @@ const ThDiv = styled.th`
 `;
 const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem; text-align: left !important;`;
 const Big = styled.div`font-size: 1.75rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
-const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: nowrap;`;
+const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: normal; overflow-wrap: anywhere;`;
 const Bar = styled.div`display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin: 0.5rem auto 0; min-width: 7rem; max-width: 14rem;`;
 const Seg = styled.div`width: ${p => p.$pct}%; background: ${p => p.$color};`;
 const Strip = styled.div`display: flex; gap: 3px; margin-top: 0.5rem; justify-content: center;`;
@@ -49,7 +49,7 @@ const SecHead = styled.td`
 `;
 // 맨 오른쪽 「전체」 — 작고 옅게, 사업부 열과 구분되게
 const ThAll = styled.th`
-  width: 11rem; padding: 0 0.3rem 0.3rem !important; background: white !important; border-bottom: none !important; border-left: 2px solid #e2e8f0;
+  padding: 0 0.3rem 0.3rem !important; background: white !important; border-bottom: none !important; border-left: 2px solid #e2e8f0;
   & > span { display: block; font-size: 1.05rem; color: white; background: #334155; text-align: center; border-radius: 0.4rem 0.4rem 0 0; padding: 0.5rem 0.6rem; }
 `;
 const TdAll = styled.td`border-left: 2px solid #e2e8f0; background: #fafafa;`;
@@ -150,9 +150,14 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
   return (
     <Wrap>
       <Table>
+        <colgroup>
+          <col style={{ width: '10rem' }} />
+          {boards.map(b => <col key={b.division_id} />)}
+          <col style={{ width: '11rem' }} />
+        </colgroup>
         <thead>
           <tr>
-            <th style={{ width: '9rem' }}>축</th>
+            <th>축</th>
             {boards.map(b => (
               <ThDiv key={b.division_id} onClick={() => onPickDivision && onPickDivision(b.division_id)} title="누르면 이 사업부 판으로"><span>{b.division_name}</span></ThDiv>
             ))}

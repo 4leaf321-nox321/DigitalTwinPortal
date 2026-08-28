@@ -13,7 +13,7 @@ const linkColor = (i) => (i == null ? '#e2e8f0' : LINK_COLORS[Math.min(i, LINK_C
 const dark = (i) => i != null && i >= 3;
 
 const Big = styled.div`font-size: 1.75rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
-const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: nowrap;`;
+const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: normal; overflow-wrap: anywhere;`;
 const Pill = styled.span`display: inline-block; margin-left: 0.3rem; padding: 0 0.45rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: ${p => (p.$warn ? '#fef3c7' : p.$good ? '#dcfce7' : '#f1f5f9')}; color: ${p => (p.$warn ? '#92400e' : p.$good ? '#166534' : '#64748b')};`;
 const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem; text-align: left !important; small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }`;
 const SecHead = styled.td`background: #f8fafc !important; text-align: left !important; border-top: 2px solid #e2e8f0; padding: 0.4rem 0.9rem !important; font-size: 0.8125rem; color: #64748b; strong { color: #1e293b; font-size: 0.9375rem; margin-right: 0.5rem; }`;
