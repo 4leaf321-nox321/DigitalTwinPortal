@@ -104,6 +104,7 @@ export default async function run() {
     const h4 = html();
     say(h4.includes('재료비 스레드') && !!byText('button', '설계 BOM → 예상 원가') && !!byText('button', '목표 원가 → 설계 BOM'), '④ 스레드 줄 그림 — 적은 구간은 색, 안 적은 구간은 점선');
     say(h4.includes('조직 간 연계') && h4.includes('원가팀') && h4.includes('시스템 허브도') && h4.includes('Teamcenter'), '④ 조직 연계표와 시스템 허브도');
+    say(!!document.querySelector('svg[aria-label="시스템 지도"]') && document.querySelectorAll('svg[aria-label="시스템 지도"] circle').length === 3 && document.querySelectorAll('svg[aria-label="시스템 지도"] line').length === 2, '④ 시스템 지도 — 노드 3(Teamcenter·메일·원가 산정) · 간선 2');
     await click(byText('button', '설계 BOM → 예상 원가'));
     say(opened === 901, '④ 줄의 구간을 누르면 그 구간 상세');
     await click(byText('button', '상세')); await settle();

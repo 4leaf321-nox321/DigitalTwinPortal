@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import maturityApi from '../../services/maturityApi';
+import SystemMap from './SystemMap';
 
 // 디지털 스레드의 셈을 그리는 부품 둘(2026-08-28).
 //   ThreadOverviewRows — 전체 요약 표의 아래 줄: 스레드마다 사업부별 연속성 % · 도달 단계 · 최약 구간
@@ -156,6 +157,10 @@ export const ThreadDivisionPanels = ({ divisionId, subjects = [], axes = [], onO
           </Table>
         )}
       </Panel>
+      <Wide aria-label="시스템 지도">
+        <h4>시스템 지도<span>어느 시스템을 지나 어느 조직 사이를 건너나</span></h4>
+        <SystemMap divisionId={divisionId} threads={threads} onOpenPair={onOpenPair} />
+      </Wide>
       {Object.keys(segBySubject).length === 0 && <Muted>아직 구간이 없습니다 — 목록 탭에서 구간을 더하세요.</Muted>}
     </Grid>
   );
