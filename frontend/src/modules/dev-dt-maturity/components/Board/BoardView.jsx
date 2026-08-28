@@ -237,7 +237,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
         <ModeBtn $on={mode === 'scan'} onClick={() => setMode('scan')} title="축마다 대표 수치와 근거(앞선·취약 연계)">요약</ModeBtn>
         <ModeBtn $on={mode === 'read'} onClick={() => setMode('read')} title="한 줄에 시뮬레이션 하나 — 켠 것들을 배지로">상세</ModeBtn>
         <ModeBtn $on={mode === 'progress'} onClick={() => setMode('progress')} title="올해 어느 칸이 언제 올라갔나">변화</ModeBtn>
-        {!isThread && <ModeBtn $on={mode === 'tiles'} onClick={() => setMode('tiles')} title="연계 하나가 네모 하나 — 고른 축의 색으로 밭처럼 훑는다">모판</ModeBtn>}
+        <ModeBtn $on={mode === 'tiles'} onClick={() => setMode('tiles')} title={isThread ? '구간 하나가 네모 하나 — 스레드로 묶어 밭처럼 훑는다' : '연계 하나가 네모 하나 — 고른 축의 색으로 밭처럼 훑는다'}>모판</ModeBtn>
         <span style={{ width: '0.5rem' }} />
         <Chip $on={filters.unassessedOnly} onClick={() => set({ unassessedOnly: !filters.unassessedOnly })}>미평가만</Chip>
         <Chip $on={filters.staleOnly} onClick={() => set({ staleOnly: !filters.staleOnly })}>재평가 필요만</Chip>
@@ -291,7 +291,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
 
       {mode === 'tiles' ? (
         // 「모판」 — 연계가 네모, 고른 축이 색. 담당 부서로 묶는다.
-        <TileBoard subjects={subjects} axes={axes} onOpenPair={onOpenPair} allMode={!!board.boards} />
+        <TileBoard subjects={subjects} axes={axes} onOpenPair={onOpenPair} allMode={!!board.boards} sector={sector} />
       ) : mode === 'scan' && board.boards ? (
         // 전체 「요약」 — 사업부 × 축. 한 화면에 사업부 여섯. 행을 누르면 그 사업부로.
         <OverviewGrid boards={board.boards} axes={axes} review={review} onPickDivision={onPickDivision} sector={sector} />
