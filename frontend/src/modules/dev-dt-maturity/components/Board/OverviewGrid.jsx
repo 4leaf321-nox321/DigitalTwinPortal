@@ -16,9 +16,14 @@ import { colorFor, divisionSummary, headlineIndex, DATE_BASES, baseDate, summary
 
 // 남는 높이를 이 칸이 갖고 스크롤도 여기 걸린다. 표는 그 80% 만 — 아래 20% 는 비워 둔다.
 // 코멘트 보기 토글(2026-08-29) — 끄면 큰 숫자만 남고 작은 글줄(.ov-note)이 다 숨는다. 기본 켜짐.
-const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0; ${p => (p.$notes ? '' : '.ov-note { display: none; }')}`;
+const Wrap = styled.div`
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  ${p => (p.$notes ? '' : '.ov-note { display: none; }')}
+`;
+const Head = styled.div`flex: none; padding: 0 0.4rem 0.4rem;`;
+const Body = styled.div`overflow: auto; flex: 1; min-height: 0;`;
 const Table = styled.table`
-  width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem; table-layout: fixed;   /* 아래 남는 공간 없이 채운다 · 열 폭은 내용과 무관하게 같다(2026-08-28) */
+  width: 100%; height: 100%; border-collapse: separate;   /* height 는 Body 기준 — 칩 줄이 표 높이에 얹히지 않는다(2026-08-29) */ border-spacing: 0; font-size: 0.9375rem; table-layout: fixed;   /* 아래 남는 공간 없이 채운다 · 열 폭은 내용과 무관하게 같다(2026-08-28) */
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; text-align: center; }   /* 한 화면에 들어가게 — 칸 여백을 줄인다(2026-08-28) */   /* 값은 열 가운데 — 사업부끼리 세로로 비교된다(2026-08-28) */
 `;
@@ -186,16 +191,17 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
   );
   return (
     <Wrap $notes={notes} data-notes={notes ? 'on' : 'off'}>
+      <Head>
+        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginRight: '0.4rem' }}>날짜 기준</span>
+        {DATE_BASES.map(d => (
+          <DateBtn key={d.key} type="button" $on={since === d.key} aria-pressed={since === d.key}
+                   onClick={() => setSince(v => (v === d.key ? null : d.key))} title="대표 수치마다 이 날짜 대비 변화량을 붙입니다">{d.label}</DateBtn>
+        ))}
+        {sinceIso && <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '0.4rem' }}>{sinceIso} 대비 Δ</span>}
+        <DateBtn type="button" $on={notes} aria-pressed={notes} onClick={() => setNotes(v => !v)} title="평가 완료 n/m 같은 작은 글줄을 켜고 끕니다" style={{ float: 'right' }}>코멘트 보기</DateBtn>
+      </Head>
+      <Body>
       <Table>
-        <caption style={{ captionSide: 'top', textAlign: 'left', padding: '0 0.4rem 0.4rem' }}>
-          <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginRight: '0.4rem' }}>날짜 기준</span>
-          {DATE_BASES.map(d => (
-            <DateBtn key={d.key} type="button" $on={since === d.key} aria-pressed={since === d.key}
-                     onClick={() => setSince(v => (v === d.key ? null : d.key))} title="대표 수치마다 이 날짜 대비 변화량을 붙입니다">{d.label}</DateBtn>
-          ))}
-          {sinceIso && <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '0.4rem' }}>{sinceIso} 대비 Δ</span>}
-          <DateBtn type="button" $on={notes} aria-pressed={notes} onClick={() => setNotes(v => !v)} title="평가 완료 n/m 같은 작은 글줄을 켜고 끕니다" style={{ float: 'right' }}>코멘트 보기</DateBtn>
-        </caption>
         <colgroup>
           <col style={{ width: '11rem' }} />
           {boards.map(b => <col key={b.division_id} />)}
@@ -251,6 +257,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
           {boards.length === 0 && <tr><Muted colSpan={2}>보이는 사업부가 없습니다 — 설정 「사업부 표시」를 확인하세요.</Muted></tr>}
         </tbody>
       </Table>
+      </Body>
     </Wrap>
   );
 };
