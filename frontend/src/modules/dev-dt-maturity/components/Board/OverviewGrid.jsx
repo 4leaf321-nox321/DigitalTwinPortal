@@ -18,7 +18,7 @@ const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0;`;
 const Table = styled.table`
   width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem;   /* 아래 남는 공간 없이 채운다(2026-08-28) */
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-  td { padding: 0.75rem 0.9rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }   /* 행 사이 간격을 조금 — 줄이 구분되게 */
+  td { padding: 0.75rem 0.9rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; text-align: center; }   /* 값은 열 가운데 — 사업부끼리 세로로 비교된다(2026-08-28) */
 `;
 // 사업부 머리 — 색 헤더. 누르면 그 사업부 판으로(2026-08-28).
 const ThDiv = styled.th`
@@ -26,12 +26,12 @@ const ThDiv = styled.th`
   & > span { display: block; font-size: 1.05rem; color: white; background: #1d4ed8; text-align: center; border-radius: 0.4rem 0.4rem 0 0; padding: 0.5rem 0.6rem; }
   &:hover > span { background: #1e40af; text-decoration: underline; }
 `;
-const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem;`;
+const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem; text-align: left !important;`;
 const Big = styled.div`font-size: 1.75rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
 const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: nowrap;`;
-const Bar = styled.div`display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin-top: 0.5rem; min-width: 7rem;`;
+const Bar = styled.div`display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin: 0.5rem auto 0; min-width: 7rem; max-width: 14rem;`;
 const Seg = styled.div`width: ${p => p.$pct}%; background: ${p => p.$color};`;
-const Strip = styled.div`display: flex; gap: 3px; margin-top: 0.5rem;`;
+const Strip = styled.div`display: flex; gap: 3px; margin-top: 0.5rem; justify-content: center;`;
 const Cellet = styled.div`
   flex: 1 1 0; height: 1.4rem; border-radius: 3px; min-width: 1.6rem; font-size: 0.6875rem; font-weight: 600; line-height: 1.4rem; text-align: center; overflow: hidden;
   background: ${p => p.$color}; color: ${p => (p.$dark ? 'white' : '#1e293b')};
@@ -42,7 +42,7 @@ const Pill = styled.span`
 `;
 const Muted = styled.td`color: #94a3b8; font-size: 0.75rem;`;
 const SecHead = styled.td`
-  background: #f8fafc !important; border-top: 2px solid #e2e8f0; padding: 0.4rem 0.9rem !important; font-size: 0.8125rem; color: #64748b;
+  background: #f8fafc !important; text-align: left !important; border-top: 2px solid #e2e8f0; padding: 0.4rem 0.9rem !important; font-size: 0.8125rem; color: #64748b;
   strong { color: #1e293b; font-size: 0.9375rem; margin-right: 0.5rem; }
   select { float: right; padding: 0.2rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; }
 `;
