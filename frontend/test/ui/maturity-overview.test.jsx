@@ -55,10 +55,22 @@ export default async function run() {
     await click(byText('th', 'VD'));
     say(picked === 18, '③ 사업부 머리를 누르면 그 사업부(18)로');
     await click(byText('button', '상세')); await settle();
-    say(html().includes('낙하 시험') && html().includes('진동 시험'), '③ 「상세」로 바꾸면 시험 표');
-    await click(byText('button', '전부 펼침')); await settle();
+    say(html().includes('낙하 시험') && html().includes('진동 시험') && byText('td', '낙하 시험')?.getAttribute('rowspan') === '2', '③ 「상세」— 시험 항목은 셀을 합치고(rowspan 2) 한 줄에 시뮬레이션 하나');
     const h3 = html();
     say(h3.includes('>전처리<') && h3.includes('>실행<') && h3.includes('시험 2/2') && h3.includes('>형상 재현<'), '③ 상세의 묶음·표 축은 선택한 것들이 배지로 늘어섬(전처리·실행 · 형상 재현 · 시험 2/2)');
+    await unmount();
+
+    // ④ 사업부 하나의 「요약」 — 축마다 판, 앞선·취약 연계
+    const ONE = { ...MX, subjects: MX.subjects, totals: { subjects: 1, pairs: 2, unassessed: 1, stale: 0 }, stale_days: 365, deny_reason: null };
+    let opened = null;
+    await render(<BoardBody board={ONE} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={(id) => { opened = id; }} onPickDivision={() => {}} review={REVIEW} />);
+    await settle();
+    await click(byText('button', '요약')); await settle();
+    const h4 = html();
+    say(h4.includes('앞선 연계') && h4.includes('취약 연계') && h4.includes('평균 정확도'), '④ 사업부 요약은 축마다 판 + 앞선·취약 연계');
+    say(h4.includes('낙하 시험 × 해석') && h4.includes('미평가'), '④ 취약 연계에 미평가 연계가 오름');
+    await click(byText('b', '낙하 시험 × 해석').closest('button'));
+    say(opened != null, '④ 연계를 누르면 상세가 열림');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

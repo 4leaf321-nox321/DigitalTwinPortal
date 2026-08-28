@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import OverviewGrid from './OverviewGrid';
+import DivisionSummary from './DivisionSummary';
 import {
   colorFor, distribution, applyFilters, accuracyLabel, changesByMonth,
 } from '../../utils/board';
@@ -58,7 +59,10 @@ const Td = styled.td`
   color: #1e293b; vertical-align: middle; white-space: nowrap;
   &:first-child { position: sticky; left: 0; background: white; z-index: 1; }
 `;
-const SubjectRow = styled.tr`background: ${p => (p.$open ? '#f8fafc' : 'white')}; cursor: pointer;`;
+const SubjectTd = styled.td`
+  padding: 0.45rem 0.6rem; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; background: #fcfcfd; vertical-align: top; font-size: 0.8125rem;
+`;
+const SimName = styled.button`border: none; background: transparent; font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; cursor: pointer; padding: 0; text-align: left; &:hover { color: #1d4ed8; text-decoration: underline; }`;
 const PairRow = styled.tr`background: #fcfcfd;`;
 const Name = styled.span`font-weight: 600;`;
 const DivTag = styled.span`
@@ -184,7 +188,6 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
 
 export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review }) => {
   const [mode, setMode] = useState(board?.boards ? 'scan' : 'read');       // scan | read | progress — 전체는 요약부터
-  const [open, setOpen] = useState({});           // subject_id → 펼침
   const subjects = useMemo(() => applyFilters(board?.subjects || [], filters), [board, filters]);
   const dist = useMemo(() => distribution(subjects, axes), [subjects, axes]);
   const families = useMemo(() => {
@@ -203,16 +206,13 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
     );
   }
 
-  const dense = mode === 'scan';
   const set = (patch) => onFiltersChange({ ...filters, ...patch });
-  const toggle = (id) => setOpen(o => ({ ...o, [id]: !o[id] }));
-  const openAll = (v) => setOpen(Object.fromEntries(subjects.map(s => [s.id, v])));
 
   return (
     <Wrap>
       <Bar>
-        <ModeBtn $on={mode === 'scan'} onClick={() => setMode('scan')} title="한눈에 — 색만">요약</ModeBtn>
-        <ModeBtn $on={mode === 'read'} onClick={() => setMode('read')} title="접힌 표 — 펼쳐 읽기">상세</ModeBtn>
+        <ModeBtn $on={mode === 'scan'} onClick={() => setMode('scan')} title="축마다 대표 수치와 근거(앞선·취약 연계)">요약</ModeBtn>
+        <ModeBtn $on={mode === 'read'} onClick={() => setMode('read')} title="한 줄에 시뮬레이션 하나 — 켠 것들을 배지로">상세</ModeBtn>
         <ModeBtn $on={mode === 'progress'} onClick={() => setMode('progress')} title="올해 어느 칸이 언제 올라갔나">변화</ModeBtn>
         <span style={{ width: '0.5rem' }} />
         <Chip $on={filters.unassessedOnly} onClick={() => set({ unassessedOnly: !filters.unassessedOnly })}>미평가만</Chip>
@@ -237,12 +237,6 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
               <option key={r.key} value={i}>{r.label} 이상</option>
             ))}
           </Select>
-        )}
-        {mode === 'read' && (
-          <>
-            <Chip onClick={() => openAll(true)}>전부 펼침</Chip>
-            <Chip onClick={() => openAll(false)}>전부 접음</Chip>
-          </>
         )}
       </Bar>
 
@@ -274,59 +268,50 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
       {mode === 'scan' && board.boards ? (
         // 전체 「요약」 — 사업부 × 축. 한 화면에 사업부 여섯. 행을 누르면 그 사업부로.
         <OverviewGrid boards={board.boards} axes={axes} review={review} onPickDivision={onPickDivision} />
+      ) : mode === 'scan' ? (
+        // 사업부 하나의 「요약」 — 축마다 판 하나, 화면 가득. 앞선 연계·취약 연계가 근거로 붙는다.
+        <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
       ) : mode !== 'progress' ? (
+        // 「상세」 — 늘 펼친 표. 한 줄에 시뮬레이션 하나, 시험 항목은 셀을 합친다(목록 탭과 같은 문법, 2026-08-28).
         <TableWrap>
           <Table>
             <thead>
               <tr>
-                <Th>시험 항목</Th>
-                <Th>정확도</Th>
-                {axes.filter(a => a.kind !== 'value').map(a => <Th key={a.key}>{a.label}</Th>)}
+                <Th style={{ width: '18%' }}>시험 항목</Th>
+                <Th style={{ width: '16%' }}>시뮬레이션</Th>
+                {axes.map(a => <Th key={a.key}>{a.label}</Th>)}
                 <Th>미평가</Th>
               </tr>
             </thead>
             <tbody>
               {subjects.map(s => {
-                const isOpen = dense ? false : !!open[s.id];
-                return (
-                  <React.Fragment key={s.id}>
-                    <SubjectRow $open={isOpen} onClick={() => !dense && toggle(s.id)}>
-                      <Td $dense={dense}>
-                        {!dense && (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}{' '}
-                        {s.division_name && <DivTag>{s.division_name}</DivTag>}
-                        <Name>{s.name}</Name> {s.detail && <Sub>{s.detail}</Sub>}
-                        {' '}<Sub>× {s.pairs.length}</Sub>
-                      </Td>
-                      <Td $dense={dense}>
-                        {(() => {
-                          const acc = axes.find(a => a.key === 'accuracy');
-                          if (!acc) return null;
-                          return dense
-                            ? <BestCell idx={s.summary.accuracy_rung ? acc.rungs.findIndex(r => r.key === s.summary.accuracy_rung) : null} axis={acc} dense />
-                            : <span title={`항목 정확도 (${s.accuracy_rule})`}>{accuracyLabel(s.summary)}</span>;
-                        })()}
-                      </Td>
-                      {axes.filter(a => a.kind !== 'value').map(a => (
-                        <Td key={a.key} $dense={dense}><BestCell idx={s.summary.best_rung_index[a.key]} axis={a} dense={dense} /></Td>
-                      ))}
-                      <Td $dense={dense}>{s.summary.unassessed ? <Muted>{s.summary.unassessed}</Muted> : ''}</Td>
-                    </SubjectRow>
-                    {(isOpen || dense) && s.pairs.map(p => (
-                      <PairRow key={p.id}>
-                        <Td $dense={dense}>
-                          <span style={{ paddingLeft: dense ? '0.75rem' : '1.5rem' }}>└ {p.agent?.name}</span>
-                          {p.agent?.model_kind && <Sub> {p.agent.model_kind}</Sub>}
-                        </Td>
-                        {axes.map(a => (
-                          <Td key={a.key} $dense={dense}>
-                            <AxisCell a={p.assessments[a.key]} axis={a} dense={dense} onClick={() => onOpenPair(p.id)} />
-                          </Td>
-                        ))}
-                        <Td $dense={dense}>{p.unassessed.length ? <Muted>{p.unassessed.length}</Muted> : ''}</Td>
-                      </PairRow>
-                    ))}
-                  </React.Fragment>
+                const span = Math.max(1, s.pairs.length);
+                const acc = axes.find(a => a.key === 'accuracy');
+                const cell = (
+                  <SubjectTd rowSpan={span}>
+                    {s.division_name && <DivTag>{s.division_name}</DivTag>}
+                    <Name>{s.name}</Name>
+                    <div><Sub>연계 {s.pairs.length}</Sub>{acc && s.summary.accuracy != null && <Sub> · 항목 정확도 {accuracyLabel(s.summary)}</Sub>}</div>
+                  </SubjectTd>
                 );
+                if (s.pairs.length === 0) {
+                  return <tr key={s.id}>{cell}<Td colSpan={axes.length + 2}><Muted>아직 이은 시뮬레이션이 없습니다.</Muted></Td></tr>;
+                }
+                return s.pairs.map((p, i) => (
+                  <PairRow key={p.id}>
+                    {i === 0 && cell}
+                    <Td>
+                      <SimName onClick={() => onOpenPair(p.id)} title="연계 상세 열기">{p.agent?.name}</SimName>
+                      {(p.agent?.tools || []).length > 0 && <div><Sub>{p.agent.tools.join(', ')}</Sub></div>}
+                    </Td>
+                    {axes.map(a => (
+                      <Td key={a.key}>
+                        <AxisCell a={p.assessments[a.key]} axis={a} dense={false} onClick={() => onOpenPair(p.id)} />
+                      </Td>
+                    ))}
+                    <Td>{p.unassessed.length ? <Muted>{p.unassessed.length}</Muted> : ''}</Td>
+                  </PairRow>
+                ));
               })}
             </tbody>
           </Table>
