@@ -399,6 +399,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
     attachment: { label: '첨부/링크', type: 'text' },
     hours_per_run: { label: '1회 소요(Hr)', type: 'number' },
     tests_saved_per_year: { label: '줄어든 시험 횟수/년', type: 'number' },
+    coverage_pct: { label: '대상 중 확보 비율(%)', type: 'number' },
   }), []);
 
   return (

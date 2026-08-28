@@ -155,14 +155,15 @@ AXES = {
         # 전부 택1, 칸은 셋~넷 — 「보면 아는 것」만. 「모름」은 따로(unknown_ok) 두어 「확인 필요」로 센다.
         {
             'key': 'capture', 'label': '데이터 확보', 'kind': 'rung', 'unknown_ok': True,
-            'question': '출발 쪽에 데이터가 디지털로 있는가',
-            'evidence': ['attachment'], 'evidence_label': '어디서 확인했나(화면·담당자)',
-            'headline_min': 'partial',
+            'question': '데이터가 어떻게 생기는가 — 사람 손이 얼마나 덜 드나',
+            # 「일부/전부」(양)는 칸이 아니라 근거의 숫자(coverage_pct)로 받는다(2026-08-28)
+            'evidence': ['coverage_pct', 'attachment'], 'evidence_label': '대상 중 확보 비율(%) · 어디서 확인했나',
+            'headline_min': 'direct',
             'rungs': [
-                {'key': 'none', 'label': '없음·종이', 'description': '데이터가 없거나 종이·머릿속에만'},
-                {'key': 'personal', 'label': '개인 엑셀·문서', 'description': '담당자의 파일에만 있다'},
-                {'key': 'partial', 'label': '시스템에 일부', 'description': '시스템에 있지만 일부 항목·일부 과제만'},
-                {'key': 'full', 'label': '시스템에 전부', 'description': '시스템에 전부 있다(자동 수집 포함)'},
+                {'key': 'none', 'label': '없음·개인 파일', 'description': '종이·머릿속이거나 담당자의 엑셀·문서에만'},
+                {'key': 'upload', 'label': '사람이 취합해 올림', 'description': '엑셀로 만든 것을 나중에 시스템에 입력·업로드한다'},
+                {'key': 'direct', 'label': '시스템에 직접 입력', 'description': '일이 일어나는 자리에서 시스템에 바로 기록한다'},
+                {'key': 'auto', 'label': '장비·도구에서 자동 수집', 'description': '사람 없이 시스템이 받는다(설비·센서·CAE 자동 등록)'},
             ],
         },
         {

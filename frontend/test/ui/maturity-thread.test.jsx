@@ -12,7 +12,7 @@ import { BoardBody } from '../../src/modules/dev-dt-maturity/components/Board/Bo
 import ThreadCaseLedger from '../../src/modules/dev-dt-maturity/components/Thread/ThreadCaseLedger';
 
 const AXES = [
-  { key: 'capture', label: '데이터 확보', kind: 'rung', unknown_ok: true, headline_min: 'partial', rungs: [{ key: 'none', label: '없음·종이' }, { key: 'personal', label: '개인 엑셀·문서' }, { key: 'partial', label: '시스템에 일부' }, { key: 'full', label: '시스템에 전부' }] },
+  { key: 'capture', label: '데이터 확보', kind: 'rung', unknown_ok: true, headline_min: 'direct', rungs: [{ key: 'none', label: '없음·개인 파일' }, { key: 'upload', label: '사람이 취합해 올림' }, { key: 'direct', label: '시스템에 직접 입력' }, { key: 'auto', label: '장비·도구에서 자동 수집' }] },
   { key: 'link_mode', label: '연결', kind: 'rung', unknown_ok: true, headline_min: 'auto_transfer', rungs: [{ key: 'manual', label: '사람이 옮김' }, { key: 'auto_transfer', label: '자동 전달' }, { key: 'integrated', label: '시스템 연동' }, { key: 'closed_loop', label: '폐루프' }] },
 ];
 const THREAD = {

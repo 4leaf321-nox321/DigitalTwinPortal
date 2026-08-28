@@ -673,7 +673,7 @@ def _remap_thread_marks(marks):
     li = ['manual', 'auto_transfer', 'integrated', 'closed_loop'].index(link)
     quality = QUALITY_REMAP.get(marks.get('consistency')) or ('master' if li >= 2 else 'mapped' if li == 1 else 'manual_match')
     stab = marks.get('stability') or 0
-    capture = 'full' if li >= 2 else 'partial' if li == 1 else 'personal'
+    capture = 'auto' if li >= 2 else 'direct' if li == 1 else 'upload'
     usage = 'automatic' if link == 'closed_loop' else 'decision' if stab >= 85 else 'review' if stab >= 60 else 'reference'
     return {'capture': capture, 'link_mode': link, 'quality': quality, 'usage': usage}
 

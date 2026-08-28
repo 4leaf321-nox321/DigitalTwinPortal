@@ -201,6 +201,7 @@ def test_디지털_스레드_축과_사전_어휘():
     assert all(a['kind'] == 'rung' and a.get('unknown_ok') for a in axes.values())
     assert D.rung_keys(axes['link_mode']) == ['manual', 'auto_transfer', 'integrated', 'closed_loop']
     assert D.rung_keys(axes['quality']) == ['manual_match', 'mapped', 'master']
+    assert D.rung_keys(axes['capture']) == ['none', 'upload', 'direct', 'auto'] and 'coverage_pct' in axes['capture']['evidence']
     assert [a['headline_min'] in D.rung_keys(a) for a in axes.values()] == [True] * 4
     keys = [t['key'] for t in D.THREAD_DEFAULTS]
     assert keys == ['simulation', 'cost', 'quality', 'manufacturing', 'bom_change']

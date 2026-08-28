@@ -667,8 +667,9 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     _assess(client, auth, mx_user, s1['pair_id'], 'link_mode', {'rung': 'integrated', 'note': 'PLM 내부 링크'})
     _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'auto_transfer', 'note': 'x'}, expect=400)     # 비공식 매개면 첫 칸만
     _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'manual', 'note': '엑셀 메일'})
-    _assess(client, auth, mx_user, s1['pair_id'], 'capture', {'rung': 'full', 'note': 'PLM 에 전부'})
-    _assess(client, auth, mx_user, s2['pair_id'], 'capture', {'rung': 'personal', 'note': '담당자 엑셀'})
+    out = _assess(client, auth, mx_user, s1['pair_id'], 'capture', {'rung': 'auto', 'note': 'PLM 자동 등록', 'evidence': {'coverage_pct': '85'}})
+    assert out['data']['assessments']['capture']['evidence'] == {'coverage_pct': 85.0}
+    _assess(client, auth, mx_user, s2['pair_id'], 'capture', {'rung': 'upload', 'note': '담당자 엑셀을 월말에 올림'})
     _assess(client, auth, mx_user, s1['pair_id'], 'usage', {'rung': 'decision', 'note': '원가 승인 근거'})
     out = _assess(client, auth, mx_user, s2['pair_id'], 'quality', {'rung': 'unknown', 'note': '마스터 담당 확인 필요'})   # 「모름」
     q = out['data']['assessments']['quality']

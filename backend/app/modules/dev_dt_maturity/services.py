@@ -356,7 +356,7 @@ def _clean_evidence(axis, raw):
                 out[key] = int(v)
             except (TypeError, ValueError):
                 continue
-        elif key in ('error_pct', 'hours_per_run'):
+        elif key in ('error_pct', 'hours_per_run', 'coverage_pct'):
             try:
                 out[key] = float(v)
             except (TypeError, ValueError):

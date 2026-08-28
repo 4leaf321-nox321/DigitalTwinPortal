@@ -22,7 +22,7 @@ SECTOR = 'digital_thread'
 STAGE_ORDER = {s['key']: i for i, s in enumerate(D.THREAD_STAGES)}
 LINK_AXIS = 'link_mode'
 AUTO_FROM = 'auto_transfer'      # 이 칸 이상이면 「이어진」 구간
-CAPTURE_FROM = 'partial'         # 이 칸 이상이면 「확보된」 구간
+CAPTURE_FROM = 'direct'          # 이 칸 이상이면 「확보된」 구간 — 취합 없이 바로 생기는 데이터
 USAGE_FROM = 'decision'          # 이 칸 이상이면 「쓰이는」 구간
 
 
