@@ -58,6 +58,7 @@ export default async function run() {
     say(html().includes('낙하 시험') && html().includes('진동 시험') && byText('td', '낙하 시험')?.getAttribute('rowspan') === '2', '③ 「상세」— 시험 항목은 셀을 합치고(rowspan 2) 한 줄에 시뮬레이션 하나');
     const h3 = html();
     say(h3.includes('>전처리<') && h3.includes('>실행<') && h3.includes('시험 2/2') && h3.includes('>형상 재현<'), '③ 상세의 묶음·표 축은 선택한 것들이 배지로 늘어섬(전처리·실행 · 형상 재현 · 시험 2/2)');
+    say(h3.includes('>파생까지<') && h3.includes('>이슈 대응<') && h3.includes('담당 그룹'), '③ 택1 축은 선택지 전부가 늘어서고 고른 칸만 채움 · 담당 그룹 열');
     await unmount();
 
     // ④ 사업부 하나의 「요약」 — 축마다 판, 앞선·취약 연계
