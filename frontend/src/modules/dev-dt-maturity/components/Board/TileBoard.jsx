@@ -79,7 +79,7 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
       .sort((a, b) => (b.value || 0) - (a.value || 0));
     treemap().tile(treemapSquarify.ratio(1.35)).size([W, H]).paddingInner(0.35).paddingOuter(0.5).paddingTop(3.2)(h);
     return h;
-  }, [subjects, axis, allMode, isThread, total]);
+  }, [subjects, axis, allMode, isThread]);
 
   if (!axis || !root) return null;
   const pairsCount = subjects.reduce((n, s) => n + (s.pairs || []).length, 0);
