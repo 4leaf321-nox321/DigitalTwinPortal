@@ -1,6 +1,10 @@
 // 샘플 뷰의 경로 → 목업 답 셈. JSON 을 안 물어 node 시험이 그대로 읽는다(2026-08-28).
 
-/** 정확히 같은 키가 없으면 같은 경로·같은 division 의 비슷한 키(days 같은 꼬리 인자만 다른 것)를 쓰고, 그래도 없으면 빈 답. */
+/** 정확히 같은 키가 없으면 같은 경로·같은 division·같은 sector 의 비슷한 키(days 같은 꼬리 인자만 다른 것)를
+ *  쓰고, 그래도 없으면 빈 답.
+ *
+ *  ⚠️ division 과 sector 는 **넘어가면 안 되는 선**이다 — 다른 사업부·다른 부문의 자료를 대신 답하면
+ *     화면이 조용히 뒤섞인다(2026-08-29: 스레드 구간이 시뮬레이션 목록에 섞여 나왔다). */
 export const resolveSample = (path, method, store) => {
   if (method && method !== 'GET') {
     const err = new Error('샘플 뷰에서는 저장되지 않습니다 — 보기 전용입니다.');
@@ -15,8 +19,9 @@ export const resolveSample = (path, method, store) => {
     const same = Object.keys(want).filter(q => have[q] === want[q]).length;
     const diff = Object.keys(want).filter(q => have[q] !== undefined && have[q] !== want[q]).length;
     const sameDivision = !('division_id' in want) || have.division_id === want.division_id;
-    return { k, same, diff, sameDivision };
-  }).filter(x => x.sameDivision && x.diff <= 1);
+    const sameSector = !('sector' in want) || !('sector' in have) || have.sector === want.sector;
+    return { k, same, diff, sameDivision, sameSector };
+  }).filter(x => x.sameDivision && x.sameSector && x.diff <= 1);
   scored.sort((a, b) => b.same - a.same || a.diff - b.diff);
   if (scored.length) return { success: true, data: store[scored[0].k] };
   if (/^\/pairs\/\d+$/.test(base)) return { success: true, data: null };

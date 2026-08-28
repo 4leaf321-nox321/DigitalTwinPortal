@@ -73,8 +73,12 @@ def main():
             out[f'/board?division_id={did}&sector=simulation'] = S.board(did, 'simulation')
             for days in (365, 730, 1825):
                 out[f'/changes?division_id={did}&sector=simulation&days={days}'] = S.recent_changes(did, 'simulation', days)
-            subs = [s.to_dict() for s in MaturitySubject.query.filter_by(division_id=did).order_by(MaturitySubject.order, MaturitySubject.id).all()]
-            ags = [a.to_dict() for a in MaturityAgent.query.filter_by(division_id=did).order_by(MaturityAgent.name).all()]
+            # ⚠️ 부문으로 거른다 — 서버의 /subjects·/agents 는 sector 기본값이 simulation 이다(routes._list).
+            #    안 거르면 스레드의 구간(「요구사항 → 해석 조건」…)이 시뮬레이션 목록에 섞여 나온다.
+            subs = [s.to_dict() for s in MaturitySubject.query.filter_by(division_id=did, sector='simulation')
+                    .order_by(MaturitySubject.order, MaturitySubject.id).all()]
+            ags = [a.to_dict() for a in MaturityAgent.query.filter_by(division_id=did, sector='simulation')
+                   .order_by(MaturityAgent.name).all()]
             out[f'/subjects?division_id={did}'] = subs
             out[f'/agents?division_id={did}'] = ags
             subjects_all += subs

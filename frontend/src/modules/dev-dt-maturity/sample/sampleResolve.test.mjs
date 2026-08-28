@@ -21,3 +21,17 @@ test('다른 사업부의 키는 빌리지 않고 빈 답 · 저장은 거절', 
   assert.equal(resolveSample('/pairs/5', 'GET', STORE).data, null);   // 없는 연계는 null — 화면이 「없는 연계」로 읽는다
   assert.throws(() => resolveSample('/pairs/5/assessments/accuracy', 'PUT', STORE), /저장되지 않습니다/);
 });
+
+test('부문이 다른 키로는 넘어가지 않는다 — 스레드 구간이 시뮬레이션 목록에 섞이면 안 된다', () => {
+  const store = {
+    '/board?division_id=17&sector=simulation': { subjects: ['시뮬'] },
+    '/changes?division_id=17&sector=simulation&days=365': ['시뮬 이력'],
+  };
+  // 스레드 판을 물었는데 시뮬레이션 판이 오면 안 된다 — 빈 답이 낫다
+  assert.deepEqual(resolveSample('/board?division_id=17&sector=digital_thread', 'GET', store).data, {});
+  assert.deepEqual(resolveSample('/changes?division_id=17&sector=digital_thread&days=730', 'GET', store).data, []);
+  // 같은 부문이면 꼬리 인자(days)가 달라도 쓴다
+  assert.deepEqual(resolveSample('/changes?division_id=17&sector=simulation&days=1825', 'GET', store).data, ['시뮬 이력']);
+  // 부문을 안 물으면 예전처럼 고른다
+  assert.deepEqual(resolveSample('/board?division_id=17', 'GET', store).data, { subjects: ['시뮬'] });
+});
