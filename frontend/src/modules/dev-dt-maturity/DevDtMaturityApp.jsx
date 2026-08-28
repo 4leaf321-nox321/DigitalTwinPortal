@@ -109,6 +109,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const division = divisions.find(d => d.id === divisionId);
   const tab = ['list', 'reviews', 'cases'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
+  const sinceIso = params.get('since') || null;      // 모판의 날짜 기준 — 창에서 바뀐 축을 짚어 준다
   const filters = useMemo(() => filtersFromParams(k => params.get(k)), [params]);
 
   const patch = useCallback((changes) => {
@@ -122,7 +123,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const setFilters = (f) => {
     const keep = new URLSearchParams();
     // 필터를 바꿔도 부문·샘플 뷰는 남아야 한다 — 빠지면 시뮬레이션으로 튄다(2026-08-28)
-    ['division', 'tab', 'pair', 'sector', 'sample'].forEach(k => { if (params.get(k)) keep.set(k, params.get(k)); });
+    ['division', 'tab', 'pair', 'sector', 'sample', 'since'].forEach(k => { if (params.get(k)) keep.set(k, params.get(k)); });
     Object.entries(filtersToParams(f)).forEach(([k, v]) => keep.set(k, v));
     setParams(keep, { replace: true });
   };
@@ -180,7 +181,8 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)}
-                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} review={isThread ? null : defs.review} thread={defs.thread} />
+                     onOpenPair={(id, since) => patch({ pair: id, since: since || null })} onPickDivision={(id) => patch({ division: id, pair: null })}
+                     refreshKey={refreshKey} review={isThread ? null : defs.review} thread={defs.thread} />
         ) : isThread && tab === 'cases' ? (
           <ThreadCaseLedger divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} thread={defs.thread} axes={axes} refreshKey={refreshKey} />
         ) : isThread ? (
@@ -198,7 +200,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                     onChanged={bump} refreshKey={refreshKey} />
         ))}
         {pairId && defs && tab !== 'list' && (
-          <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
+          <PairModal pairId={pairId} axes={axes} since={sinceIso} onClose={() => patch({ pair: null, since: null })} onChanged={bump} />
         )}
         {modal && ['system', 'org', 'thread'].includes(modal.kind) && defs && (
           <ThreadDictModal kind={modal.kind} divisionId={divisionId} divisions={divisions} thread={defs.thread} axes={defs.axes?.digital_thread || []}

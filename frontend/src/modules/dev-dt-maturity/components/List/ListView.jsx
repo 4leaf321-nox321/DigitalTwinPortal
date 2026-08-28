@@ -75,7 +75,7 @@ const Go = styled.td`
   tr:hover & { color: #1d4ed8; }
 `;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
-const DeptCell = styled.td`color: #475569; white-space: nowrap; small { color: #cbd5e1; }`;
+const DeptCell = styled.td`color: #475569; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; }`;
 // 사용 툴 · 디지털 트윈 연결 과제 — 제 열로 뺐다(2026-08-29). 과제는 코드가 아니라 **이름**으로.
 const ToolCell = styled.td`color: #64748b; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; }`;
 const ProjCell = styled.td`color: #475569; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; } em { font-style: normal; color: #cbd5e1; }`;
@@ -172,8 +172,8 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
           <Table>
             <thead><tr>
               <th style={{ width: '20%' }}>시험</th><th style={{ width: '20%' }}>시뮬레이션</th>
-              <th style={{ width: '16%' }}>사용 툴</th><th style={{ width: '14%' }}>담당 부서</th>
-              <th style={{ width: '24%' }}>디지털 트윈 연결 과제</th><th style={{ width: '1.2rem' }} /><th style={{ width: '2.5rem' }} />
+              <th style={{ width: '16%' }}>사용 툴</th><th style={{ width: '11%' }}>담당 부서</th>
+              <th style={{ width: '29%' }}>디지털 트윈 연결 과제</th><th style={{ width: '1.2rem' }} /><th style={{ width: '2.5rem' }} />
             </tr></thead>
             <tbody>
               {rows.length === 0 && <tr><Muted colSpan={7}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}

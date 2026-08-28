@@ -11,6 +11,7 @@ import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, type, keydown, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import PairSide from '../../src/modules/dev-dt-maturity/components/Pair/PairSide';
+import { PairPanel } from '../../src/modules/dev-dt-maturity/components/Pair/PairModal';
 import ItemManagerModal from '../../src/modules/dev-dt-maturity/components/List/ItemManagerModal';
 
 const AXES = [
@@ -215,6 +216,26 @@ export default async function run() {
     say(JSON.stringify(put6?.body?.defect_types) === '["크랙"]', `⑥-2 PUT 에 defect_types 가 감: ${JSON.stringify(put6?.body?.defect_types)}`);
     say(!!put6 && put6.body.department_id === 3, `⑥ department_id 가 숫자로 감: ${JSON.stringify(put6?.body)}`);
     say(JSON.stringify(put6?.body?.project_uuids) === '["u1","u2"]', `⑥-3 PUT 에 project_uuids 가 감: ${JSON.stringify(put6?.body?.project_uuids)}`);
+    await unmount();
+
+    // ⑧ 모판에서 날짜 기준을 켠 채 들어오면 — 그 뒤에 바뀐 축을 짚어 준다
+    const HOT = { ...PAIR, changes: [
+      { id: 1, axis: 'automation', before: 'manual', after: 'pre', created_at: '2026-08-20T00:00:00', actor_name: '나', note: '스크립트' },
+      { id: 2, axis: 'scope', before: 'issue', after: 'basic', created_at: '2026-05-02T00:00:00', actor_name: '홍', note: '넓힘' },
+      { id: 3, axis: 'accuracy', before: null, after: 'trend', created_at: '2026-08-25T00:00:00', actor_name: '나', note: '시점 적기' },
+    ] };
+    await render(<PairPanel pair={HOT} pairId={101} axes={AXES} since="2026-08-01" onClose={() => {}} onSaved={() => {}} />);
+    await settle();
+    say(html().includes('2026-08-01') && html().includes('뒤로 바뀐 축'), '⑧ 창 위에 날짜 기준 줄');
+    say(html().includes('<strong>1개</strong>') || html().includes('1개'), '⑧ 바뀐 축의 수');
+    say(html().includes('그 뒤 바뀜'), '⑧ 바뀐 축에 「그 뒤 바뀜」 표');
+    const hotCount = (html().match(/그 뒤 바뀜/g) || []).length;
+    say(hotCount === 1, `⑧ 자동화만 짚는다(적용 범위는 그 전, 정확도는 「시점 적기」뿐): ${hotCount}`);
+    await unmount();
+    // 날짜 기준 없이 열면 아무 표시도 없다
+    await render(<PairPanel pair={HOT} pairId={101} axes={AXES} onClose={() => {}} onSaved={() => {}} />);
+    await settle();
+    say(!html().includes('그 뒤 바뀜') && !html().includes('뒤로 바뀐 축'), '⑧ 날짜 기준 없이 열면 표시가 없다');
     await unmount();
 
     // ⑦ initialId — 표의 연필로 연 것처럼

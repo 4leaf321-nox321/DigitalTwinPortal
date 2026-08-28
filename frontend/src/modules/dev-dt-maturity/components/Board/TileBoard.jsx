@@ -96,7 +96,8 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
   // 드릴다운한 묶음이 필터로 사라지면 전체로
   if (focus != null && root == null) setFocus(null);
 
-  const changedSet = useMemo(() => changedPairsSince(changes, axis?.key, baseDate(since)), [changes, axis, since]);
+  const sinceIso = baseDate(since);
+  const changedSet = useMemo(() => changedPairsSince(changes, axis?.key, sinceIso), [changes, axis, sinceIso]);
 
   if (!axis || !root) return null;
   const pairsCount = subjects.reduce((n, s) => n + (s.pairs || []).length, 0);
@@ -143,7 +144,7 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
               <Frame key={d.id} type="button" $c={c} $empty={d.idx == null} $hot={changedSet.has(d.id)}
                      style={{ left: `${n.x0}%`, top: `${n.y0}%`, width: `${w}%`, height: `${h}%` }}
                      title={`${d.name}${d.sub ? ` — ${d.sub}` : ''} · ${axis.label}: ${label}`}
-                     onClick={() => onOpenPair && onOpenPair(d.id)}>
+                     onClick={() => onOpenPair && onOpenPair(d.id, sinceIso)}>
                 {showName && <FName $dark={isDark(c)} $lines={lines}>{d.name}</FName>}
                 {showName && d.text && h > 5 && <FBadge $dark={isDark(c)}>{d.text}</FBadge>}
               </Frame>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { X, Check, History, AlertTriangle, Pencil, Trash2, Square } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
-import { colorFor, reachedDates, flagDefs, matrixLevel } from '../../utils/board';
+import { colorFor, reachedDates, flagDefs, matrixLevel, REACHED_NOTE } from '../../utils/board';
 import { AccuracyPreview, DEFAULT_RULE } from '../Settings/SettingsModal';
 
 // 연계 상세 — 사다리를 **그 안에서** 그린다. (PLAN 7-1)
@@ -65,7 +65,18 @@ const MDate = styled.button`
   &:disabled { text-decoration: none; cursor: default; }
 `;
 const AxisBlock = styled.div`
-  border: 1px solid #e2e8f0; border-radius: 0.6rem; padding: 0 0.875rem 0.75rem; background: white; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  border: 1px solid ${p => (p.$hot ? '#a3e635' : '#e2e8f0')}; border-radius: 0.6rem; padding: 0 0.875rem 0.75rem; background: white;
+  box-shadow: ${p => (p.$hot ? '0 0 0 2px #a3e635, 0 1px 2px rgba(15,23,42,0.05)' : '0 1px 2px rgba(15, 23, 42, 0.05)')};
+`;
+// 모판에서 날짜 기준을 켠 채 들어왔을 때 — 그 날 뒤에 바뀐 축을 모판과 같은 형광으로 짚는다(2026-08-29).
+const Hot = styled.span`
+  display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.5rem; border-radius: 999px;
+  background: #ecfccb; color: #3f6212; border: 1px solid #a3e635; font-size: 0.6875rem; font-weight: 700;
+`;
+const SinceBar = styled.div`
+  display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+  background: #f7fee7; border: 1px solid #d9f99d; color: #3f6212; font-size: 0.8125rem;
+  strong { color: #365314; }
 `;
 // 카드 머리 — 옅은 띠 + 아래 선. 헤더를 칠하지 않고도 카드의 시작이 보인다
 const AxisHead = styled.div`
@@ -120,7 +131,10 @@ const Button = styled.button`
 `;
 const Primary = styled(Button)`background: #1d4ed8; border-color: transparent; color: white;`;
 const HistoryList = styled.div`display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8125rem; color: #475569;`;
-const HistoryRow = styled.div`display: flex; gap: 0.5rem; flex-wrap: wrap;`;
+const HistoryRow = styled.div`
+  display: flex; gap: 0.5rem; flex-wrap: wrap;
+  ${p => (p.$hot ? 'background: #f7fee7; box-shadow: inset 3px 0 0 #a3e635; padding: 0.1rem 0.3rem; border-radius: 0.25rem;' : '')}
+`;
 const When = styled.span`color: #94a3b8; min-width: 6.5rem;`;
 
 // 시점은 **연-월**로만 보인다 — 날짜 단위는 필요 없다(2026-08-28).
@@ -288,7 +302,7 @@ const matrixSummary = (axis, flags, defects, names) => {
 };
 
 // 껍데기(읽기·모달)와 속(PairPanel)을 가른다 — 속은 props 만 받아 시험·SSR 로 그릴 수 있다.
-const PairModal = ({ pairId, axes, onClose, onChanged }) => {
+const PairModal = ({ pairId, axes, since = null, onClose, onChanged }) => {
   const [pair, setPair] = useState(null);
   const [error, setError] = useState(null);
 
@@ -307,14 +321,14 @@ const PairModal = ({ pairId, axes, onClose, onChanged }) => {
   return (
     <Backdrop onClick={onClose}>
       <Panel onClick={e => e.stopPropagation()}>
-        <PairPanel pair={pair} pairId={pairId} axes={axes} loadError={error}
+        <PairPanel pair={pair} pairId={pairId} axes={axes} loadError={error} since={since}
                    onClose={onClose} onSaved={(data) => { setPair(p => ({ ...p, ...data })); if (onChanged) onChanged(); }} />
       </Panel>
     </Backdrop>
   );
 };
 
-export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) => {
+export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose, onSaved }) => {
   const [editing, setEditing] = useState(null);   // { axis, rung?, value?, note, evidence }
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -372,6 +386,17 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
   };
 
   const histCount = (pair?.changes || []).filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').length;
+  // 날짜 기준(모판에서 들고 온 것) 뒤에 바뀐 축 — 「시점 적기」만 있는 줄은 바뀜으로 안 친다(모판과 같은 셈).
+  const hotAxes = useMemo(() => {
+    if (!since || !pair) return null;
+    const set = new Set();
+    (pair.changes || []).forEach(c => {
+      if (c.before == null && c.note === REACHED_NOTE) return;
+      if (String(c.created_at || '').slice(0, 10) > since) set.add(c.axis);
+    });
+    return set;
+  }, [pair, since]);
+  const isHot = (c) => since && !(c.before == null && c.note === REACHED_NOTE) && String(c.created_at || '').slice(0, 10) > since;
 
   const save = async () => {
     if (!editing?.note?.trim()) return;
@@ -441,7 +466,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     return axis?.rungs.find(r => r.key === k)?.label || k;
                   };
                   return (
-                    <HistoryRow key={c.id}>
+                    <HistoryRow key={c.id} $hot={isHot(c)}>
                       <When>{fmtDate(c.created_at)}</When>
                       <span><strong>{axis?.label || c.axis}</strong> {lab(c.before)} → {lab(c.after)}</span>
                       <span style={{ color: '#94a3b8' }}>{c.actor_name}</span>
@@ -460,15 +485,23 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
             <Notice><AlertTriangle size={14} /> <span>{pair.deny_reason} 조회는 그대로 하실 수 있습니다.</span></Notice>
           )}
 
+          {pair && hotAxes && (
+            <SinceBar>
+              <strong>{since}</strong> 뒤로 바뀐 축 <strong>{hotAxes.size}개</strong>
+              {hotAxes.size > 0 && <span>— {axes.filter(a => hotAxes.has(a.key)).map(a => a.label).join(' · ')}</span>}
+              {hotAxes.size === 0 && <span>— 이 연계는 그 뒤로 손대지 않았습니다.</span>}
+            </SinceBar>
+          )}
           {pair && axes.map(axis => {
             const a = pair.assessments?.[axis.key];
             const dates = reachedDates(pair.changes, axis);
             const curIdx = a?.rung_index ?? null;
             const isEditing = editing?.axis === axis.key;
             return (
-              <AxisBlock key={axis.key}>
+              <AxisBlock key={axis.key} $hot={!!hotAxes?.has(axis.key)}>
                 <AxisHead>
                   <AxisName>{axis.label}</AxisName>
+                  {hotAxes?.has(axis.key) && <Hot title={`${since} 뒤에 바뀐 축입니다`}>그 뒤 바뀜</Hot>}
                   <AxisQ>{axis.question}</AxisQ>
                   {a ? (
                     <Meta>

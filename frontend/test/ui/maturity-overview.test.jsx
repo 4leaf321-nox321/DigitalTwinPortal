@@ -70,6 +70,7 @@ export default async function run() {
     say(h6.includes('80%') || h6.includes('90%'), '⑥ 정확도 축이면 네모에 % 배지');
     await click(byText('button', '지난 분기 마감')); await settle();
     say(html().includes('그 뒤 바뀜'), '⑥ 모판의 날짜 기준 — 범례에 「그 뒤 바뀜」이 붙음');
+    // ⑥-2 그 상태로 액자를 누르면 — 날짜 기준이 창까지 따라간다
     await click(byText('button', '지난 분기 마감')); await settle();
     say(!html().includes('그 뒤 바뀜'), '⑥ 날짜 기준을 풀면 표시가 사라짐');
     await click(byText('button', '자동화')); await settle();
