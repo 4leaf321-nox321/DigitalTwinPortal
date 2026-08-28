@@ -6,6 +6,7 @@ import { colorFor, flagDefs } from '../../utils/board';
 // 「모판」(2026-08-29) — 미술관 벽의 액자 모음처럼, 화면 전체가 한 뭉치다(트리맵).
 // 바깥 액자 = 묶음(시뮬레이션은 담당 부서, 디지털 스레드는 스레드), 그 안의 액자 = 연계·구간 하나.
 // 고른 축의 칸이 액자의 색이 된다. 액자 크기는 균등 — 색만 정보고, 배치가 축을 바꿔도 안정적이다.
+// 묶음 이름표를 누르면 그 묶음만 벽 전체로 펼친다(드릴다운) — 「← 전체」로 돌아온다(2026-08-29).
 
 const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.6rem; flex: 1; min-height: 0;`;
 const Bar = styled.div`display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;`;
@@ -56,6 +57,7 @@ const W = 100, H = 100;   // 트리맵의 가상 크기(%) — 화면 비율은 
 const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sector = 'simulation' }) => {
   const isThread = sector === 'digital_thread';
   const [axisKey, setAxisKey] = useState(axes[0]?.key);
+  const [focus, setFocus] = useState(null);   // 드릴다운한 묶음 이름
   const axis = axes.find(a => a.key === axisKey) || axes[0];
   const total = axis ? axis.rungs.length : 1;
 
@@ -74,19 +76,27 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
         value: 1,
       });
     }));
-    const h = hierarchy({ children: [...groups.entries()].map(([name, children]) => ({ name, children })) })
+    const entries = [...groups.entries()].filter(([name]) => focus == null || name === focus);
+    if (focus != null && entries.length === 0) return null;          // 필터로 사라졌으면 밖에서 되돌린다
+    const h = hierarchy({ children: entries.map(([name, children]) => ({ name, children })) })
       .sum(d => d.value || 0)
       .sort((a, b) => (b.value || 0) - (a.value || 0));
     treemap().tile(treemapSquarify.ratio(1.35)).size([W, H]).paddingInner(0.35).paddingOuter(0.5).paddingTop(3.2)(h);
     return h;
-  }, [subjects, axis, allMode, isThread]);
+  }, [subjects, axis, allMode, isThread, focus]);
+  // 드릴다운한 묶음이 필터로 사라지면 전체로
+  if (focus != null && root == null) setFocus(null);
 
   if (!axis || !root) return null;
   const pairsCount = subjects.reduce((n, s) => n + (s.pairs || []).length, 0);
   return (
     <Wrap>
       <Bar>
-        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700 }}>색의 기준</span>
+        {focus != null && (
+          <AxisBtn type="button" onClick={() => setFocus(null)} title="벽 전체로 돌아간다" style={{ fontWeight: 700 }}>← 전체</AxisBtn>
+        )}
+        {focus != null && <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#1e293b' }}>{focus}</span>}
+        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginLeft: focus != null ? '0.5rem' : 0 }}>색의 기준</span>
         {axes.map(a => <AxisBtn key={a.key} type="button" $on={a.key === axis.key} aria-pressed={a.key === axis.key} onClick={() => setAxisKey(a.key)}>{a.label}</AxisBtn>)}
         <Legend aria-label="범례">
           {axis.rungs.map((r, i) => (axis.hide_empty && i === 0 ? null : <span key={r.key}><Sw $c={colorFor(i, total)} />{r.label}</span>))}
@@ -98,8 +108,12 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
         <Wall aria-label={`모판 — ${axis.label}`}>
           {(root.children || []).map(g => (
             <GroupBox key={g.data.name} style={{ left: `${g.x0}%`, top: `${g.y0}%`, width: `${g.x1 - g.x0}%`, height: `${g.y1 - g.y0}%` }}
-                      title={`${g.data.name} — ${g.children?.length || 0}개`}>
-              <GroupLabel>{g.data.name} <span style={{ opacity: 0.7, fontWeight: 400 }}>{g.children?.length || 0}</span></GroupLabel>
+                      title={focus == null ? `${g.data.name} — ${g.children?.length || 0}개 · 누르면 이 묶음만 펼칩니다` : `${g.data.name} — ${g.children?.length || 0}개`}>
+              <GroupLabel as="button" type="button" aria-label={`${g.data.name} 펼치기`}
+                          onClick={() => setFocus(f => (f == null ? g.data.name : null))}
+                          style={{ cursor: 'pointer', border: 'none', width: '100%', textAlign: 'left', fontFamily: 'inherit' }}>
+                {g.data.name} <span style={{ opacity: 0.7, fontWeight: 400 }}>{g.children?.length || 0}</span>{focus == null && <span style={{ float: 'right', opacity: 0.7 }}>⤢</span>}
+              </GroupLabel>
             </GroupBox>
           ))}
           {root.leaves().map(n => {

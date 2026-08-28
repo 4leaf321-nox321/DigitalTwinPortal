@@ -61,6 +61,10 @@ export default async function run() {
     say(h6.includes('80%') || h6.includes('90%'), '⑥ 정확도 축이면 네모에 % 배지');
     await click(byText('button', '자동화')); await settle();
     say(html().includes('2/2') || html().includes('1/2'), '⑥ 축을 자동화로 바꾸면 배지가 켠 수로');
+    await click(document.querySelector('button[aria-label="부서 미지정 펼치기"]')); await settle();
+    say(!!byText('button', '← 전체') && html().includes('부서 미지정'), '⑥ 묶음 이름표를 누르면 드릴다운, 「← 전체」가 생김');
+    await click(byText('button', '← 전체')); await settle();
+    say(!byText('button', '← 전체'), '⑥ 「← 전체」로 벽 전체로 돌아옴');
     await click(byText('button', '상세')); await settle();
     say(html().includes('낙하 시험') && html().includes('진동 시험') && byText('td', '낙하 시험')?.getAttribute('rowspan') === '2', '③ 「상세」— 시험 항목은 셀을 합치고(rowspan 2) 한 줄에 시뮬레이션 하나');
     const h3 = html();
