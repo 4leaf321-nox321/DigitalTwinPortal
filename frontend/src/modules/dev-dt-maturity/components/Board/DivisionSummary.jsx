@@ -6,14 +6,16 @@ import { colorFor, divisionSummary, flagDefs } from '../../utils/board';
 // 큰 숫자(대표 수치) + 분포 + **근거**: 어느 연계가 앞서고(기여) 어느 연계가 처지는지(취약)를 한눈에.
 // 요약 표(OverviewGrid)의 셈과 같은 divisionSummary 를 쓰고, 연계 목록만 여기서 더 고른다.
 
+// 사업부 탭을 눌러 들어오는 화면이라 **한 사업부가 화면을 다 차지한다** — 3 × 2 격자가 높이를 채운다(2026-08-28).
 const Grid = styled.div`
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 0.75rem; flex: 1; min-height: 0; overflow: auto; align-content: start;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 0.75rem; flex: 1; min-height: 0; overflow: auto;
+  @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
 const Panel = styled.section`
   display: flex; flex-direction: column; gap: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.6rem; background: white; padding: 0.8rem 0.9rem; min-height: 0;
 `;
-const Head = styled.div`display: flex; align-items: baseline; gap: 0.5rem; h4 { margin: 0; font-size: 0.9375rem; color: #1e293b; } span { font-size: 0.75rem; color: #94a3b8; }`;
-const Big = styled.div`font-size: 2.2rem; font-weight: 700; color: #1e293b; line-height: 1; small { font-size: 0.9rem; font-weight: 500; color: #64748b; margin-left: 0.3rem; }`;
+const Head = styled.div`display: flex; align-items: baseline; gap: 0.5rem; h4 { margin: 0; font-size: 1.05rem; color: #1e293b; } span { font-size: 0.75rem; color: #94a3b8; }`;
+const Big = styled.div`font-size: 2.6rem; font-weight: 700; color: #1e293b; line-height: 1; small { font-size: 0.9rem; font-weight: 500; color: #64748b; margin-left: 0.3rem; }`;
 const Line = styled.div`font-size: 0.8125rem; color: #64748b;`;
 const Bar = styled.div`display: flex; height: 0.8rem; border-radius: 999px; overflow: hidden; background: #f1f5f9;`;
 const Seg = styled.div`width: ${p => p.$pct}%; background: ${p => p.$color};`;
@@ -25,12 +27,12 @@ const Cellet = styled.div`
 `;
 const Two = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; flex: 1; min-height: 0;`;
 const List = styled.div`
-  display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.75rem; min-height: 0;
+  display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8125rem; min-height: 0; overflow: auto;
   h5 { margin: 0 0 0.15rem; font-size: 0.6875rem; font-weight: 700; color: ${p => (p.$weak ? '#b45309' : '#166534')}; }
 `;
 const Item = styled.button`
   display: flex; gap: 0.4rem; align-items: center; text-align: left; border: none; background: ${p => (p.$weak ? '#fffbeb' : '#f0fdf4')}; border-radius: 0.3rem;
-  padding: 0.25rem 0.45rem; font-family: inherit; font-size: 0.75rem; color: #1e293b; cursor: pointer; min-width: 0;
+  padding: 0.3rem 0.5rem; font-family: inherit; font-size: 0.8125rem; color: #1e293b; cursor: pointer; min-width: 0;
   &:hover { outline: 2px solid ${p => (p.$weak ? '#f59e0b' : '#22c55e')}; }
   b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
   em { font-style: normal; color: #64748b; white-space: nowrap; }
@@ -97,8 +99,8 @@ const DivisionSummary = ({ board, subjects, axes, onOpenPair }) => {
     <Grid>
       {axes.map(axis => {
         const scored = pairs.map(p => ({ p, ...scoreOf(axis, p) }));
-        const top = scored.filter(x => x.score >= 0).sort((a, b) => b.score - a.score).slice(0, 4);
-        const weak = scored.filter(x => x.score < 0 || x.stale).concat(scored.filter(x => x.score >= 0 && !x.stale).sort((a, b) => a.score - b.score)).slice(0, 4);
+        const top = scored.filter(x => x.score >= 0).sort((a, b) => b.score - a.score).slice(0, 6);
+        const weak = scored.filter(x => x.score < 0 || x.stale).concat(scored.filter(x => x.score >= 0 && !x.stale).sort((a, b) => a.score - b.score)).slice(0, 6);
         const key = (x) => `${x.p.subject_name} × ${x.p.agent?.name || ''}`;
         return (
           <Panel key={axis.key} aria-label={axis.label}>

@@ -87,6 +87,7 @@ const Badge = styled.span`
   display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; white-space: nowrap;
   background: ${p => p.$color}; color: ${p => (p.$dark ? 'white' : '#1e293b')};
 `;
+const Ghost = styled.span`display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.6875rem; white-space: nowrap; color: #cbd5e1; border: 1px dashed #e2e8f0;`;
 
 const isDark = (c) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(c);
 
@@ -115,6 +116,16 @@ const AxisCell = ({ a, axis, dense, onClick }) => {
         {on.length === 0 && extra.every(e => !e.on) && <Muted>{axis.rungs[0].label}</Muted>}
         {on.map(r => <Badge key={r.key} $color={color} $dark={isDark(color)}>{r.short || r.label}</Badge>)}
         {extra.filter(e => e.on).map(e => <Badge key={e.key} $color={color} $dark={isDark(color)}>{e.label}</Badge>)}
+      </Badges>
+    );
+  }
+  if (!dense && idx != null && axis.kind === 'rung') {
+    // 택1 축은 선택지 전부를 늘어놓고 고른 칸만 채운다 — 어디쯤인지가 보인다(2026-08-28)
+    return (
+      <Badges $color={color} $stale={a?.stale} title={title} onClick={onClick} role="button" tabIndex={0}>
+        {axis.rungs.map((r, i) => (i === idx
+          ? <Badge key={r.key} $color={color} $dark={isDark(color)}>{r.label}</Badge>
+          : <Ghost key={r.key}>{r.label}</Ghost>))}
       </Badges>
     );
   }
@@ -278,7 +289,8 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
             <thead>
               <tr>
                 <Th style={{ width: '18%' }}>시험 항목</Th>
-                <Th style={{ width: '16%' }}>시뮬레이션</Th>
+                <Th style={{ width: '14%' }}>시뮬레이션</Th>
+                <Th style={{ width: '9%' }}>담당 그룹</Th>
                 {axes.map(a => <Th key={a.key}>{a.label}</Th>)}
                 <Th>미평가</Th>
               </tr>
@@ -295,7 +307,7 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
                   </SubjectTd>
                 );
                 if (s.pairs.length === 0) {
-                  return <tr key={s.id}>{cell}<Td colSpan={axes.length + 2}><Muted>아직 이은 시뮬레이션이 없습니다.</Muted></Td></tr>;
+                  return <tr key={s.id}>{cell}<Td colSpan={axes.length + 3}><Muted>아직 이은 시뮬레이션이 없습니다.</Muted></Td></tr>;
                 }
                 return s.pairs.map((p, i) => (
                   <PairRow key={p.id}>
@@ -304,6 +316,7 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
                       <SimName onClick={() => onOpenPair(p.id)} title="연계 상세 열기">{p.agent?.name}</SimName>
                       {(p.agent?.tools || []).length > 0 && <div><Sub>{p.agent.tools.join(', ')}</Sub></div>}
                     </Td>
+                    <Td>{p.agent?.department_name || <Muted>—</Muted>}</Td>
                     {axes.map(a => (
                       <Td key={a.key}>
                         <AxisCell a={p.assessments[a.key]} axis={a} dense={false} onClick={() => onOpenPair(p.id)} />
