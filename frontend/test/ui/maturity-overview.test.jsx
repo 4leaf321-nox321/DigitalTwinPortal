@@ -56,6 +56,9 @@ export default async function run() {
     say(picked === 18, '③ 사업부 머리를 누르면 그 사업부(18)로');
     await click(byText('button', '상세')); await settle();
     say(html().includes('낙하 시험') && html().includes('진동 시험'), '③ 「상세」로 바꾸면 시험 표');
+    await click(byText('button', '전부 펼침')); await settle();
+    const h3 = html();
+    say(h3.includes('>전처리<') && h3.includes('>실행<') && h3.includes('시험 2/2') && h3.includes('>형상 재현<'), '③ 상세의 묶음·표 축은 켠 것들이 배지로 늘어섬(전처리·실행 · 형상 재현 · 시험 2/2)');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

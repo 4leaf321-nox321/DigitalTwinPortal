@@ -73,6 +73,16 @@ const Cell = styled.button`
   color: ${p => (p.$dark ? 'white' : '#1e293b')}; cursor: pointer; text-align: center;
 `;
 const Muted = styled.span`color: #94a3b8;`;
+// 상세의 묶음·표 축 — 켠 것들의 배지 묶음. 왼쪽 띠가 서열 색, 배지는 그 색으로 채운다.
+const Badges = styled.div`
+  display: inline-flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.15rem 0.3rem 0.15rem 0.45rem; border-radius: 0.3rem; cursor: pointer; min-width: 4.5rem;
+  border-left: 4px solid ${p => p.$color}; border-top: 2px solid ${p => (p.$stale ? '#f59e0b' : 'transparent')}; border-bottom: 2px solid ${p => (p.$stale ? '#f59e0b' : 'transparent')};
+  &:hover { background: #f8fafc; }
+`;
+const Badge = styled.span`
+  display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; white-space: nowrap;
+  background: ${p => p.$color}; color: ${p => (p.$dark ? 'white' : '#1e293b')};
+`;
 
 const isDark = (c) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(c);
 
@@ -88,10 +98,24 @@ const AxisCell = ({ a, axis, dense, onClick }) => {
     ? axis.rungs.filter(r => a.flags.includes(r.key)).map(r => r.label).join(' · ')
     : axis.kind === 'matrix' && a?.summary
       ? `${label} — 시험 ${a.summary.test}/${a.summary.total} · 시장 ${a.summary.market}/${a.summary.total}` : null;
+  const title = `${axis.label}: ${flagsText || label}${a?.stale ? ' · 낡음' : ''}${a?.note ? ` — ${a.note}` : ''}`;
+  // 「상세」에서 묶음·표 축은 켠 것들을 **배지로 늘어놓는다** — 「3/5」로는 무엇을 켰는지 안 보인다(2026-08-28).
+  if (!dense && idx != null && (axis.kind === 'set' || axis.kind === 'matrix')) {
+    const defs = axis.kind === 'matrix' ? (axis.base || []) : axis.rungs.slice(1);
+    const on = defs.filter(r => (a.flags || []).includes(r.key));
+    const extra = axis.kind === 'matrix' && a.summary
+      ? [{ key: '_t', label: `시험 ${a.summary.test}/${a.summary.total}`, on: a.summary.test > 0 }, { key: '_m', label: `시장 ${a.summary.market}/${a.summary.total}`, on: a.summary.market > 0 }]
+      : [];
+    return (
+      <Badges $color={color} $stale={a?.stale} title={title} onClick={onClick} role="button" tabIndex={0}>
+        {on.length === 0 && extra.every(e => !e.on) && <Muted>{axis.rungs[0].label}</Muted>}
+        {on.map(r => <Badge key={r.key} $color={color} $dark={isDark(color)}>{r.short || r.label}</Badge>)}
+        {extra.filter(e => e.on).map(e => <Badge key={e.key} $color={color} $dark={isDark(color)}>{e.label}</Badge>)}
+      </Badges>
+    );
+  }
   return (
-    <Cell $dense={dense} $color={color} $dark={isDark(color)} $stale={a?.stale}
-          title={`${axis.label}: ${flagsText || label}${a?.stale ? ' · 낡음' : ''}${a?.note ? ` — ${a.note}` : ''}`}
-          onClick={onClick}>
+    <Cell $dense={dense} $color={color} $dark={isDark(color)} $stale={a?.stale} title={title} onClick={onClick}>
       {dense ? '' : (axis.kind === 'value' && a?.value != null ? `${a.value}%` : label)}
     </Cell>
   );
