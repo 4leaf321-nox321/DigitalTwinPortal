@@ -482,7 +482,7 @@ def board(division_id, sector):
     }
 
 
-def recent_changes(division_id, sector, days=365, limit=500):
+def recent_changes(division_id, sector, days=365, limit=5000):   # 그래프가 24개월치를 되감는다 — 잘리면 선이 틀린다(2026-08-28)
     """사업부의 최근 이력 — 타임라인(「올해 어느 칸이 언제 올라갔나」)의 재료.
 
     연계의 이름(시험 × 시뮬레이션)을 같이 실어 화면이 다시 찾지 않게 한다.

@@ -170,3 +170,37 @@ test('divisionSummary — 값은 평균, 택1은 「이상 %」, 묶음은 채�
   assert.equal(s.axes.modeling.testRate, 33);            // 유형 칸 3개 중 1
   assert.deepEqual(s.axes.modeling.adoption, { geometry: 100, performance: 0 });
 });
+
+// ── monthlySeries: 이력을 달마다 되감는다 ──
+import { monthlySeries, monthKeys } from './board.js';
+
+test('monthKeys — 최근 n 달, 오래된 달부터', () => {
+  assert.deepEqual(monthKeys(3, new Date(2026, 7, 15)), ['2026-06', '2026-07', '2026-08']);
+  assert.deepEqual(monthKeys(2, new Date(2026, 0, 3)), ['2025-12', '2026-01']);
+});
+
+test('monthlySeries — 그 달 말의 상태로 평균·이상 %·단계 수·재현률을 낸다', () => {
+  const axes = [
+    { key: 'accuracy', kind: 'value', rungs: [{ key: 'a' }, { key: 'b' }, { key: 'c' }] },
+    { key: 'scope', kind: 'rung', rungs: [{ key: 'issue' }, { key: 'basic' }, { key: 'derived_some' }, { key: 'all' }] },
+    SET_AXIS, MATRIX_AXIS,
+  ];
+  const subjects = [{ pairs: [{ id: 1, agent: { defect_types: ['a', 'b'] } }, { id: 2, agent: { defect_types: ['c'] } }] }];
+  const changes = [
+    { id: 1, pair_id: 1, axis: 'accuracy', before: null, after: '70', created_at: '2026-05-10T00:00:00' },
+    { id: 2, pair_id: 1, axis: 'accuracy', before: '70', after: '90', created_at: '2026-07-02T00:00:00' },
+    { id: 3, pair_id: 2, axis: 'accuracy', before: null, after: '50', created_at: '2026-07-20T00:00:00' },
+    { id: 4, pair_id: 1, axis: 'scope', before: null, after: 'basic', created_at: '2026-05-01T00:00:00' },
+    { id: 5, pair_id: 1, axis: 'scope', before: 'basic', after: 'all', created_at: '2026-06-15T00:00:00' },
+    { id: 6, pair_id: 1, axis: 'scope', before: null, after: 'issue', note: REACHED_NOTE, created_at: '2024-01-01T00:00:00' },   // 시점 적기 — 뺀다
+    { id: 7, pair_id: 1, axis: 'automation', before: null, after: 'pre,run', created_at: '2026-06-01T00:00:00' },
+    { id: 8, pair_id: 2, axis: 'automation', before: null, after: 'manual', created_at: '2026-07-01T00:00:00' },
+    { id: 9, pair_id: 1, axis: 'modeling', before: null, after: 'geometry|t1/m0', created_at: '2026-07-05T00:00:00' },
+  ];
+  const rows = monthlySeries(subjects, changes, axes, ['2026-04', '2026-05', '2026-06', '2026-07']);
+  assert.deepEqual(rows.map(r => r.accuracy.value), [null, 70, 70, 70]);        // 7월: (90+50)/2
+  assert.deepEqual(rows.map(r => r.accuracy.changes), [0, 1, 0, 2]);
+  assert.deepEqual(rows.map(r => r.scope.value), [null, 0, 100, 100]);          // derived_some 이상 %
+  assert.deepEqual(rows.map(r => r.automation.value), [null, null, 2, 1]);      // 7월: (2+0)/2
+  assert.deepEqual(rows.map(r => r.modeling.value), [null, null, null, 50]);    // 유형 칸 2개 중 1
+});

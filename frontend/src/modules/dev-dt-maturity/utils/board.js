@@ -208,3 +208,72 @@ export const divisionSummary = (board, axes) => {
   });
   return out;
 };
+
+// ── 「변화」 그래프 — 이력을 달마다 되감아 그 달 말의 상태를 복원한다(2026-08-28) ──────────
+
+/** 최근 n 달의 'YYYY-MM' 목록(오래된 달부터). now 를 주면 시험에서 고정할 수 있다. */
+export const monthKeys = (n = 12, now = new Date()) => {
+  const out = [];
+  for (let i = n - 1; i >= 0; i -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+};
+
+/** 이력 한 줄의 after 를 그 축의 상태로 — value 는 숫자, set/matrix 는 켠 목록(+시험·시장 수), rung 은 칸 index. */
+const stateOf = (axis, after) => {
+  if (after == null || after === '') return null;
+  const str = String(after);
+  if (axis.kind === 'value') { const v = Number(str); return Number.isNaN(v) ? null : { value: v }; }
+  const [head, tail] = str.split('|');
+  const keys = flagDefs(axis).map(r => r.key);
+  if (axis.kind === 'set' || axis.kind === 'matrix') {
+    const flags = head.split(',').filter(k => keys.includes(k));
+    const mm = /t(\d+)\/m(\d+)/.exec(tail || '');
+    return { flags, test: mm ? Number(mm[1]) : 0, market: mm ? Number(mm[2]) : 0 };
+  }
+  const idx = axis.rungs.findIndex(r => r.key === head);
+  return idx < 0 ? null : { idx };
+};
+
+/**
+ * 달마다 축별 대표 수치 — [{month, <axis.key>: {value, changes, n}}, …]. 요약(divisionSummary)과 같은 셈:
+ *   value 평균 % · rung 「끝에서 둘째 칸」 이상 % · set 적용 단계 수 평균 · matrix 시험 불량 재현 %(유형 칸 기준)
+ * 연계는 그 달까지 이력이 하나라도 있어야 분모에 든다(생기기 전엔 셈에 없다). 「시점 적기」 이력은 뺀다.
+ */
+export const monthlySeries = (subjects, changes, axes, months) => {
+  const pairs = (subjects || []).flatMap(s => s.pairs || []);
+  const defectTotal = Object.fromEntries(pairs.map(p => [p.id, (p.agent?.defect_types || []).length]));
+  const byPairAxis = {};
+  (changes || []).filter(c => !(c.before == null && c.note === REACHED_NOTE)).forEach(c => {
+    const k = `${c.pair_id}|${c.axis}`;
+    (byPairAxis[k] = byPairAxis[k] || []).push(c);
+  });
+  Object.values(byPairAxis).forEach(list => list.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id)));
+  return months.map(month => {
+    const end = `${month}-99`;                       // 그 달 말까지(문자열 비교)
+    const row = { month };
+    axes.forEach(axis => {
+      let n = 0, changed = 0;
+      const states = [];
+      pairs.forEach(p => {
+        const list = byPairAxis[`${p.id}|${axis.key}`] || [];
+        const upto = list.filter(c => c.created_at.slice(0, 10) <= end);
+        changed += upto.filter(c => c.created_at.slice(0, 7) === month).length;
+        if (!upto.length) return;
+        const st = stateOf(axis, upto[upto.length - 1].after);
+        if (st) { states.push({ st, total: defectTotal[p.id] || 0 }); n += 1; }
+      });
+      let value = null;
+      if (n) {
+        if (axis.kind === 'value') value = Math.round((states.reduce((a, x) => a + x.st.value, 0) / n) * 10) / 10;
+        else if (axis.kind === 'rung') { const k = Math.max(0, axis.rungs.length - 2); value = Math.round((states.filter(x => x.st.idx >= k).length * 100) / n); }
+        else if (axis.kind === 'set') value = Math.round((states.reduce((a, x) => a + x.st.flags.length, 0) / n) * 10) / 10;
+        else if (axis.kind === 'matrix') { const cells = states.reduce((a, x) => a + x.total, 0); value = cells ? Math.round((states.reduce((a, x) => a + x.st.test, 0) * 100) / cells) : null; }
+      }
+      row[axis.key] = { value, changes: changed, n };
+    });
+    return row;
+  });
+};

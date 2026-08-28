@@ -72,6 +72,11 @@ export default async function run() {
     say(h4.includes('낙하 시험 × 해석') && h4.includes('미평가'), '④ 취약 연계에 미평가 연계가 오름');
     await click(byText('b', '낙하 시험 × 해석').closest('button'));
     say(opened != null, '④ 연계를 누르면 상세가 열림');
+    // ⑤ 「변화」 — 축마다 그래프 하나, 표 없음
+    await click(byText('button', '변화')); await settle();
+    const h5 = html();
+    say(['정확도', '자동화', '모델링 수준', '적용 범위'].every(l => !!document.querySelector(`section[aria-label="${l}"]`)) && h5.includes('12개월') && h5.includes('24개월'), '⑤ 변화는 축마다 그래프 판 + 기간 12/24개월');
+    say(!h5.includes('<table'), '⑤ 표는 없다');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

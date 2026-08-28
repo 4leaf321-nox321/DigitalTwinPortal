@@ -4,8 +4,9 @@ import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import OverviewGrid from './OverviewGrid';
 import DivisionSummary from './DivisionSummary';
+import ChartsView from './ChartsView';
 import {
-  colorFor, distribution, applyFilters, accuracyLabel, changesByMonth,
+  colorFor, distribution, applyFilters, accuracyLabel,
 } from '../../utils/board';
 
 // 사업부 판 — 모드 셋: 요약(히트맵) · 상세(접힌 표) · 변화(타임라인). (PLAN 7-2)
@@ -154,6 +155,7 @@ const BestCell = ({ idx, axis, dense }) => {
 const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey, review }) => {
   const [board, setBoard] = useState(null);
   const [changes, setChanges] = useState([]);
+  const [changeSets, setChangeSets] = useState({});   // 전체일 때 사업부별 이력 — 그래프가 사업부마다 선을 그린다
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -165,7 +167,7 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
           // 전체 — 사업부마다의 판을 묶는다. 셈(문턱·재평가 필요)은 사업부별로 이미 돼 있다.
           const b = await maturityApi.getBoard('all');
           const boards = b.data.boards || [];
-          const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id).catch(() => ({ data: [] }))));
+          const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id, 'simulation', 730).catch(() => ({ data: [] }))));
           if (!alive) return;
           setBoard({
             ...b.data,
@@ -173,15 +175,17 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
             stale_days: boards[0]?.stale_days ?? 365,
             deny_reason: null,
           });
-          setChanges(cs.flatMap(c => c.data || [])); setError(null);
+          setChanges(cs.flatMap(c => c.data || []));
+          setChangeSets(Object.fromEntries(boards.map((x, i) => [x.division_id, cs[i].data || []])));
+          setError(null);
           return;
         }
         const [b, c] = await Promise.all([
           maturityApi.getBoard(divisionId),
-          maturityApi.getChanges(divisionId),
+          maturityApi.getChanges(divisionId, 'simulation', 730),
         ]);
         if (!alive) return;
-        setBoard(b.data); setChanges(c.data || []); setError(null);
+        setBoard(b.data); setChanges(c.data || []); setChangeSets({}); setError(null);
       } catch (e) {
         if (alive) setError(e.message);
       }
@@ -192,12 +196,12 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
   if (error) return <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>;
   if (!board) return <Empty>불러오는 중…</Empty>;
   return (
-    <BoardBody board={board} changes={changes} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review}
+    <BoardBody board={board} changes={changes} changeSets={changeSets} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review}
                onFiltersChange={onFiltersChange} onOpenPair={onOpenPair} />
   );
 };
 
-export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review }) => {
+export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review }) => {
   const [mode, setMode] = useState(board?.boards ? 'scan' : 'read');       // scan | read | progress — 전체는 요약부터
   const subjects = useMemo(() => applyFilters(board?.subjects || [], filters), [board, filters]);
   const dist = useMemo(() => distribution(subjects, axes), [subjects, axes]);
@@ -206,7 +210,6 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
     (board?.subjects || []).forEach(x => (x.product_families || []).forEach(f => s.add(f)));
     return [...s].sort();
   }, [board]);
-  const byMonth = useMemo(() => changesByMonth(changes), [changes]);
 
   if (!board.subjects.length) {
     return (
@@ -330,61 +333,12 @@ export const BoardBody = ({ board, changes, axes, filters, onFiltersChange, onOp
           </Table>
         </TableWrap>
       ) : (
-        <ProgressView subjects={subjects} axes={axes} byMonth={byMonth} onOpenPair={onOpenPair} />
+        // 「변화」 — 축마다 선 그래프. 「전체」면 사업부마다 선 하나.
+        <ChartsView axes={axes} series={board.boards
+          ? board.boards.map(b => ({ name: b.division_name, subjects: applyFilters(b.subjects || [], filters), changes: changeSets[b.division_id] || [] }))
+          : [{ name: '이 사업부', subjects, changes }]} />
       )}
     </Wrap>
-  );
-};
-
-// ── 진전 — 달마다 「어느 축이 올라갔나」 점 ─────────────────────────────────
-const months = () => {
-  const out = [];
-  const d = new Date();
-  for (let i = 11; i >= 0; i -= 1) {
-    const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
-    out.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`);
-  }
-  return out;
-};
-const Dot = styled.button`
-  width: 0.9rem; height: 0.9rem; border-radius: 50%; border: none; cursor: pointer; margin: 0 1px;
-  background: ${p => p.$color};
-`;
-
-const ProgressView = ({ subjects, axes, byMonth, onOpenPair }) => {
-  const cols = months();
-  const rows = subjects.flatMap(s => s.pairs.map(p => ({ s, p })));
-  const any = rows.some(({ p }) => byMonth[p.id]);
-  if (!any) return <Empty>지난 12개월에 바뀐 칸이 없습니다. 연계 상세에서 칸을 옮기면 여기에 찍힙니다.</Empty>;
-  return (
-    <TableWrap>
-      <Table>
-        <thead>
-          <tr><Th>시험 × 시뮬레이션</Th>{cols.map(m => <Th key={m}>{m.slice(2)}</Th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.filter(({ p }) => byMonth[p.id]).map(({ s, p }) => (
-            <tr key={p.id}>
-              <Td>{s.division_name && <DivTag>{s.division_name}</DivTag>}<Name>{s.name}</Name> <Sub>× {p.agent?.name}</Sub></Td>
-              {cols.map(m => (
-                <Td key={m}>
-                  {(byMonth[p.id]?.[m] || []).map(c => {
-                    const axis = axes.find(a => a.key === c.axis);
-                    const idx = axis ? axis.rungs.findIndex(r => r.key === c.after) : -1;
-                    const label = axis?.rungs[idx]?.label || c.after;
-                    return (
-                      <Dot key={c.id} $color={colorFor(idx < 0 ? null : idx, axis?.rungs.length || 1)}
-                           title={`${axis?.label || c.axis}: ${label} (${(c.created_at || '').slice(0, 10)}, ${c.actor_name || ''})`}
-                           onClick={() => onOpenPair(p.id)} />
-                    );
-                  })}
-                </Td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </TableWrap>
   );
 };
 
