@@ -519,7 +519,7 @@ def test_불량_유형_표의_칸은_근거_없이_바로_켜고_끈다(client, 
     def cell(name, col, month, expect=200):
         res = client.put(f'{BASE}/pairs/{p["id"]}/defects/modeling', json={'name': name, 'col': col, 'month': month}, headers=auth(mx_user))
         assert res.status_code == expect, res.get_json()
-        return res.get_json()['data']
+        return res.get_json().get('data')
 
     d = cell('크랙', 'test', '2025-03')                                   # 평가 줄이 없어도 「없음」 바탕으로 생긴다
     m = d['assessments']['modeling']
