@@ -190,17 +190,6 @@ AXES = {
             ],
         },
         {
-            'key': 'scope', 'label': '적용 범위', 'kind': 'rung',
-            'question': '어느 개발 과제에서 흐르는가',
-            'evidence': ['product_families'], 'evidence_label': '대상 제품군',
-            'rungs': [
-                {'key': 'issue', 'label': '이슈 대응', 'description': '문제가 난 뒤, 그 과제에만'},
-                {'key': 'basic', 'label': '대표(Basic) 모델', 'description': '제품군의 대표 모델 개발에서'},
-                {'key': 'derived_some', 'label': '신규 개발 전 모델', 'description': '신규 개발 과제 전부에서'},
-                {'key': 'all', 'label': '파생·지역 변형까지', 'description': '파생·지역 변형 과제까지 전부에서'},
-            ],
-        },
-        {
             'key': 'stability', 'label': '운영 안정성', 'kind': 'value', 'unit': '%',
             'question': '수동 개입 없이 흐른 비율',
             'evidence': ['attachment'], 'evidence_label': '근거 링크',

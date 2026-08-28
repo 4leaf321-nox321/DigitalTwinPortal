@@ -197,7 +197,7 @@ def test_가져오기_틀은_필수_열_셋이다():
 
 def test_디지털_스레드_축과_사전_어휘():
     axes = {a['key']: a for a in D.AXES['digital_thread']}
-    assert list(axes) == ['link_mode', 'traceability', 'consistency', 'scope', 'stability']
+    assert list(axes) == ['link_mode', 'traceability', 'consistency', 'stability']      # 적용 범위는 뺐다(2026-08-28)
     assert D.rung_keys(axes['link_mode']) == ['verbal', 'manual_file', 'auto_file', 'api', 'sync', 'closed_loop']
     assert axes['traceability']['kind'] == 'set' and D.set_flag_keys(axes['traceability']) == ['identity', 'version', 'provenance', 'up_link', 'down_link']
     assert axes['stability']['kind'] == 'value' and D.rung_for_value(92, axes['stability']['thresholds']) == 'auto'
