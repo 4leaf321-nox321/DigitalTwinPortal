@@ -28,7 +28,7 @@ const GroupLabel = styled.div`
 `;
 const Frame = styled.button`
   position: absolute; font-family: inherit; cursor: pointer; padding: 0; overflow: hidden; text-align: left; border-radius: 2px;
-  background: ${p => p.$c}; border: ${p => (p.$empty ? '1.5px dashed #64748b' : '1px solid rgba(15, 23, 42, 0.55)')};
+  background: ${p => p.$c}; border: ${p => (p.$empty ? '1.5px dashed #94a3b8' : '1px solid rgba(15, 23, 42, 0.55)')};
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);   /* 재평가 필요 표시는 모판엔 없다(2026-08-29) — 색이 곧 정보 */
   &:hover { outline: 2px solid white; z-index: 2; }
 `;
@@ -39,7 +39,7 @@ const FName = styled.span`
 const FBadge = styled.span`position: absolute; right: 0.25rem; bottom: 0.1rem; font-size: 0.62rem; font-weight: 700; color: ${p => (p.$dark ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.75)')};`;
 const Muted = styled.div`font-size: 0.8125rem; color: #94a3b8;`;
 
-const EMPTY = '#334155';
+const EMPTY = '#f8fafc';   // 미평가 = 빈 캔버스(흰색) — 범례의 점선 흰 칸과 같다(2026-08-29)
 // 어두운 벽 전용 팔레트 — 판의 옅은 첫 칸(#dbeafe)은 벽 위에서 흰색으로 읽혀 미평가와 헷갈린다(2026-08-29).
 const WALL_COLORS = ['#93c5fd', '#60a5fa', '#3b82f6', '#1d4ed8', '#172e78'];
 const wallColor = (idx, count) => {
@@ -47,7 +47,7 @@ const wallColor = (idx, count) => {
   const slot = Math.round((idx / Math.max(1, count - 1)) * (WALL_COLORS.length - 1));
   return WALL_COLORS[Math.min(WALL_COLORS.length - 1, Math.max(0, slot))];
 };
-const isDark = (c) => ['#3b82f6', '#1d4ed8', '#172e78', EMPTY].includes(c);
+const isDark = (c) => ['#3b82f6', '#1d4ed8', '#172e78'].includes(c);
 
 /** 고른 축에서 이 연계의 칸 index 와 짧은 표기. 미평가는 null. */
 export const tileValue = (axis, p) => {
