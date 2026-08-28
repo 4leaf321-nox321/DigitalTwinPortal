@@ -2,7 +2,7 @@ import React from 'react';
 import styled from 'styled-components';
 import { colorFor, divisionSummary } from '../../utils/board';
 
-// 전체 「요약」 — 사업부 × 축 표. 한 화면에 사업부 여섯이 들어가야 한다(2026-08-28).
+// 전체 「요약」 — 축 × 사업부 표(가로가 사업부). 한 화면에 사업부 여섯이 들어가야 하고, **세로로 화면을 채운다**(2026-08-28).
 //
 // 축마다 대표 수치가 다르다 — 축이 다 순서형이 아니라서 「n단계 이상 %」 하나로 못 잰다.
 //   정확도(값)     평균 % · 미검증 수                  + 세 영역 분포 막대
@@ -10,27 +10,28 @@ import { colorFor, divisionSummary } from '../../utils/board';
 //   자동화(묶음)   항목별 채택률 띠 (전처리·실행·후처리·보고·파이프라인)  + 평균 켠 수
 //   시험 대체(묶음) 항목별 채택률 띠                     + 완전 대체 수
 //   모델링(표)     시험 불량 재현률 · 시장 재현률        + 바탕(형상·거동) 채택률
-// 행을 누르면 그 사업부 판으로 내려간다.
+// 사업부 머리를 누르면 그 사업부 판으로 내려간다.
 
-const Wrap = styled.div`overflow: auto;`;
+// 헤더·사업부 줄·모드 줄·합계를 뺀 나머지 높이를 표가 다 쓴다 — 줄 여섯이 그 높이를 나눠 갖는다.
+const Wrap = styled.div`overflow: auto; height: calc(100vh - 21rem); min-height: 28rem;`;
 const Table = styled.table`
-  width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8125rem;
-  th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.6875rem; font-weight: 700; color: #64748b; padding: 0.35rem 0.6rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-  td { padding: 0.55rem 0.6rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem;
+  th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  td { padding: 0.6rem 0.9rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 `;
-const ThDiv = styled.th`cursor: pointer; font-size: 0.875rem !important; color: #1e293b !important; &:hover { color: #1d4ed8 !important; text-decoration: underline; }`;
-const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; vertical-align: top !important;`;
-const Big = styled.div`font-size: 1rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
-const Small = styled.div`font-size: 0.6875rem; color: #64748b; margin-top: 0.15rem; white-space: nowrap;`;
-const Bar = styled.div`display: flex; height: 0.45rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin-top: 0.3rem; min-width: 7rem;`;
+const ThDiv = styled.th`cursor: pointer; font-size: 1.05rem !important; color: #1e293b !important; &:hover { color: #1d4ed8 !important; text-decoration: underline; }`;
+const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem;`;
+const Big = styled.div`font-size: 1.75rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
+const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: nowrap;`;
+const Bar = styled.div`display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin-top: 0.5rem; min-width: 7rem;`;
 const Seg = styled.div`width: ${p => p.$pct}%; background: ${p => p.$color};`;
-const Strip = styled.div`display: flex; gap: 2px; margin-top: 0.3rem;`;
+const Strip = styled.div`display: flex; gap: 3px; margin-top: 0.5rem;`;
 const Cellet = styled.div`
-  flex: 1 1 0; height: 0.9rem; border-radius: 2px; min-width: 1.1rem; font-size: 0.5625rem; line-height: 0.9rem; text-align: center; overflow: hidden;
+  flex: 1 1 0; height: 1.4rem; border-radius: 3px; min-width: 1.6rem; font-size: 0.6875rem; font-weight: 600; line-height: 1.4rem; text-align: center; overflow: hidden;
   background: ${p => p.$color}; color: ${p => (p.$dark ? 'white' : '#1e293b')};
 `;
 const Pill = styled.span`
-  display: inline-block; margin-left: 0.3rem; padding: 0 0.4rem; border-radius: 999px; font-size: 0.625rem; font-weight: 600;
+  display: inline-block; margin-left: 0.3rem; padding: 0 0.45rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;
   background: ${p => (p.$warn ? '#fef3c7' : '#f1f5f9')}; color: ${p => (p.$warn ? '#92400e' : '#64748b')};
 `;
 const Muted = styled.td`color: #94a3b8; font-size: 0.75rem;`;
@@ -82,7 +83,7 @@ const AxisSummary = ({ axis, s }) => {
   if (axis.kind === 'matrix') {
     return (
       <>
-        <Big>{s.testRate != null ? `${s.testRate}%` : '—'}<span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}> 시험 재현</span></Big>
+        <Big>{s.testRate != null ? `${s.testRate}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 시험 재현</span></Big>
         <Small>시장 재현 {s.marketRate != null ? `${s.marketRate}%` : '—'} · 유형 {s.defectTotal}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Strip>
           {axis.base.map(b => {
