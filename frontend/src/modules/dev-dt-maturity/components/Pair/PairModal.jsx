@@ -73,12 +73,13 @@ const Stale = styled.span`
 `;
 // 표 축은 왼쪽 1/3 에 바탕(형상·거동)을 위아래로, 오른쪽 2/3 에 불량 유형 표(2026-08-28).
 const FlagRow = styled.div`
-  display: ${p => (p.$matrix ? 'grid' : 'block')}; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0.6rem; align-items: stretch;
+  display: ${p => (p.$matrix ? 'grid' : 'block')}; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0.6rem; align-items: start;
 `;
 // 세로로 쌓을 때는 타일의 flex 기준(1 1 0)이 폭이 아니라 **높이**에 걸려 납작해진다 — 표 높이를 둘이 나눠 갖게 한다.
 const Ladder = styled.div`
   display: flex; gap: 0.35rem; flex-wrap: wrap;
-  ${p => (p.$stack ? 'flex-direction: column; flex-wrap: nowrap; height: 100%; min-height: 6.5rem; & > * { flex: 1 1 auto; min-height: 3rem; }' : '')}
+  /* 세로 쌓기: 타일은 3~4.5rem 사이 — 표가 길어져도(불량 유형 열 개 넘게) 따라 늘지 않는다(2026-08-28). */
+  ${p => (p.$stack ? 'flex-direction: column; flex-wrap: nowrap; align-self: start; & > * { flex: 0 0 auto; min-height: 3rem; max-height: 4.5rem; }' : '')}
 `;
 // div 다 — 칸 밑에 시점을 고치는 입력·단추가 들어가서(button 안에 button 은 안 된다).
 const Rung = styled.div`
