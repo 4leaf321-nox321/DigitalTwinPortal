@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 import { ChevronDown, X } from 'lucide-react';
 
@@ -8,6 +9,10 @@ import { ChevronDown, X } from 'lucide-react';
 // 목록을 붙인 것이라 키보드(↑↓ Enter Esc)로도 된다. 값은 option 의 id 로 주고받는다.
 //
 // ⚠️ 목록 바깥을 누르면 닫히고, 치던 글자는 버린다 — 골라진 값이 정본이다.
+//
+// ⚠️ 펼친 목록은 **창 밖(document.body)에 그린다**(2026-08-29). 창은 대개 overflow 를 감추거나
+//    스크롤하는데, 목록을 창 안에 두면 그 경계에서 **잘려 안 보인다**(「구간 추가」에서 드러났다).
+//    붙박이(fixed) 자리는 칸의 화면 좌표에서 재고, 아래가 좁으면 위로 편다.
 
 const Wrap = styled.div`position: relative; min-width: 0;`;
 const Box = styled.div`
@@ -18,8 +23,8 @@ const Box = styled.div`
   button { border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; display: inline-flex; &:hover { color: #475569; } &:disabled { cursor: default; opacity: 0.4; } }
 `;
 const List = styled.ul`
-  position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20; margin: 0; padding: 0.25rem; list-style: none;
-  max-height: 14rem; overflow-y: auto; background: white; border: 1px solid #e2e8f0; border-radius: 0.375rem; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  position: fixed; z-index: 4000; margin: 0; padding: 0.25rem; list-style: none;   /* 창 위로 — 어떤 모달보다 앞이다 */
+  max-height: 14rem; overflow-y: auto; background: white; border: 1px solid #e2e8f0; border-radius: 0.375rem; box-shadow: 0 8px 24px rgba(0,0,0,0.18);
 `;
 const Item = styled.li`
   padding: 0.35rem 0.5rem; border-radius: 0.3rem; font-size: 0.8125rem; cursor: pointer; color: #0f172a;
@@ -34,6 +39,8 @@ const SearchSelect = ({ options = [], value, onChange, placeholder = '찾아서 
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
   const wrap = useRef(null);
+  const list = useRef(null);
+  const [rect, setRect] = useState(null);      // 펼친 목록의 화면 좌표(붙박이)
   const current = options.find(o => String(o.id) === String(value ?? '')) || null;
 
   const shown = useMemo(() => {
@@ -41,9 +48,33 @@ const SearchSelect = ({ options = [], value, onChange, placeholder = '찾아서 
     return options.filter(o => !needle || o.name.toLowerCase().includes(needle) || (o.sub || '').toLowerCase().includes(needle));
   }, [options, q]);
 
+  // 목록 자리 재기 — 칸 바로 아래. 아래가 좁으면 위로 편다. 스크롤·크기 변화를 따라간다.
+  useEffect(() => {
+    if (!open) { setRect(null); return undefined; }
+    const measure = () => {
+      const el = wrap.current;
+      if (!el || !el.getBoundingClientRect) return;
+      const b = el.getBoundingClientRect();
+      const vh = window.innerHeight || 800;
+      const below = vh - b.bottom;
+      const MAX = 224;                                   // max-height 14rem
+      const up = below < 160 && b.top > below;           // 아래가 좁고 위가 더 넓으면 위로
+      setRect({ left: b.left, width: b.width, top: up ? null : b.bottom + 2, bottom: up ? vh - b.top + 2 : null,
+                max: Math.max(120, Math.min(MAX, (up ? b.top : below) - 12)) });
+    };
+    measure();
+    window.addEventListener('scroll', measure, true);    // 창 안쪽 스크롤까지(캡처)
+    window.addEventListener('resize', measure);
+    return () => { window.removeEventListener('scroll', measure, true); window.removeEventListener('resize', measure); };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return undefined;
-    const onDoc = (e) => { if (wrap.current && !wrap.current.contains(e.target)) { setOpen(false); setQ(''); } };
+    const onDoc = (e) => {
+      const inWrap = wrap.current && wrap.current.contains(e.target);
+      const inList = list.current && list.current.contains(e.target);   // 목록은 창 밖에 있다 — 바깥으로 치면 안 된다
+      if (!inWrap && !inList) { setOpen(false); setQ(''); }
+    };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
@@ -71,8 +102,10 @@ const SearchSelect = ({ options = [], value, onChange, placeholder = '찾아서 
         )}
         <button type="button" title="펼치기" disabled={disabled} onClick={() => setOpen(v => !v)}><ChevronDown size={14} /></button>
       </Box>
-      {open && !disabled && (
-        <List role="listbox">
+      {open && !disabled && createPortal(
+        <List role="listbox" ref={list}
+              style={rect ? { left: rect.left, width: rect.width, top: rect.top ?? undefined, bottom: rect.bottom ?? undefined, maxHeight: rect.max }
+                : { left: -9999, top: -9999 }}>
           {allowEmpty && !q && <Item role="option" $on={!current} onMouseDown={e => e.preventDefault()} onClick={() => pick(null)}>{emptyLabel}</Item>}
           {shown.map((o, i) => (
             <Item key={o.id} role="option" $active={i === active} $on={current && current.id === o.id}
@@ -81,7 +114,8 @@ const SearchSelect = ({ options = [], value, onChange, placeholder = '찾아서 
             </Item>
           ))}
           {shown.length === 0 && <Empty>{hint || '맞는 것이 없습니다.'}</Empty>}
-        </List>
+        </List>,
+        document.body,
       )}
     </Wrap>
   );

@@ -78,7 +78,12 @@ export default async function run() {
     await select(document.querySelector('select[aria-label="스레드"]'), '1');
     await select(document.querySelector('select[aria-label="표준 구간"]'), '11');
     const sels = document.querySelectorAll('input[data-search-select]');
-    await type(sels[0], '설계'); await settle(); await click(byText('li', 'MX 설계그룹')); await settle();
+    await type(sels[0], '설계'); await settle();
+    // 펼친 목록은 **창 밖(body)에** 그린다 — 창 안에 두면 경계에서 잘려 안 보인다(2026-08-29)
+    const listEl = document.querySelector('ul[role="listbox"]');
+    say(!!listEl && listEl.parentElement === document.body && document.querySelector('[role="dialog"]')?.contains(listEl) === false,
+        '② 펼친 목록이 모달 밖(body)에 그려짐 — 잘리지 않는다');
+    await click(byText('li', 'MX 설계그룹')); await settle();
     await type(sels[1], 'Team'); await settle(); await click(byText('li', 'Teamcenter')); await settle();
     await type(sels[2], '메일'); await settle(); await click(byText('li', '메일 (비시스템)')); await settle();
     await type(sels[3], '원가'); await settle(); await click(byText('li', '원가팀')); await settle();
