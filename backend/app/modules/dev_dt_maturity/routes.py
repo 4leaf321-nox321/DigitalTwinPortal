@@ -103,8 +103,9 @@ def divisions(actor):
     rows = (Division.query.filter_by(is_active=True)
             .order_by(Division.order, Division.id).all())
     everything = request.args.get('all') in ('1', 'true')
+    # 순서는 대시보드 설정(Division.order)이 정본 — 화면마다 배열을 박지 않는다(2026-08-28)
     return success_response([{
-        'id': d.id, 'name': d.name,
+        'id': d.id, 'name': d.name, 'order': d.order or 0,
         'deny_reason': P.deny_reason(actor, d.id, d.name),
         'hidden': d.id in hidden,
     } for d in rows if everything or d.id not in hidden])

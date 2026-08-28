@@ -48,7 +48,7 @@ def main():
             'import_columns': D.IMPORT_COLUMNS, 'stale_days': D.get_stale_days(),
             'review': D.review_definitions(), 'thread': D.thread_definitions(), 'can_curate': True, 'my_division_id': None,
         }
-        rows = [{'id': d.id, 'name': d.name, 'deny_reason': None, 'hidden': False} for d in divs]
+        rows = [{'id': d.id, 'name': d.name, 'order': d.order or 0, 'deny_reason': None, 'hidden': False} for d in divs]
         out['/divisions'] = rows
         out['/divisions?all=1'] = rows
         out['/settings'] = {k: D._setting(k) for k in D.SETTINGS_KEYS}

@@ -138,7 +138,7 @@ const ChartsView = ({ series, axes, review }) => {
   const [detail, setDetail] = useState(axes[0]?.key || null);   // 오른쪽 「상세」에 보일 축
   const months = useMemo(() => (span === 'custom' ? monthRange(range.from, range.to) : monthKeys(span)), [span, range]);
   const data = useMemo(() => series.map(s => ({ name: s.name, rows: monthlySeries(s.subjects, s.changes, axes, months) })), [series, axes, months]);
-  const reviewRows = useReviewMonthly(series, months);
+  const reviewRows = useReviewMonthly(review ? series : [], months);
   const reviewTotal = reviewRows.reduce((n, r) => n + r.spec + r.cause, 0);
   const detailAxis = axes.find(a => a.key === detail) || null;
   return (
@@ -195,6 +195,7 @@ const ChartsView = ({ series, axes, review }) => {
             </Panel>
           );
         })}
+        {review && (
         <Panel aria-label="해석 활용 기록">
           <h4>해석 활용 기록<span>달마다 건수 — {review?.kinds?.map(k => k.label).join(' · ') || '설계 스펙 검토 · 원인 분석'}</span></h4>
           {data.length >= 1 && <Now>{reviewTotal}<small>건 / {months.length}개월</small></Now>}
@@ -211,6 +212,7 @@ const ChartsView = ({ series, axes, review }) => {
             </ResponsiveContainer>
           </ChartBox>
         </Panel>
+        )}
       </Grid>
       <Side aria-label="상세">
         <h4>상세<span>{detailAxis ? `${detailAxis.label} — 연계마다 선 하나` : '왼쪽 판의 「상세」를 누르세요'}</span></h4>

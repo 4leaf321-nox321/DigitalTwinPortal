@@ -26,6 +26,9 @@ import { filtersFromParams, filtersToParams } from './utils/board';
 // 전부 이 주소로 온다.
 
 const Container = styled.div`display: flex; flex-direction: column; height: 100vh; background: #f8fafc;`;
+// 사업부 차례 — 대시보드 설정(Division.order)이 정본. 서버가 실어 준 order 로 세운다.
+const byOrder = (rows) => [...(rows || [])].sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)) || (a.id - b.id));
+
 const SampleBar = styled.div`
   flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 1.5rem; background: #fef3c7; border-bottom: 1px solid #fde68a; color: #92400e; font-size: 0.8125rem;
   strong { color: #78350f; } button { margin-left: auto; border: 1px solid #f59e0b; background: white; color: #92400e; border-radius: 999px; padding: 0.15rem 0.6rem; font-family: inherit; font-size: 0.75rem; cursor: pointer; }
@@ -81,7 +84,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         const allowed = wantSample && !!d.data?.can_curate;
         setSampleMode(allowed); setSample(allowed);
         const [d2, v] = await Promise.all([allowed ? maturityApi.getDefinitions() : Promise.resolve(d), maturityApi.getDivisions()]);
-        setDefs(d2.data); setDivisions(v.data); setError(null);
+        setDefs(d2.data); setDivisions(byOrder(v.data)); setError(null);
         setRefreshKey(k => k + 1);
       } catch (e) { setError(e.message); }
     })();
@@ -90,7 +93,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   // 설정(뺀 조직)이 바뀌면 사업부 줄만 다시 — 정의는 그대로
   useEffect(() => {
     if (!refreshKey) return;
-    maturityApi.getDivisions().then(v => setDivisions(v.data)).catch(() => {});
+    maturityApi.getDivisions().then(v => setDivisions(byOrder(v.data))).catch(() => {});
   }, [refreshKey]);
 
   // 사업부: URL → 내 사업부 → 첫 사업부. 'all' 은 전체.
