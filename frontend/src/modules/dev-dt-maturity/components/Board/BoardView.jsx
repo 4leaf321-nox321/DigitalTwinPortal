@@ -307,7 +307,8 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
           <Table>
             <thead>
               <tr>
-                <Th style={{ width: isThread ? '13%' : '12%' }}>{isThread ? '스레드 · 구간' : (sectorDef?.subject_label || '시험 항목')}</Th>
+                {isThread && <Th style={{ width: '8%' }}>스레드</Th>}
+                <Th style={{ width: '12%' }}>{isThread ? '구간' : (sectorDef?.subject_label || '시험 항목')}</Th>
                 <Th style={{ width: isThread ? '20%' : '12%' }}>{isThread ? '출발 → 매개 → 도착' : (sectorDef?.agent_label || '시뮬레이션')}</Th>
                 {!isThread && <Th style={{ width: '8%' }}>담당 그룹</Th>}
                 {axes.map(a => <Th key={a.key}>{a.label}</Th>)}
@@ -315,23 +316,44 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
               </tr>
             </thead>
             <tbody>
-              {subjects.map((s, gi) => {
+              {(() => {
+                // 스레드 부문 — 연이은 같은 스레드를 한 칸으로(셀 합치기). 얼룩말·경계선도 스레드 묶음 단위(2026-08-29).
+                const threadKey = (x) => (x.segment?.thread_id ?? `x${x.id}`);
+                const groupSpan = {};
+                const groupIdx = {};
+                if (isThread) {
+                  let g = -1;
+                  let headId = null;
+                  subjects.forEach((x, i) => {
+                    if (i === 0 || threadKey(x) !== threadKey(subjects[i - 1])) { g += 1; headId = x.id; groupSpan[headId] = 0; }
+                    groupSpan[headId] += 1;
+                    groupIdx[x.id] = g;
+                  });
+                }
+                return subjects.map((s, gi) => {
                 const span = Math.max(1, s.pairs.length);
+                const band = isThread ? groupIdx[s.id] % 2 === 1 : gi % 2 === 1;
+                const first = isThread ? groupSpan[s.id] != null : true;
                 const acc = axes.find(a => a.key === 'accuracy');
+                const threadCell = isThread && groupSpan[s.id] != null ? (
+                  <SubjectTd rowSpan={groupSpan[s.id]} style={{ fontWeight: 700 }}>
+                    {s.segment?.thread_name || <Muted>스레드 없음</Muted>}
+                  </SubjectTd>
+                ) : null;
                 const cell = (
                   <SubjectTd rowSpan={span}>
                     {s.division_name && <DivTag>{s.division_name}</DivTag>}
-                    {isThread && s.segment?.thread_name && <div><Sub>{s.segment.thread_name}</Sub></div>}
                     <Name>{s.name}</Name>
                     {isThread && (s.segment?.data_kind_labels || []).length > 0 && <div><Sub>{s.segment.data_kind_labels.join(' · ')}</Sub></div>}
                     {!isThread && <div><Sub>연계 {s.pairs.length}</Sub>{acc && s.summary.accuracy != null && <Sub> · 항목 정확도 {accuracyLabel(s.summary)}</Sub>}</div>}
                   </SubjectTd>
                 );
                 if (s.pairs.length === 0) {
-                  return <PairRow key={s.id} $band={gi % 2 === 1} $first>{cell}<Td colSpan={axes.length + (isThread ? 2 : 3)}><Muted>{isThread ? '연계가 없습니다.' : '아직 이은 시뮬레이션이 없습니다.'}</Muted></Td></PairRow>;
+                  return <PairRow key={s.id} $band={band} $first={first}>{threadCell}{cell}<Td colSpan={axes.length + (isThread ? 2 : 3)}><Muted>{isThread ? '연계가 없습니다.' : '아직 이은 시뮬레이션이 없습니다.'}</Muted></Td></PairRow>;
                 }
                 return s.pairs.map((p, i) => (
-                  <PairRow key={p.id} $band={gi % 2 === 1} $first={i === 0}>
+                  <PairRow key={p.id} $band={band} $first={i === 0 && first}>
+                    {i === 0 && threadCell}
                     {i === 0 && cell}
                     {isThread ? (
                       <Td>
@@ -356,7 +378,8 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
                     <Td>{p.unassessed.length ? <Muted>{p.unassessed.length}</Muted> : ''}</Td>
                   </PairRow>
                 ));
-              })}
+                });
+              })()}
             </tbody>
           </Table>
         </TableWrap>

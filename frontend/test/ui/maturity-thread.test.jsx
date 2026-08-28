@@ -123,7 +123,7 @@ export default async function run() {
     await click(byText('button', '설계 BOM → 예상 원가'));
     say(opened === 901, '④ 줄의 구간을 누르면 그 구간 상세');
     await click(byText('button', '상세')); await settle();
-    say(html().includes('스레드 · 구간') && html().includes('출발 → 매개 → 도착') && html().includes('MX 설계그룹'), '④ 상세 표의 첫 두 열이 구간과 출발 → 매개 → 도착');
+    say(html().includes('>스레드<') && html().includes('>구간<') && html().includes('출발 → 매개 → 도착') && html().includes('MX 설계그룹') && html().includes('재료비 스레드'), '④ 상세 표 — 스레드 열(셀 합치기)과 구간 열이 갈라짐');
     await unmount();
 
     // ⑤ 연계 개발 기록 — 건이 보이고, 토글로 적어 추가
