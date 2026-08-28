@@ -166,16 +166,16 @@ AXES = {
             ],
         },
         {
-            'key': 'traceability', 'label': '추적성', 'kind': 'set', 'hide_empty': True,
+            'key': 'traceability', 'label': '추적성(데이터 계보)', 'kind': 'set', 'hide_empty': True,
             'question': '건너면서 무엇을 잃지 않는가',
             'evidence': ['attachment'], 'evidence_label': '근거 링크',
             'rungs': [
                 {'key': 'none', 'label': '없음', 'description': '아무것도 유지되지 않는다'},
-                {'key': 'identity', 'label': '식별자 유지', 'short': '식별자', 'description': '같은 물건을 같은 id 로 안다'},
-                {'key': 'version', 'label': '버전 유지', 'short': '버전', 'description': '어느 판인지 안다'},
-                {'key': 'provenance', 'label': '출처 기록', 'short': '출처', 'description': '누가 언제 만들었는지 남는다'},
-                {'key': 'up_link', 'label': '상류 링크', 'short': '상류', 'description': '어디서 왔는지로 거슬러 간다'},
-                {'key': 'down_link', 'label': '하류 링크', 'short': '하류', 'description': '어디에 쓰였는지로 내려간다'},
+                {'key': 'identity', 'label': '고유 식별자(ID) 유지', 'short': 'ID', 'description': '건너도 같은 ID 로 같은 물건을 안다'},
+                {'key': 'version', 'label': '버전·리비전 관리', 'short': '버전', 'description': '어느 판(리비전)인지 안다'},
+                {'key': 'provenance', 'label': '출처 메타데이터', 'short': '출처', 'description': '누가·언제·어느 시스템에서 만들었는지가 데이터에 붙어 있다'},
+                {'key': 'up_link', 'label': '원천 참조', 'short': '원천', 'description': '결과에서 원천 데이터로 거슬러 간다(상류 계보)'},
+                {'key': 'down_link', 'label': '영향 참조', 'short': '영향', 'description': '원천에서 쓰인 곳으로 내려간다(하류 계보) — 영향 분석의 재료'},
             ],
         },
         {
