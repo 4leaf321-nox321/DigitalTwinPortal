@@ -106,6 +106,7 @@ def main():
         for b in out['/board?division_id=all&sector=digital_thread'].get('boards', []):
             T.decorate_board(b)
         out['/systems/hubs?division_id=all'] = T.system_hubs(ids)
+        out['/segments?division_id=all'] = T.list_segments(None)
         out['/threads/stats?division_id=all'] = {'divisions': [{**T.thread_stats(d.id), 'division_name': d.name} for d in kpi]}
         for d in kpi:
             did = d.id

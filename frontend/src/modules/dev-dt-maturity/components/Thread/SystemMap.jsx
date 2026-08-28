@@ -7,7 +7,7 @@ import maturityApi from '../../services/maturityApi';
 // 대시보드 「관계도」와 같은 그림 문법(d3-force). 스레드 하나를 고르면 그 줄만 밝게.
 
 const LINK_COLORS = ['#fca5a5', '#fdba74', '#93c5fd', '#3b82f6', '#1d4ed8', '#1e3a8a'];
-const KIND_COLORS = { plm: '#1d4ed8', cad: '#2563eb', cae: '#0891b2', spdm: '#0e7490', requirements: '#7c3aed', erp: '#059669', mes: '#16a34a', qms: '#d97706', cost: '#b45309', purchase: '#65a30d', cs: '#dc2626', test: '#ca8a04', hub: '#475569', informal: '#9ca3af', other: '#6b7280' };
+export const KIND_COLORS = { plm: '#1d4ed8', cad: '#2563eb', cae: '#0891b2', spdm: '#0e7490', requirements: '#7c3aed', erp: '#059669', mes: '#16a34a', qms: '#d97706', cost: '#b45309', purchase: '#65a30d', cs: '#dc2626', test: '#ca8a04', hub: '#475569', informal: '#9ca3af', other: '#6b7280' };
 
 const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.4rem; min-height: 0;`;
 const Bar = styled.div`display: flex; gap: 0.3rem; flex-wrap: wrap; font-size: 0.75rem; align-items: center;`;

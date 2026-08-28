@@ -1031,6 +1031,8 @@ def org(actor, row_id):
 @bp.route('/segments', methods=['GET'])
 @read_required
 def list_segments(actor):
+    if request.args.get('division_id') == 'all':      # 시스템 연결도 — 전사 한 그래프
+        return _refused(lambda: success_response(T.list_segments(None)))
     division_id = _int_arg('division_id')
     if division_id is None:
         return error_response('사업부를 고르세요.', status_code=400)

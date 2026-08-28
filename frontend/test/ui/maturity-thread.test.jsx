@@ -6,6 +6,7 @@
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, type, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import ThreadSystemGraph from '../../src/modules/dev-dt-maturity/components/Thread/ThreadSystemGraph';
 import ThreadListView from '../../src/modules/dev-dt-maturity/components/Thread/ThreadListView';
 import ThreadDictModal from '../../src/modules/dev-dt-maturity/components/Thread/ThreadDictModal';
 import { BoardBody } from '../../src/modules/dev-dt-maturity/components/Board/BoardView';
@@ -112,8 +113,8 @@ export default async function run() {
     const SUBJ = { id: 501, name: '설계 BOM → 예상 원가', product_families: [], segment: { thread_id: 1, thread_name: '재료비 스레드', segment_def_id: 12, via_informal: true, from_org_name: 'MX 설계그룹', from_system_name: 'Teamcenter', via_system_name: '메일', to_org_name: '원가팀', to_system_name: '원가 산정 시스템' },
       pairs: [{ id: 901, agent: null, unassessed: ['scope'], assessments: { link_mode: { rung: 'manual', rung_index: 0 }, capture: null } }], summary: { unassessed: 1, stale: 0, pair_count: 1, best_rung_index: {} } };
     const BOARD = { division_id: 17, subjects: [SUBJ], totals: { subjects: 1, pairs: 1, unassessed: 1, stale: 0 }, stale_days: 365, deny_reason: null };
-    let opened = null;
-    await render(<BoardBody board={BOARD} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={(id) => { opened = id; }} onPickDivision={() => {}} review={null} sector="digital_thread" sectorDef={{ subject_label: '연계 구간' }} />);
+    let openedPair = null;
+    await render(<BoardBody board={BOARD} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={(id) => { openedPair = id; }} onPickDivision={() => {}} review={null} sector="digital_thread" sectorDef={{ subject_label: '연계 구간' }} />);
     await settle(80);
     await click(byText('button', '요약')); await settle(80);
     const h4 = html();
@@ -121,7 +122,7 @@ export default async function run() {
     say(h4.includes('조직 간 연계') && h4.includes('원가팀') && h4.includes('시스템 허브도') && h4.includes('Teamcenter'), '④ 조직 연계표와 시스템 허브도');
     say(!!document.querySelector('svg[aria-label="시스템 지도"]') && document.querySelectorAll('svg[aria-label="시스템 지도"] circle').length === 3 && document.querySelectorAll('svg[aria-label="시스템 지도"] line').length === 2, '④ 시스템 지도 — 노드 3(Teamcenter·메일·원가 산정) · 간선 2');
     await click(byText('button', '설계 BOM → 예상 원가'));
-    say(opened === 901, '④ 줄의 구간을 누르면 그 구간 상세');
+    say(openedPair === 901, '④ 줄의 구간을 누르면 그 구간 상세');
     await click(byText('button', '상세')); await settle();
     say(html().includes('>스레드<') && html().includes('>구간<') && html().includes('출발 → 매개 → 도착') && html().includes('MX 설계그룹') && html().includes('재료비 스레드'), '④ 상세 표 — 스레드 열(셀 합치기)과 구간 열이 갈라짐');
     await unmount();
@@ -146,6 +147,21 @@ export default async function run() {
     const pc = calls.find(c => c.method === 'POST' && c.url.endsWith('/thread-cases'));
     say(!!pc && pc.body.action === 'harmonize' && pc.body.status === 'doing' && pc.body.segment_id === 101 && pc.body.system_id === 5 && pc.body.link_from === 'manual' && pc.body.link_to === 'integrated',
         `⑤ POST /thread-cases: ${JSON.stringify(pc?.body)}`);
+    await unmount();
+
+    // ⑥ 시스템 연결도 — 시스템이 노드, 간선 색 = 스레드, 간선 클릭 → 평가판
+    let graphPair = null;
+    await render(<ThreadSystemGraph divisionId={17} onOpenPair={(id) => { graphPair = id; }} />);
+    await settle(80);
+    const svg = document.querySelector('svg[aria-label="시스템 연결도"]');
+    say(!!svg, '⑥ 연결도 그림이 있음');
+    say(byText('button', '재료비 스레드') != null && byText('button', '전부') != null, '⑥ 스레드 범례 칩');
+    const hh = html();
+    say(hh.includes('Teamcenter') && hh.includes('원가 산정 시스템') && hh.includes('메일'), '⑥ 시스템 노드 셋');
+    const edges = [...(svg?.querySelectorAll('path') || [])];
+    say(edges.length === 2 && edges.every(p => p.getAttribute('stroke') === '#2563eb' && p.getAttribute('stroke-dasharray')), '⑥ 간선 둘 — 스레드 색, 사람이 옮김이라 점선');
+    await click(edges[0]); await settle();
+    say(graphPair === 901, '⑥ 간선을 누르면 그 구간의 평가판');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

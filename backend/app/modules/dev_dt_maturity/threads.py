@@ -412,10 +412,11 @@ def segment_dict(seg, systems=None, orgs=None, with_pair=True):
 
 
 def list_segments(division_id):
+    """division_id=None 이면 전사 전부 — 시스템 연결도가 쓴다."""
     systems = {s.id: s for s in ThreadSystem.query.all()}
     orgs = {o.id: o for o in ThreadOrg.query.all()}
-    rows = (ThreadSegment.query.filter_by(division_id=int(division_id))
-            .join(MaturitySubject, ThreadSegment.subject_id == MaturitySubject.id)
+    q = ThreadSegment.query if division_id is None else ThreadSegment.query.filter_by(division_id=int(division_id))
+    rows = (q.join(MaturitySubject, ThreadSegment.subject_id == MaturitySubject.id)
             .order_by(ThreadSegment.thread_id, MaturitySubject.order, MaturitySubject.id).all())
     return [segment_dict(s, systems, orgs) for s in rows]
 
