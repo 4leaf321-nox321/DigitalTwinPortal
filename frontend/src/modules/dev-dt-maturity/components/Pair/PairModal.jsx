@@ -186,7 +186,7 @@ const AccuracyBar = ({ axis, a, rule }) => {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', fontSize: '0.8125rem' }}>
         {value != null
           ? <><strong style={{ fontSize: '1.1rem', color: '#1e293b' }}>{value}%</strong><span style={{ color: '#1d4ed8', fontWeight: 600 }}>{cur?.label}</span></>
-          : <span style={{ color: '#94a3b8' }}>미검증 — 아직 값이 없습니다</span>}
+          : <span style={{ color: '#94a3b8' }}>미평가 — 아직 값이 없습니다</span>}
         {a?.assessed_at && <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>· {fmtDate(a.assessed_at)}</span>}
       </div>
       <div style={{ position: 'relative' }}>

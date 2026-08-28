@@ -478,7 +478,7 @@ def main():
                         axis = axes[axis_key]
                         if axis['kind'] == 'value':
                             if val is None:
-                                continue                       # 값 없음 = 미검증(미평가)
+                                continue                       # 값 없음 = 미평가
                             rung, value = None, float(val)
                         elif axis['kind'] == 'matrix':
                             rung, value = None, None

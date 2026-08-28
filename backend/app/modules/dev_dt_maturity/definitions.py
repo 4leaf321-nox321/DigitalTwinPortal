@@ -60,7 +60,7 @@ AXES = {
             'evidence': ['compared_tests', 'error_pct', 'attachment'],
             'evidence_label': '비교 시험 건수 · 오차 · 첨부',
             # ⚠️ value 축의 칸은 사람이 고르지 않는다 — 값이 문턱을 넘으면 올라간다.
-            #    '미검증' 은 값이 없는 상태라 사다리에 없다(None).
+            #    '미평가' 은 값이 없는 상태라 사다리에 없다(None).
             'rungs': [
                 # 문구는 2026-08-28 — 한 줄 막대의 세 영역. key 는 고정.
                 {'key': 'trend', 'label': '경향 일치',
@@ -262,7 +262,7 @@ ACCURACY_RULES = {'auto', 'single', 'mean'}
 
 
 def rung_for_value(value, thresholds=None, boundary=DEFAULT_ACCURACY_BOUNDARY):
-    """값 → 칸 key. 값이 없으면 None(미검증).
+    """값 → 칸 key. 값이 없으면 None(미평가).
 
     문턱 목록은 낮은 칸부터. 값이 넘는 **가장 높은** 칸을 고른다.
     'gte' 면 같아도 위 칸, 'gt' 면 넘어야 위 칸. 첫 칸의 min 은 보통 0 이라

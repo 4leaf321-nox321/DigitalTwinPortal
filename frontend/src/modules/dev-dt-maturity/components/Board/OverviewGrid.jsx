@@ -6,7 +6,7 @@ import { colorFor, divisionSummary } from '../../utils/board';
 // 전체 「요약」 — 축 × 사업부 표(가로가 사업부). 한 화면에 사업부 여섯이 들어가야 하고, **세로로 화면을 채운다**(2026-08-28).
 //
 // 축마다 대표 수치가 다르다 — 축이 다 순서형이 아니라서 「n단계 이상 %」 하나로 못 잰다.
-//   정확도(값)     평균 % · 미검증 수                  + 세 영역 분포 막대
+//   정확도(값)     평균 % · 미평가 수                  + 세 영역 분포 막대
 //   적용 범위(택1) 「신규 개발 전 모델」 이상 %          + 칸 분포 막대
 //   자동화(묶음)   항목별 채택률 띠 (전처리·실행·후처리·보고·파이프라인)  + 적용 단계 수 (평균)
 //   시험 대체(묶음) 항목별 채택률 띠                     + 완전 대체 수
@@ -63,7 +63,7 @@ const AxisSummary = ({ axis, s }) => {
     return (
       <>
         <Big>{s.mean != null ? `${s.mean}%` : '—'}</Big>
-        <Small>값 있음 {s.filled}/{s.total}{s.unassessed > 0 && <Pill $warn>미검증 {s.unassessed}</Pill>}</Small>
+        <Small>값 있음 {s.filled}/{s.total}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Bar title={axis.rungs.map((r, i) => `${r.label} ${s.counts[i]}`).join(' · ')}>
           {axis.rungs.map((r, i) => <Seg key={r.key} $pct={pct(s.counts[i], s.filled) || 0} $color={colorFor(i, axis.rungs.length)} />)}
         </Bar>

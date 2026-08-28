@@ -51,7 +51,7 @@ export default async function run() {
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');
     say(h.includes('1/2') && h.includes('적용 단계 수 (평균)'), '② 자동화: 적용 단계 수 (평균) 1/2');
     say(h.includes('시험 불량 재현') && h.includes('불량 유형 4'), '② 모델링: 시험 불량 재현률 · 불량 유형 수');
-    say(h.includes('미검증 1'), '② VD 정확도에 「미검증 1」 배지');
+    say(h.includes('미평가 1'), '② VD 정확도에 「미평가 1」 배지');
     await click(byText('th', 'VD'));
     say(picked === 18, '③ 사업부 머리를 누르면 그 사업부(18)로');
     await click(byText('button', '상세')); await settle();
