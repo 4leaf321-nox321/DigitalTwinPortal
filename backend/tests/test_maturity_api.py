@@ -663,9 +663,9 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert res.get_json()['data']['data_kind_labels'] == ['BOM', '단가표(엑셀)']                       # 직접 적은 것도, 겹침은 뺌
     s2 = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': d2['id'], 'from_org_id': dev['id'], 'from_system_id': plm['id'], 'via_system_id': mail['id'], 'to_org_id': fin['id'], 'to_system_id': costsys['id']}, headers=auth(mx_user)).get_json()['data']
     assert s2['via_informal'] is True
-    # 매기기 — 기존 평가 API 그대로. 비공식 매개면 연결 방식은 둘째 칸까지
+    # 매기기 — 기존 평가 API 그대로. 비시스템 매개면 연결 방식은 둘째 칸까지
     _assess(client, auth, mx_user, s1['pair_id'], 'link_mode', {'rung': 'integrated', 'note': 'PLM 내부 링크'})
-    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'auto_transfer', 'note': 'x'}, expect=400)     # 비공식 매개면 첫 칸만
+    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'auto_transfer', 'note': 'x'}, expect=400)     # 비시스템 매개면 첫 칸만
     _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'manual', 'note': '엑셀 메일'})
     out = _assess(client, auth, mx_user, s1['pair_id'], 'capture', {'rung': 'auto', 'note': 'PLM 자동 등록', 'evidence': {'coverage_pct': '85'}})
     assert out['data']['assessments']['capture']['evidence'] == {'coverage_pct': 85.0}
@@ -675,7 +675,7 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     q = out['data']['assessments']['quality']
     assert q['rung'] == 'unknown' and q['rung_index'] is None and q['unknown'] is True
     _assess(client, auth, mx_user, s2['pair_id'], 'quality', {'rung': 'nope', 'note': 'x'}, expect=400)
-    # 스레드 셈 — 재료비: 구간 2, 이어진 1(50%), 도달 단계는 첫 구간의 to(개발), 최약은 s2, 비공식 50%, 수집률 50, 활용률 100(매긴 것 중), 확인 필요 1
+    # 스레드 셈 — 재료비: 구간 2, 이어진 1(50%), 도달 단계는 첫 구간의 to(개발), 최약은 s2, 비시스템 50%, 수집률 50, 활용률 100(매긴 것 중), 확인 필요 1
     st = client.get(f'{BASE}/threads/stats?division_id={mx}', headers=auth(mx_user)).get_json()['data']['threads']
     c = next(t for t in st if t['thread_key'] == 'cost')
     assert c['segment_count'] == 2 and c['assessed'] == 2 and c['continuity'] == 50

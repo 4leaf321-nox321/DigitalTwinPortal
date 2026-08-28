@@ -213,7 +213,7 @@ class ThreadSegmentDef(BaseModel):
 
 
 class ThreadSystem(BaseModel):
-    """시스템 사전(전사 하나) — 스레드 주체가 자기 구간을 적으며 채운다. 「비공식 매개」(메일·엑셀…)도 한 종류."""
+    """시스템 사전(전사 하나) — 스레드 주체가 자기 구간을 적으며 채운다. 「비시스템 매개」(메일·엑셀…)도 한 종류."""
     __tablename__ = 'dt_thread_system'
     name = db.Column(db.String(200), nullable=False, unique=True)
     kind = db.Column(db.String(30), nullable=False)

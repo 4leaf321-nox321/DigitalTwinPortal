@@ -89,7 +89,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
   const set = (p) => setDraft(d => ({ ...d, ...p }));
   const threadOf = (id) => threads.find(t => t.id === Number(id));
   const defOptions = threadOf(draft.thread_id)?.segments || [];
-  const sysOpts = systems.map(s => ({ id: s.id, name: s.kind === 'informal' ? `${s.name} (비공식)` : s.name }));
+  const sysOpts = systems.map(s => ({ id: s.id, name: s.kind === 'informal' ? `${s.name} (비시스템)` : s.name }));
   const orgOpts = orgs.map(o => ({ id: o.id, name: o.name }));
   const num = (v) => (v === '' || v == null ? null : Number(v));
 
@@ -204,7 +204,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
               <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={orgOpts} value={draft.from_org_id} onChange={(id) => set({ from_org_id: id ?? '' })} placeholder="조직 찾기" hint="조직 관리에서 먼저 넣으세요." /></span>
               <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={sysOpts} value={draft.from_system_id} onChange={(id) => set({ from_system_id: id ?? '' })} placeholder="시스템 찾기" hint="시스템 관리에서 먼저 넣으세요." /></span>
               <Lab>매개</Lab>
-              <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={sysOpts} value={draft.via_system_id} onChange={(id) => set({ via_system_id: id ?? '' })} placeholder="매개 시스템 (메일·엑셀이면 비공식)" hint="시스템 관리에서 먼저 넣으세요." /></span>
+              <span style={{ flex: 1, minWidth: '10rem' }}><SearchSelect options={sysOpts} value={draft.via_system_id} onChange={(id) => set({ via_system_id: id ?? '' })} placeholder="매개 시스템 (메일·엑셀이면 비시스템)" hint="시스템 관리에서 먼저 넣으세요." /></span>
             </Line>
             <Line>
               <Lab>데이터</Lab>

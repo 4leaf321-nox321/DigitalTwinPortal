@@ -171,7 +171,7 @@ AXES = {
             'question': '데이터가 어떻게 건너가는가',
             'evidence': ['attachment'], 'evidence_label': '어디서 확인했나(화면·담당자)',
             'headline_min': 'auto_transfer',
-            # 매개가 「비공식 매개」면 첫 칸만(threads.guard_assess)
+            # 매개가 「비시스템 매개」면 첫 칸만(threads.guard_assess)
             'rungs': [
                 {'key': 'manual', 'label': '사람이 옮김', 'description': '구두·메일·파일로 사람이 넘긴다'},
                 {'key': 'auto_transfer', 'label': '자동 전달', 'description': '정해진 배치·파일 교환으로 저절로 넘어간다'},
@@ -218,7 +218,7 @@ SYSTEM_KINDS = [
     {'key': 'requirements', 'label': '요구사항 관리'}, {'key': 'erp', 'label': 'ERP'}, {'key': 'mes', 'label': 'MES'},
     {'key': 'qms', 'label': '품질(QMS)'}, {'key': 'cost', 'label': '원가'}, {'key': 'purchase', 'label': '구매'},
     {'key': 'cs', 'label': '서비스(CS)'}, {'key': 'test', 'label': '시험 관리'}, {'key': 'hub', 'label': '데이터 허브·ESB'},
-    {'key': 'informal', 'label': '비공식 매개'}, {'key': 'other', 'label': '기타'},
+    {'key': 'informal', 'label': '비시스템 매개'}, {'key': 'other', 'label': '기타'},
 ]
 SYSTEM_KIND_KEYS = [k['key'] for k in SYSTEM_KINDS]
 INFORMAL_ITEMS = ['메일', '엑셀·문서 전달', '파일서버·공유폴더', '메신저', '구두·회의']

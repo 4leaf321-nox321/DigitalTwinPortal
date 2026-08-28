@@ -5,8 +5,8 @@
 기존 틀(대상 = 구간, 수단 없는 연계, 축 다섯)을 그대로 쓰고, 여기서는
   · 사전 — 스레드(전사, 사무국) · 표준 구간 · 시스템(전사 하나, 아래에서 채움 + 정돈) · 조직(포탈 부서·프로세스 노드 참조)
   · 구간의 속성 — 출발 조직·시스템 / 매개 시스템 / 도착 조직·시스템
-  · 셈 — 구간을 모아 줄로: 연속성 · 도달 단계 · 최약 구간 · 폐루프 · 비공식 매개 비율 / 시스템 허브도 / 조직 간 연계표
-매개가 「비공식 매개」면 연결 방식은 수동 파일 교환 이하로만 — 매개와 축이 어긋난 채 저장되지 않는다.
+  · 셈 — 구간을 모아 줄로: 연속성 · 도달 단계 · 최약 구간 · 폐루프 · 비시스템 매개 비율 / 시스템 허브도 / 조직 간 연계표
+매개가 「비시스템 매개」면 연결 방식은 수동 파일 교환 이하로만 — 매개와 축이 어긋난 채 저장되지 않는다.
 """
 from collections import Counter, defaultdict
 
@@ -29,7 +29,7 @@ USAGE_FROM = 'decision'          # 이 칸 이상이면 「쓰이는」 구간
 # ── 기본 사전 — 표가 비어 있으면 코드의 초안을 넣는다(멱등) ──────────────────
 
 def ensure_defaults():
-    """표준 스레드·구간과 비공식 매개 항목을 처음 한 번 넣는다. key 로 멱등."""
+    """표준 스레드·구간과 비시스템 매개 항목을 처음 한 번 넣는다. key 로 멱등."""
     made = 0
     for order, t in enumerate(D.THREAD_DEFAULTS, 1):
         row = ThreadDef.query.filter_by(key=t['key']).first()
@@ -50,7 +50,7 @@ def ensure_defaults():
                 made += 1
     for name in D.INFORMAL_ITEMS:
         if not ThreadSystem.query.filter_by(name=name).first():
-            db.session.add(ThreadSystem(name=name, kind='informal', link_means='none', status='active', note='비공식 매개 — 코드 기본'))
+            db.session.add(ThreadSystem(name=name, kind='informal', link_means='none', status='active', note='비시스템 매개 — 코드 기본'))
             made += 1
     if made:
         db.session.flush()
@@ -425,7 +425,7 @@ def segment_of_pair(pair):
 
 
 def guard_assess(pair, axis_key, payload):
-    """매개가 비공식이면 연결 방식은 수동 파일 교환 이하로만."""
+    """매개가 비시스템이면 연결 방식은 수동 파일 교환 이하로만."""
     if pair.subject.sector != SECTOR or axis_key != LINK_AXIS:
         return
     seg = segment_of_pair(pair)
@@ -438,7 +438,7 @@ def guard_assess(pair, axis_key, payload):
     keys = D.rung_keys(axis)
     rung = payload.get('rung')
     if rung in keys and keys.index(rung) > 0:
-        raise Refused(f'매개가 「{via.name}」(비공식 매개)이면 연결은 「{axis["rungs"][0]["label"]}」만 고를 수 있습니다 — 매개 시스템을 먼저 바꾸세요.')
+        raise Refused(f'매개가 「{via.name}」(비시스템 매개)이면 연결은 「{axis["rungs"][0]["label"]}」만 고를 수 있습니다 — 매개 시스템을 먼저 바꾸세요.')
 
 
 # ── 스레드 단위의 셈 ───────────────────────────────────────────────────────
@@ -457,7 +457,7 @@ def _unknown_count(seg_d):
 
 
 def thread_stats(division_id):
-    """사업부의 스레드마다 — 구간 수·매긴 수·연속성 %·도달 단계·최약 구간·폐루프·비공식 매개 비율."""
+    """사업부의 스레드마다 — 구간 수·매긴 수·연속성 %·도달 단계·최약 구간·폐루프·비시스템 매개 비율."""
     axis = D.axis_of(SECTOR, LINK_AXIS)
     auto_idx = D.rung_keys(axis).index(AUTO_FROM)
     cap_axis, use_axis = D.axis_of(SECTOR, 'capture'), D.axis_of(SECTOR, 'usage')

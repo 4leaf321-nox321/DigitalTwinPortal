@@ -34,7 +34,7 @@ const cellOf = (t) => {
         <Stat><StatV>{v(t.capture_rate)}</StatV><StatL>수집</StatL></Stat>
         <Stat><StatV>{v(t.usage_rate)}</StatV><StatL>활용</StatL></Stat>
       </Trio>
-      <Small>구간 {t.assessed}/{t.segment_count}{t.closed_loop && <Pill $good>폐루프</Pill>}{t.unassessed > 0 && <Pill $warn>미평가 {t.unassessed}</Pill>}{t.unknown > 0 && <Pill $warn>확인 필요 {t.unknown}</Pill>}{t.informal_ratio > 0 && <Pill $warn>비공식 {t.informal_ratio}%</Pill>}</Small>
+      <Small>구간 {t.assessed}/{t.segment_count}{t.closed_loop && <Pill $good>폐루프</Pill>}{t.unassessed > 0 && <Pill $warn>미평가 {t.unassessed}</Pill>}{t.unknown > 0 && <Pill $warn>확인 필요 {t.unknown}</Pill>}{t.informal_ratio > 0 && <Pill $warn>비시스템 {t.informal_ratio}%</Pill>}</Small>
     </>
   );
 };
@@ -122,7 +122,7 @@ export const ThreadDivisionPanels = ({ divisionId, subjects = [], axes = [], onO
                 const label = linkAxis?.rungs?.[idx]?.label;
                 return (
                   <Seg key={sd.id} type="button" $color={linkColor(idx)} $dark={dark(idx)} $missing={!inst}
-                       title={`${sd.name}${inst ? ` — ${label || '미평가'}${inst.segment?.via_informal ? ' · 비공식 매개' : ''}` : ' — 아직 안 적음'}`}
+                       title={`${sd.name}${inst ? ` — ${label || '미평가'}${inst.segment?.via_informal ? ' · 비시스템 매개' : ''}` : ' — 아직 안 적음'}`}
                        onClick={() => inst?.pairs?.[0] && onOpenPair && onOpenPair(inst.pairs[0].id)}>
                     {sd.name}
                   </Seg>
@@ -141,7 +141,7 @@ export const ThreadDivisionPanels = ({ divisionId, subjects = [], axes = [], onO
             <tbody>
               {matrix.map(c => (
                 <tr key={`${c.from_org_id}-${c.to_org_id}`}>
-                  <td>{c.from_org}</td><td>{c.to_org}</td><td>{c.count}{c.informal > 0 && <Pill $warn>비공식 {c.informal}</Pill>}</td>
+                  <td>{c.from_org}</td><td>{c.to_org}</td><td>{c.count}{c.informal > 0 && <Pill $warn>비시스템 {c.informal}</Pill>}</td>
                   <td>{c.min_link != null ? <LinkTag $color={linkColor(c.min_link)} $dark={dark(c.min_link)}>{c.min_link_label}</LinkTag> : <span style={{ color: '#94a3b8' }}>미평가</span>}</td>
                   <td style={{ color: '#64748b' }}>{c.systems.join(' · ')}</td>
                 </tr>

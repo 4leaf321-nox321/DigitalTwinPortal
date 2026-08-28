@@ -1,6 +1,6 @@
 // 성숙도 — 디지털 스레드의 「목록」(구간 표 + 추가 줄)과 사전 창을 눌러 본다. (2026-08-28)
 //
-//   ① 구간이 스레드 묶음으로 보이고(출발 → 매개 → 도착, 비공식 매개는 호박색), 연결 방식 배지
+//   ① 구간이 스레드 묶음으로 보이고(출발 → 매개 → 도착, 비시스템 매개는 호박색), 연결 방식 배지
 //   ② 아래 줄에서 스레드·표준 구간·조직·시스템을 고르고 「구간 추가」 → POST /segments
 //   ③ 사전 창: 시스템 빠른 추가 → POST /systems · 조직 탭에서 포탈 부서 가져오기 → POST /orgs(portal)
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
@@ -17,7 +17,7 @@ const AXES = [
 ];
 const THREAD = {
   stages: [{ key: 'planning', label: '기획' }, { key: 'development', label: '개발' }, { key: 'management', label: '경영' }, { key: 'purchasing', label: '구매' }],
-  system_kinds: [{ key: 'plm', label: 'PLM' }, { key: 'cost', label: '원가' }, { key: 'informal', label: '비공식 매개' }, { key: 'other', label: '기타' }],
+  system_kinds: [{ key: 'plm', label: 'PLM' }, { key: 'cost', label: '원가' }, { key: 'informal', label: '비시스템 매개' }, { key: 'other', label: '기타' }],
   link_means: [{ key: 'api', label: 'API 있음' }, { key: 'file', label: '파일 배치' }, { key: 'none', label: '없음' }, { key: 'unknown', label: '미확인' }],
   system_status: [{ key: 'active', label: '운영' }, { key: 'adopting', label: '도입 중' }],
   data_kinds: [{ key: 'bom', label: 'BOM' }, { key: 'cost', label: '원가·단가' }, { key: 'other', label: '기타' }],
@@ -65,7 +65,7 @@ export default async function run() {
     await settle(60);
     const h = html();
     say(h.includes('재료비 스레드') && h.includes('품질 스레드') && h.includes('설계 BOM → 예상 원가'), '① 스레드 묶음과 구간이 보임');
-    say(h.includes('MX 설계그룹') && h.includes('원가팀') && byText('span', '메일') != null, '① 출발 → 매개 → 도착 (비공식 매개 「메일」)');
+    say(h.includes('MX 설계그룹') && h.includes('원가팀') && byText('span', '메일') != null, '① 출발 → 매개 → 도착 (비시스템 매개 「메일」)');
     say(h.includes('사람이 옮김') && h.includes('미평가 1개'), '① 연결 방식 배지와 미평가 수');
     say(h.includes('>BOM<') && h.includes('>원가·단가<'), '① 데이터 종류 꼬리표');
 
@@ -79,7 +79,7 @@ export default async function run() {
     const sels = document.querySelectorAll('input[data-search-select]');
     await type(sels[0], '설계'); await settle(); await click(byText('li', 'MX 설계그룹')); await settle();
     await type(sels[1], 'Team'); await settle(); await click(byText('li', 'Teamcenter')); await settle();
-    await type(sels[2], '메일'); await settle(); await click(byText('li', '메일 (비공식)')); await settle();
+    await type(sels[2], '메일'); await settle(); await click(byText('li', '메일 (비시스템)')); await settle();
     await type(sels[3], '원가'); await settle(); await click(byText('li', '원가팀')); await settle();
     await click(byText('button', '추가')); await settle(60);
     say(!document.querySelector('[role="dialog"][aria-label="구간 추가"]'), '② 넣으면 모달이 닫힘');
