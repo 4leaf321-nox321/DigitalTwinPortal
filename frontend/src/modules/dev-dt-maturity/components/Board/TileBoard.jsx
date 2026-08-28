@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { hierarchy, treemap, treemapSquarify } from 'd3-hierarchy';
-import { colorFor, flagDefs } from '../../utils/board';
+import { flagDefs } from '../../utils/board';
 
 // 「모판」(2026-08-29) — 미술관 벽의 액자 모음처럼, 화면 전체가 한 뭉치다(트리맵).
 // 바깥 액자 = 묶음(시뮬레이션은 담당 부서, 디지털 스레드는 스레드), 그 안의 액자 = 연계·구간 하나.
@@ -40,7 +40,14 @@ const FBadge = styled.span`position: absolute; right: 0.25rem; bottom: 0.1rem; f
 const Muted = styled.div`font-size: 0.8125rem; color: #94a3b8;`;
 
 const EMPTY = '#334155';
-const isDark = (c) => ['#3b82f6', '#1d4ed8', '#1e3a8a', EMPTY].includes(c);
+// 어두운 벽 전용 팔레트 — 판의 옅은 첫 칸(#dbeafe)은 벽 위에서 흰색으로 읽혀 미평가와 헷갈린다(2026-08-29).
+const WALL_COLORS = ['#93c5fd', '#60a5fa', '#3b82f6', '#1d4ed8', '#172e78'];
+const wallColor = (idx, count) => {
+  if (idx == null) return EMPTY;
+  const slot = Math.round((idx / Math.max(1, count - 1)) * (WALL_COLORS.length - 1));
+  return WALL_COLORS[Math.min(WALL_COLORS.length - 1, Math.max(0, slot))];
+};
+const isDark = (c) => ['#3b82f6', '#1d4ed8', '#172e78', EMPTY].includes(c);
 
 /** 고른 축에서 이 연계의 칸 index 와 짧은 표기. 미평가는 null. */
 export const tileValue = (axis, p) => {
@@ -99,7 +106,7 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
         <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginLeft: focus != null ? '0.5rem' : 0 }}>색의 기준</span>
         {axes.map(a => <AxisBtn key={a.key} type="button" $on={a.key === axis.key} aria-pressed={a.key === axis.key} onClick={() => setAxisKey(a.key)}>{a.label}</AxisBtn>)}
         <Legend aria-label="범례">
-          {axis.rungs.map((r, i) => (axis.hide_empty && i === 0 ? null : <span key={r.key}><Sw $c={colorFor(i, total)} />{r.label}</span>))}
+          {axis.rungs.map((r, i) => (axis.hide_empty && i === 0 ? null : <span key={r.key}><Sw $c={wallColor(i, total)} />{r.label}</span>))}
           <span><Sw $dashed />미평가</span>
         </Legend>
       </Bar>
@@ -117,7 +124,7 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
           ))}
           {root.leaves().map(n => {
             const d = n.data;
-            const c = d.idx == null ? EMPTY : colorFor(d.idx, total);
+            const c = d.idx == null ? EMPTY : wallColor(d.idx, total);
             const w = n.x1 - n.x0, h = n.y1 - n.y0;
             const label = d.idx == null ? (d.text === '?' ? '확인 필요' : '미평가') : axis.rungs[d.idx]?.label;
             const showName = w > 6 && h > 3.2;
