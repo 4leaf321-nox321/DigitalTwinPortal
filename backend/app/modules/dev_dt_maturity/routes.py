@@ -666,3 +666,25 @@ def delete_entry(actor, pair_id, change_id):
         return error_response(str(e), status_code=400)
     except Exception:
         return _crashed()
+
+
+@bp.route('/pairs/<int:pair_id>/defects/<axis>', methods=['PUT'])
+@read_required
+def set_defect_cell(actor, pair_id, axis):
+    """불량 유형 표의 칸 하나 — {name, col, month|null}. 근거 없이 바로 저장한다."""
+    pair = MaturityPair.query.get(pair_id)
+    if not pair:
+        return error_response('없는 쌍입니다.', status_code=404)
+    denied = _deny(actor, pair.subject.division_id)
+    if denied:
+        return denied
+    p = request.get_json() or {}
+    try:
+        S.set_defect_cell(pair, axis, p.get('name'), p.get('col'), p.get('month'), actor)
+        db.session.commit()
+        return success_response(S.pair_dict(pair, with_changes=True))
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()

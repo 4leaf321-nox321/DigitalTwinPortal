@@ -46,6 +46,9 @@ export const maturityApi = {
   createPair: (subjectId, agentId) =>
     request('/pairs', json('POST', { subject_id: subjectId, agent_id: agentId })),
   deletePair: (id) => request(`/pairs/${id}`, { method: 'DELETE' }),
+  /** 불량 유형 표의 칸 하나 — 근거 없이 바로. month 가 null 이면 끈다. */
+  setDefectCell: (pairId, axis, name, col, month) =>
+    request(`/pairs/${pairId}/defects/${axis}`, json('PUT', { name, col, month })),
   /** 정확도 줄 하나를 지운다(값 축만). */
   deleteChange: (pairId, changeId) => request(`/pairs/${pairId}/changes/${changeId}`, { method: 'DELETE' }),
   /** 칸의 도달 시점(연-월)을 그 자리에서 적는다. */

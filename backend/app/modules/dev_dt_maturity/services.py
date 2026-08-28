@@ -773,3 +773,53 @@ def set_reached(pair, axis_key, rung_key, month, actor):
     db.session.flush()
     change.created_at = when
     return change
+
+
+def set_defect_cell(pair, axis_key, name, col, month, actor):
+    """불량 유형 표의 칸 하나 — {유형, 열}을 그 달로 켜거나(month) 끈다(None). **근거 없이** 바로 저장한다(2026-08-28).
+
+    근거는 바탕(형상·거동)을 매길 때 적는다. 표의 칸은 「어느 불량이 언제부터 재현됐나」의 사실 하나라
+    칸마다 근거를 묻지 않는다. 평가 줄이 없으면 바탕 「없음」으로 하나 만든다. 이력은 바뀌었을 때만.
+    """
+    subject = pair.subject
+    axis = D.axis_of(subject.sector, axis_key)
+    if axis is None or axis['kind'] != 'matrix':
+        raise Refused('이 축에는 불량 유형 표가 없습니다.')
+    names = list((pair.agent.defect_types or []) if pair.agent else [])
+    if name not in names:
+        raise Refused('이 시뮬레이션에 없는 불량 유형입니다 — 시뮬레이션 관리에서 먼저 넣으세요.')
+    if col not in [c['key'] for c in axis['columns']]:
+        raise Refused('없는 열입니다.')
+    if month is True:                      # True = 이번 달
+        when = datetime.utcnow()
+    else:
+        when = parse_month(month) if month not in (None, '', False) else None
+    row = MaturityAssessment.query.filter_by(pair_id=pair.id, axis=axis_key).first()
+    before = _mark(row) if row else None
+    if row is None:
+        row = MaturityAssessment(pair_id=pair.id, axis=axis_key, rung=D.rung_keys(axis)[0], note='', evidence={})
+        db.session.add(row)
+    ev = dict(row.evidence) if isinstance(row.evidence, dict) else {}
+    defects = dict(ev.get('defects') or {})
+    cells = dict(defects.get(name) or {})
+    if when is None:
+        cells.pop(col, None)
+    else:
+        cells[col] = when.strftime('%Y-%m')
+    if cells:
+        defects[name] = cells
+    else:
+        defects.pop(name, None)
+    ev['defects'] = defects
+    row.evidence = ev
+    row.assessed_at = datetime.utcnow()
+    row.assessed_by_id = getattr(actor, 'id', None)
+    row.assessed_by_name = getattr(actor, 'name', None)
+    db.session.flush()
+    after = _mark(row)
+    if before != after:
+        db.session.add(MaturityChange(
+            pair_id=pair.id, axis=axis_key, before=before, after=after,
+            note=f'{name} · {col}' + (' 켬' if when else ' 끔'),
+            actor_user_id=getattr(actor, 'id', None), actor_name=getattr(actor, 'name', None)))
+    return row

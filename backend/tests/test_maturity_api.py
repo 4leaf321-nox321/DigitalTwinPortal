@@ -509,3 +509,33 @@ def test_모델링_수준은_불량_유형마다_시험_시장_열을_켠다(cli
     _assess(client, auth, mx_user, p2['id'], 'modeling', {'flags': ['geometry'], 'note': 'x', 'evidence': {'defects': {'크랙': {'test': '2025-03'}}}}, expect=400)
     out = _assess(client, auth, mx_user, p2['id'], 'modeling', {'flags': ['geometry'], 'note': 'x'})
     assert out['data']['assessments']['modeling']['rung_index'] == 1
+
+
+def test_불량_유형_표의_칸은_근거_없이_바로_켜고_끈다(client, auth, world, mx_user):
+    s = client.post(f'{BASE}/subjects', json={'division_id': world['mx'].id, 'name': '낙하 시험'}, headers=auth(mx_user)).get_json()['data']
+    a = client.post(f'{BASE}/agents', json={'division_id': world['mx'].id, 'name': '구조 해석', 'defect_types': ['크랙', '변색']}, headers=auth(mx_user)).get_json()['data']
+    p = client.post(f'{BASE}/pairs', json={'subject_id': s['id'], 'agent_id': a['id']}, headers=auth(mx_user)).get_json()['data']
+
+    def cell(name, col, month, expect=200):
+        res = client.put(f'{BASE}/pairs/{p["id"]}/defects/modeling', json={'name': name, 'col': col, 'month': month}, headers=auth(mx_user))
+        assert res.status_code == expect, res.get_json()
+        return res.get_json()['data']
+
+    d = cell('크랙', 'test', '2025-03')                                   # 평가 줄이 없어도 「없음」 바탕으로 생긴다
+    m = d['assessments']['modeling']
+    assert m['flags'] == [] and m['defects'] == {'크랙': {'test': '2025-03'}} and m['rung_index'] == 3
+    assert d['changes'][0]['after'] == 'none|t1/m0' and '켬' in d['changes'][0]['note']
+    d = cell('크랙', 'market', True)                                        # True 는 이번 달
+    assert d['assessments']['modeling']['rung_index'] == 5
+    d = cell('크랙', 'test', None)                                          # 끔
+    assert d['assessments']['modeling']['defects'] == {'크랙': {'market': d['assessments']['modeling']['defects']['크랙']['market']}}
+    d = cell('크랙', 'market', None)
+    assert d['assessments']['modeling']['defects'] == {} and d['assessments']['modeling']['rung_index'] == 0
+    cell('없는유형', 'test', '2025-03', expect=400)
+    cell('크랙', 'weird', '2025-03', expect=400)
+    cell('크랙', 'test', '2099-01', expect=400)
+    # 바탕을 근거와 함께 매겨도 표는 남는다
+    cell('변색', 'test', '2025-06')
+    out = _assess(client, auth, mx_user, p['id'], 'modeling', {'flags': ['performance'], 'note': '거동 확인',
+                  'evidence': {'defects': {'변색': {'test': '2025-06'}}}})
+    assert out['data']['assessments']['modeling']['rung_index'] == 3

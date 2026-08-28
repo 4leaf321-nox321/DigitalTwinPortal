@@ -55,6 +55,11 @@ export default async function run() {
       const [, axis, rung] = url.split('/reached/')[1].match(/^(\w+)\/(\w+)$/);
       return { ...PAIR, changes: [{ id: 21, axis, before: null, after: rung, created_at: `${body.month}-01T12:00:00`, actor_name: '나', note: '시점 적기' }] };
     }
+    if (url.includes('/defects/')) {
+      const on = body.month ? { [body.name]: { [body.col]: `${body.month}-01` } } : {};
+      const lv = body.month ? 3 : 0;
+      return { ...PAIR, assessments: { ...PAIR.assessments, modeling: { rung: lv ? 'test_some' : 'none', flags: [], defects: on, summary: { test: lv ? 1 : 0, market: 0, total: 2 }, rung_index: lv, stale: false, note: '', evidence: { defects: on }, assessed_at: '2026-08-28T00:00:00', assessed_by_name: '나' } } };
+    }
     if (method === 'DELETE' && url.includes('/changes/')) return PAIR;
     if (url.endsWith('/pairs/101')) return PAIR;
     if (/\/(subjects|agents)\/\d+$/.test(url)) return { id: Number(url.split('/').pop()), ...body };
@@ -107,19 +112,24 @@ export default async function run() {
     say(!!reachedCall && reachedCall.body.month === '2024-09', `②-2 PUT reached 가 감: ${JSON.stringify(reachedCall?.body)}`);
     say(html().includes('2024-09'), '②-2 사다리가 그 달을 그림');
 
-    // ②-3 모델링 수준 — 바탕 토글 + 불량 유형 표
+    // ②-3 모델링 수준 — 표의 칸은 근거 없이 바로 저장, 바탕은 근거와 함께
     calls.length = 0;
-    say(html().includes('크랙') && html().includes('변색') && !!document.querySelector('[aria-label="크랙 신뢰성 시험 불량 재현"]'), '②-3 시뮬레이션의 불량 유형이 표의 행으로 보임');
+    say(html().includes('크랙') && html().includes('변색') && !!document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]'), '②-3 시뮬레이션의 불량 유형이 표의 행으로 보임');
+    await click(document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]')); await settle();
+    const cellPut = calls.find(c => c.method === 'PUT' && c.url.includes('/defects/modeling'));
+    say(!!cellPut && cellPut.body.name === '크랙' && cellPut.body.col === 'test' && /^\d{4}-\d{2}$/.test(cellPut.body.month), `②-3 칸을 누르면 근거 없이 PUT defects 가 감: ${JSON.stringify(cellPut?.body)}`);
+    say(!document.querySelector('input[placeholder^="근거"]'), '②-3 표의 칸은 근거 상자를 열지 않음');
+    say(document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]').getAttribute('aria-pressed') === 'true' && html().includes('시험 1/2'), '②-3 켜진 칸과 「시험 1/2」 요약');
+    await click(document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]')); await settle();
+    const offPut = calls.filter(c => c.url.includes('/defects/modeling')).pop();
+    say(offPut?.body.month === null, '②-3 다시 누르면 끔(month null)');
+    calls.length = 0;
     await click(byText('[role="button"]', '거동 재현'));
-    const cellBtn = document.querySelector('button[aria-label="크랙 신뢰성 시험 불량 재현"]');
-    await click(cellBtn); await settle();
-    say(cellBtn.getAttribute('aria-pressed') === 'true' && !!document.querySelector('input[aria-label="크랙 신뢰성 시험 불량 재현 시점"]'), '②-3 표의 칸을 누르면 켜지고 달 입력이 붙음');
-    say(html().includes('시험 1/2'), '②-3 머리 요약이 「시험 1/2」로 바뀜');
+    say(!!document.querySelector('input[placeholder^="근거"]'), '②-3 바탕(거동 재현)을 누르면 근거 상자가 열림');
     await type(document.querySelector('input[placeholder^="근거"]'), '낙하 3건 비교');
     await click(byText('button', '저장')); await settle();
     const putM = calls.find(c => c.method === 'PUT' && c.url.includes('/assessments/modeling'));
-    say(!!putM && JSON.stringify(putM.body.flags) === '["performance"]' && !!putM.body.evidence?.defects?.['크랙']?.test && !putM.body.evidence?.defects?.['크랙']?.market,
-        `②-3 PUT 에 바탕과 표가 같이 감: ${JSON.stringify(putM?.body?.evidence?.defects)}`);
+    say(!!putM && JSON.stringify(putM.body.flags) === '["performance"]', `②-3 바탕은 flags 로 감: ${JSON.stringify(putM?.body?.flags)}`);
 
     // ③ 정확도 값
     calls.length = 0;

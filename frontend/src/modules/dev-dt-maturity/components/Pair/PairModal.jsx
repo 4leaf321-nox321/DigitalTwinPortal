@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Check, History, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import { X, Check, History, AlertTriangle, Pencil, Trash2, Square } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import { colorFor, reachedDates, flagDefs, matrixLevel } from '../../utils/board';
 import { AccuracyPreview, DEFAULT_RULE } from '../Settings/SettingsModal';
@@ -50,10 +50,17 @@ const MatrixWrap = styled.div`
   td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
   td:first-child { color: #1e293b; font-weight: 600; }
 `;
+// 칸 — 켠 것은 파랗게 채우고, 안 켠 것은 빈 상자로. 둘 다 같은 크기라 눌러야 할 자리가 보인다.
 const MCell = styled.button`
-  display: inline-flex; align-items: center; gap: 0.2rem; border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.6875rem; font-family: inherit; cursor: pointer;
-  border: 1px solid ${p => (p.$on ? '#93c5fd' : '#e2e8f0')}; background: ${p => (p.$on ? '#dbeafe' : 'white')}; color: ${p => (p.$on ? '#1e40af' : '#94a3b8')};
-  &:hover { border-color: #1d4ed8; }
+  display: inline-flex; align-items: center; gap: 0.3rem; border-radius: 0.375rem; padding: 0.3rem 0.6rem; min-width: 4.6rem; justify-content: center;
+  font-size: 0.75rem; font-weight: 600; font-family: inherit; cursor: pointer;
+  border: 1.5px solid ${p => (p.$on ? '#1d4ed8' : '#cbd5e1')}; background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#64748b')};
+  &:hover:not(:disabled) { border-color: #1d4ed8; background: ${p => (p.$on ? '#1e40af' : '#eff6ff')}; color: ${p => (p.$on ? 'white' : '#1d4ed8')}; }
+  &:disabled { cursor: default; opacity: 0.8; }
+`;
+const MDate = styled.button`
+  margin-left: 0.3rem; border: none; background: transparent; color: #1e40af; font-size: 0.6875rem; font-family: inherit; cursor: pointer; text-decoration: underline dotted; padding: 0;
+  &:disabled { text-decoration: none; cursor: default; }
 `;
 const AxisBlock = styled.div`border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem 0.875rem;`;
 const AxisHead = styled.div`display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;`;
@@ -113,8 +120,10 @@ const fmtDate = (iso) => (iso ? iso.slice(0, 7) : '');
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const isDark = (color) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(color);
 
-/** 불량 유형 × (시험·시장) 표 — 시뮬레이션의 불량 유형이 행. 칸은 켜면 「✓ 연-월」, 편집 중엔 눌러 켜고 달을 고친다. */
-const DefectMatrix = ({ axis, names, defects, editing, canEdit, onToggle, onMonth, onStart }) => {
+/** 불량 유형 × (시험·시장) 표 — 시뮬레이션의 불량 유형이 행. 칸은 **근거 없이 바로** 켜고 끈다(2026-08-28).
+ *  근거는 바탕(형상·거동)을 매길 때만 묻는다. 켠 칸엔 달이 붙고, 달을 눌러 고친다. */
+const DefectMatrix = ({ axis, names, defects, canEdit, busy, onCell }) => {
+  const [monthFor, setMonthFor] = useState(null);   // { name, col } — 달을 고치는 중인 칸
   if (!names.length) {
     return <AxisQ style={{ marginTop: '0.4rem' }}>이 시뮬레이션에 불량 유형이 없습니다 — 「시뮬레이션 관리」에서 먼저 넣으면 여기 표가 생깁니다.</AxisQ>;
   }
@@ -129,24 +138,24 @@ const DefectMatrix = ({ axis, names, defects, editing, canEdit, onToggle, onMont
               {axis.columns.map(c => {
                 const month = defects?.[name]?.[c.key] || null;
                 const label = `${name} ${c.label}`;
-                if (editing) {
-                  return (
-                    <td key={c.key}>
-                      <MCell type="button" $on={!!month} aria-label={label} aria-pressed={!!month} onClick={() => onToggle(name, c.key)} title="누르면 켜고 끕니다">
-                        {month ? '✓' : '·'}
-                      </MCell>
-                      {month && <input type="month" max={thisMonth()} value={month.slice(0, 7)} aria-label={`${label} 시점`}
-                                       onChange={e => onMonth(name, c.key, e.target.value)}
-                                       style={{ fontSize: '0.6875rem', fontFamily: 'inherit', marginLeft: '0.25rem', width: '7.2rem' }} />}
-                    </td>
-                  );
-                }
+                const dating = monthFor && monthFor.name === name && monthFor.col === c.key;
                 return (
                   <td key={c.key}>
-                    <MCell as={canEdit ? 'button' : 'span'} type={canEdit ? 'button' : undefined} $on={!!month} aria-label={label}
-                           onClick={canEdit ? onStart : undefined} title={canEdit ? '누르면 편집으로 들어갑니다' : undefined}>
-                      {month ? `✓ ${month.slice(0, 7)}` : '·'}
+                    <MCell type="button" $on={!!month} disabled={!canEdit || busy} aria-label={label} aria-pressed={!!month}
+                           onClick={() => { setMonthFor(null); onCell(name, c.key, month ? null : thisMonth()); }}
+                           title={!canEdit ? undefined : month ? '누르면 끕니다' : '누르면 이번 달로 켭니다'}>
+                      {month ? <><Check size={12} strokeWidth={3} /> 재현</> : <><Square size={12} /> 안 됨</>}
                     </MCell>
+                    {month && !dating && (
+                      <MDate type="button" disabled={!canEdit || busy} aria-label={`${label} 시점`} title={canEdit ? '언제부터인지 고칩니다' : undefined}
+                             onClick={() => setMonthFor({ name, col: c.key })}>{month.slice(0, 7)}</MDate>
+                    )}
+                    {month && dating && (
+                      <input type="month" max={thisMonth()} defaultValue={month.slice(0, 7)} autoFocus aria-label={`${label} 시점 고치기`}
+                             onKeyDown={e => { if (e.key === 'Escape') setMonthFor(null); if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }}
+                             onBlur={e => { setMonthFor(null); if (e.target.value && e.target.value !== month.slice(0, 7)) onCell(name, c.key, e.target.value); }}
+                             style={{ fontSize: '0.6875rem', fontFamily: 'inherit', marginLeft: '0.3rem', width: '7.2rem' }} />
+                    )}
                   </td>
                 );
               })}
@@ -314,6 +323,14 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
     } catch (e) { setSaveError(e.message); }
     finally { setBusy(false); }
   };
+  const saveCell = async (axisKey, name, col, month) => {
+    setBusy(true);
+    try {
+      const res = await maturityApi.setDefectCell(pairId, axisKey, name, col, month);
+      onSaved(res.data); setSaveError(null);
+    } catch (e) { setSaveError(e.message); }
+    finally { setBusy(false); }
+  };
   const saveReached = async () => {
     if (!dating?.month) return;
     setBusy(true);
@@ -445,12 +462,12 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                   <AxisQ>{axis.question}</AxisQ>
                   {a ? (
                     <Meta>
-                      {axis.kind === 'matrix' && <strong>{matrixSummary(axis, isEditing ? editing.flags : a.flags, isEditing ? editing.evidence.defects : a.defects, pair.agent?.defect_types)}</strong>}{' '}
+                      {axis.kind === 'matrix' && <strong>{matrixSummary(axis, isEditing ? editing.flags : a.flags, a.defects, pair.agent?.defect_types)}</strong>}{' '}
                       {axis.kind === 'value' && <strong>{a.value}%</strong>}{' '}
                       {fmtDate(a.assessed_at)} · {a.assessed_by_name || '—'}
                       {a.stale && <> <Stale>낡음</Stale></>}
                     </Meta>
-                  ) : <Meta>{axis.kind === 'matrix' && isEditing ? <strong>{matrixSummary(axis, editing.flags, editing.evidence.defects, pair.agent?.defect_types)}</strong> : '미평가'}</Meta>}
+                  ) : <Meta>{axis.kind === 'matrix' && isEditing ? <strong>{matrixSummary(axis, editing.flags, {}, pair.agent?.defect_types)}</strong> : '미평가'}</Meta>}
                 </AxisHead>
 
                 {isFlagKind(axis.kind) ? (
@@ -459,7 +476,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                   // 표(matrix) 축은 타일이 바탕(형상·거동)이고 색은 접힌 서열, 그 밑에 불량 유형 표가 붙는다.
                   (() => {
                     const flags = isEditing ? editing.flags : (a?.flags || null);
-                    const defects = isEditing ? (editing.evidence.defects || {}) : (a?.defects || {});
+                    const defects = a?.defects || {};
                     const names = pair.agent?.defect_types || [];
                     const n = flags == null ? null : (axis.kind === 'matrix' ? matrixLevel(axis, flags, defects, names).level : flags.length);
                     const color = colorFor(n, axis.rungs.length);
@@ -490,15 +507,8 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                         })}
                       </Ladder>
                       {axis.kind === 'matrix' && (
-                        <DefectMatrix axis={axis} names={names} defects={defects} editing={isEditing} canEdit={canEdit}
-                                      onToggle={(name, col) => setEditing(s => {
-                                        const cur = { ...((s.evidence.defects || {})[name] || {}) };
-                                        if (cur[col]) delete cur[col]; else cur[col] = thisMonth();
-                                        return { ...s, evidence: { ...s.evidence, defects: { ...(s.evidence.defects || {}), [name]: cur } } };
-                                      })}
-                                      onMonth={(name, col, month) => setEditing(s => ({
-                                        ...s, evidence: { ...s.evidence, defects: { ...(s.evidence.defects || {}), [name]: { ...((s.evidence.defects || {})[name] || {}), [col]: month } } } }))}
-                                      onStart={() => startEdit(axis, null)} />
+                        <DefectMatrix axis={axis} names={names} defects={a?.defects || {}} canEdit={canEdit} busy={busy}
+                                      onCell={(name, col, month) => saveCell(axis.key, name, col, month)} />
                       )}
                       </FlagRow>
                     );
@@ -558,7 +568,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     ) : isFlagKind(editing.kind) ? (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
                         → <strong>{flagLabels(axis, editing.flags)}</strong>
-                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다.{!axis.hide_empty && <> 「{axis.rungs[0].label}」은 전부 끕니다.</>}{axis.implies?.full && <> 「완전 대체」를 켜면 나머지가 다 켜집니다.</>}{axis.kind === 'matrix' && <> 표의 칸도 눌러 켜고, 달은 고칠 수 있습니다.</>}</AxisQ>
+                        <AxisQ style={{ marginLeft: '0.5rem' }}>위 칸을 눌러 켜고 끕니다.{!axis.hide_empty && <> 「{axis.rungs[0].label}」은 전부 끕니다.</>}{axis.implies?.full && <> 「완전 대체」를 켜면 나머지가 다 켜집니다.</>}{axis.kind === 'matrix' && <> 오른쪽 표의 칸은 근거 없이 바로 저장됩니다.</>}</AxisQ>
                       </span></Row>
                     ) : (
                       <Row><span style={{ fontSize: '0.8125rem' }}>
