@@ -31,7 +31,8 @@ const CloseButton = styled.button`
   margin-left: auto; border: none; background: transparent; color: #94a3b8; cursor: pointer;
   padding: 0.25rem; border-radius: 0.25rem; &:hover { color: #475569; background: #f1f5f9; }
 `;
-const Body = styled.div`overflow-y: auto; padding: 0.75rem 1.25rem 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;`;
+// 바탕을 옅게 깔고 축 카드를 흰색으로 띄운다 — 카드끼리 구분되게(2026-08-28)
+const Body = styled.div`overflow-y: auto; padding: 0.75rem 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.9rem; background: #f1f5f9;`;
 const Notice = styled.div`
   display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.6rem 0.75rem; border-radius: 0.5rem;
   background: ${p => (p.$bad ? '#fef2f2' : '#fffbeb')}; border: 1px solid ${p => (p.$bad ? '#fecaca' : '#fde68a')};
@@ -62,9 +63,14 @@ const MDate = styled.button`
   margin-left: 0.3rem; border: none; background: transparent; color: #1e40af; font-size: 0.6875rem; font-family: inherit; cursor: pointer; text-decoration: underline dotted; padding: 0;
   &:disabled { text-decoration: none; cursor: default; }
 `;
-const AxisBlock = styled.div`border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem 0.875rem;`;
-const AxisHead = styled.div`display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;`;
-const AxisName = styled.span`font-weight: 700; color: #1e293b;`;
+const AxisBlock = styled.div`
+  border: 1px solid #e2e8f0; border-radius: 0.6rem; padding: 0 0.875rem 0.75rem; background: white; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+`;
+// 카드 머리 — 옅은 띠 + 아래 선. 헤더를 칠하지 않고도 카드의 시작이 보인다
+const AxisHead = styled.div`
+  display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; margin: 0 -0.875rem 0.65rem; padding: 0.5rem 0.875rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-radius: 0.6rem 0.6rem 0 0;
+`;
+const AxisName = styled.span`font-weight: 700; color: #1e293b; font-size: 0.9375rem;`;
 const AxisQ = styled.span`font-size: 0.75rem; color: #94a3b8;`;
 const Meta = styled.span`margin-left: auto; font-size: 0.75rem; color: #64748b;`;
 const Stale = styled.span`
