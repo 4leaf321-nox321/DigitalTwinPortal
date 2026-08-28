@@ -79,16 +79,17 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   useEffect(() => {
     (async () => {
       try {
-        setSampleMode(false);
+        await setSampleMode(false);
         const d = await maturityApi.getDefinitions();
-        const allowed = wantSample && !!d.data?.can_curate;
-        setSampleMode(allowed); setSample(allowed);
+        // 목업은 켤 때 받아 온다 — 받은 뒤에야 아래 부름이 목업을 읽는다.
+        const allowed = (wantSample && !!d.data?.can_curate) ? await setSampleMode(true) : false;
+        setSample(allowed);
         const [d2, v] = await Promise.all([allowed ? maturityApi.getDefinitions() : Promise.resolve(d), maturityApi.getDivisions()]);
         setDefs(d2.data); setDivisions(byOrder(v.data)); setError(null);
         setRefreshKey(k => k + 1);
       } catch (e) { setError(e.message); }
     })();
-    return () => setSampleMode(false);
+    return () => { setSampleMode(false); };
   }, [wantSample]);
   // 설정(뺀 조직)이 바뀌면 사업부 줄만 다시 — 정의는 그대로
   useEffect(() => {
