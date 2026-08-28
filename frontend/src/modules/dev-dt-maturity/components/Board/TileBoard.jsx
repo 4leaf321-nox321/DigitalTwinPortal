@@ -5,7 +5,7 @@ import { colorFor, flagDefs } from '../../utils/board';
 
 // 「모판」(2026-08-29) — 미술관 벽의 액자 모음처럼, 화면 전체가 한 뭉치다(트리맵).
 // 바깥 액자 = 묶음(시뮬레이션은 담당 부서, 디지털 스레드는 스레드), 그 안의 액자 = 연계·구간 하나.
-// 고른 축의 칸이 액자의 색이 되고, 칸이 높은 것일수록 액자가 조금 크다 — 밭이 아니라 벽화를 읽듯 훑는다.
+// 고른 축의 칸이 액자의 색이 된다. 액자 크기는 균등 — 색만 정보고, 배치가 축을 바꿔도 안정적이다.
 
 const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.6rem; flex: 1; min-height: 0;`;
 const Bar = styled.div`display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;`;
@@ -70,8 +70,8 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
       groups.get(key).push({
         id: p.id, name: isThread ? s.name : (p.agent?.name || s.name), sub: isThread ? '' : s.name,
         idx: v.idx, text: v.text, stale: v.stale,
-        // 칸이 높을수록 액자가 조금 크다 — 벽에서 잘된 것이 먼저 눈에 든다
-        value: 1 + (v.idx == null ? 0 : (v.idx / Math.max(1, total - 1)) * 0.9),
+        // 균등(2026-08-29) — 색만 정보다. 크기까지 서열이면 미평가가 작아져 「채울 곳」이 안 보인다.
+        value: 1,
       });
     }));
     const h = hierarchy({ children: [...groups.entries()].map(([name, children]) => ({ name, children })) })
