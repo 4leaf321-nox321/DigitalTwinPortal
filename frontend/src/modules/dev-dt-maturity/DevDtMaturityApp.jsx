@@ -6,6 +6,8 @@ import Header from './components/Layout/Header';
 import BoardView from './components/Board/BoardView';
 import ListView from './components/List/ListView';
 import ReviewLedger from './components/Review/ReviewLedger';
+import ThreadListView from './components/Thread/ThreadListView';
+import ThreadDictModal from './components/Thread/ThreadDictModal';
 import PairModal from './components/Pair/PairModal';
 import ModalHost from './components/List/ModalHost';
 import SettingsModal from './components/Settings/SettingsModal';
@@ -119,23 +121,32 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     setParams(keep, { replace: true });
   };
 
-  const axes = defs?.axes?.simulation || [];
+  // 부문 — URL ?sector=. 열린 부문만(정의의 active). 시뮬레이션이 기본.
+  const sector = useMemo(() => {
+    const raw = params.get('sector');
+    const ok = (defs?.sectors || []).some(s => s.key === raw && s.active);
+    return ok ? raw : 'simulation';
+  }, [params, defs]);
+  const isThread = sector === 'digital_thread';
+  const axes = defs?.axes?.[sector] || [];
   const bump = () => setRefreshKey(k => k + 1);
 
   // 헤더 단추에 붙는 수 — 사업부가 바뀌거나 무엇이 바뀌면 다시 센다.
   useEffect(() => {
+    if (isThread) { setCounts({}); return undefined; }
     if (!divisionId) return;
     let alive = true;
     Promise.all([maturityApi.listSubjects(divisionId), maturityApi.listAgents(divisionId)])
       .then(([s, a]) => { if (alive) setCounts({ subjects: s.data.length, agents: a.data.length }); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [divisionId, refreshKey]);
+  }, [isThread, divisionId, refreshKey]);
 
   return (
     <Container>
       <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} canCurate={!!defs?.can_curate}
-              sample={sample} onToggleSample={() => patch({ sample: sample ? null : '1', pair: null })} />
+              sample={sample} onToggleSample={() => patch({ sample: sample ? null : '1', pair: null })}
+              sector={sector} sectors={defs?.sectors || []} onSector={(k) => patch({ sector: k === 'simulation' ? null : k, pair: null, tab: null })} />
       {sample && (
         <SampleBar role="status">
           <strong>샘플 뷰</strong> — 개발용 목업 자료로 그린 화면입니다. 실제 자료가 아니며, 저장되지 않습니다.
@@ -161,8 +172,12 @@ const DevDtMaturityApp = ({ onGoHome }) => {
       <Main $fill>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
-          <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters}
-                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} review={defs.review} />
+          <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)}
+                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} review={isThread ? null : defs.review} />
+        ) : isThread ? (
+          <ThreadListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} axes={axes} pairId={pairId} thread={defs.thread}
+                          onOpenPair={(id) => patch({ pair: id })} onClosePair={() => patch({ pair: null })} onChanged={bump} refreshKey={refreshKey}
+                          onManage={(kind) => setModal({ kind })} />
         ) : tab === 'reviews' ? (
           <ReviewLedger divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} review={defs.review} refreshKey={refreshKey} />
         ) : (
@@ -176,11 +191,15 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {pairId && defs && tab !== 'list' && (
           <PairModal pairId={pairId} axes={axes} onClose={() => patch({ pair: null })} onChanged={bump} />
         )}
+        {modal && ['system', 'org', 'thread'].includes(modal.kind) && defs && (
+          <ThreadDictModal kind={modal.kind} divisionId={divisionId} divisions={divisions} thread={defs.thread} axes={defs.axes?.digital_thread || []}
+                           canCurate={!!defs.can_curate} denyReason={division?.deny_reason || null} onClose={() => setModal(null)} onChanged={bump} />
+        )}
         {modal?.kind === 'settings' && defs && (
           <SettingsModal divisions={divisions} accuracyRungs={(axes.find(a => a.key === 'accuracy') || {}).rungs || []}
                          onClose={() => setModal(null)} onChanged={bump} />
         )}
-        {modal && modal.kind !== 'settings' && defs && divisionId && (
+        {modal && !['settings', 'system', 'org', 'thread'].includes(modal.kind) && defs && divisionId && (
           <ModalHost kind={modal.kind} initialId={modal.id ?? null} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      onClose={() => setModal(null)} onChanged={bump} />

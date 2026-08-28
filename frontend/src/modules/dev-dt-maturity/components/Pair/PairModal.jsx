@@ -522,7 +522,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                     );
                   })()
                 ) : axis.kind === 'value' ? (
-                  <AccuracyBar axis={axis} a={a} rule={pair.accuracy_rule || DEFAULT_RULE} />
+                  <AccuracyBar axis={axis} a={a} rule={axis.thresholds ? { thresholds: axis.thresholds, boundary: axis.boundary || 'gte' } : (pair.accuracy_rule || DEFAULT_RULE)} />
                 ) : (
                 <Ladder>
                   {axis.rungs.map((r, i) => {

@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2 } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -37,7 +37,7 @@ const SECTORS = [
   { key: 'digital_thread', label: '디지털 스레드', icon: Link2, open: false },
 ];
 
-const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample }) => (
+const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector }) => (
   <CommonHeader
     logo={<Gauge size={24} strokeWidth={2} />}
     title="개발 디지털 트윈 성숙도"
@@ -47,22 +47,44 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
     className="dev-dt-maturity-header"
     centerContent={
       <Buttons>
-        <HeaderButton onClick={() => onOpen('subject')} title="시험 항목 추가·수정·삭제">
-          <FlaskConical size={16} /> 시험 항목 관리 {counts.subjects != null && <Count>{counts.subjects}</Count>}
-        </HeaderButton>
-        <HeaderButton onClick={() => onOpen('agent')} title="시뮬레이션 추가·수정·삭제 (엑셀 행 단위)">
-          <Cpu size={16} /> 시뮬레이션 관리 {counts.agents != null && <Count>{counts.agents}</Count>}
-        </HeaderButton>
-        <HeaderButton $variant="primary" onClick={() => onOpen('import')} title="틀 내려받기 → 채워서 붙여넣기 → 미리보기 → 넣기">
-          <Upload size={16} /> 가져오기
-        </HeaderButton>
+        {sector === 'digital_thread' ? (
+          <>
+            <HeaderButton onClick={() => onOpen('system')} title="사내 시스템 사전 — 전사 하나, 스레드 주체가 채운다">
+              <Server size={16} /> 시스템 관리
+            </HeaderButton>
+            <HeaderButton onClick={() => onOpen('org')} title="조직 사전 — 포탈 부서에서 가져오거나 직접">
+              <Users size={16} /> 조직 관리
+            </HeaderButton>
+            {canCurate && (
+              <HeaderButton onClick={() => onOpen('thread')} title="스레드 사전 — 표준 스레드와 구간(사무국)">
+                <BookOpen size={16} /> 스레드 사전
+              </HeaderButton>
+            )}
+          </>
+        ) : (
+          <>
+            <HeaderButton onClick={() => onOpen('subject')} title="시험 항목 추가·수정·삭제">
+              <FlaskConical size={16} /> 시험 항목 관리 {counts.subjects != null && <Count>{counts.subjects}</Count>}
+            </HeaderButton>
+            <HeaderButton onClick={() => onOpen('agent')} title="시뮬레이션 추가·수정·삭제 (엑셀 행 단위)">
+              <Cpu size={16} /> 시뮬레이션 관리 {counts.agents != null && <Count>{counts.agents}</Count>}
+            </HeaderButton>
+            <HeaderButton $variant="primary" onClick={() => onOpen('import')} title="틀 내려받기 → 채워서 붙여넣기 → 미리보기 → 넣기">
+              <Upload size={16} /> 가져오기
+            </HeaderButton>
+          </>
+        )}
         <SectorToggle role="group" aria-label="부문">
-          {SECTORS.map(x => (
-            <SectorBtn key={x.key} type="button" $on={x.key === 'simulation'} disabled={!x.open} aria-pressed={x.key === 'simulation'}
-                       title={x.open ? `${x.label} 부문` : `${x.label} 부문 — 준비 중`}>
-              <x.icon size={15} strokeWidth={2} /> {x.label}
-            </SectorBtn>
-          ))}
+          {SECTORS.map(x => {
+            const open = x.open || (sectors.find(s => s.key === x.key)?.active ?? false);
+            return (
+              <SectorBtn key={x.key} type="button" $on={x.key === sector} disabled={!open} aria-pressed={x.key === sector}
+                         onClick={() => open && onSector && onSector(x.key)}
+                         title={open ? `${x.label} 부문` : `${x.label} 부문 — 준비 중`}>
+                <x.icon size={15} strokeWidth={2} /> {x.label}
+              </SectorBtn>
+            );
+          })}
         </SectorToggle>
         {canCurate && (
           <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자" style={{ marginLeft: '0.5rem' }}>

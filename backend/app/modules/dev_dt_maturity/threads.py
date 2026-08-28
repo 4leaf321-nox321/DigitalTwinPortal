@@ -521,3 +521,20 @@ def system_hubs(division_ids=None):
                     'avg_link': round(sum(links) / len(links), 1) if links else None,
                     'unknown_means': h['system'].get('link_means') == 'unknown'})
     return sorted(out, key=lambda x: (-x['threads'], -x['segments'], x['name']))
+
+
+def decorate_board(board):
+    """판의 대상(구간)에 스레드·출발/매개/도착을 붙인다 — 상세 표가 시험 대신 구간을 그린다."""
+    subs = board.get('subjects') or []
+    if not subs:
+        return board
+    ids = [s['id'] for s in subs]
+    systems = {s.id: s for s in ThreadSystem.query.all()}
+    orgs = {o.id: o for o in ThreadOrg.query.all()}
+    segs = {seg.subject_id: seg for seg in ThreadSegment.query.filter(ThreadSegment.subject_id.in_(ids)).all()}
+    for s in subs:
+        seg = segs.get(s['id'])
+        s['segment'] = segment_dict(seg, systems, orgs, with_pair=False) if seg else None
+    # 스레드 순으로 — 표에서 스레드가 묶음이 된다
+    subs.sort(key=lambda s: ((s.get('segment') or {}).get('thread_id') or 0, s.get('order') or 0, s['id']))
+    return board

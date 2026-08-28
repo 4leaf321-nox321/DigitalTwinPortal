@@ -119,7 +119,11 @@ def board(actor):
     # 「전체」 — 사업부마다 판을 돌려 묶는다. 사업부별 셈은 그대로다.
     if request.args.get('division_id') == 'all':
         try:
-            return success_response(S.board_all(sector))
+            data = S.board_all(sector)
+            if sector == 'digital_thread':
+                for b in data.get('boards', []):
+                    T.decorate_board(b)
+            return success_response(data)
         except Exception:
             return _crashed()
     division_id = _int_arg('division_id')
@@ -127,6 +131,8 @@ def board(actor):
         return error_response('사업부를 고르세요.', status_code=400)
     try:
         data = S.board(division_id, sector)
+        if sector == 'digital_thread':
+            T.decorate_board(data)
         data['deny_reason'] = P.deny_reason(actor, division_id, _division_name(division_id))
         return success_response(data)
     except Exception:

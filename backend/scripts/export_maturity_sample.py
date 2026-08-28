@@ -30,7 +30,7 @@ def main():
     from app.modules.dev_dt_maturity import reviews as R
     from app.modules.dev_dt_maturity import services as S
     from app.modules.dev_dt_maturity import importer as I
-    from app.modules.dev_dt_maturity.models import MaturityAgent, MaturityPair, MaturitySubject
+    from app.modules.dev_dt_maturity.models import MaturityAgent, MaturityPair, MaturitySubject, ThreadSegment
     from app.modules.digital_twin_dashboard.models import Division
 
     app = create_app()
@@ -46,7 +46,7 @@ def main():
             'axes': {k: D.get_axes(k) for k in D.SECTOR_KEYS},
             'model_kinds': D.MODEL_KINDS, 'accuracy_rules': sorted(D.ACCURACY_RULES),
             'import_columns': D.IMPORT_COLUMNS, 'stale_days': D.get_stale_days(),
-            'review': D.review_definitions(), 'can_curate': True, 'my_division_id': None,
+            'review': D.review_definitions(), 'thread': D.thread_definitions(), 'can_curate': True, 'my_division_id': None,
         }
         rows = [{'id': d.id, 'name': d.name, 'deny_reason': None, 'hidden': False} for d in divs]
         out['/divisions'] = rows
@@ -97,6 +97,32 @@ def main():
                 dct = S.pair_dict(p, with_changes=True)
                 dct['deny_reason'] = None
                 out[f'/pairs/{p.id}'] = dct
+        # 디지털 스레드
+        from app.modules.dev_dt_maturity import threads as T
+        out['/threads'] = T.list_threads()
+        out['/threads?all=1'] = T.list_threads(active_only=False)
+        out['/systems'] = T.list_systems()
+        out['/board?division_id=all&sector=digital_thread'] = S.board_all('digital_thread')
+        for b in out['/board?division_id=all&sector=digital_thread'].get('boards', []):
+            T.decorate_board(b)
+        out['/systems/hubs?division_id=all'] = T.system_hubs(ids)
+        out['/threads/stats?division_id=all'] = {'divisions': [{**T.thread_stats(d.id), 'division_name': d.name} for d in kpi]}
+        for d in kpi:
+            did = d.id
+            out[f'/board?division_id={did}&sector=digital_thread'] = T.decorate_board(S.board(did, 'digital_thread'))
+            for days in (365, 730, 1825):
+                out[f'/changes?division_id={did}&sector=digital_thread&days={days}'] = S.recent_changes(did, 'digital_thread', days)
+            out[f'/segments?division_id={did}'] = T.list_segments(did)
+            out[f'/orgs?division_id={did}'] = T.list_orgs(did)
+            out[f'/orgs/from-departments?division_id={did}'] = T.departments_as_orgs(did)
+            out[f'/threads/stats?division_id={did}'] = T.thread_stats(did)
+            out[f'/threads/org-matrix?division_id={did}'] = T.org_matrix(did)
+            out[f'/systems/hubs?division_id={did}'] = T.system_hubs([did])
+            for seg in ThreadSegment.query.filter_by(division_id=did).all():
+                for p in seg.subject.pairs:
+                    dct = S.pair_dict(p, with_changes=True)
+                    dct['deny_reason'] = None
+                    out[f'/pairs/{p.id}'] = dct
         out['/subjects?division_id=all'] = subjects_all
         out['/agents?division_id=all'] = agents_all
         out['/departments?division_id=all'] = deps_all

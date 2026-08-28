@@ -105,6 +105,31 @@ export const maturityApi = {
   /** 담당 부서 고르기의 재료 — 사업부의 활성 부서. 'all' 이면 {division_id: [...]} */
   getDepartments: (divisionId) => request(`/departments?division_id=${divisionId}`),
 
+  // 디지털 스레드 — 사전 넷과 사업부 구간, 스레드 셈(2026-08-28)
+  listThreads: (all = false) => request(all ? '/threads?all=1' : '/threads'),
+  createThread: (payload) => request('/threads', json('POST', payload)),
+  updateThread: (id, payload) => request(`/threads/${id}`, json('PUT', payload)),
+  addSegmentDef: (threadId, payload) => request(`/threads/${threadId}/segment-defs`, json('POST', payload)),
+  updateSegmentDef: (id, payload) => request(`/threads/segment-defs/${id}`, json('PUT', payload)),
+  deleteSegmentDef: (id) => request(`/threads/segment-defs/${id}`, { method: 'DELETE' }),
+  listSystems: () => request('/systems'),
+  createSystem: (payload) => request('/systems', json('POST', payload)),
+  updateSystem: (id, payload) => request(`/systems/${id}`, json('PUT', payload)),
+  deleteSystem: (id) => request(`/systems/${id}`, { method: 'DELETE' }),
+  mergeSystems: (keepId, dropId) => request('/systems/merge', json('POST', { keep_id: keepId, drop_id: dropId })),
+  systemHubs: (divisionId) => request(`/systems/hubs?division_id=${divisionId}`),
+  listOrgs: (divisionId) => request(`/orgs?division_id=${divisionId}`),
+  orgsFromDepartments: (divisionId) => request(`/orgs/from-departments?division_id=${divisionId}`),
+  createOrg: (payload) => request('/orgs', json('POST', payload)),
+  updateOrg: (id, payload) => request(`/orgs/${id}`, json('PUT', payload)),
+  deleteOrg: (id) => request(`/orgs/${id}`, { method: 'DELETE' }),
+  listSegments: (divisionId) => request(`/segments?division_id=${divisionId}`),
+  createSegment: (divisionId, payload) => request('/segments', json('POST', { division_id: divisionId, ...payload })),
+  updateSegment: (id, payload) => request(`/segments/${id}`, json('PUT', payload)),
+  deleteSegment: (id) => request(`/segments/${id}`, { method: 'DELETE' }),
+  threadStats: (divisionId) => request(`/threads/stats?division_id=${divisionId}`),
+  orgMatrix: (divisionId) => request(`/threads/org-matrix?division_id=${divisionId}`),
+
   getSettings: () => request('/settings'),
   putSettings: (payload) => request('/settings', json('PUT', payload)),
 };

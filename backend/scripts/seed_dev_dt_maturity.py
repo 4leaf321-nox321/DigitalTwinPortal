@@ -32,7 +32,7 @@ from app.extensions import db                                                # n
 from app.modules.dev_dt_maturity import definitions as D                     # noqa: E402
 from app.modules.dev_dt_maturity import services as S                        # noqa: E402
 from app.modules.dev_dt_maturity.models import (                             # noqa: E402
-    MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturityReviewCase, MaturitySubject,
+    MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturityReviewCase, MaturitySubject, ThreadOrg,
 )
 from app.modules.digital_twin_dashboard.models import Department, Division   # noqa: E402
 
@@ -448,6 +448,7 @@ def main():
         n_old = MaturitySubject.query.filter(MaturitySubject.division_id.in_(ids)).delete(synchronize_session=False)
         MaturityAgent.query.filter(MaturityAgent.division_id.in_(ids)).delete(synchronize_session=False)
         MaturityReviewCase.query.filter(MaturityReviewCase.division_id.in_(ids)).delete(synchronize_session=False)
+        ThreadOrg.query.filter(ThreadOrg.division_id.in_(ids)).delete(synchronize_session=False)
         db.session.flush()
 
         counts = {'subjects': 0, 'agents': 0, 'pairs': 0, 'assessments': 0, 'changes': 0}
@@ -506,6 +507,7 @@ def main():
                         db.session.add(c); db.session.flush()
                         c.created_at = _days_ago(days); counts['changes'] += 1
         counts['reviews'] = _seed_reviews(divisions)          # 해석 활용 기록 — 스팟 건
+        counts['segments'] = _seed_threads(divisions)         # 디지털 스레드 — 구간과 평가
         db.session.commit()
         print(f'지운 시험 {n_old}개 → 넣음:', counts)
         for dname, div in divisions.items():
@@ -601,6 +603,117 @@ def _seed_reviews(divisions):
                 basis=basis, lead_days=lead, note=note or None, actor_name=PEOPLE[n % len(PEOPLE)]))
             n += 1
     return n
+
+
+# ── 디지털 스레드 씨앗 — 사업부마다 스레드 몇 줄, 구간마다 출발/매개/도착과 평가(2026-08-28) ──
+SYSTEMS_SEED = [
+    ('Teamcenter', 'plm', 'PLM 운영팀', ['development', 'mfg_eng'], 'api', 'active'),
+    ('SPDM', 'spdm', 'CAE 인프라팀', ['development'], 'api', 'adopting'),
+    ('NX', 'cad', 'PLM 운영팀', ['development'], 'file', 'active'),
+    ('요구사항 관리(DOORS)', 'requirements', '개발기획', ['planning', 'development'], 'file', 'active'),
+    ('시험 관리(LIMS)', 'test', '품질', ['quality'], 'file', 'active'),
+    ('SAP ERP', 'erp', 'IT 기획', ['purchasing', 'manufacturing', 'management'], 'api', 'active'),
+    ('MES', 'mes', '제조 IT', ['manufacturing'], 'api', 'active'),
+    ('QMS', 'qms', '품질', ['quality', 'market'], 'file', 'active'),
+    ('원가 산정 시스템', 'cost', '원가팀', ['management'], 'none', 'active'),
+    ('구매 포털', 'purchase', '구매', ['purchasing'], 'api', 'active'),
+    ('CS 포털', 'cs', 'CS', ['market'], 'file', 'active'),
+    ('데이터 허브', 'hub', 'IT 기획', ['development', 'manufacturing', 'quality'], 'api', 'adopting'),
+]
+# 사업부 → [(스레드 key, 구간 key, 출발 조직, 출발 시스템, 매개 시스템, 도착 조직, 도착 시스템, {축: 값}, 며칠 전)]
+THREAD_SEED = {
+    'MX': [
+        ('simulation', 'req_to_cond', '개발기획', '요구사항 관리(DOORS)', '엑셀·문서 전달', '설계그룹', 'SPDM', {'link_mode': 'manual_file', 'traceability': ['identity'], 'scope': 'basic', 'stability': 60}, 40),
+        ('simulation', 'cad_to_model', '설계그룹', 'NX', 'Teamcenter', 'CAE그룹', 'SPDM', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance'], 'scope': 'derived_some', 'stability': 92}, 35),
+        ('simulation', 'result_to_review', 'CAE그룹', 'SPDM', 'SPDM', '설계그룹', 'Teamcenter', {'link_mode': 'auto_file', 'traceability': ['identity', 'version'], 'scope': 'basic', 'stability': 80}, 30),
+        ('simulation', 'test_vs_result', '품질', '시험 관리(LIMS)', '메일', 'CAE그룹', 'SPDM', {'link_mode': 'manual_file', 'traceability': [], 'scope': 'issue', 'stability': 30}, 20),
+        ('cost', 'target_to_bom', '개발기획', '요구사항 관리(DOORS)', 'Teamcenter', '설계그룹', 'Teamcenter', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'scope': 'derived_some', 'stability': 90}, 45),
+        ('cost', 'bom_to_estimate', '설계그룹', 'Teamcenter', '메일', '원가팀', '원가 산정 시스템', {'link_mode': 'manual_file', 'traceability': ['identity'], 'consistency': 'retyped', 'scope': 'basic', 'stability': 40}, 40),
+        ('cost', 'estimate_to_price', '원가팀', '원가 산정 시스템', '데이터 허브', '구매', '구매 포털', {'link_mode': 'auto_file', 'traceability': ['identity'], 'consistency': 'mapped', 'scope': 'derived_some', 'stability': 75}, 25),
+        ('quality', 'spec_to_test', '설계그룹', 'Teamcenter', '파일서버·공유폴더', '품질', '시험 관리(LIMS)', {'link_mode': 'manual_file', 'traceability': ['version'], 'consistency': 'mapped', 'scope': 'derived_some', 'stability': 55}, 30),
+        ('quality', 'field_to_cause', 'CS', 'CS 포털', 'QMS', '설계그룹', 'Teamcenter', {'link_mode': 'api', 'traceability': ['identity', 'provenance', 'up_link'], 'consistency': 'master', 'scope': 'all', 'stability': 88}, 15),
+        ('manufacturing', 'design_to_process', '설계그룹', 'Teamcenter', 'Teamcenter', '제조기술', 'Teamcenter', {'link_mode': 'sync', 'traceability': ['identity', 'version', 'up_link', 'down_link'], 'consistency': 'single_source', 'scope': 'all', 'stability': 97}, 50),
+        ('manufacturing', 'process_to_equipment', '제조기술', 'Teamcenter', '데이터 허브', '제조', 'MES', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'scope': 'derived_some', 'stability': 85}, 20),
+        ('bom_change', 'ebom_to_mbom', '설계그룹', 'Teamcenter', 'Teamcenter', '제조기술', 'SAP ERP', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance'], 'consistency': 'master', 'scope': 'all', 'stability': 93}, 60),
+    ],
+    'VD': [
+        ('simulation', 'cad_to_model', '설계그룹', 'NX', '파일서버·공유폴더', 'CAE그룹', 'SPDM', {'link_mode': 'manual_file', 'traceability': ['identity'], 'scope': 'basic', 'stability': 50}, 30),
+        ('simulation', 'result_to_review', 'CAE그룹', 'SPDM', '메일', '설계그룹', 'Teamcenter', {'link_mode': 'verbal', 'traceability': [], 'scope': 'issue', 'stability': 20}, 30),
+        ('cost', 'bom_to_estimate', '설계그룹', 'Teamcenter', 'Teamcenter', '원가팀', '원가 산정 시스템', {'link_mode': 'auto_file', 'traceability': ['identity', 'version'], 'consistency': 'mapped', 'scope': 'derived_some', 'stability': 78}, 25),
+        ('quality', 'spec_to_test', '설계그룹', 'Teamcenter', '메일', '품질', 'QMS', {'link_mode': 'manual_file', 'traceability': [], 'consistency': 'retyped', 'scope': 'basic', 'stability': 35}, 20),
+        ('manufacturing', 'design_to_process', '설계그룹', 'Teamcenter', 'Teamcenter', '제조기술', 'Teamcenter', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'scope': 'derived_some', 'stability': 90}, 40),
+    ],
+    '생활가전': [
+        ('manufacturing', 'design_to_process', '설계그룹', 'Teamcenter', 'Teamcenter', '제조기술', 'Teamcenter', {'link_mode': 'sync', 'traceability': ['identity', 'version', 'down_link'], 'consistency': 'single_source', 'scope': 'all', 'stability': 96}, 45),
+        ('manufacturing', 'process_to_equipment', '제조기술', 'Teamcenter', 'MES', '제조', 'MES', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'scope': 'all', 'stability': 91}, 30),
+        ('manufacturing', 'equipment_to_yield', '제조', 'MES', 'MES', '제조', 'MES', {'link_mode': 'sync', 'traceability': ['identity', 'provenance'], 'consistency': 'single_source', 'scope': 'all', 'stability': 98}, 30),
+        ('manufacturing', 'yield_to_design', '제조', 'MES', '메일', '설계그룹', 'Teamcenter', {'link_mode': 'manual_file', 'traceability': [], 'consistency': 'retyped', 'scope': 'issue', 'stability': 25}, 10),
+        ('quality', 'inspection_to_field', '제조', 'MES', 'QMS', 'CS', 'CS 포털', {'link_mode': 'auto_file', 'traceability': ['identity'], 'consistency': 'mapped', 'scope': 'derived_some', 'stability': 70}, 20),
+    ],
+    'NW': [
+        ('cost', 'bom_to_estimate', '설계그룹', 'Teamcenter', '엑셀·문서 전달', '원가팀', '원가 산정 시스템', {'link_mode': 'manual_file', 'traceability': ['identity'], 'consistency': 'retyped', 'scope': 'basic', 'stability': 45}, 30),
+        ('bom_change', 'ebom_to_mbom', '설계그룹', 'Teamcenter', 'Teamcenter', '제조기술', 'SAP ERP', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'scope': 'derived_some', 'stability': 89}, 40),
+    ],
+    '의료기기': [
+        ('quality', 'spec_to_test', '설계그룹', 'Teamcenter', 'Teamcenter', '품질', '시험 관리(LIMS)', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance', 'up_link'], 'consistency': 'master', 'scope': 'all', 'stability': 94}, 25),
+        ('quality', 'field_to_cause', 'CS', 'CS 포털', 'QMS', '설계그룹', 'Teamcenter', {'link_mode': 'auto_file', 'traceability': ['identity', 'provenance'], 'consistency': 'mapped', 'scope': 'derived_some', 'stability': 72}, 15),
+    ],
+}
+
+
+def _seed_threads(divisions):
+    from app.modules.dev_dt_maturity import threads as T
+    from app.modules.dev_dt_maturity import definitions as D
+    from app.modules.dev_dt_maturity.models import ThreadDef, ThreadSegmentDef, ThreadSystem
+
+    class _Actor:
+        id = None
+        name = '씨앗'
+    T.ensure_defaults()
+    for (name, kind, owner, stages, means, status) in SYSTEMS_SEED:
+        if not ThreadSystem.query.filter_by(name=name).first():
+            db.session.add(ThreadSystem(name=name, kind=kind, owner_org=owner, stages=stages, link_means=means, status=status))
+    db.session.flush()
+    systems = {s.name: s for s in ThreadSystem.query.all()}
+    threads = {t.key: t for t in ThreadDef.query.all()}
+    axes = {a['key']: a for a in D.AXES['digital_thread']}
+    n = 0
+    for dname, rows in THREAD_SEED.items():
+        div = divisions.get(dname)
+        if not div:
+            continue
+        orgs = {}
+
+        def org(nm):
+            if nm not in orgs:
+                orgs[nm] = T.create_org({'name': f'{dname} {nm}' if nm in ('설계그룹', 'CAE그룹') else nm}, div.id)
+            return orgs[nm]
+        for (tkey, skey, from_org, from_sys, via_sys, to_org, to_sys, marks, days) in rows:
+            t = threads[tkey]
+            sd = ThreadSegmentDef.query.filter_by(thread_id=t.id, key=skey).first()
+            seg, subject, pair = T.create_segment(div.id, {
+                'thread_id': t.id, 'segment_def_id': sd.id if sd else None,
+                'from_org_id': org(from_org).id, 'from_system_id': systems[from_sys].id, 'via_system_id': systems[via_sys].id,
+                'to_org_id': org(to_org).id, 'to_system_id': systems[to_sys].id})
+            who = PEOPLE[n % len(PEOPLE)]
+            for axis_key, val in marks.items():
+                axis = axes[axis_key]
+                if axis['kind'] == 'value':
+                    rung, value = None, float(val)
+                elif axis['kind'] == 'set':
+                    rung, value = D.set_rung(axis, val), None
+                else:
+                    rung, value = val, None
+                a = MaturityAssessment(pair_id=pair.id, axis=axis_key, rung=rung, value=value, note=f'{who} 평가', evidence={},
+                                       assessed_at=_days_ago(days), assessed_by_name=who)
+                db.session.add(a)
+                c = MaturityChange(pair_id=pair.id, axis=axis_key, before=None, after=(rung or f'{value:g}'), note='', actor_name=who)
+                db.session.add(c)
+                db.session.flush()
+                c.created_at = _days_ago(days)
+            n += 1
+    return n
+
 
 if __name__ == '__main__':
     main()

@@ -82,6 +82,7 @@ const Cell = styled.button`
   color: ${p => (p.$dark ? 'white' : '#1e293b')}; cursor: pointer; text-align: center;
 `;
 const Muted = styled.span`color: #94a3b8;`;
+const InformalTag = styled.span`display: inline-block; padding: 0 0.4rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; background: #fef3c7; color: #92400e;`;
 // 상세의 묶음·표 축 — 선택한 것들의 배지 묶음. 왼쪽 띠가 서열 색, 배지는 그 색으로 채운다.
 const Badges = styled.div`
   display: inline-flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.15rem 0.3rem 0.15rem 0.45rem; border-radius: 0.3rem; cursor: pointer; min-width: 4.5rem;
@@ -156,7 +157,7 @@ const BestCell = ({ idx, axis, dense }) => {
 };
 
 // 읽기와 그리기를 가른다 — 그리기(BoardBody)는 props 만 받아 시험·SSR 로 그릴 수 있다.
-const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey, review }) => {
+const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey, review, sector = 'simulation', sectorDef }) => {
   const [board, setBoard] = useState(null);
   const [changes, setChanges] = useState([]);
   const [changeSets, setChangeSets] = useState({});   // 전체일 때 사업부별 이력 — 그래프가 사업부마다 선을 그린다
@@ -169,9 +170,9 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
       try {
         if (divisionId === 'all') {
           // 전체 — 사업부마다의 판을 묶는다. 셈(문턱·재평가 필요)은 사업부별로 이미 돼 있다.
-          const b = await maturityApi.getBoard('all');
+          const b = await maturityApi.getBoard('all', sector);
           const boards = b.data.boards || [];
-          const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id, 'simulation', 1825).catch(() => ({ data: [] }))));
+          const cs = await Promise.all(boards.map(x => maturityApi.getChanges(x.division_id, sector, 1825).catch(() => ({ data: [] }))));
           if (!alive) return;
           setBoard({
             ...b.data,
@@ -185,8 +186,8 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
           return;
         }
         const [b, c] = await Promise.all([
-          maturityApi.getBoard(divisionId),
-          maturityApi.getChanges(divisionId, 'simulation', 1825),
+          maturityApi.getBoard(divisionId, sector),
+          maturityApi.getChanges(divisionId, sector, 1825),
         ]);
         if (!alive) return;
         setBoard(b.data); setChanges(c.data || []); setChangeSets({}); setError(null);
@@ -195,17 +196,18 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
       }
     })();
     return () => { alive = false; };
-  }, [divisionId, refreshKey]);
+  }, [divisionId, refreshKey, sector]);
 
   if (error) return <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>;
   if (!board) return <Empty>불러오는 중…</Empty>;
   return (
-    <BoardBody board={board} changes={changes} changeSets={changeSets} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review}
+    <BoardBody board={board} changes={changes} changeSets={changeSets} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review} sector={sector} sectorDef={sectorDef}
                onFiltersChange={onFiltersChange} onOpenPair={onOpenPair} />
   );
 };
 
-export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review }) => {
+export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review, sector = 'simulation', sectorDef }) => {
+  const isThread = sector === 'digital_thread';
   const [mode, setMode] = useState(board?.boards ? 'scan' : 'read');       // scan | read | progress — 전체는 요약부터
   const subjects = useMemo(() => applyFilters(board?.subjects || [], filters), [board, filters]);
   const dist = useMemo(() => distribution(subjects, axes), [subjects, axes]);
@@ -295,9 +297,9 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
           <Table>
             <thead>
               <tr>
-                <Th style={{ width: '18%' }}>시험 항목</Th>
-                <Th style={{ width: '14%' }}>시뮬레이션</Th>
-                <Th style={{ width: '9%' }}>담당 그룹</Th>
+                <Th style={{ width: '18%' }}>{isThread ? '스레드 · 구간' : (sectorDef?.subject_label || '시험 항목')}</Th>
+                <Th style={{ width: isThread ? '22%' : '14%' }}>{isThread ? '출발 → 매개 → 도착' : (sectorDef?.agent_label || '시뮬레이션')}</Th>
+                {!isThread && <Th style={{ width: '9%' }}>담당 그룹</Th>}
                 {axes.map(a => <Th key={a.key}>{a.label}</Th>)}
                 <Th>미평가</Th>
               </tr>
@@ -309,21 +311,32 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
                 const cell = (
                   <SubjectTd rowSpan={span}>
                     {s.division_name && <DivTag>{s.division_name}</DivTag>}
+                    {isThread && s.segment?.thread_name && <div><Sub>{s.segment.thread_name}</Sub></div>}
                     <Name>{s.name}</Name>
-                    <div><Sub>연계 {s.pairs.length}</Sub>{acc && s.summary.accuracy != null && <Sub> · 항목 정확도 {accuracyLabel(s.summary)}</Sub>}</div>
+                    {!isThread && <div><Sub>연계 {s.pairs.length}</Sub>{acc && s.summary.accuracy != null && <Sub> · 항목 정확도 {accuracyLabel(s.summary)}</Sub>}</div>}
                   </SubjectTd>
                 );
                 if (s.pairs.length === 0) {
-                  return <PairRow key={s.id} $band={gi % 2 === 1} $first>{cell}<Td colSpan={axes.length + 3}><Muted>아직 이은 시뮬레이션이 없습니다.</Muted></Td></PairRow>;
+                  return <PairRow key={s.id} $band={gi % 2 === 1} $first>{cell}<Td colSpan={axes.length + (isThread ? 2 : 3)}><Muted>{isThread ? '연계가 없습니다.' : '아직 이은 시뮬레이션이 없습니다.'}</Muted></Td></PairRow>;
                 }
                 return s.pairs.map((p, i) => (
                   <PairRow key={p.id} $band={gi % 2 === 1} $first={i === 0}>
                     {i === 0 && cell}
-                    <Td>
-                      <SimName onClick={() => onOpenPair(p.id)} title="연계 상세 열기">{p.agent?.name}</SimName>
-                      {(p.agent?.tools || []).length > 0 && <div><Sub>{p.agent.tools.join(', ')}</Sub></div>}
-                    </Td>
-                    <Td>{p.agent?.department_name || <Muted>—</Muted>}</Td>
+                    {isThread ? (
+                      <Td>
+                        <SimName onClick={() => onOpenPair(p.id)} title="구간 상세 열기">
+                          {s.segment ? <>{s.segment.from_org_name || '—'} <Sub>{s.segment.from_system_name}</Sub> → {s.segment.via_informal ? <InformalTag>{s.segment.via_system_name}</InformalTag> : <Sub>{s.segment.via_system_name || '(매개 없음)'}</Sub>} → {s.segment.to_org_name || '—'} <Sub>{s.segment.to_system_name}</Sub></> : '열기'}
+                        </SimName>
+                      </Td>
+                    ) : (
+                      <>
+                        <Td>
+                          <SimName onClick={() => onOpenPair(p.id)} title="연계 상세 열기">{p.agent?.name}</SimName>
+                          {(p.agent?.tools || []).length > 0 && <div><Sub>{p.agent.tools.join(', ')}</Sub></div>}
+                        </Td>
+                        <Td>{p.agent?.department_name || <Muted>—</Muted>}</Td>
+                      </>
+                    )}
                     {axes.map(a => (
                       <Td key={a.key}>
                         <AxisCell a={p.assessments[a.key]} axis={a} dense={false} onClick={() => onOpenPair(p.id)} />
