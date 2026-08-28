@@ -64,6 +64,21 @@ export default async function run() {
     const put3 = calls.find(x => x.method === 'PUT');
     say(!!put3 && JSON.stringify(put3.body) === JSON.stringify({ hidden_divisions: [99] }), `⑤ PUT hidden_divisions: ${JSON.stringify(put3?.body)}`);
     say(html().includes('1개 뺌'), '⑤ 왼쪽에 「1개 뺌」');
+
+    // ⑥ 재평가 기간 — 일 수를 바꿔 저장
+    calls.length = 0;
+    await click(byText('button', '재평가 기간')); await settle();
+    const sd = document.querySelector('input[aria-label="재평가 기간(일)"]');
+    say(!!sd && sd.value === '365' && byText('button', '저장').disabled, '⑥ 기본 365일이 채워져 있고 안 바꾸면 저장 잠김');
+    await click(byText('button', '180일'));
+    say(sd.value === '180' && !byText('button', '저장').disabled, '⑥ 빠른 선택 180일 → 저장 켜짐');
+    await type(sd, '0');
+    say(byText('button', '저장').disabled && html().includes('정수(일)'), '⑥ 0 은 거절');
+    await type(sd, '240');
+    await click(byText('button', '저장')); await settle();
+    const put4 = calls.find(x => x.method === 'PUT');
+    say(!!put4 && JSON.stringify(put4.body) === JSON.stringify({ stale_days: 240 }), `⑥ PUT stale_days: ${JSON.stringify(put4?.body)}`);
+    say(html().includes('240일'), '⑥ 왼쪽에 「240일」');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

@@ -42,6 +42,7 @@ const Button = styled.button`
 const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.8125rem; color: ${p => (p.$bad ? '#991b1b' : '#92400e')};`;
 
 const DIVS = '__divisions__';
+const STALE = '__stale__';   // 재평가 기간(일) — 이 날이 지난 평가는 「재평가 필요」
 const Sep = styled.div`font-size: 0.6875rem; font-weight: 700; color: #94a3b8; padding: 0.6rem 0.9rem 0.2rem; border-top: 1px solid #e2e8f0; margin-top: 0.3rem;`;
 const DivList = styled.div`
   display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8125rem; color: #1e293b;
@@ -86,16 +87,22 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
   const [allDivisions, setAllDivisions] = useState(null);
   const [hidden, setHidden] = useState([]);           // 초안
   const [hiddenSaved, setHiddenSaved] = useState([]); // 서버 값
+  const [staleDays, setStaleDays] = useState('');     // 초안(일)
+  const [staleSaved, setStaleSaved] = useState(null);
 
   useEffect(() => {
     maturityApi.getSettings().then(r => {
       setConf(r.data?.accuracy || {});
       const h = (r.data?.hidden_divisions || []).map(Number);
       setHidden(h); setHiddenSaved(h);
+      const sd = r.data?.stale_days ?? 365;
+      setStaleDays(String(sd)); setStaleSaved(sd);
     }).catch(e => setError(e.message));
     maturityApi.getDivisions(true).then(r => setAllDivisions(r.data || [])).catch(() => setAllDivisions([]));
   }, []);
   const hiddenChanged = JSON.stringify([...hidden].sort()) !== JSON.stringify([...hiddenSaved].sort());
+  const staleValid = Number.isInteger(Number(staleDays)) && Number(staleDays) >= 1 && Number(staleDays) <= 3650;
+  const staleChanged = staleValid && Number(staleDays) !== staleSaved;
   const toggleHidden = (id) => { setSaved(false); setHidden(h => (h.includes(id) ? h.filter(x => x !== id) : [...h, id])); };
   useEffect(() => { if (conf) setDraft(rowOf(conf, key)); }, [conf, key]);   // 「저장됨」은 줄을 옮길 때만 지운다
 
@@ -110,10 +117,11 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
       if (draft) next[key] = { boundary: draft.boundary, thresholds: [
         { rung: 'trend', min: 0 }, { rung: 'quantitative', min: Number(draft.q) }, { rung: 'correlated', min: Number(draft.c) }] };
       else delete next[key];
-      const payload = key === DIVS ? { hidden_divisions: hidden } : { accuracy: next };
+      const payload = key === DIVS ? { hidden_divisions: hidden } : key === STALE ? { stale_days: Number(staleDays) } : { accuracy: next };
       const r = await maturityApi.putSettings(payload);
-      if (key !== DIVS) setConf(r.data?.accuracy || next);
-      else { const h = (r.data?.hidden_divisions || hidden).map(Number); setHidden(h); setHiddenSaved(h); }
+      if (key === DIVS) { const h = (r.data?.hidden_divisions || hidden).map(Number); setHidden(h); setHiddenSaved(h); }
+      else if (key === STALE) { const sd = r.data?.stale_days ?? Number(staleDays); setStaleDays(String(sd)); setStaleSaved(sd); }
+      else setConf(r.data?.accuracy || next);
       setSaved(true);
       if (onChanged) onChanged();
     } catch (e) { setError(e.message); }
@@ -122,18 +130,23 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
 
   const rows = [{ key: '*', name: '전사 기본' }, ...divisions.map(d => ({ key: String(d.id), name: d.name }))];
   const onDivs = key === DIVS;
+  const onStale = key === STALE;
   const own = (k) => !!rowOf(conf, k);
   const set = (patch) => { setSaved(false); setDraft(d => ({ ...(d || base), ...patch })); };
 
   return (
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="설정">
-        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — {onDivs ? '사업부 표시' : '정확도 문턱과 경계'}</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
+        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — {onDivs ? '사업부 표시' : onStale ? '재평가 기간' : '정확도 문턱과 경계'}</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
         <Body>
           <Left>
             <Item type="button" $on={onDivs} onClick={() => { setKey(DIVS); setSaved(false); }}>
               <span>사업부 표시</span>
               <Tag $own={hidden.length > 0}>{hidden.length ? `${hidden.length}개 뺌` : '전부'}</Tag>
+            </Item>
+            <Item type="button" $on={onStale} onClick={() => { setKey(STALE); setSaved(false); }}>
+              <span>재평가 기간</span>
+              <Tag $own={staleSaved != null && staleSaved !== 365}>{staleSaved != null ? `${staleSaved}일` : '…'}</Tag>
             </Item>
             <Sep>정확도 문턱</Sep>
             {rows.map(r => (
@@ -160,7 +173,22 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
                 )}
               </>
             )}
-            {conf && !onDivs && (
+            {conf && onStale && (
+              <>
+                <Hint>평가한 날로부터 이 날수가 지나면 그 평가는 <strong>재평가 필요</strong>로 표시됩니다 — 배지, 「재평가 필요만」 필터, 요약의 셈이 모두 이 값을 씁니다. 바꾸면 이미 매긴 평가에도 바로 적용됩니다(지우지 않습니다). 기본 365일.</Hint>
+                <Field>
+                  <span style={{ minWidth: '7rem' }}>재평가 기간</span>
+                  <Num type="number" min="1" max="3650" step="1" value={staleDays} aria-label="재평가 기간(일)" onChange={e => { setSaved(false); setStaleDays(e.target.value); }} /> 일
+                  <span style={{ color: '#64748b', fontSize: '0.75rem' }}>{staleValid ? `≈ ${Math.round((Number(staleDays) / 30.4) * 10) / 10}개월` : ''}</span>
+                </Field>
+                <Field>
+                  <span style={{ minWidth: '7rem' }}>빠른 선택</span>
+                  {[90, 180, 365, 730].map(d => <Button key={d} type="button" onClick={() => { setSaved(false); setStaleDays(String(d)); }}>{d}일</Button>)}
+                </Field>
+                {!staleValid && <Notice $bad><AlertTriangle size={14} /> <span>1 ~ 3650 사이의 정수(일)여야 합니다.</span></Notice>}
+              </>
+            )}
+            {conf && !onDivs && !onStale && (
               <>
                 <Hint>
                   {key === '*' ? '사업부에 따로 정한 값이 없을 때 쓰는 전사 기본입니다.'
@@ -189,10 +217,10 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
           </Right>
         </Body>
         <Foot>
-          {!onDivs && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
+          {!onDivs && !onStale && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
           <span style={{ flex: 1, fontSize: '0.75rem', color: '#16a34a' }}>{saved ? '저장됨' : ''}</span>
           <Button type="button" onClick={onClose}>닫기</Button>
-          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
+          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
         </Foot>
       </Box>
     </Backdrop>
