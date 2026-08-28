@@ -336,7 +336,8 @@ IMPORT_COLUMNS = [
 #   accuracy       {division_id|'*': {'thresholds': [...], 'boundary': 'gte'|'gt'}}
 #   phenomena      {division_id: [태그…]}                            사업부별 현상 태그 사전
 #   stale_days     int
-SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days')
+#   hidden_divisions [division_id…]   이 화면에서 뺄 조직 — SR·GTR·CS 처럼 사업부가 아닌 것(2026-08-28)
+SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days', 'hidden_divisions')
 
 
 def _setting(key):
@@ -386,6 +387,20 @@ def get_phenomena(division_id):
     conf = _setting('phenomena') or {}
     tags = conf.get(str(division_id)) or []
     return [t for t in tags if isinstance(t, str) and t.strip()]
+
+
+def get_hidden_divisions():
+    """이 화면에서 뺀 조직의 id 집합. 설정이 깨져 있으면 아무것도 안 뺀다."""
+    raw = _setting('hidden_divisions')
+    if not isinstance(raw, list):
+        return set()
+    out = set()
+    for v in raw:
+        try:
+            out.add(int(v))
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def get_stale_days():

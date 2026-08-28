@@ -41,6 +41,12 @@ const Button = styled.button`
 `;
 const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.8125rem; color: ${p => (p.$bad ? '#991b1b' : '#92400e')};`;
 
+const DIVS = '__divisions__';
+const Sep = styled.div`font-size: 0.6875rem; font-weight: 700; color: #94a3b8; padding: 0.6rem 0.9rem 0.2rem; border-top: 1px solid #e2e8f0; margin-top: 0.3rem;`;
+const DivList = styled.div`
+  display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8125rem; color: #1e293b;
+  label { display: flex; align-items: center; gap: 0.5rem; } small { color: #94a3b8; }
+`;
 export const DEFAULT_RULE = { thresholds: [{ rung: 'trend', min: 0 }, { rung: 'quantitative', min: 70 }, { rung: 'correlated', min: 90 }], boundary: 'gte' };
 const SEG_COLORS = ['#dbeafe', '#93c5fd', '#1d4ed8'];
 
@@ -76,10 +82,21 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  // 사업부 표시 — SR·GTR·CS 처럼 사업부가 아닌 조직을 이 화면에서 뺀다. 전체 목록은 ?all=1 로 받는다.
+  const [allDivisions, setAllDivisions] = useState(null);
+  const [hidden, setHidden] = useState([]);           // 초안
+  const [hiddenSaved, setHiddenSaved] = useState([]); // 서버 값
 
   useEffect(() => {
-    maturityApi.getSettings().then(r => setConf(r.data?.accuracy || {})).catch(e => setError(e.message));
+    maturityApi.getSettings().then(r => {
+      setConf(r.data?.accuracy || {});
+      const h = (r.data?.hidden_divisions || []).map(Number);
+      setHidden(h); setHiddenSaved(h);
+    }).catch(e => setError(e.message));
+    maturityApi.getDivisions(true).then(r => setAllDivisions(r.data || [])).catch(() => setAllDivisions([]));
   }, []);
+  const hiddenChanged = JSON.stringify([...hidden].sort()) !== JSON.stringify([...hiddenSaved].sort());
+  const toggleHidden = (id) => { setSaved(false); setHidden(h => (h.includes(id) ? h.filter(x => x !== id) : [...h, id])); };
   useEffect(() => { if (conf) setDraft(rowOf(conf, key)); }, [conf, key]);   // 「저장됨」은 줄을 옮길 때만 지운다
 
   const base = useMemo(() => rowOf(conf, '*') || { q: 70, c: 90, boundary: 'gte' }, [conf]);
@@ -93,23 +110,32 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
       if (draft) next[key] = { boundary: draft.boundary, thresholds: [
         { rung: 'trend', min: 0 }, { rung: 'quantitative', min: Number(draft.q) }, { rung: 'correlated', min: Number(draft.c) }] };
       else delete next[key];
-      const r = await maturityApi.putSettings({ accuracy: next });
-      setConf(r.data?.accuracy || next); setSaved(true);
+      const payload = key === DIVS ? { hidden_divisions: hidden } : { accuracy: next };
+      const r = await maturityApi.putSettings(payload);
+      if (key !== DIVS) setConf(r.data?.accuracy || next);
+      else { const h = (r.data?.hidden_divisions || hidden).map(Number); setHidden(h); setHiddenSaved(h); }
+      setSaved(true);
       if (onChanged) onChanged();
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   };
 
   const rows = [{ key: '*', name: '전사 기본' }, ...divisions.map(d => ({ key: String(d.id), name: d.name }))];
+  const onDivs = key === DIVS;
   const own = (k) => !!rowOf(conf, k);
   const set = (patch) => { setSaved(false); setDraft(d => ({ ...(d || base), ...patch })); };
 
   return (
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="설정">
-        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — 정확도 문턱과 경계</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
+        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — {onDivs ? '사업부 표시' : '정확도 문턱과 경계'}</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
         <Body>
           <Left>
+            <Item type="button" $on={onDivs} onClick={() => { setKey(DIVS); setSaved(false); }}>
+              <span>사업부 표시</span>
+              <Tag $own={hidden.length > 0}>{hidden.length ? `${hidden.length}개 뺌` : '전부'}</Tag>
+            </Item>
+            <Sep>정확도 문턱</Sep>
             {rows.map(r => (
               <Item key={r.key} type="button" $on={key === r.key} onClick={() => { setKey(r.key); setSaved(false); }}>
                 <span>{r.name}</span>
@@ -119,7 +145,22 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
           </Left>
           <Right>
             {!conf && !error && <Hint>불러오는 중…</Hint>}
-            {conf && (
+            {conf && onDivs && (
+              <>
+                <Hint>체크한 조직은 이 화면(왼쪽 위 사업부 줄·전체 판·설정의 문턱 목록)에서 빠집니다. SR·GTR·CS 처럼 사업부가 아닌 조직을 빼 두세요. 자료는 지워지지 않습니다.</Hint>
+                {allDivisions == null ? <Hint>불러오는 중…</Hint> : (
+                  <DivList>
+                    {allDivisions.map(d => (
+                      <label key={d.id}>
+                        <input type="checkbox" checked={hidden.includes(d.id)} onChange={() => toggleHidden(d.id)} aria-label={`${d.name} 제외`} />
+                        {d.name}{hidden.includes(d.id) && <small> — 제외</small>}
+                      </label>
+                    ))}
+                  </DivList>
+                )}
+              </>
+            )}
+            {conf && !onDivs && (
               <>
                 <Hint>
                   {key === '*' ? '사업부에 따로 정한 값이 없을 때 쓰는 전사 기본입니다.'
@@ -148,10 +189,10 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
           </Right>
         </Body>
         <Foot>
-          {key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
+          {!onDivs && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
           <span style={{ flex: 1, fontSize: '0.75rem', color: '#16a34a' }}>{saved ? '저장됨' : ''}</span>
           <Button type="button" onClick={onClose}>닫기</Button>
-          <Button type="button" $primary disabled={busy || !conf || !valid} onClick={save}><Check size={14} /> 저장</Button>
+          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
         </Foot>
       </Box>
     </Backdrop>

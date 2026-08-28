@@ -18,6 +18,7 @@ export default async function run() {
   const calls = fakeFetch(({ url, method, body }) => {
     if (url.endsWith('/settings') && method === 'PUT') { stored = { ...stored, ...body }; return stored; }
     if (url.endsWith('/settings')) return stored;
+    if (url.includes('/divisions')) return [{ id: 17, name: 'MX', hidden: false }, { id: 18, name: 'VD', hidden: false }, { id: 99, name: 'SR', hidden: false }];
     return {};
   });
 
@@ -51,6 +52,18 @@ export default async function run() {
     await click(byText('button', '저장')); await settle();
     const put2 = calls.find(x => x.method === 'PUT');
     say(!!put2 && !('17' in (put2.body.accuracy || {})), '④ 「전사 기본 따르기」로 사업부 줄이 빠짐');
+
+    // ⑤ 사업부 표시 — SR 을 빼면 hidden_divisions 로 저장
+    calls.length = 0;
+    await click(byText('button', '사업부 표시')); await settle();
+    const sr = document.querySelector('input[aria-label="SR 제외"]');
+    say(!!sr && !!document.querySelector('input[aria-label="MX 제외"]'), '⑤ 전체 조직이 체크 목록으로 보임');
+    say(byText('button', '저장').disabled, '⑤ 안 바꾸면 저장 잠김');
+    await click(sr); await settle();
+    await click(byText('button', '저장')); await settle();
+    const put3 = calls.find(x => x.method === 'PUT');
+    say(!!put3 && JSON.stringify(put3.body) === JSON.stringify({ hidden_divisions: [99] }), `⑤ PUT hidden_divisions: ${JSON.stringify(put3?.body)}`);
+    say(html().includes('1개 뺌'), '⑤ 왼쪽에 「1개 뺌」');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

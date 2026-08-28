@@ -683,8 +683,11 @@ def board_all(sector='simulation'):
     from app.modules.digital_twin_dashboard.models import Division
     divisions = (Division.query.filter_by(is_active=True, is_kpi_owner=True)
                  .order_by(Division.order, Division.id).all())
+    hidden = D.get_hidden_divisions()
     boards = []
     for d in divisions:
+        if d.id in hidden:
+            continue
         b = board(d.id, sector)
         b['division_name'] = d.name
         for s in b['subjects']:

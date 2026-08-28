@@ -95,13 +95,17 @@ def definitions(actor):
 @bp.route('/divisions', methods=['GET'])
 @read_required
 def divisions(actor):
+    """활성 사업부. 설정에서 뺀 조직(SR·GTR·CS 같은 비사업부)은 기본으로 안 준다 — ?all=1 이면 hidden 표시와 함께 전부."""
     from app.modules.digital_twin_dashboard.models import Division
+    hidden = D.get_hidden_divisions()
     rows = (Division.query.filter_by(is_active=True)
             .order_by(Division.order, Division.id).all())
+    everything = request.args.get('all') in ('1', 'true')
     return success_response([{
         'id': d.id, 'name': d.name,
         'deny_reason': P.deny_reason(actor, d.id, d.name),
-    } for d in rows])
+        'hidden': d.id in hidden,
+    } for d in rows if everything or d.id not in hidden])
 
 
 @bp.route('/board', methods=['GET'])

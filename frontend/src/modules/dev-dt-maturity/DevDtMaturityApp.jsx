@@ -40,6 +40,7 @@ const Tab = styled.button`
 // 무엇이 있는지가 함께 보여야 한다(인텔 분야 토글과 같은 이유). 「전체」는 모든 사업부를
 // 사업부별로 묶어 보여 준다.
 const DivBar = styled.div`display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap;`;
+const Tabs = styled.div`margin-left: auto; display: flex; gap: 0.25rem;`;   // 성숙도·목록은 오른쪽 끝(2026-08-28)
 const DivBtn = styled.button`
   padding: 0.3rem 0.7rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#e2e8f0')}; border-radius: 999px;
   background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : p.$muted ? '#94a3b8' : '#475569')};
@@ -68,6 +69,11 @@ const DevDtMaturityApp = ({ onGoHome }) => {
       } catch (e) { setError(e.message); }
     })();
   }, []);
+  // 설정(뺀 조직)이 바뀌면 사업부 줄만 다시 — 정의는 그대로
+  useEffect(() => {
+    if (!refreshKey) return;
+    maturityApi.getDivisions().then(v => setDivisions(v.data)).catch(() => {});
+  }, [refreshKey]);
 
   // 사업부: URL → 내 사업부 → 첫 사업부. 'all' 은 전체.
   const divisionId = useMemo(() => {
@@ -122,8 +128,10 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                     onClick={() => patch({ division: d.id, pair: null })}>{d.name}</DivBtn>
           ))}
         </DivBar>
-        <Tab $on={tab === 'board'} onClick={() => patch({ tab: null })}>성숙도</Tab>
-        <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
+        <Tabs>
+          <Tab $on={tab === 'board'} onClick={() => patch({ tab: null })}>성숙도</Tab>
+          <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
+        </Tabs>
       </StickyBar>
       <Main $fill={tab === 'list'}>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}

@@ -25,7 +25,7 @@ const json = (method, payload) => ({ method, body: JSON.stringify(payload) });
 
 export const maturityApi = {
   getDefinitions: () => request('/definitions'),
-  getDivisions: () => request('/divisions'),
+  getDivisions: (all = false) => request(all ? '/divisions?all=1' : '/divisions'),
   /** 사업부 판. 이 판에는 「전체」가 없다 — division_id 가 필수다. */
   getBoard: (divisionId, sector = 'simulation') =>
     request(`/board?division_id=${divisionId}&sector=${sector}`),

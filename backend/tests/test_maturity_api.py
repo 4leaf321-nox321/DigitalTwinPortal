@@ -539,3 +539,18 @@ def test_불량_유형_표의_칸은_근거_없이_바로_켜고_끈다(client, 
     out = _assess(client, auth, mx_user, p['id'], 'modeling', {'flags': ['performance'], 'note': '거동 확인',
                   'evidence': {'defects': {'변색': {'test': '2025-06'}}}})
     assert out['data']['assessments']['modeling']['rung_index'] == 3
+
+
+def test_설정에서_뺀_조직은_사업부_목록과_전체_판에서_빠진다(client, auth, world, mx_user, office):
+    vd = world['vd'].id
+    res = client.put(f'{BASE}/settings', json={'hidden_divisions': [vd, 'x']}, headers=auth(office))
+    assert res.status_code == 200
+    ids = [d['id'] for d in client.get(f'{BASE}/divisions', headers=auth(mx_user)).get_json()['data']]
+    assert vd not in ids and world['mx'].id in ids
+    allrows = client.get(f'{BASE}/divisions?all=1', headers=auth(mx_user)).get_json()['data']
+    assert any(d['id'] == vd and d['hidden'] for d in allrows)
+    res = client.get(f'{BASE}/board?division_id=all', headers=auth(mx_user))
+    assert vd not in [b['division_id'] for b in res.get_json()['data']['boards']]
+    client.put(f'{BASE}/settings', json={'hidden_divisions': []}, headers=auth(office))
+    ids = [d['id'] for d in client.get(f'{BASE}/divisions', headers=auth(mx_user)).get_json()['data']]
+    assert vd in ids
