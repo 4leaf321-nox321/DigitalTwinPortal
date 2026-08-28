@@ -19,6 +19,7 @@ export const resolveSample = (path, method, store) => {
   }).filter(x => x.sameDivision && x.diff <= 1);
   scored.sort((a, b) => b.same - a.same || a.diff - b.diff);
   if (scored.length) return { success: true, data: store[scored[0].k] };
+  if (/^\/pairs\/\d+$/.test(base)) return { success: true, data: null };
   const empty = /\/(subjects|agents|reviews|divisions|departments|changes)$|\/years$/.test(base) ? [] : {};
   return { success: true, data: empty };
 };

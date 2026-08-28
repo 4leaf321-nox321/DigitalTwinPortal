@@ -24,7 +24,7 @@ const PairSide = ({ pairId, axes, onChanged, onClose }) => {
     let alive = true;
     setPair(null);
     maturityApi.getPair(pairId)
-      .then(r => { if (alive) { setPair(r.data); setError(null); } })
+      .then(r => { if (!alive) return; if (!r.data?.id) { setPair(null); setError('없는 연계입니다 — 지워졌거나 샘플에 없는 것입니다.'); return; } setPair(r.data); setError(null); })
       .catch(e => { if (alive) setError(e.message); });
     return () => { alive = false; };
   }, [pairId]);

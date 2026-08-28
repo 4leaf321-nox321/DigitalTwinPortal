@@ -295,6 +295,7 @@ const PairModal = ({ pairId, axes, onClose, onChanged }) => {
   const load = async () => {
     try {
       const res = await maturityApi.getPair(pairId);
+      if (!res.data?.id) throw new Error('없는 연계입니다 — 지워졌거나 샘플에 없는 것입니다.');
       setPair(res.data);
       setError(null);
     } catch (e) {
@@ -405,7 +406,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
         <Head>
           <div>
             <Title>
-              {pair ? `${pair.subject.name} × ${pair.agent?.name ?? '(수단 없음)'}` : '불러오는 중…'}
+              {pair?.subject ? `${pair.subject.name}${pair.agent ? ` × ${pair.agent.name}` : ''}` : pair ? '(없는 연계)' : '불러오는 중…'}
             </Title>
             {pair && (
               <Sub>{(pair.agent?.tools || []).length > 0 ? pair.agent.tools.join(', ') : '\u00a0'}</Sub>
