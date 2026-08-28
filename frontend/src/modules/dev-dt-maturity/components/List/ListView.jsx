@@ -151,7 +151,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
         <BoxHead>
           <Link2 size={14} /> 시험 × 시뮬레이션 <Count>연계 {pairs.length}</Count>
           {(allMode ? touchable.length > 0 : !denyReason) && (
-            <Button type="button" onClick={() => setLinkOpen(true)} style={{ marginLeft: '0.5rem', borderColor: '#1d4ed8', color: '#1d4ed8' }}><Plus size={13} /> 연계 추가</Button>
+            <Button type="button" onClick={() => setLinkOpen(true)} style={{ marginLeft: '0.5rem', background: '#1d4ed8', borderColor: '#1d4ed8', color: 'white' }}><Plus size={13} /> 연계 추가</Button>
           )}
           <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 관리·가져오기는 헤더 단추에서</Hint>
         </BoxHead>

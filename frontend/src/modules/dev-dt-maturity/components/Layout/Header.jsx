@@ -56,8 +56,8 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
               <Users size={16} /> 조직 관리
             </HeaderButton>
             {canCurate && (
-              <HeaderButton onClick={() => onOpen('thread')} title="스레드 사전 — 표준 스레드와 구간(사무국)">
-                <BookOpen size={16} /> 스레드 사전
+              <HeaderButton onClick={() => onOpen('thread')} title="스레드 정의 — 표준 스레드와 구간(사무국)">
+                <BookOpen size={16} /> 스레드 정의
               </HeaderButton>
             )}
           </>

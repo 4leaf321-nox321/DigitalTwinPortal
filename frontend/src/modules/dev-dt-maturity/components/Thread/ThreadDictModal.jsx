@@ -125,7 +125,7 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
     catch (err) { setError(err.message); } finally { setBusy(false); }
   };
 
-  const title = { system: '시스템 관리', org: '조직 관리', thread: '스레드 사전' }[kind];
+  const title = { system: '시스템 관리', org: '조직 관리', thread: '스레드 정의' }[kind];
   return (
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label={title}>
@@ -134,7 +134,7 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
           <Tabs>
             <Tab type="button" $on={kind === 'system'} onClick={() => setKind('system')}>시스템</Tab>
             <Tab type="button" $on={kind === 'org'} onClick={() => setKind('org')}>조직</Tab>
-            {canCurate && <Tab type="button" $on={kind === 'thread'} onClick={() => setKind('thread')}>스레드 사전</Tab>}
+            {canCurate && <Tab type="button" $on={kind === 'thread'} onClick={() => setKind('thread')}>스레드 정의</Tab>}
           </Tabs>
           <IconBtn onClick={onClose} title="닫기" aria-label="닫기"><X size={16} /></IconBtn>
         </Head>

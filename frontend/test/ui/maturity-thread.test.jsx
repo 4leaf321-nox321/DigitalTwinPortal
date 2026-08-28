@@ -105,7 +105,7 @@ export default async function run() {
     await click(document.querySelector('button[aria-label="CAE그룹(MX) 가져오기"]')); await settle(60);
     const po = calls.find(c => c.method === 'POST' && c.url.endsWith('/orgs'));
     say(!!po && po.body.source_kind === 'portal' && po.body.source_id === '3' && po.body.name === 'CAE그룹(MX)', `③ POST /orgs(portal): ${JSON.stringify(po?.body)}`);
-    say(!!byText('button', '스레드 사전'), '③ 사무국에는 스레드 사전 탭');
+    say(!!byText('button', '스레드 정의'), '③ 사무국에는 스레드 정의 탭');
     await unmount();
 
     // ④ 사업부 요약 — 스레드 줄 그림 · 조직 연계표 · 시스템 허브도
