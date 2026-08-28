@@ -231,7 +231,7 @@ SYSTEM_STATUS_KEYS = [k['key'] for k in SYSTEM_STATUS]
 DATA_KINDS = [
     {'key': 'requirement', 'label': '요구사항·스펙'}, {'key': 'geometry', 'label': '설계 형상(CAD)'}, {'key': 'material', 'label': '재질·물성'},
     {'key': 'sim_model', 'label': '해석 모델'}, {'key': 'sim_result', 'label': '해석 결과'}, {'key': 'test_result', 'label': '시험 결과'},
-    {'key': 'bom', 'label': 'BOM'}, {'key': 'eco', 'label': '설계 변경(ECO)'}, {'key': 'cost', 'label': '원가·단가'},
+    {'key': 'bom', 'label': 'BOM(E/M)'}, {'key': 'bop', 'label': 'BOP(공정 순서)'}, {'key': 'eco', 'label': '설계 변경(ECO)'}, {'key': 'cost', 'label': '원가·단가'},
     {'key': 'process', 'label': '공정·설비 파라미터'}, {'key': 'yield', 'label': '생산 실적·수율'}, {'key': 'inspection', 'label': '검사 결과'},
     {'key': 'defect', 'label': '불량·이슈'}, {'key': 'field', 'label': '시장 품질·CS'}, {'key': 'other', 'label': '기타'},
 ]
@@ -248,10 +248,10 @@ THREAD_DEFAULTS = [
          {'key': 'test_vs_result', 'data': ['test_result', 'sim_result'], 'name': '시험 결과 ↔ 해석 결과', 'from': 'quality', 'to': 'development'},
          {'key': 'eco_to_rerun', 'data': ['eco'], 'name': '설계 변경 → 해석 재수행', 'from': 'development', 'to': 'development'},
      ]},
-    {'key': 'cost', 'name': '재료비 스레드', 'description': '목표 원가에서 설계 BOM·예상 원가·구매 단가·실적 원가·손익까지',
+    {'key': 'cost', 'name': '재료비 스레드', 'description': '목표 원가에서 E-BOM·예상 원가·구매 단가·실적 원가·손익까지',
      'segments': [
-         {'key': 'target_to_bom', 'data': ['cost', 'bom'], 'name': '목표 원가 → 설계 BOM', 'from': 'planning', 'to': 'development'},
-         {'key': 'bom_to_estimate', 'data': ['bom', 'cost'], 'name': '설계 BOM → 예상 원가', 'from': 'development', 'to': 'management'},
+         {'key': 'target_to_bom', 'data': ['cost', 'bom'], 'name': '목표 원가 → E-BOM', 'from': 'planning', 'to': 'development'},
+         {'key': 'bom_to_estimate', 'data': ['bom', 'cost'], 'name': 'E-BOM → 예상 원가', 'from': 'development', 'to': 'management'},
          {'key': 'estimate_to_price', 'data': ['cost'], 'name': '예상 원가 → 구매 단가', 'from': 'management', 'to': 'purchasing'},
          {'key': 'price_to_actual', 'data': ['cost'], 'name': '구매 단가 → 실적 원가', 'from': 'purchasing', 'to': 'manufacturing'},
          {'key': 'actual_to_pl', 'data': ['cost'], 'name': '실적 원가 → 손익', 'from': 'manufacturing', 'to': 'management'},
@@ -271,11 +271,13 @@ THREAD_DEFAULTS = [
          {'key': 'equipment_to_yield', 'data': ['process', 'yield'], 'name': '설비 파라미터 → 생산 실적·수율', 'from': 'manufacturing', 'to': 'manufacturing'},
          {'key': 'yield_to_design', 'data': ['yield', 'defect'], 'name': '생산 실적 → 설계 피드백', 'from': 'manufacturing', 'to': 'development'},
      ]},
-    {'key': 'bom_change', 'name': 'BOM·설계 변경 스레드', 'description': '설계 BOM에서 제조 BOM·구매·설계 변경 전파까지',
+    {'key': 'bom_change', 'name': 'BOM·BOP 스레드', 'description': 'E-BOM에서 M-BOM·BOP·구매·설계 변경 전파까지',
      'segments': [
-         {'key': 'ebom_to_mbom', 'data': ['bom'], 'name': '설계 BOM → 제조 BOM', 'from': 'development', 'to': 'mfg_eng'},
-         {'key': 'mbom_to_purchase', 'data': ['bom', 'cost'], 'name': '제조 BOM → 구매 요청', 'from': 'mfg_eng', 'to': 'purchasing'},
-         {'key': 'eco_to_mbom', 'data': ['eco', 'bom'], 'name': '설계 변경 → 제조 BOM 반영', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'ebom_to_mbom', 'data': ['bom'], 'name': 'E-BOM → M-BOM', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'mbom_to_bop', 'data': ['bom', 'bop'], 'name': 'M-BOM → BOP', 'from': 'mfg_eng', 'to': 'mfg_eng'},
+         {'key': 'bop_to_line', 'data': ['bop', 'process'], 'name': 'BOP → 라인 작업 지시', 'from': 'mfg_eng', 'to': 'manufacturing'},
+         {'key': 'mbom_to_purchase', 'data': ['bom', 'cost'], 'name': 'M-BOM → 구매 요청', 'from': 'mfg_eng', 'to': 'purchasing'},
+         {'key': 'eco_to_mbom', 'data': ['eco', 'bom', 'bop'], 'name': '설계 변경 → M-BOM·BOP 반영', 'from': 'development', 'to': 'mfg_eng'},
          {'key': 'eco_to_field', 'data': ['eco', 'field'], 'name': '설계 변경 → 서비스 부품 반영', 'from': 'development', 'to': 'market'},
      ]},
 ]

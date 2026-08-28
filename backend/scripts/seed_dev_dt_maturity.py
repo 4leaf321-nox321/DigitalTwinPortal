@@ -555,7 +555,7 @@ REVIEW_SEED = {
         ('2026-08', 'cause', 'QM #2290', '빛샘', '광학 시뮬레이션', 'after_issue', 'reference', 'trend', 3, ''),
         ('2025-10', 'spec', 'Neo QLED 85', '스탠드 처짐 스펙', '스탠드 구조 해석', 'review_meeting', 'change_basis', 'margin', 4, ''),
     ],
-    '생활가전': [
+    'DA': [
         ('2026-02', 'spec', '비스포크 AI 세탁기', '드럼 진동 스펙', '드럼 동역학 해석', 'before_spec', 'gate', 'confirmed', 4, ''),
         ('2026-05', 'spec', '비스포크 AI 세탁기 24kg', '드럼 진동 스펙', '드럼 동역학 해석', 'before_spec', 'gate', 'margin', 3, ''),
         ('2026-04', 'spec', '비스포크 냉장고', '냉기 분배 스펙', '냉기 유동 해석', 'concept', 'change_basis', 'trend', 6, ''),
@@ -608,57 +608,81 @@ def _seed_reviews(divisions):
 
 
 # ── 디지털 스레드 씨앗 — 사업부마다 스레드 몇 줄, 구간마다 출발/매개/도착과 평가(2026-08-28) ──
+# 사내 실제 이름으로(2026-08-29). SPDM 은 **사업부마다 따로** 있어 이름에 사업부를 붙인다 —
+# 씨앗은 `SPDM` 이라고만 적고 사업부별 행을 찾아 쓴다(_sys 참고).
 SYSTEMS_SEED = [
+    ('PLM', 'plm', 'PLM 운영팀', ['development', 'mfg_eng'], 'api', 'active'),
     ('Teamcenter', 'plm', 'PLM 운영팀', ['development', 'mfg_eng'], 'api', 'active'),
-    ('SPDM', 'spdm', 'CAE 인프라팀', ['development'], 'api', 'adopting'),
     ('NX', 'cad', 'PLM 운영팀', ['development'], 'file', 'active'),
     ('요구사항 관리(DOORS)', 'requirements', '개발기획', ['planning', 'development'], 'file', 'active'),
     ('시험 관리(LIMS)', 'test', '품질', ['quality'], 'file', 'active'),
-    ('SAP ERP', 'erp', 'IT 기획', ['purchasing', 'manufacturing', 'management'], 'api', 'active'),
-    ('MES', 'mes', '제조 IT', ['manufacturing'], 'api', 'active'),
-    ('QMS', 'qms', '품질', ['quality', 'market'], 'file', 'active'),
+    ('G-ERP', 'erp', 'IT 기획', ['purchasing', 'manufacturing', 'management'], 'api', 'active'),
+    ('G-MES', 'mes', '제조 IT', ['manufacturing'], 'api', 'active'),
+    ('BQMS', 'qms', '품질', ['quality', 'market'], 'file', 'active'),
     ('원가 산정 시스템', 'cost', '원가팀', ['management'], 'none', 'active'),
     ('구매 포털', 'purchase', '구매', ['purchasing'], 'api', 'active'),
     ('CS 포털', 'cs', 'CS', ['market'], 'file', 'active'),
-    ('데이터 허브', 'hub', 'IT 기획', ['development', 'manufacturing', 'quality'], 'api', 'adopting'),
+    ('제조 데이터레이크', 'hub', '제조 IT', ['mfg_eng', 'manufacturing', 'quality'], 'api', 'active'),
+    ('BDC', 'hub', 'IT 기획', ['development', 'manufacturing', 'quality', 'management'], 'api', 'adopting'),
 ]
+# 사업부마다 하나씩 세우는 시스템 — 씨앗 표의 이름 → 실제 행 이름은 `{이름}({사업부})`
+PER_DIVISION_SYSTEMS = {'SPDM': ('spdm', 'CAE 인프라팀', ['development'], 'api', 'adopting')}
+# 개발 DB 에 남아 있는 옛 이름을 새 이름으로 — 다시 돌리면 사전이 저절로 맞춰진다.
+SYSTEM_RENAMES = {'SAP ERP': 'G-ERP', 'MES': 'G-MES', 'QMS': 'BQMS', '데이터 허브': 'BDC'}
+# 사업부 → [(스레드 key, 구간 key, 출발 조직, 출발 시스템, 매개 시스템, 도착 조직, 도착 시스템, {축: 값}, 며칠 전)]
+# 사업부별 설계·해석 조직의 실제 이름 — 그 밖의 조직(품질·구매…)은 이름 그대로 쓰고 사업부만 붙인다.
+DESIGN_ORGS = {
+    ('MX', '설계그룹'): '설계그룹', ('MX', 'CAE그룹'): 'CAE그룹',
+    ('VD', '설계그룹'): 'Mecha그룹', ('VD', 'CAE그룹'): 'CAE그룹',
+    ('DA', '설계그룹'): '요소기술그룹', ('DA', 'CAE그룹'): 'CAE그룹',
+    ('NW', '설계그룹'): 'H/W개발그룹', ('NW', 'CAE그룹'): 'CAE그룹',
+    ('의료기기', '설계그룹'): '설계그룹', ('의료기기', 'CAE그룹'): 'CAE그룹',
+}
+
 # 사업부 → [(스레드 key, 구간 key, 출발 조직, 출발 시스템, 매개 시스템, 도착 조직, 도착 시스템, {축: 값}, 며칠 전)]
 THREAD_SEED = {
     'MX': [
         ('simulation', 'req_to_cond', '개발기획', '요구사항 관리(DOORS)', '엑셀·문서 전달', '설계그룹', 'SPDM', {'link_mode': 'manual_file', 'traceability': ['identity'], 'stability': 60}, 40),
-        ('simulation', 'cad_to_model', '설계그룹', 'NX', 'Teamcenter', 'CAE그룹', 'SPDM', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance'], 'stability': 92}, 35),
-        ('simulation', 'result_to_review', 'CAE그룹', 'SPDM', 'SPDM', '설계그룹', 'Teamcenter', {'link_mode': 'auto_file', 'traceability': ['identity', 'version'], 'stability': 80}, 30),
+        ('simulation', 'cad_to_model', '설계그룹', 'NX', 'PLM', 'CAE그룹', 'SPDM', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance'], 'stability': 92}, 35),
+        ('simulation', 'result_to_review', 'CAE그룹', 'SPDM', 'SPDM', '설계그룹', 'PLM', {'link_mode': 'auto_file', 'traceability': ['identity', 'version'], 'stability': 80}, 30),
         ('simulation', 'test_vs_result', '품질', '시험 관리(LIMS)', '메일', 'CAE그룹', 'SPDM', {'link_mode': 'manual_file', 'traceability': [], 'stability': 30}, 20),
-        ('cost', 'target_to_bom', '개발기획', '요구사항 관리(DOORS)', 'Teamcenter', '설계그룹', 'Teamcenter', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 90}, 45),
-        ('cost', 'bom_to_estimate', '설계그룹', 'Teamcenter', '메일', '원가팀', '원가 산정 시스템', {'link_mode': 'manual_file', 'traceability': ['identity'], 'consistency': 'retyped', 'stability': 40}, 40),
-        ('cost', 'estimate_to_price', '원가팀', '원가 산정 시스템', '데이터 허브', '구매', '구매 포털', {'link_mode': 'auto_file', 'traceability': ['identity'], 'consistency': 'mapped', 'stability': 75}, 25),
-        ('quality', 'spec_to_test', '설계그룹', 'Teamcenter', '파일서버·공유폴더', '품질', '시험 관리(LIMS)', {'link_mode': 'manual_file', 'traceability': ['version'], 'consistency': 'mapped', 'stability': 55}, 30),
-        ('quality', 'field_to_cause', 'CS', 'CS 포털', 'QMS', '설계그룹', 'Teamcenter', {'link_mode': 'api', 'traceability': ['identity', 'provenance', 'up_link'], 'consistency': 'master', 'stability': 88}, 15),
-        ('manufacturing', 'design_to_process', '설계그룹', 'Teamcenter', 'Teamcenter', '제품기술', 'Teamcenter', {'link_mode': 'sync', 'traceability': ['identity', 'version', 'up_link', 'down_link'], 'consistency': 'single_source', 'stability': 97}, 50),
-        ('manufacturing', 'process_to_equipment', '제품기술', 'Teamcenter', '데이터 허브', '제조', 'MES', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 85}, 20),
-        ('bom_change', 'ebom_to_mbom', '설계그룹', 'Teamcenter', 'Teamcenter', '제품기술', 'SAP ERP', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance'], 'consistency': 'master', 'stability': 93}, 60),
+        ('cost', 'target_to_bom', '개발기획', '요구사항 관리(DOORS)', 'PLM', '설계그룹', 'PLM', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 90}, 45),
+        ('cost', 'bom_to_estimate', '설계그룹', 'PLM', '메일', '원가팀', '원가 산정 시스템', {'link_mode': 'manual_file', 'traceability': ['identity'], 'consistency': 'retyped', 'stability': 40}, 40),
+        ('cost', 'estimate_to_price', '원가팀', '원가 산정 시스템', 'BDC', '구매', '구매 포털', {'link_mode': 'auto_file', 'traceability': ['identity'], 'consistency': 'mapped', 'stability': 75}, 25),
+        ('quality', 'spec_to_test', '설계그룹', 'PLM', '파일서버·공유폴더', '품질', '시험 관리(LIMS)', {'link_mode': 'manual_file', 'traceability': ['version'], 'consistency': 'mapped', 'stability': 55}, 30),
+        ('quality', 'field_to_cause', 'CS', 'CS 포털', 'BQMS', '설계그룹', 'PLM', {'link_mode': 'api', 'traceability': ['identity', 'provenance', 'up_link'], 'consistency': 'master', 'stability': 88}, 15),
+        ('manufacturing', 'design_to_process', '설계그룹', 'PLM', 'PLM', '제품기술', 'Teamcenter', {'link_mode': 'sync', 'traceability': ['identity', 'version', 'up_link', 'down_link'], 'consistency': 'single_source', 'stability': 97}, 50),
+        ('manufacturing', 'process_to_equipment', '제품기술', 'Teamcenter', '제조 데이터레이크', '제조', 'G-MES', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 85}, 20),
+        ('bom_change', 'ebom_to_mbom', '설계그룹', 'PLM', 'PLM', '제품기술', 'G-ERP', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance'], 'consistency': 'master', 'stability': 93}, 60),
+        ('bom_change', 'mbom_to_bop', '제품기술', 'G-ERP', 'Teamcenter', '제품기술', 'Teamcenter', {'link_mode': 'auto_file', 'traceability': ['identity', 'version'], 'consistency': 'mapped', 'stability': 70}, 35),
+        ('bom_change', 'bop_to_line', '제품기술', 'Teamcenter', '제조 데이터레이크', '제조', 'G-MES', {'link_mode': 'api', 'traceability': ['identity'], 'consistency': 'master', 'stability': 82}, 25),
     ],
     'VD': [
         ('simulation', 'cad_to_model', '설계그룹', 'NX', '파일서버·공유폴더', 'CAE그룹', 'SPDM', {'link_mode': 'manual_file', 'traceability': ['identity'], 'stability': 50}, 30),
-        ('simulation', 'result_to_review', 'CAE그룹', 'SPDM', '메일', '설계그룹', 'Teamcenter', {'link_mode': 'verbal', 'traceability': [], 'stability': 20}, 30),
-        ('cost', 'bom_to_estimate', '설계그룹', 'Teamcenter', 'Teamcenter', '원가팀', '원가 산정 시스템', {'link_mode': 'auto_file', 'traceability': ['identity', 'version'], 'consistency': 'mapped', 'stability': 78}, 25),
-        ('quality', 'spec_to_test', '설계그룹', 'Teamcenter', '메일', '품질', 'QMS', {'link_mode': 'manual_file', 'traceability': [], 'consistency': 'retyped', 'stability': 35}, 20),
-        ('manufacturing', 'design_to_process', '설계그룹', 'Teamcenter', 'Teamcenter', '제품기술', 'Teamcenter', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 90}, 40),
+        ('simulation', 'result_to_review', 'CAE그룹', 'SPDM', '메일', '설계그룹', 'PLM', {'link_mode': 'verbal', 'traceability': [], 'stability': 20}, 30),
+        ('cost', 'bom_to_estimate', '설계그룹', 'PLM', 'PLM', '원가팀', '원가 산정 시스템', {'link_mode': 'auto_file', 'traceability': ['identity', 'version'], 'consistency': 'mapped', 'stability': 78}, 25),
+        ('quality', 'spec_to_test', '설계그룹', 'PLM', '메일', '품질', 'BQMS', {'link_mode': 'manual_file', 'traceability': [], 'consistency': 'retyped', 'stability': 35}, 20),
+        ('manufacturing', 'design_to_process', '설계그룹', 'PLM', 'PLM', '제품기술', 'Teamcenter', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 90}, 40),
+        ('bom_change', 'ebom_to_mbom', '설계그룹', 'PLM', '엑셀·문서 전달', '제품기술', 'G-ERP', {'link_mode': 'manual_file', 'traceability': ['identity'], 'consistency': 'retyped', 'stability': 42}, 35),
     ],
-    '생활가전': [
-        ('manufacturing', 'design_to_process', '설계그룹', 'Teamcenter', 'Teamcenter', '제품기술', 'Teamcenter', {'link_mode': 'sync', 'traceability': ['identity', 'version', 'down_link'], 'consistency': 'single_source', 'stability': 96}, 45),
-        ('manufacturing', 'process_to_equipment', '제품기술', 'Teamcenter', 'MES', '제조', 'MES', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 91}, 30),
-        ('manufacturing', 'equipment_to_yield', '제조', 'MES', 'MES', '제조', 'MES', {'link_mode': 'sync', 'traceability': ['identity', 'provenance'], 'consistency': 'single_source', 'stability': 98}, 30),
-        ('manufacturing', 'yield_to_design', '제조', 'MES', '메일', '설계그룹', 'Teamcenter', {'link_mode': 'manual_file', 'traceability': [], 'consistency': 'retyped', 'stability': 25}, 10),
-        ('quality', 'inspection_to_field', '제조', 'MES', 'QMS', 'CS', 'CS 포털', {'link_mode': 'auto_file', 'traceability': ['identity'], 'consistency': 'mapped', 'stability': 70}, 20),
+    'DA': [
+        ('manufacturing', 'design_to_process', '설계그룹', 'PLM', 'PLM', '제품기술', 'Teamcenter', {'link_mode': 'sync', 'traceability': ['identity', 'version', 'down_link'], 'consistency': 'single_source', 'stability': 96}, 45),
+        ('manufacturing', 'process_to_equipment', '제품기술', 'Teamcenter', 'G-MES', '제조', 'G-MES', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 91}, 30),
+        ('manufacturing', 'equipment_to_yield', '제조', 'G-MES', 'G-MES', '제조', 'G-MES', {'link_mode': 'sync', 'traceability': ['identity', 'provenance'], 'consistency': 'single_source', 'stability': 98}, 30),
+        ('manufacturing', 'yield_to_design', '제조', 'G-MES', '메일', '설계그룹', 'PLM', {'link_mode': 'manual_file', 'traceability': [], 'consistency': 'retyped', 'stability': 25}, 10),
+        ('quality', 'inspection_to_field', '제조', 'G-MES', 'BQMS', 'CS', 'CS 포털', {'link_mode': 'auto_file', 'traceability': ['identity'], 'consistency': 'mapped', 'stability': 70}, 20),
+        ('bom_change', 'bop_to_line', '제품기술', 'Teamcenter', '제조 데이터레이크', '제조', 'G-MES', {'link_mode': 'sync', 'traceability': ['identity', 'version'], 'consistency': 'single_source', 'stability': 95}, 40),
+        ('bom_change', 'mbom_to_purchase', '제품기술', 'G-ERP', 'G-ERP', '구매', '구매 포털', {'link_mode': 'api', 'traceability': ['identity'], 'consistency': 'master', 'stability': 86}, 30),
     ],
     'NW': [
-        ('cost', 'bom_to_estimate', '설계그룹', 'Teamcenter', '엑셀·문서 전달', '원가팀', '원가 산정 시스템', {'link_mode': 'manual_file', 'traceability': ['identity'], 'consistency': 'retyped', 'stability': 45}, 30),
-        ('bom_change', 'ebom_to_mbom', '설계그룹', 'Teamcenter', 'Teamcenter', '제품기술', 'SAP ERP', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 89}, 40),
+        ('cost', 'bom_to_estimate', '설계그룹', 'PLM', '엑셀·문서 전달', '원가팀', '원가 산정 시스템', {'link_mode': 'manual_file', 'traceability': ['identity'], 'consistency': 'retyped', 'stability': 45}, 30),
+        ('bom_change', 'ebom_to_mbom', '설계그룹', 'PLM', 'PLM', '제품기술', 'G-ERP', {'link_mode': 'api', 'traceability': ['identity', 'version'], 'consistency': 'master', 'stability': 89}, 40),
+        ('bom_change', 'mbom_to_bop', '제품기술', 'G-ERP', '엑셀·문서 전달', '제품기술', 'Teamcenter', {'link_mode': 'manual_file', 'traceability': [], 'consistency': 'retyped', 'stability': 30}, 20),
     ],
     '의료기기': [
-        ('quality', 'spec_to_test', '설계그룹', 'Teamcenter', 'Teamcenter', '품질', '시험 관리(LIMS)', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance', 'up_link'], 'consistency': 'master', 'stability': 94}, 25),
-        ('quality', 'field_to_cause', 'CS', 'CS 포털', 'QMS', '설계그룹', 'Teamcenter', {'link_mode': 'auto_file', 'traceability': ['identity', 'provenance'], 'consistency': 'mapped', 'stability': 72}, 15),
+        ('quality', 'spec_to_test', '설계그룹', 'PLM', 'PLM', '품질', '시험 관리(LIMS)', {'link_mode': 'api', 'traceability': ['identity', 'version', 'provenance', 'up_link'], 'consistency': 'master', 'stability': 94}, 25),
+        ('quality', 'field_to_cause', 'CS', 'CS 포털', 'BQMS', '설계그룹', 'PLM', {'link_mode': 'auto_file', 'traceability': ['identity', 'provenance'], 'consistency': 'mapped', 'stability': 72}, 15),
+        ('simulation', 'cad_to_model', '설계그룹', 'NX', '파일서버·공유폴더', 'CAE그룹', 'SPDM', {'link_mode': 'manual_file', 'traceability': [], 'stability': 28}, 18),
     ],
 }
 
@@ -681,15 +705,44 @@ def _remap_thread_marks(marks):
 def _seed_threads(divisions):
     from app.modules.dev_dt_maturity import threads as T
     from app.modules.dev_dt_maturity import definitions as D
-    from app.modules.dev_dt_maturity.models import ThreadDef, ThreadSegmentDef, ThreadSystem
+    from app.modules.dev_dt_maturity.models import ThreadDef, ThreadSegment, ThreadSegmentDef, ThreadSystem
 
     class _Actor:
         id = None
         name = '씨앗'
     T.ensure_defaults()
+    # ① 옛 이름을 새 이름으로 — 사전은 전사 하나라 지우고 다시 넣지 않는다(구간이 매달려 있다).
+    for old, new in SYSTEM_RENAMES.items():
+        row = ThreadSystem.query.filter_by(name=old).first()
+        if row and not ThreadSystem.query.filter_by(name=new).first():
+            row.name = new
+    # ② 표준 스레드·구간의 이름도 코드 쪽에 맞춘다(ensure_defaults 는 이미 있는 줄을 안 고친다).
+    for order, t in enumerate(D.THREAD_DEFAULTS, 1):
+        row = ThreadDef.query.filter_by(key=t['key']).first()
+        if not row:
+            continue
+        row.name, row.description = t['name'], t.get('description')
+        for so, seg in enumerate(t.get('segments') or [], 1):
+            sd = ThreadSegmentDef.query.filter_by(thread_id=row.id, key=seg['key']).first()
+            if sd is None:
+                sd = ThreadSegmentDef(thread_id=row.id, key=seg['key'], from_stage=seg['from'], to_stage=seg['to'])
+                db.session.add(sd)
+            sd.name, sd.from_stage, sd.to_stage, sd.order, sd.data_kinds = seg['name'], seg['from'], seg['to'], so, list(seg.get('data') or [])
+    # ③ 전사 시스템 + 사업부마다 하나씩 있는 시스템(SPDM)
     for (name, kind, owner, stages, means, status) in SYSTEMS_SEED:
         if not ThreadSystem.query.filter_by(name=name).first():
             db.session.add(ThreadSystem(name=name, kind=kind, owner_org=owner, stages=stages, link_means=means, status=status))
+    for base, (kind, owner, stages, means, status) in PER_DIVISION_SYSTEMS.items():
+        for dname, div in divisions.items():
+            name = f'{base}({dname})'
+            if not ThreadSystem.query.filter_by(name=name).first():
+                db.session.add(ThreadSystem(name=name, kind=kind, owner_org=f'{owner}({dname})', stages=stages,
+                                            link_means=means, status=status, created_division_id=div.id))
+    # 사업부 없는 옛 SPDM 한 줄은 치운다 — 이제 사업부마다 따로다.
+    old_spdm = ThreadSystem.query.filter_by(name='SPDM').first()
+    if old_spdm and not ThreadSegment.query.filter(
+            (ThreadSegment.from_system_id == old_spdm.id) | (ThreadSegment.via_system_id == old_spdm.id) | (ThreadSegment.to_system_id == old_spdm.id)).first():
+        db.session.delete(old_spdm)
     db.session.flush()
     systems = {s.name: s for s in ThreadSystem.query.all()}
     threads = {t.key: t for t in ThreadDef.query.all()}
@@ -702,16 +755,21 @@ def _seed_threads(divisions):
         orgs = {}
 
         def org(nm):
+            # 이름은 **그룹명(사업부)** — 전사 그래프에서 사업부가 다른 같은 이름이 섞이지 않는다.
             if nm not in orgs:
-                orgs[nm] = T.create_org({'name': f'{dname} {nm}' if nm in ('설계그룹', 'CAE그룹') else nm}, div.id)
+                orgs[nm] = T.create_org({'name': f'{DESIGN_ORGS.get((dname, nm), nm)}({dname})'}, div.id)
             return orgs[nm]
+
+        def _sys(nm):
+            """사업부마다 있는 시스템은 그 사업부 행으로."""
+            return systems[f'{nm}({dname})' if nm in PER_DIVISION_SYSTEMS else nm]
         for (tkey, skey, from_org, from_sys, via_sys, to_org, to_sys, marks, days) in rows:
             t = threads[tkey]
             sd = ThreadSegmentDef.query.filter_by(thread_id=t.id, key=skey).first()
             seg, subject, pair = T.create_segment(div.id, {
                 'thread_id': t.id, 'segment_def_id': sd.id if sd else None,
-                'from_org_id': org(from_org).id, 'from_system_id': systems[from_sys].id, 'via_system_id': systems[via_sys].id,
-                'to_org_id': org(to_org).id, 'to_system_id': systems[to_sys].id})
+                'from_org_id': org(from_org).id, 'from_system_id': _sys(from_sys).id, 'via_system_id': _sys(via_sys).id,
+                'to_org_id': org(to_org).id, 'to_system_id': _sys(to_sys).id})
             who = PEOPLE[n % len(PEOPLE)]
             marks = _remap_thread_marks(marks)
             for axis_key, val in marks.items():
@@ -739,20 +797,20 @@ THREAD_CASE_SEED = {
     'MX': [
         ('2026-02', 'integrate', 'done', 'simulation', 'cad_to_model', 'SPDM', 'manual', 'integrated', 'NX → SPDM 형상 자동 등록'),
         ('2026-04', 'adopt', 'doing', 'simulation', None, 'SPDM', None, None, 'SPDM 2차 — 결과 관리 모듈'),
-        ('2026-05', 'integrate', 'planned', 'cost', 'bom_to_estimate', '데이터 허브', 'manual', 'auto_transfer', 'BOM → 원가 허브 배치'),
-        ('2026-06', 'harmonize', 'done', 'bom_change', 'ebom_to_mbom', 'SAP ERP', 'auto_transfer', 'integrated', '부품 코드 마스터 통일'),
+        ('2026-05', 'integrate', 'planned', 'cost', 'bom_to_estimate', 'BDC', 'manual', 'auto_transfer', 'E-BOM → 원가 배치'),
+        ('2026-06', 'harmonize', 'done', 'bom_change', 'ebom_to_mbom', 'G-ERP', 'auto_transfer', 'integrated', '부품 코드 마스터 통일'),
         ('2025-10', 'integrate', 'done', 'manufacturing', 'design_to_process', 'Teamcenter', 'auto_transfer', 'integrated', '공정 설계 동기화'),
     ],
     'VD': [
         ('2026-03', 'adopt', 'doing', 'simulation', None, 'SPDM', None, None, 'SPDM 도입 검토'),
-        ('2026-05', 'integrate', 'planned', 'quality', 'spec_to_test', 'QMS', 'manual', 'auto_transfer', '스펙 → QMS 배치'),
+        ('2026-05', 'integrate', 'planned', 'quality', 'spec_to_test', 'BQMS', 'manual', 'auto_transfer', '스펙 → BQMS 배치'),
     ],
-    '생활가전': [
-        ('2026-01', 'automate', 'done', 'manufacturing', 'process_to_equipment', 'MES', 'auto_transfer', 'integrated', '설비 파라미터 API'),
-        ('2026-06', 'integrate', 'doing', 'manufacturing', 'yield_to_design', '데이터 허브', 'manual', 'auto_transfer', '수율 → 설계 피드백'),
+    'DA': [
+        ('2026-01', 'automate', 'done', 'manufacturing', 'process_to_equipment', 'G-MES', 'auto_transfer', 'integrated', '설비 파라미터 API'),
+        ('2026-06', 'integrate', 'doing', 'manufacturing', 'yield_to_design', '제조 데이터레이크', 'manual', 'auto_transfer', '수율 → 설계 피드백'),
     ],
     'NW': [('2026-04', 'harmonize', 'planned', 'cost', 'bom_to_estimate', '원가 산정 시스템', 'manual', 'auto_transfer', '원가 항목 매핑표')],
-    '의료기기': [('2026-02', 'integrate', 'done', 'quality', 'field_to_cause', 'QMS', 'manual', 'auto_transfer', 'CS → QMS 배치')],
+    '의료기기': [('2026-02', 'integrate', 'done', 'quality', 'field_to_cause', 'BQMS', 'manual', 'auto_transfer', 'CS → BQMS 배치')],
 }
 
 
