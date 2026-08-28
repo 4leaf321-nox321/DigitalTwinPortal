@@ -50,7 +50,7 @@ export default async function run() {
     say(h.includes('80%') && h.includes('값 있음 2/2'), '② 정확도: 평균 80% · 값 있음 2/2');
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');
     say(h.includes('1/2') && h.includes('평균 켠 수'), '② 자동화: 평균 켠 수 1/2');
-    say(h.includes('시험 재현') && h.includes('유형 4'), '② 모델링: 시험 재현률 · 유형 수');
+    say(h.includes('시험 불량 재현') && h.includes('불량 유형 4'), '② 모델링: 시험 불량 재현률 · 불량 유형 수');
     say(h.includes('미검증 1'), '② VD 정확도에 「미검증 1」 배지');
     await click(byText('th', 'VD'));
     say(picked === 18, '③ 사업부 머리를 누르면 그 사업부(18)로');

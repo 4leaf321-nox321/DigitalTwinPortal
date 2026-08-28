@@ -92,8 +92,8 @@ const AxisSummary = ({ axis, s }) => {
   if (axis.kind === 'matrix') {
     return (
       <>
-        <Big>{s.testRate != null ? `${s.testRate}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 시험 재현</span></Big>
-        <Small>시장 재현 {s.marketRate != null ? `${s.marketRate}%` : '—'} · 유형 {s.defectTotal}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
+        <Big>{s.testRate != null ? `${s.testRate}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 시험 불량 재현</span></Big>
+        <Small>시장 불량 재현 {s.marketRate != null ? `${s.marketRate}%` : '—'} · 불량 유형 {s.defectTotal}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Strip>
           {axis.base.map(b => {
             const p = s.adoption[b.key];
