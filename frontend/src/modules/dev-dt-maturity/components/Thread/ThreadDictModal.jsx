@@ -130,17 +130,17 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label={title}>
         <Head>
+          {kind === 'org' && divisionId === 'all' && (
+            <select value={division ?? ''} onChange={e => setDivision(Number(e.target.value))} aria-label="사업부" style={{ marginRight: '0.4rem', fontFamily: 'inherit', fontSize: '0.8125rem', padding: '0.2rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}>
+              {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          )}
           <h3>{title}</h3>
           <Tabs>
             <Tab type="button" $on={kind === 'system'} onClick={() => setKind('system')}>시스템</Tab>
             <Tab type="button" $on={kind === 'org'} onClick={() => setKind('org')}>조직</Tab>
             {canCurate && <Tab type="button" $on={kind === 'thread'} onClick={() => setKind('thread')}>스레드 사전</Tab>}
           </Tabs>
-          {kind === 'org' && divisionId === 'all' && (
-            <select value={division ?? ''} onChange={e => setDivision(Number(e.target.value))} aria-label="사업부" style={{ fontFamily: 'inherit', fontSize: '0.8125rem', padding: '0.2rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}>
-              {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          )}
           <IconBtn onClick={onClose} title="닫기" aria-label="닫기"><X size={16} /></IconBtn>
         </Head>
         <Body>
