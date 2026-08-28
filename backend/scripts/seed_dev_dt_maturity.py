@@ -630,6 +630,9 @@ PER_DIVISION_SYSTEMS = {'SPDM': ('spdm', 'CAE 인프라팀', ['development'], 'a
 # 개발 DB 에 남아 있는 옛 이름을 새 이름으로 — 다시 돌리면 사전이 저절로 맞춰진다.
 SYSTEM_RENAMES = {'SAP ERP': 'G-ERP', 'MES': 'G-MES', 'QMS': 'BQMS', '데이터 허브': 'BDC'}
 # 사업부 → [(스레드 key, 구간 key, 출발 조직, 출발 시스템, 매개 시스템, 도착 조직, 도착 시스템, {축: 값}, 며칠 전)]
+# 조직 이름의 괄호에 붙는 사업부 표기 — 요약표는 NW 라고 줄여 쓰지만 **그룹 이름에서는 풀어 쓴다**.
+ORG_DIVISION_LABEL = {'NW': '네트워크'}
+
 # 사업부별 설계·해석 조직의 실제 이름 — 그 밖의 조직(품질·구매…)은 이름 그대로 쓰고 사업부만 붙인다.
 DESIGN_ORGS = {
     ('MX', '설계그룹'): '설계그룹', ('MX', 'CAE그룹'): 'CAE그룹',
@@ -757,7 +760,8 @@ def _seed_threads(divisions):
         def org(nm):
             # 이름은 **그룹명(사업부)** — 전사 그래프에서 사업부가 다른 같은 이름이 섞이지 않는다.
             if nm not in orgs:
-                orgs[nm] = T.create_org({'name': f'{DESIGN_ORGS.get((dname, nm), nm)}({dname})'}, div.id)
+                label = ORG_DIVISION_LABEL.get(dname, dname)
+                orgs[nm] = T.create_org({'name': f'{DESIGN_ORGS.get((dname, nm), nm)}({label})'}, div.id)
             return orgs[nm]
 
         def _sys(nm):
