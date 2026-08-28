@@ -12,10 +12,10 @@ import { colorFor, divisionSummary } from '../../utils/board';
 //   모델링(표)     시험 불량 재현률 · 시장 재현률        + 바탕(형상·거동) 채택률
 // 사업부 머리를 누르면 그 사업부 판으로 내려간다.
 
-// 헤더·사업부 줄·모드 줄·합계를 뺀 나머지 높이를 표가 다 쓴다 — 줄 여섯이 그 높이를 나눠 갖는다.
-const Wrap = styled.div`overflow: auto; height: calc(100vh - 21rem); min-height: 28rem;`;
+// 남는 높이를 이 칸이 갖고 스크롤도 여기 걸린다. 표는 그 80% 만 — 아래 20% 는 비워 둔다.
+const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0;`;
 const Table = styled.table`
-  width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem;
+  width: 100%; height: 80%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem;
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 0.6rem 0.9rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 `;

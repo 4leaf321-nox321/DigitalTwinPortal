@@ -28,7 +28,7 @@ const StickyBar = styled.div`
 const Main = styled.div`
   flex: 1; min-height: 0; overflow-y: auto; padding: 1rem 1.5rem 2rem;
   display: flex; flex-direction: column;
-  /* 목록 탭은 좌 표·우 상세가 화면을 다 쓰고 각자 스크롤된다 — 바깥은 안 흐른다 */
+  /* 목록은 좌 표·우 상세가, 성숙도는 아래 표가 각자 스크롤된다 — 바깥은 안 흐른다(2026-08-28) */
   ${p => (p.$fill ? 'overflow: hidden; padding-bottom: 1rem;' : '')}
 `;
 const Tab = styled.button`
@@ -133,7 +133,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
         </Tabs>
       </StickyBar>
-      <Main $fill={tab === 'list'}>
+      <Main $fill>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters}

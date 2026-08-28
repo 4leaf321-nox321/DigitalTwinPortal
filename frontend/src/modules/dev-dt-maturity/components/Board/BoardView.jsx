@@ -12,7 +12,8 @@ import {
 // ⚠️ 확대·축소는 없다. 표가 커지지 않게 하는 것(접힘·필터)이 답이다.
 // ⚠️ 축은 순서형이라 평균이 없다 — 분포와 최고 칸만.
 
-const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.875rem;`;
+// 판은 세로로 화면을 채우고, 스크롤은 **아래 표에만** 걸린다 — 모드 줄·합계·분포는 고정(2026-08-28).
+const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.875rem; flex: 1; min-height: 0;`;
 const Bar = styled.div`display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;`;
 const ModeBtn = styled.button`
   padding: 0.35rem 0.75rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#cbd5e1')}; border-radius: 0.375rem;
@@ -45,7 +46,7 @@ const Empty = styled.div`
 `;
 
 // ── 표 (읽기 · 훑기 공용 뼈대) ──────────────────────────────────────────────
-const TableWrap = styled.div`overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: white;`;
+const TableWrap = styled.div`overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: white; flex: 1; min-height: 0;`;
 const Table = styled.table`border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.8125rem;`;
 const Th = styled.th`
   position: sticky; top: 0; z-index: 2; background: #f8fafc; padding: 0.45rem 0.6rem; text-align: left;
