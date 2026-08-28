@@ -116,7 +116,8 @@ const DevDtMaturityApp = ({ onGoHome }) => {
 
   const setFilters = (f) => {
     const keep = new URLSearchParams();
-    ['division', 'tab', 'pair'].forEach(k => { if (params.get(k)) keep.set(k, params.get(k)); });
+    // 필터를 바꿔도 부문·샘플 뷰는 남아야 한다 — 빠지면 시뮬레이션으로 튄다(2026-08-28)
+    ['division', 'tab', 'pair', 'sector', 'sample'].forEach(k => { if (params.get(k)) keep.set(k, params.get(k)); });
     Object.entries(filtersToParams(f)).forEach(([k, v]) => keep.set(k, v));
     setParams(keep, { replace: true });
   };
