@@ -682,6 +682,9 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert c['reach_stage'] == 'development' and c['weakest']['id'] == s2['id'] and c['informal_ratio'] == 50 and c['closed_loop'] is False
     assert c['capture_rate'] == 50 and c['usage_rate'] == 100 and c['unknown'] == 1
     assert c['weak_axis']['segment_id'] == s2['id'] and c['weak_axis']['axis'] in ('link_mode', 'capture')
+    # 전사 연계 개발 기록 — division_id=all (시스템 창)
+    _ = client.get(f'{BASE}/thread-cases?division_id=all', headers=auth(mx_user))
+    assert _.status_code == 200 and isinstance(_.get_json()['data'], list)
     # 전사 구간 — division_id=all (시스템 연결도)
     alls = client.get(f'{BASE}/segments?division_id=all', headers=auth(mx_user)).get_json()['data']
     assert {x['id'] for x in alls} >= {s1['id'], s2['id']}

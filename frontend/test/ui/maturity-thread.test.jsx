@@ -35,7 +35,7 @@ const SYSTEMS = [{ id: 5, name: 'Teamcenter', kind: 'plm', link_means: 'api', st
 const ORGS = [{ id: 21, name: 'MX 설계그룹', role: 'development', division_id: 17, source_kind: 'manual' }, { id: 22, name: '원가팀', role: 'management', division_id: 17, source_kind: 'manual' }];
 const SEG = { id: 101, subject_id: 501, division_id: 17, thread_id: 1, thread_name: '재료비 스레드', segment_def_id: 12, segment_def: THREADS[0].segments[1], name: '설계 BOM → 예상 원가',
   from_org_id: 21, from_org_name: 'MX 설계그룹', from_system_id: 5, from_system_name: 'Teamcenter', via_system_id: 9, via_system_name: '메일', via_informal: true, to_org_id: 22, to_org_name: '원가팀', to_system_id: 6, to_system_name: '원가 산정 시스템',
-  data_kinds: ['bom', 'cost'], data_kind_labels: ['BOM', '원가·단가'],
+  data_kinds: ['bom', 'cost'], data_kind_labels: ['BOM(E/M)', '원가·단가'], division_id: 17, division_name: 'MX',
   pair_id: 901, pair: { id: 901, assessments: { link_mode: { rung: 'manual', rung_index: 0 } }, unassessed: ['capture'] } };
 
 export default async function run() {
@@ -68,7 +68,7 @@ export default async function run() {
     say(h.includes('재료비 스레드') && h.includes('품질 스레드') && h.includes('설계 BOM → 예상 원가'), '① 스레드 묶음과 구간이 보임');
     say(h.includes('MX 설계그룹') && h.includes('원가팀') && byText('span', '메일') != null, '① 출발 → 매개 → 도착 (비시스템 매개 「메일」)');
     say(h.includes('사람이 옮김') && h.includes('미평가 1개'), '① 연결 방식 배지와 미평가 수');
-    say(h.includes('>BOM<') && h.includes('>원가·단가<'), '① 데이터 종류 꼬리표');
+    say(h.includes('BOM(E/M)') && h.includes('>원가·단가<'), '① 데이터 종류 꼬리표');
 
     // ② 구간 추가 — 단추를 누르면 모달
     calls.length = 0;
@@ -151,7 +151,7 @@ export default async function run() {
 
     // ⑥ 시스템 연결도 — 시스템이 노드, 간선 색 = 스레드, 간선 클릭 → 평가판
     let graphPair = null;
-    await render(<ThreadSystemGraph divisionId={17} onOpenPair={(id) => { graphPair = id; }} />);
+    await render(<ThreadSystemGraph divisionId={17} thread={THREAD} onOpenPair={(id) => { graphPair = id; }} />);
     await settle(80);
     say(byText('button', '재료비 스레드') != null && byText('button', '전부') != null, '⑥ 스레드 범례 칩');
     say(byText('button', '배치 다시 계산') != null && byText('button', '화면에 맞추기') != null, '⑥ 캔버스 손잡이');
@@ -167,6 +167,18 @@ export default async function run() {
     say(document.querySelector('[data-labels="off"]') != null, '⑥ 다시 누르면 뗌');
     await click(edges[0]); await settle();
     say(graphPair === 901, '⑥ 간선을 누르면 그 구간의 평가판');
+
+    // ⑦ 노드를 누르면 그 시스템 관점의 창
+    await click(document.querySelector('[data-fg-node="5"]')); await settle(60);
+    const dlg = document.querySelector('[role="dialog"]');
+    const dh = dlg ? dlg.innerHTML : '';
+    say(!!dlg && dh.includes('Teamcenter') && dh.includes('PLM'), '⑦ 시스템 창이 열리고 이름·종류가 보임');
+    say(dh.includes('지나는 구간') && dh.includes('스레드') && dh.includes('사업부') && dh.includes('자동 전달 이상'), '⑦ 수치 넷');
+    say(dh.includes('설계 BOM → 예상 원가') && dh.includes('출발') && dh.includes('MX 설계그룹') && dh.includes('사람이 옮김'), '⑦ 지나는 구간 표 — 역할·조직·연결');
+    say(dh.includes('메일') && dh.includes('원가 산정 시스템'), '⑦ 맞닿은 시스템');
+    say(dh.includes('허브 연동') || dh.includes('연계 개발 기록'), '⑦ 연계 개발 기록 칸');
+    await click(dlg.querySelector('[aria-label="닫기"]')); await settle();
+    say(document.querySelector('[role="dialog"]') == null, '⑦ 닫기');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

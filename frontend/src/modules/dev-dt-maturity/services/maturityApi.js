@@ -129,7 +129,7 @@ export const maturityApi = {
   deleteSegment: (id) => request(`/segments/${id}`, { method: 'DELETE' }),
   threadStats: (divisionId) => request(`/threads/stats?division_id=${divisionId}`),
   // 연계 개발 기록
-  listThreadCases: (divisionId, year, status) => request(`/thread-cases?division_id=${divisionId}&year=${year}${status ? `&status=${status}` : ''}`),
+  listThreadCases: (divisionId, year, status) => request(`/thread-cases?division_id=${divisionId}${year ? `&year=${year}` : ''}${status ? `&status=${status}` : ''}`),
   threadCaseYears: (divisionId) => request(`/thread-cases/years?division_id=${divisionId}`),
   threadCaseStats: (divisionId, year) => request(`/thread-cases/stats?division_id=${divisionId}&year=${year}`),
   createThreadCase: (divisionId, payload) => request('/thread-cases', json('POST', { division_id: divisionId, ...payload })),

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import maturityApi from '../../services/maturityApi';
 import ThreadGraphCanvas from './ThreadGraphCanvas';
+import SystemDetailModal from './SystemDetailModal';
 import { buildSystemGraph, threadColors } from '../../utils/systemGraph';
 
 // 시스템 연결도(2026-08-29) — 모판 옆의 다섯째 보기.
@@ -21,12 +22,13 @@ const Chip = styled.button`
 const Dot = styled.span`width: 0.55rem; height: 0.55rem; border-radius: 999px; background: ${p => (p.$on ? 'white' : p.$c)};`;
 const Muted = styled.div`padding: 1rem; color: #94a3b8; font-size: 0.8125rem;`;
 
-const ThreadSystemGraph = ({ divisionId, onOpenPair }) => {
+const ThreadSystemGraph = ({ divisionId, thread, onOpenPair }) => {
   const [segments, setSegments] = useState(null);
   const [systems, setSystems] = useState([]);
   const [threads, setThreads] = useState([]);
   const [focus, setFocus] = useState(null);
   const [labels, setLabels] = useState(false);      // 간선에 스레드 이름을 붙였다 뺐다
+  const [pick, setPick] = useState(null);           // 누른 시스템 — 창을 연다
   useEffect(() => {
     setSegments(null);
     Promise.all([maturityApi.listSegments(divisionId ?? 'all'), maturityApi.listSystems(), maturityApi.listThreads()])
@@ -53,7 +55,23 @@ const ThreadSystemGraph = ({ divisionId, onOpenPair }) => {
           간선 색 = 스레드 · 실선 = 자동 전달 이상 · 점선 = 사람이 옮김·미평가 · 끌어 옮기면 그 자리에 고정 · 간선을 누르면 그 구간
         </span>
       </Bar>
-      <ThreadGraphCanvas nodes={graph.nodes} links={graph.links} focusThread={focus} showLabels={labels} onOpenPair={onOpenPair} />
+      <ThreadGraphCanvas nodes={graph.nodes} links={graph.links} focusThread={focus} showLabels={labels}
+                         onOpenPair={onOpenPair} onPickSystem={(id) => setPick(id)} />
+      {pick != null && (
+        <SystemDetailModal
+          system={(() => {
+            const s = systems.find(x => x.id === pick);
+            if (!s) return null;
+            return {
+              ...s,
+              kind_label: (thread?.system_kinds || []).find(k => k.key === s.kind)?.label,
+              stage_labels: (s.stages || []).map(k => (thread?.stages || []).find(x => x.key === k)?.label || k),
+            };
+          })()}
+          segments={segments || []} systems={systems} divisionId={divisionId}
+          onOpenPair={(id) => { setPick(null); onOpenPair && onOpenPair(id); }}
+          onClose={() => setPick(null)} />
+      )}
     </Wrap>
   );
 };

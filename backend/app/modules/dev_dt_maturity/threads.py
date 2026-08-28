@@ -404,11 +404,17 @@ def segment_dict(seg, systems=None, orgs=None, with_pair=True):
     d['data_kind_labels'] = [D.DATA_KIND_LABELS.get(k, k) for k in d['data_kinds']]
     for f in ('from_org', 'to_org'):
         d[f'{f}_name'] = name(orgs, getattr(seg, f'{f}_id'))
+    d['division_name'] = _division_names().get(seg.division_id)
     if with_pair:
         pair = seg.subject.pairs[0] if seg.subject.pairs else None
         d['pair'] = pair_dict(pair, with_changes=False) if pair else None
         d['pair_id'] = pair.id if pair else None
     return d
+
+
+def _division_names():
+    from app.modules.digital_twin_dashboard.models import Division
+    return {d.id: d.name for d in Division.query.all()}
 
 
 def list_segments(division_id):
@@ -684,8 +690,9 @@ def case_dict(row):
 
 
 def list_cases(division_id, year=None, status=None):
+    """division_id=None 이면 전사 전부 — 시스템 창이 쓴다."""
     from datetime import date
-    q = ThreadCase.query.filter_by(division_id=int(division_id))
+    q = ThreadCase.query if division_id is None else ThreadCase.query.filter_by(division_id=int(division_id))
     if year:
         q = q.filter(ThreadCase.month >= date(int(year), 1, 1), ThreadCase.month < date(int(year) + 1, 1, 1))
     if status:

@@ -28,7 +28,7 @@ const Tool = styled.button`padding: 0.2rem 0.6rem; border: 1px solid #cbd5e1; bo
 const FALLBACK = { width: 960, height: 520 };
 const nodeRadius = (n) => 4 + Math.min(n.count || 0, 8) * 1.1;
 
-const ThreadGraphCanvas = ({ nodes, links, focusThread = null, showLabels = false, onOpenPair }) => {
+const ThreadGraphCanvas = ({ nodes, links, focusThread = null, showLabels = false, onOpenPair, onPickSystem }) => {
   const wrapRef = useRef(null);
   const fgRef = useRef(null);
   const fittedFor = useRef(null);
@@ -190,6 +190,7 @@ const ThreadGraphCanvas = ({ nodes, links, focusThread = null, showLabels = fals
             linkCanvasObject={paintLinkLabel}
             linkCanvasObjectMode={() => 'after'}
             onLinkClick={(l) => l?.pair_id && onOpenPair && onOpenPair(l.pair_id)}
+            onNodeClick={(n) => n && onPickSystem && onPickSystem(n.id)}
             onNodeHover={(n) => setHoverId(n?.id ?? null)}
             onNodeDragEnd={handleDragEnd}
             onEngineStop={handleEngineStop}

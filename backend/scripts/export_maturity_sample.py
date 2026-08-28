@@ -107,6 +107,7 @@ def main():
             T.decorate_board(b)
         out['/systems/hubs?division_id=all'] = T.system_hubs(ids)
         out['/segments?division_id=all'] = T.list_segments(None)
+        out['/thread-cases?division_id=all'] = T.list_cases(None)      # 시스템 창
         out['/threads/stats?division_id=all'] = {'divisions': [{**T.thread_stats(d.id), 'division_name': d.name} for d in kpi]}
         for d in kpi:
             did = d.id

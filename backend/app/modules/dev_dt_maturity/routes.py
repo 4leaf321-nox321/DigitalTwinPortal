@@ -1105,6 +1105,8 @@ from .models import ThreadCase                                                  
 @bp.route('/thread-cases', methods=['GET'])
 @read_required
 def list_thread_cases(actor):
+    if request.args.get('division_id') == 'all':          # 시스템 창 — 전사 한 묶음
+        return _refused(lambda: success_response(T.list_cases(None, _int_arg('year'), request.args.get('status') or None)))
     division_id = _int_arg('division_id')
     if division_id is None:
         return error_response('사업부를 고르세요.', status_code=400)

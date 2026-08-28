@@ -3,7 +3,7 @@
 // 간선을 누르면 무엇이 열리나」다. 그리는 규칙 자체는 utils/systemGraph 의 node 시험이 본다.
 import React from 'react';
 
-const ForceGraph2D = React.forwardRef(({ graphData, linkColor, linkWidth, linkCurvature, linkLineDash, onLinkClick, nodeLabel }, ref) => {
+const ForceGraph2D = React.forwardRef(({ graphData, linkColor, linkWidth, linkCurvature, linkLineDash, onLinkClick, onNodeClick, nodeLabel }, ref) => {
   React.useImperativeHandle(ref, () => ({
     d3Force: () => ({ strength: () => ({ distanceMax: () => {} }), distance: () => ({ strength: () => {} }) }),
     d3ReheatSimulation: () => {},
@@ -13,6 +13,7 @@ const ForceGraph2D = React.forwardRef(({ graphData, linkColor, linkWidth, linkCu
   return React.createElement('div', { 'data-fg': String((graphData?.nodes || []).length) },
     (graphData?.nodes || []).map(n => React.createElement('span', {
       key: n.id, 'data-fg-node': String(n.id), 'data-kind': n.kind, title: val(nodeLabel, n),
+      onClick: () => onNodeClick && onNodeClick(n),
     }, n.label)),
     (graphData?.links || []).map((l, i) => React.createElement('button', {
       key: i, type: 'button', 'data-fg-link': String(i),

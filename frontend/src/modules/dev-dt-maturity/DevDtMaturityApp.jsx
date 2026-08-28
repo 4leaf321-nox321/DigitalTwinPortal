@@ -179,7 +179,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)}
-                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} review={isThread ? null : defs.review} />
+                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} review={isThread ? null : defs.review} thread={defs.thread} />
         ) : isThread && tab === 'cases' ? (
           <ThreadCaseLedger divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} thread={defs.thread} axes={axes} refreshKey={refreshKey} />
         ) : isThread ? (

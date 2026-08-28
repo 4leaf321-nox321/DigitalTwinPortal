@@ -163,7 +163,7 @@ const BestCell = ({ idx, axis, dense }) => {
 };
 
 // 읽기와 그리기를 가른다 — 그리기(BoardBody)는 props 만 받아 시험·SSR 로 그릴 수 있다.
-const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey, review, sector = 'simulation', sectorDef }) => {
+const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey, review, sector = 'simulation', sectorDef, thread }) => {
   
   const [board, setBoard] = useState(null);
   const [changes, setChanges] = useState([]);
@@ -208,12 +208,12 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
   if (error) return <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>;
   if (!board) return <Empty>불러오는 중…</Empty>;
   return (
-    <BoardBody board={board} changes={changes} changeSets={changeSets} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review} sector={sector} sectorDef={sectorDef}
+    <BoardBody board={board} changes={changes} changeSets={changeSets} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review} sector={sector} sectorDef={sectorDef} thread={thread}
                onFiltersChange={onFiltersChange} onOpenPair={onOpenPair} />
   );
 };
 
-export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review, sector = 'simulation', sectorDef }) => {
+export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review, sector = 'simulation', sectorDef, thread }) => {
   const isThread = sector === 'digital_thread';
   const [mode, setMode] = useState(board?.boards ? 'scan' : 'read');       // scan | read | progress — 전체는 요약부터
   useEffect(() => { if (!isThread && mode === 'sysgraph') setMode('scan'); }, [isThread, mode]);   // 시스템 연결도는 스레드 부문에만
@@ -295,7 +295,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
 
       {mode === 'sysgraph' && isThread ? (
         // 「시스템 연결도」 — 시스템이 노드, 구간이 간선, 간선 색 = 스레드(2026-08-29)
-        <ThreadSystemGraph divisionId={board.boards ? 'all' : board.division_id} onOpenPair={onOpenPair} />
+        <ThreadSystemGraph divisionId={board.boards ? 'all' : board.division_id} thread={thread} onOpenPair={onOpenPair} />
       ) : mode === 'tiles' ? (
         // 「모판」 — 연계가 네모, 고른 축이 색. 담당 부서로 묶는다.
         <TileBoard subjects={subjects} axes={axes} onOpenPair={onOpenPair} allMode={!!board.boards} sector={sector} changes={changes} />
