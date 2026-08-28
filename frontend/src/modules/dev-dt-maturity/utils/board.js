@@ -277,3 +277,32 @@ export const monthlySeries = (subjects, changes, axes, months) => {
     return row;
   });
 };
+
+/**
+ * 한 축을 **연계마다** 되감는다 — [{id, name, points: [값|null …]}]. 값은 그 축의 대표 수치와 같은 자(척도):
+ *   value 정확도 % · rung 칸 index · set 켠 수 · matrix 시험 불량 재현 %(그 연계의 유형 칸 기준)
+ */
+export const pairSeries = (subjects, changes, axis, months) => {
+  const kept = (changes || []).filter(c => c.axis === axis.key && !(c.before == null && c.note === REACHED_NOTE));
+  const byPair = {};
+  kept.forEach(c => { (byPair[c.pair_id] = byPair[c.pair_id] || []).push(c); });
+  Object.values(byPair).forEach(l => l.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id)));
+  const out = [];
+  (subjects || []).forEach(sub => (sub.pairs || []).forEach(p => {
+    const list = byPair[p.id];
+    if (!list) return;
+    const total = (p.agent?.defect_types || []).length;
+    const points = months.map(month => {
+      const upto = list.filter(c => c.created_at.slice(0, 10) <= `${month}-99`);
+      if (!upto.length) return null;
+      const st = stateOf(axis, upto[upto.length - 1].after);
+      if (!st) return null;
+      if (axis.kind === 'value') return st.value;
+      if (axis.kind === 'rung') return st.idx;
+      if (axis.kind === 'set') return st.flags.length;
+      return total ? Math.round((st.test * 100) / total) : null;
+    });
+    out.push({ id: p.id, name: `${sub.name} × ${p.agent?.name || ''}`, points });
+  }));
+  return out;
+};

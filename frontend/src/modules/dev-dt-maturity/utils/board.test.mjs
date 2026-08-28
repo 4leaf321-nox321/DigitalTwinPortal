@@ -204,3 +204,15 @@ test('monthlySeries — 그 달 말의 상태로 평균·이상 %·단계 수·�
   assert.deepEqual(rows.map(r => r.automation.value), [null, null, 2, 1]);      // 7월: (2+0)/2
   assert.deepEqual(rows.map(r => r.modeling.value), [null, null, null, 50]);    // 유형 칸 2개 중 1
 });
+
+import { pairSeries } from './board.js';
+test('pairSeries — 연계마다 선 하나, 이력 없는 연계는 빠진다', () => {
+  const subjects = [{ name: '낙하', pairs: [{ id: 1, agent: { name: '구조', defect_types: [] } }, { id: 2, agent: { name: '열', defect_types: [] } }] }];
+  const changes = [
+    { id: 1, pair_id: 1, axis: 'accuracy', before: null, after: '70', created_at: '2026-05-10T00:00:00' },
+    { id: 2, pair_id: 1, axis: 'accuracy', before: '70', after: '90', created_at: '2026-07-02T00:00:00' },
+  ];
+  const axis = { key: 'accuracy', kind: 'value', rungs: [] };
+  const rows = pairSeries(subjects, changes, axis, ['2026-04', '2026-05', '2026-06', '2026-07']);
+  assert.deepEqual(rows, [{ id: 1, name: '낙하 × 구조', points: [null, 70, 70, 90] }]);
+});
