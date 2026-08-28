@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Trash2, Link2, AlertTriangle, Pencil, Plus, X } from 'lucide-react';
+import { Trash2, Link2, AlertTriangle, Pencil, Plus, X, ChevronRight } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import PairSide from '../Pair/PairSide';
 
@@ -51,9 +51,7 @@ const GroupRow = styled.td`
   font-size: 0.6875rem; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 0.3rem 0.6rem !important;
 `;
 const SimCell = styled.td`
-  cursor: pointer; color: #1e293b; position: relative; padding-right: 1.8rem !important; overflow-wrap: anywhere;
-  background: ${p => (p.$on ? '#eff6ff' : 'transparent')}; box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #1d4ed8' : 'none')};
-  &:hover { background: ${p => (p.$on ? '#dbeafe' : '#f1f5f9')}; }
+  color: #1e293b; font-weight: 600; position: relative; padding-right: 1.8rem !important; overflow-wrap: anywhere;
   small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
 `;
 // 미평가 배지 — 티는 나되 시끄럽지 않게(호박색).
@@ -62,9 +60,19 @@ const Badge = styled.span`
   background: #fef3c7; color: #92400e; border: 1px solid #fde68a; vertical-align: 1px;
 `;
 // 시험 항목 묶음마다 얼룩말(흰색/옅은 회색) + 묶음이 바뀌는 곳은 경계선을 한 단계 진하게 — 헤더를 칠하지 않고 경계를 세운다(2026-08-28).
+// 줄 전체가 눌린다 — 사다리를 여는 곳이 「시뮬레이션 칸」뿐이면 아무도 못 알아챈다(2026-08-29).
+// 고른 줄은 왼쪽에 파란 띠, 지나가면 옅게 물든다. 시험 칸(묶음 머리)과 단추들은 제 일을 한다.
 const GroupTr = styled.tr`
-  background: ${p => (p.$band ? '#f8fafc' : 'white')};
+  background: ${p => (p.$on ? '#eff6ff' : p.$band ? '#f8fafc' : 'white')};
+  ${p => (p.$click ? 'cursor: pointer;' : '')}
   ${p => (p.$first ? '& > td { border-top: 2px solid #cbd5e1; }' : '')}
+  ${p => (p.$click ? `&:hover > td { background: ${p.$on ? '#dbeafe' : '#f1f5f9'}; }` : '')}
+  & > td:first-child { box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #1d4ed8' : 'none')}; }
+`;
+// 줄 끝의 「>」 — 여기가 열린다는 표시. 지나가면 진해진다.
+const Go = styled.td`
+  color: ${p => (p.$on ? '#1d4ed8' : '#cbd5e1')}; text-align: right; padding-right: 0.2rem !important;
+  tr:hover & { color: #1d4ed8; }
 `;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
 const DeptCell = styled.td`color: #475569; white-space: nowrap; small { color: #cbd5e1; }`;
@@ -156,7 +164,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
           {(allMode ? touchable.length > 0 : !denyReason) && (
             <Button type="button" onClick={() => setLinkOpen(true)} style={{ marginLeft: '0.5rem', background: '#1d4ed8', borderColor: '#1d4ed8', color: 'white' }}><Plus size={13} /> 연계 추가</Button>
           )}
-          <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 관리·가져오기는 헤더 단추에서</Hint>
+          <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 줄을 누르면 오른쪽에 사다리가 열립니다</Hint>
         </BoxHead>
         {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {!allMode && denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
@@ -165,18 +173,18 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
             <thead><tr>
               <th style={{ width: '20%' }}>시험</th><th style={{ width: '20%' }}>시뮬레이션</th>
               <th style={{ width: '16%' }}>사용 툴</th><th style={{ width: '14%' }}>담당 부서</th>
-              <th style={{ width: '24%' }}>디지털 트윈 연결 과제</th><th style={{ width: '2.5rem' }} />
+              <th style={{ width: '24%' }}>디지털 트윈 연결 과제</th><th style={{ width: '1.2rem' }} /><th style={{ width: '2.5rem' }} />
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><Muted colSpan={6}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
+              {rows.length === 0 && <tr><Muted colSpan={7}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
               {rows.map(({ subject: s, pairs: ps }, gi) => {
                 const groupRow = allMode && s.division_id !== lastDiv
-                  ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={6}>{divName(s.division_id)}</GroupRow></tr>
+                  ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={7}>{divName(s.division_id)}</GroupRow></tr>
                   : null;
                 lastDiv = s.division_id;
                 const span = Math.max(1, ps.length);
                 const cell = (
-                  <SubjectCell rowSpan={span}>
+                  <SubjectCell rowSpan={span} onClick={e => e.stopPropagation()}>
                     {s.name}
                     {onEditSubject && (
                       <EditBtn type="button" title="시험 항목 관리에서 열기" aria-label={`${s.name} 편집`}
@@ -188,7 +196,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   return (
                     <React.Fragment key={s.id}>
                       {groupRow}
-                      <GroupTr $band={gi % 2 === 1} $first>{cell}<Muted colSpan={4}>아직 이은 시뮬레이션이 없습니다.</Muted><td /></GroupTr>
+                      <GroupTr $band={gi % 2 === 1} $first>{cell}<Muted colSpan={5}>아직 이은 시뮬레이션이 없습니다.</Muted><td /></GroupTr>
                     </React.Fragment>
                   );
                 }
@@ -196,9 +204,10 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   <React.Fragment key={s.id}>
                     {groupRow}
                     {ps.map((p, i) => (
-                      <GroupTr key={p.id} $band={gi % 2 === 1} $first={i === 0}>
+                      <GroupTr key={p.id} $band={gi % 2 === 1} $first={i === 0} $on={p.id === pairId} $click
+                               onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 사다리가 나옵니다">
                         {i === 0 && cell}
-                        <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 사다리가 나옵니다">
+                        <SimCell>
                           {p.agent?.name}
                           {p.unassessed.length > 0 && <Badge title={`아직 안 매긴 축: ${p.unassessed.length}`}>미평가 {p.unassessed.length}개</Badge>}
                           {onEditAgent && (
@@ -216,8 +225,10 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                               <span key={i}>{i > 0 && ', '}{t}</span>))
                             : <small>—</small>}
                         </ProjCell>
+                        <Go $on={p.id === pairId}><ChevronRight size={14} /></Go>
                         <td>
-                          <Icon disabled={!canTouch(p.division_id)} title="연결 끊기 — 평가·이력이 같이 사라집니다" onClick={() => cut(p)}>
+                          <Icon disabled={!canTouch(p.division_id)} title="연결 끊기 — 평가·이력이 같이 사라집니다"
+                                onClick={e => { e.stopPropagation(); cut(p); }}>
                             <Trash2 size={14} />
                           </Icon>
                         </td>

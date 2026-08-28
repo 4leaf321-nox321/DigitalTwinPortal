@@ -20,6 +20,7 @@
 """
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 
@@ -453,8 +454,10 @@ def main():
         db.session.flush()
 
         counts = {'subjects': 0, 'agents': 0, 'pairs': 0, 'assessments': 0, 'changes': 0}
-        # 대시보드 과제 — 사업부마다 몇 개만 재료로(시뮬레이션에 매단다)
-        projects = {d.id: S.projects_of(d.id, limit=12) for d in divisions.values()}
+        # 대시보드 과제 — 사업부마다 몇 개만 재료로(시뮬레이션에 매단다).
+        # ⚠️ 개발 DB 에는 손으로 넣은 시험 자료(「AAA」·「테스트123」·「Test Project 7」)가 섞여 있다.
+        #    코드가 제 꼴({사업부}-26-###)인 것만 골라야 화면에 읽을 수 있는 이름이 붙는다.
+        projects = {d.id: _real_projects(d.id) for d in divisions.values()}
         axes = {a['key']: a for a in D.AXES['simulation']}
         for dname, tests in DATA.items():
             div = divisions.get(dname)
@@ -711,6 +714,17 @@ def _remap_thread_marks(marks):
     capture = 'auto' if li >= 2 else 'direct' if li == 1 else 'upload'
     usage = 'automatic' if link == 'closed_loop' else 'decision' if stab >= 85 else 'review' if stab >= 60 else 'reference'
     return {'capture': capture, 'link_mode': link, 'quality': quality, 'usage': usage}
+
+
+_PROJ_CODE = re.compile(r'^[A-Za-z가-힣]+-\d{2}-\d{3}$')
+
+
+def _real_projects(division_id, want=12):
+    """그 사업부의 대시보드 과제 중 **제 꼴을 갖춘 것**만 — 시험용으로 손으로 넣은 것은 뺀다."""
+    pool = S.projects_of(division_id, limit=400)
+    good = [p for p in pool if p.get('code') and _PROJ_CODE.match(p['code'])
+            and p.get('title') and len(p['title']) >= 6]
+    return (good or pool)[:want]
 
 
 def _seed_threads(divisions):

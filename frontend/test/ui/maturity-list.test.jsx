@@ -11,6 +11,7 @@ const AXES = [{ key: 'accuracy', label: '정확도', kind: 'value', rungs: [{ ke
 
 export default async function run() {
   const { say, done } = suite();
+  let opened = null;
   const calls = fakeFetch(({ url, method }) => {
     if (url.includes('/pairs') && method === 'POST') return { id: 77 };
     if (url.includes('/subjects')) return [{ id: 1, name: '낙하 시험', division_id: 17, product_families: [] }];
@@ -20,12 +21,16 @@ export default async function run() {
   });
   try {
     await render(<ListView divisionId={17} divisions={[{ id: 17, name: 'MX' }]} denyReason={null} axes={AXES} pairId={null}
-                           onOpenPair={() => {}} onClosePair={() => {}} onEditSubject={() => {}} onEditAgent={() => {}} onChanged={() => {}} refreshKey={0} />);
+                           onOpenPair={(id) => { opened = id; }} onClosePair={() => {}} onEditSubject={() => {}} onEditAgent={() => {}} onChanged={() => {}} refreshKey={0} />);
     await settle(60);
     say(html().includes('낙하 시험') && !document.querySelector('[role="dialog"]'), '① 표는 보이고 잇기 양식은 안 보임');
     // ①-2 열이 다섯 — 시험 · 시뮬레이션 · 사용 툴 · 담당 부서 · 디지털 트윈 연결 과제
     const heads = [...document.querySelectorAll('thead th')].map(x => x.textContent.trim());
     say(JSON.stringify(heads.slice(0, 5)) === JSON.stringify(['시험', '시뮬레이션', '사용 툴', '담당 부서', '디지털 트윈 연결 과제']), `①-2 열 이름: ${heads}`);
+    // ①-3 줄 아무 데나 눌러도 사다리가 열린다 — 시뮬레이션 칸만 눌리면 아무도 못 알아챈다
+    const row = document.querySelector('tbody tr');
+    await click([...row.querySelectorAll('td')].find(x => x.textContent.includes('CAE그룹'))); await settle();
+    say(opened === 9, `①-3 담당 부서 칸을 눌러도 사다리가 열림: ${opened}`);
     const tds = [...document.querySelectorAll('tbody tr td')].map(x => x.textContent.trim());
     say(tds.includes('LS-DYNA, HyperMesh'), `①-2 사용 툴이 제 열에: ${tds}`);
     say(tds.includes('낙하 해석 자동화') && !tds.some(x => x.includes('MX-1')), '①-2 과제는 코드가 아니라 이름으로 제 열에');
