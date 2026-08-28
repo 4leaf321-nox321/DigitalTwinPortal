@@ -47,7 +47,7 @@ export const ThreadOverviewRows = ({ boards }) => {
   };
   return (
     <>
-      <tr><SecHead colSpan={boards.length + 2}><strong>스레드</strong>구간을 모아 줄로 — 자동 전달률(연결이 자동 전달 이상인 구간 %) · 수집률 · 활용률</SecHead></tr>
+      <tr><SecHead colSpan={boards.length + 2}><strong>스레드</strong></SecHead></tr>
       {threads.map(t => (
         <tr key={t.thread_key}>
           <Name>{t.thread_name}<small>표준 구간 {t.def_count}</small></Name>
