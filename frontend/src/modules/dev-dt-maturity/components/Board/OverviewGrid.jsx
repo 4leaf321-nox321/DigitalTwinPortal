@@ -153,7 +153,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
         <colgroup>
           <col style={{ width: '8.5rem' }} />
           {boards.map(b => <col key={b.division_id} />)}
-          <col style={{ width: '13rem' }} />
+          <col />   {/* 「전체」도 사업부와 똑같이 나눈다 */}
         </colgroup>
         <thead>
           <tr>
