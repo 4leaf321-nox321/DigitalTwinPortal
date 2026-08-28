@@ -10,6 +10,7 @@ import PairModal from './components/Pair/PairModal';
 import ModalHost from './components/List/ModalHost';
 import SettingsModal from './components/Settings/SettingsModal';
 import maturityApi from './services/maturityApi';
+import { setSampleMode } from './sample/sampleStore';
 import { filtersFromParams, filtersToParams } from './utils/board';
 
 // 개발 디지털 트윈 성숙도 — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가.
@@ -22,6 +23,10 @@ import { filtersFromParams, filtersToParams } from './utils/board';
 // 전부 이 주소로 온다.
 
 const Container = styled.div`display: flex; flex-direction: column; height: 100vh; background: #f8fafc;`;
+const SampleBar = styled.div`
+  flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 1.5rem; background: #fef3c7; border-bottom: 1px solid #fde68a; color: #92400e; font-size: 0.8125rem;
+  strong { color: #78350f; } button { margin-left: auto; border: 1px solid #f59e0b; background: white; color: #92400e; border-radius: 999px; padding: 0.15rem 0.6rem; font-family: inherit; font-size: 0.75rem; cursor: pointer; }
+`;
 const StickyBar = styled.div`
   flex-shrink: 0; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
   padding: 0.875rem 1.5rem; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
@@ -62,14 +67,23 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const [modal, setModal] = useState(null);        // { kind: 'subject'|'agent'|'import', id?: number } | null
   const [counts, setCounts] = useState({});
 
+  // 샘플 뷰 — URL ?sample=1 이고 관리자·사무국이면 서버 대신 목업을 읽는다. 정의는 먼저 서버에서 받아 권한을 본다.
+  const wantSample = params.get('sample') === '1';
+  const [sample, setSample] = useState(false);
   useEffect(() => {
     (async () => {
       try {
-        const [d, v] = await Promise.all([maturityApi.getDefinitions(), maturityApi.getDivisions()]);
-        setDefs(d.data); setDivisions(v.data); setError(null);
+        setSampleMode(false);
+        const d = await maturityApi.getDefinitions();
+        const allowed = wantSample && !!d.data?.can_curate;
+        setSampleMode(allowed); setSample(allowed);
+        const [d2, v] = await Promise.all([allowed ? maturityApi.getDefinitions() : Promise.resolve(d), maturityApi.getDivisions()]);
+        setDefs(d2.data); setDivisions(v.data); setError(null);
+        setRefreshKey(k => k + 1);
       } catch (e) { setError(e.message); }
     })();
-  }, []);
+    return () => setSampleMode(false);
+  }, [wantSample]);
   // 설정(뺀 조직)이 바뀌면 사업부 줄만 다시 — 정의는 그대로
   useEffect(() => {
     if (!refreshKey) return;
@@ -120,7 +134,14 @@ const DevDtMaturityApp = ({ onGoHome }) => {
 
   return (
     <Container>
-      <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} canCurate={!!defs?.can_curate} />
+      <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} canCurate={!!defs?.can_curate}
+              sample={sample} onToggleSample={() => patch({ sample: sample ? null : '1', pair: null })} />
+      {sample && (
+        <SampleBar role="status">
+          <strong>샘플 뷰</strong> — 개발용 목업 자료로 그린 화면입니다. 실제 자료가 아니며, 저장되지 않습니다.
+          <button type="button" onClick={() => patch({ sample: null, pair: null })}>실제 자료로</button>
+        </SampleBar>
+      )}
       <StickyBar>
         <DivBar>
           <DivBtn type="button" $on={divisionId === 'all'} onClick={() => patch({ division: 'all', pair: null })} title="모든 사업부를 사업부별로 묶어 봅니다">전체</DivBtn>

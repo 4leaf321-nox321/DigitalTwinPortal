@@ -1,7 +1,11 @@
 // 개발 디지털 트윈 성숙도 API. 전략 모듈의 request 와 같은 모양.
+import { isSampleMode, sampleAnswer } from '../sample/sampleStore';
+
 const API_BASE = '/api/dev-dt-maturity';
 
 async function request(path, options = {}) {
+  // 샘플 뷰 — 서버 대신 목업을 읽는다(관리자만 켠다). 저장은 던진다.
+  if (isSampleMode()) return sampleAnswer(path, options.method || 'GET');
   const token = localStorage.getItem('accessToken');
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,

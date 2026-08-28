@@ -20,7 +20,11 @@ const Table = styled.table`
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 0.75rem 0.9rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }   /* 행 사이 간격을 조금 — 줄이 구분되게 */
 `;
-const ThDiv = styled.th`cursor: pointer; font-size: 1.05rem !important; color: #1e293b !important; &:hover { color: #1d4ed8 !important; text-decoration: underline; }`;
+// 사업부 머리 — 색 헤더. 누르면 그 사업부 판으로(2026-08-28).
+const ThDiv = styled.th`
+  cursor: pointer; font-size: 1.05rem !important; color: white !important; background: #1d4ed8 !important; text-align: center !important; border-radius: 0.4rem 0.4rem 0 0;
+  &:hover { background: #1e40af !important; text-decoration: underline; }
+`;
 const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem;`;
 const Big = styled.div`font-size: 1.75rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
 const Small = styled.div`font-size: 0.8125rem; color: #64748b; margin-top: 0.3rem; white-space: nowrap;`;
@@ -42,7 +46,7 @@ const SecHead = styled.td`
   select { float: right; padding: 0.2rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; }
 `;
 // 맨 오른쪽 「전체」 — 작고 옅게, 사업부 열과 구분되게
-const ThAll = styled.th`width: 11rem; border-left: 2px solid #e2e8f0; color: #1e293b !important;`;
+const ThAll = styled.th`width: 11rem; border-left: 2px solid #e2e8f0; color: white !important; background: #334155 !important; text-align: center !important; border-radius: 0.4rem 0.4rem 0 0;`;
 const TdAll = styled.td`border-left: 2px solid #e2e8f0; background: #fafafa;`;
 
 const pct = (n, d) => (d ? Math.round((n * 100) / d) : null);

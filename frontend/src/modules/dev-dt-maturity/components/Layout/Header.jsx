@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -18,7 +18,7 @@ const HeaderButton = styled.button`
 `;
 const Count = styled.span`font-size: 0.7rem; color: #94a3b8; font-weight: 500;`;
 
-const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false }) => (
+const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample }) => (
   <CommonHeader
     logo={<Gauge size={24} strokeWidth={2} />}
     title="개발 디지털 트윈 성숙도"
@@ -40,6 +40,12 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false }) => (
         {canCurate && (
           <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자" style={{ marginLeft: '0.5rem' }}>
             <Settings size={16} /> 설정
+          </HeaderButton>
+        )}
+        {canCurate && onToggleSample && (
+          <HeaderButton onClick={onToggleSample} title="개발용 목업 자료로 화면을 그려 본다 — 보고용. 저장되지 않는다"
+                        style={sample ? { background: '#fef3c7', color: '#92400e', borderColor: '#f59e0b' } : undefined}>
+            <Eye size={16} /> {sample ? '샘플 뷰 끄기' : '샘플 뷰'}
           </HeaderButton>
         )}
       </Buttons>
