@@ -453,6 +453,8 @@ def main():
         db.session.flush()
 
         counts = {'subjects': 0, 'agents': 0, 'pairs': 0, 'assessments': 0, 'changes': 0}
+        # 대시보드 과제 — 사업부마다 몇 개만 재료로(시뮬레이션에 매단다)
+        projects = {d.id: S.projects_of(d.id, limit=12) for d in divisions.values()}
         axes = {a['key']: a for a in D.AXES['simulation']}
         for dname, tests in DATA.items():
             div = divisions.get(dname)
@@ -469,9 +471,15 @@ def main():
                 for i, (sname, kind, model, assess, history) in enumerate(sims):
                     agent = agents.get(sname)
                     if agent is None:
+                        # 수행 디지털 트윈 과제 — 그 사업부의 대시보드 과제를 돌려 가며 하나씩(셋에 하나는 둘, 넷에 하나는 안 붙임)
+                        pool = projects.get(div.id) or []
+                        k = counts['agents']
+                        picked = [] if (not pool or k % 4 == 3) else (
+                            [pool[k % len(pool)]['uuid'], pool[(k + 1) % len(pool)]['uuid']] if k % 3 == 0 and len(pool) > 1
+                            else [pool[k % len(pool)]['uuid']])
                         agent = MaturityAgent(division_id=div.id, sector='simulation', name=sname, kind=kind, model_kind=model,
                                               tools=TOOLS_BY_KIND.get(kind, []), defect_types=_defects_for(sname, kind),
-                                              department_id=(dep.id if dep else None))
+                                              project_uuids=picked, department_id=(dep.id if dep else None))
                         db.session.add(agent); db.session.flush(); agents[sname] = agent; counts['agents'] += 1
                     pair = MaturityPair(subject_id=subject.id, agent_id=agent.id)
                     db.session.add(pair); db.session.flush(); counts['pairs'] += 1

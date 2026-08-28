@@ -81,6 +81,7 @@ def main():
             agents_all += ags
             deps = S.departments_of(did)
             out[f'/departments?division_id={did}'] = deps
+            out[f'/projects?division_id={did}'] = S.projects_of(did)      # 수행 디지털 트윈 과제 고르기
             deps_all[str(did)] = deps
             out[f'/family-catalog?division_id={did}'] = S.family_catalog(did) if hasattr(S, 'family_catalog') else []
             try:

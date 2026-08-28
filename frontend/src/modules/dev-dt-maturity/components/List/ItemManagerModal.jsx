@@ -166,12 +166,13 @@ const toDraft = (kind, item) => (kind === 'subject'
   ? { division_id: item.division_id, name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
       accuracy_rule: item.accuracy_rule || 'auto' }
   : { division_id: item.division_id, name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])],
-      defect_types: [...(item.defect_types || [])], department_id: item.department_id ?? '' });
+      defect_types: [...(item.defect_types || [])], department_id: item.department_id ?? '',
+      project_uuids: [...(item.project_uuids || [])] });
 
 const toPayload = (kind, d) => (kind === 'subject'
   ? { division_id: d.division_id, name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
   : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools, defect_types: d.defect_types,
-      department_id: d.department_id === '' ? null : Number(d.department_id) });
+      project_uuids: d.project_uuids, department_id: d.department_id === '' ? null : Number(d.department_id) });
 
 /** 일괄 초안의 빈 상태 — 전부 「그대로 두기」. */
 const emptyBulk = (kind) => (kind === 'subject'
@@ -340,6 +341,15 @@ const ItemManagerModal = ({
     () => [...new Set(items.flatMap(i => i.defect_types || []))].sort((a, b) => a.localeCompare(b, 'ko')),
     [items]);
   const [newDefect, setNewDefect] = useState('');
+  // 수행 디지털 트윈 과제 — 그 사업부의 대시보드 과제를 처음 쓸 때 한 번 불러 둔다(2026-08-29)
+  const [projectsBy, setProjectsBy] = useState({});
+  const curDiv = current && kind === 'agent' ? (draft?.division_id ?? current.division_id) : null;
+  useEffect(() => {
+    if (curDiv == null || projectsBy[curDiv]) return;
+    maturityApi.listProjects(curDiv)
+      .then(r => setProjectsBy(m => ({ ...m, [curDiv]: Array.isArray(r.data) ? r.data : [] })))
+      .catch(() => setProjectsBy(m => ({ ...m, [curDiv]: [] })));
+  }, [curDiv, projectsBy]);
   const addDefect = () => {
     const t = newDefect.trim();
     if (!t) return;
@@ -524,6 +534,32 @@ const ItemManagerModal = ({
           )}
         </Chips>
         <small>이 시뮬레이션이 다루는 불량 유형을 하나씩 — 예: 크랙, 변색, 접점 마모. 다른 시뮬레이션이 적은 이름이 제안으로 뜹니다.</small>
+      </Field>
+      <Field><span>수행 디지털 트윈 과제</span>
+        <Chips>
+          {(d.project_uuids || []).map(u => {
+            const p = (projectsBy[d.division_id] || []).find(x => x.uuid === u)
+              || (current.projects || []).find(x => x.uuid === u) || { uuid: u };
+            return (
+              <Chip key={u} title={p.title || '없어진 과제'}>
+                {p.code ? `${p.code} ` : ''}{p.title || '(없어진 과제)'}{p.year ? ` · ${p.year}` : ''}
+                {canEditCur && <button type="button" title="빼기" onClick={() => set({ project_uuids: d.project_uuids.filter(x => x !== u) })}><X size={11} /></button>}
+              </Chip>
+            );
+          })}
+          {(d.project_uuids || []).length === 0 && <small>아직 없습니다.</small>}
+        </Chips>
+        {canEditCur && (
+          <SearchSelect
+            options={(projectsBy[d.division_id] || [])
+              .filter(p => !(d.project_uuids || []).includes(p.uuid))
+              .map(p => ({ id: p.uuid, name: `${p.code ? `${p.code} · ` : ''}${p.title}${p.year ? ` (${p.year})` : ''}` }))}
+            value={null}
+            onChange={(uuid) => uuid && set({ project_uuids: [...(d.project_uuids || []), uuid] })}
+            placeholder="과제 이름·코드로 찾아 더하기"
+            hint={projectsBy[d.division_id] == null ? '불러오는 중…' : '이 사업부에 그런 과제가 없습니다.'} />
+        )}
+        <small>이 시뮬레이션을 키우는 디지털 트윈 과제 — 대시보드의 {divName(d.division_id)} 사업부 과제에서 고릅니다. 여럿 매달 수 있습니다.</small>
       </Field>
       <Info>걸린 연계 <strong>{pairCount[current.id] || 0}</strong>개. 연계을 잇거나 끊는 것은 목록 탭에서.</Info>
     </>

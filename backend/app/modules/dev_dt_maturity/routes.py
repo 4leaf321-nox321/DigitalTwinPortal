@@ -240,7 +240,7 @@ def create_agent(actor):
         row = S.create_agent(p['division_id'], p.get('sector') or 'simulation',
                              p.get('name'), p.get('kind'), p.get('model_kind'),
                              p.get('project_uuid'), p.get('tools'), p.get('department_id'),
-                             p.get('defect_types'))
+                             p.get('defect_types'), p.get('project_uuids'))
         db.session.commit()
         return success_response(row.to_dict(), status_code=201)
     except S.Refused as e:
@@ -639,6 +639,16 @@ def departments(actor):
         return success_response(S.departments_of(division_id))
     except Exception:
         return _crashed()
+
+
+@bp.route('/projects', methods=['GET'])
+@read_required
+def list_projects(actor):
+    """「수행 디지털 트윈 과제」 고르기의 재료 — 그 사업부의 대시보드 과제."""
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return _refused(lambda: success_response(S.projects_of(division_id, request.args.get('q'))))
 
 
 @bp.route('/pairs/<int:pair_id>/reached/<axis>/<rung>', methods=['PUT'])

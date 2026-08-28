@@ -112,6 +112,7 @@ export const maturityApi = {
   addSegmentDef: (threadId, payload) => request(`/threads/${threadId}/segment-defs`, json('POST', payload)),
   updateSegmentDef: (id, payload) => request(`/threads/segment-defs/${id}`, json('PUT', payload)),
   deleteSegmentDef: (id) => request(`/threads/segment-defs/${id}`, { method: 'DELETE' }),
+  listProjects: (divisionId) => request(`/projects?division_id=${divisionId}`),   // 수행 디지털 트윈 과제 고르기의 재료
   listSystems: () => request('/systems'),
   createSystem: (payload) => request('/systems', json('POST', payload)),
   updateSystem: (id, payload) => request(`/systems/${id}`, json('PUT', payload)),

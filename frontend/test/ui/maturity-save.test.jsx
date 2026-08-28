@@ -38,6 +38,10 @@ export default async function run() {
   const { say, done } = suite();
   let refuse = null;   // 서버 거절을 흉내낼 때
   const calls = fakeFetch(({ url, method, body }) => {
+    if (url.includes('/projects?')) return [
+      { uuid: 'u1', code: 'MX-1', title: '낙하 해석 자동화', status: '진행', year: 2026, division: 'MX' },
+      { uuid: 'u2', code: 'MX-2', title: '열 해석 정확도', status: '완료', year: 2025, division: 'MX' },
+    ];
     if (url.includes('/pairs/101/assessments/')) {
       if (refuse) { const e = new Error(refuse); throw e; }
       const axis = url.split('/assessments/')[1];
@@ -185,11 +189,23 @@ export default async function run() {
     say(!!defIn, '⑥-2 불량 유형 칸이 있음');
     await type(defIn, '크랙'); await keydown(defIn, 'Enter'); await settle();
     say(html().includes('크랙') && defIn.value === '', '⑥-2 Enter 로 칩이 붙고 칸이 비워짐');
+    // ⑥-3 수행 디지털 트윈 과제 — 대시보드 과제를 여럿 매단다
+    const projIn = [...document.querySelectorAll('input[data-search-select]')].find(x => (x.placeholder || '').includes('과제'));
+    say(!!projIn, '⑥-3 과제 고르기 칸이 있음');
+    await type(projIn, '자동화'); await settle();
+    const p1 = byText('li', 'MX-1 · 낙하 해석 자동화 (2026)');
+    say(!!p1 && !byText('li', 'MX-2 · 열 해석 정확도 (2025)'), '⑥-3 글자를 치면 좁혀짐');
+    await click(p1); await settle();
+    const projIn2 = [...document.querySelectorAll('input[data-search-select]')].find(x => (x.placeholder || '').includes('과제'));
+    await type(projIn2, '정확도'); await settle();
+    await click(byText('li', 'MX-2 · 열 해석 정확도 (2025)')); await settle();
+    say(html().includes('낙하 해석 자동화') && html().includes('열 해석 정확도'), '⑥-3 둘 다 칩으로 붙음');
     say(!byText('button', '저장').disabled, '⑥ 고르면 저장이 선택됨');
     await click(byText('button', '저장')); await settle();
     const put6 = calls.find(c => c.method === 'PUT' && c.url.includes('/agents/5'));
     say(JSON.stringify(put6?.body?.defect_types) === '["크랙"]', `⑥-2 PUT 에 defect_types 가 감: ${JSON.stringify(put6?.body?.defect_types)}`);
     say(!!put6 && put6.body.department_id === 3, `⑥ department_id 가 숫자로 감: ${JSON.stringify(put6?.body)}`);
+    say(JSON.stringify(put6?.body?.project_uuids) === '["u1","u2"]', `⑥-3 PUT 에 project_uuids 가 감: ${JSON.stringify(put6?.body?.project_uuids)}`);
     await unmount();
 
     // ⑦ initialId — 표의 연필로 연 것처럼

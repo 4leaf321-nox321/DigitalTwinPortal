@@ -194,6 +194,11 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                         <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 사다리가 나옵니다">
                           {p.agent?.name}
                           {(p.agent?.tools || []).length > 0 && <small>{p.agent.tools.join(', ')}</small>}
+                          {(p.agent?.projects || []).length > 0 && (
+                            <small title={`수행 디지털 트윈 과제 — ${p.agent.projects.map(x => x.title || x.uuid).join(' · ')}`}>
+                              과제 {p.agent.projects.map(x => x.code || x.title || '?').join(', ')}
+                            </small>
+                          )}
                           {p.unassessed.length > 0 && <Badge title={`아직 안 매긴 축: ${p.unassessed.length}`}>미평가 {p.unassessed.length}개</Badge>}
                           {onEditAgent && (
                             <EditBtn type="button" title="시뮬레이션 관리에서 열기" aria-label={`${p.agent?.name} 편집`}

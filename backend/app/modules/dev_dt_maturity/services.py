@@ -93,6 +93,18 @@ def departments_of(division_id):
     return [{'id': r.id, 'name': r.name} for r in rows]
 
 
+def projects_of(division_id, q=None, limit=200):
+    """「수행 디지털 트윈 과제」 고르기의 재료 — 그 사업부의 대시보드 과제. 읽기만 한다."""
+    from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+    rows = Dt2Project.query.filter_by(division_id=int(division_id))
+    if q:
+        like = f'%{q.strip()}%'
+        rows = rows.filter(db.or_(Dt2Project.title.ilike(like), Dt2Project.code.ilike(like)))
+    rows = rows.order_by(Dt2Project.year.desc().nullslast(), Dt2Project.code).limit(int(limit)).all()
+    return [{'uuid': r.uuid, 'code': r.code, 'title': r.title, 'status': r.status,
+             'year': r.year, 'division': r.division} for r in rows]
+
+
 def _department_or_refuse(division_id, department_id):
     """담당 부서는 **그 사업부의 활성 부서**여야 한다. 아니면 거절 — 다른 사업부 부서를
     달면 어느 사업부의 시뮬레이션인지가 흐려진다. None 은 「안 정함」."""
@@ -108,7 +120,7 @@ def _department_or_refuse(division_id, department_id):
 
 
 def create_agent(division_id, sector, name, kind=None, model_kind=None, project_uuid=None,
-                 tools=None, department_id=None, defect_types=None):
+                 tools=None, department_id=None, defect_types=None, project_uuids=None):
     _sector_or_refuse(sector)
     if not D.SECTOR_BY_KEY[sector]['has_agent']:
         raise Refused('이 부문은 수단 없이 대상에 직접 매깁니다.')
@@ -123,6 +135,7 @@ def create_agent(division_id, sector, name, kind=None, model_kind=None, project_
         project_uuid=(project_uuid or '')[:64] or None,
         tools=_clean_list(tools),
         defect_types=_clean_list(defect_types),
+        project_uuids=_clean_list(project_uuids),
         department_id=_department_or_refuse(division_id, department_id),
     )
     db.session.add(row)
@@ -146,6 +159,8 @@ def update_agent(row, payload):
         row.model_kind = mk
     if 'project_uuid' in payload:
         row.project_uuid = (payload.get('project_uuid') or '')[:64] or None
+    if 'project_uuids' in payload:
+        row.project_uuids = _clean_list(payload.get('project_uuids'))
     if 'tools' in payload:
         row.tools = _clean_list(payload.get('tools'))
     if 'defect_types' in payload:

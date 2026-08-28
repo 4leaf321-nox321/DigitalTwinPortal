@@ -48,6 +48,24 @@ class MaturitySubject(BaseModel):
         return d
 
 
+def _projects_of(uuids):
+    """대시보드 과제 uuid → 화면에 보일 만큼(코드·이름·상태·연도). 없어진 과제는 이름 없이 남긴다."""
+    if not uuids:
+        return []
+    try:
+        from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
+        rows = {p.uuid: p for p in Dt2Project.query.filter(Dt2Project.uuid.in_(list(uuids))).all()}
+    except Exception:
+        rows = {}
+    out = []
+    for u in uuids:
+        p = rows.get(u)
+        out.append({'uuid': u, 'code': p.code if p else None, 'title': p.title if p else None,
+                    'status': p.status if p else None, 'year': p.year if p else None,
+                    'division': p.division if p else None, 'missing': p is None})
+    return out
+
+
 class MaturityAgent(BaseModel):
     """수단 — 시뮬레이션 부문이면 시뮬레이션(엑셀 행 단위)."""
     __tablename__ = 'dt_maturity_agent'
@@ -67,7 +85,10 @@ class MaturityAgent(BaseModel):
     # 담당 부서 — 포탈의 부서 표(departments)에서 고른다. 그 시뮬레이션의 사업부에 속한 부서만.
     # FK 는 아니다(부서 표가 정리돼도 여기가 안 깨지게). 이름은 읽을 때 붙인다.
     department_id = db.Column(db.Integer, index=True)
-    project_uuid = db.Column(db.String(64), index=True)   # 참고 링크. FK 아님
+    project_uuid = db.Column(db.String(64), index=True)   # 옛 칸 하나 — 엑셀 들여오기가 아직 쓴다. FK 아님
+    # 수행 디지털 트윈 과제 — 대시보드(dt2_projects)의 uuid 들. 여럿을 매단다(e1b9c7a25d08).
+    # FK 는 아니다. 저쪽 표가 갈려도 여기가 안 깨지게 uuid 만 든다(department_id 와 같은 결).
+    project_uuids = db.Column(db.JSON, default=list)
 
     pairs = db.relationship('MaturityPair', backref='agent',
                             cascade='all, delete-orphan', passive_deletes=True)
@@ -76,6 +97,8 @@ class MaturityAgent(BaseModel):
         d = super().to_dict()
         d['tools'] = list(self.tools or [])
         d['defect_types'] = list(self.defect_types or [])
+        d['project_uuids'] = list(self.project_uuids or ([self.project_uuid] if self.project_uuid else []))
+        d['projects'] = _projects_of(d['project_uuids'])          # 이름·코드·상태는 읽을 때 붙인다
         d['department_name'] = None
         if self.department_id:
             try:
