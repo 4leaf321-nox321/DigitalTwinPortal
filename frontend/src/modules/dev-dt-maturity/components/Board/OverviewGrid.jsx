@@ -15,11 +15,11 @@ import { colorFor, divisionSummary } from '../../utils/board';
 const Wrap = styled.div`overflow: auto;`;
 const Table = styled.table`
   width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8125rem;
-  th { text-align: left; font-size: 0.6875rem; font-weight: 700; color: #64748b; padding: 0.35rem 0.6rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.6875rem; font-weight: 700; color: #64748b; padding: 0.35rem 0.6rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 0.55rem 0.6rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 `;
-const Row = styled.tr`cursor: pointer; &:hover td { background: #f8fafc; }`;
-const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap;`;
+const ThDiv = styled.th`cursor: pointer; font-size: 0.875rem !important; color: #1e293b !important; &:hover { color: #1d4ed8 !important; text-decoration: underline; }`;
+const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; vertical-align: top !important;`;
 const Big = styled.div`font-size: 1rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
 const Small = styled.div`font-size: 0.6875rem; color: #64748b; margin-top: 0.15rem; white-space: nowrap;`;
 const Bar = styled.div`display: flex; height: 0.45rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin-top: 0.3rem; min-width: 7rem;`;
@@ -96,34 +96,41 @@ const AxisSummary = ({ axis, s }) => {
   return null;
 };
 
-const OverviewGrid = ({ boards, axes, onPickDivision }) => (
-  <Wrap>
-    <Table>
-      <thead>
-        <tr>
-          <th>사업부</th>
-          {axes.map(a => <th key={a.key}>{a.label}</th>)}
-          <th>쌍 · 미평가 · 낡음</th>
-        </tr>
-      </thead>
-      <tbody>
-        {boards.map(b => {
-          const s = divisionSummary(b, axes);
-          return (
-            <Row key={b.division_id} onClick={() => onPickDivision && onPickDivision(b.division_id)} title="누르면 이 사업부 판으로">
-              <Name>{b.division_name}</Name>
-              {axes.map(a => <td key={a.key}><AxisSummary axis={a} s={s.axes[a.key]} /></td>)}
-              <td>
+// 가로가 사업부, 세로가 축 — 한 축을 한 줄로 두고 사업부를 옆으로 늘어놓아야 「이 축에서 누가 앞서나」가 바로 읽힌다(2026-08-28).
+const OverviewGrid = ({ boards, axes, onPickDivision }) => {
+  const sums = boards.map(b => divisionSummary(b, axes));
+  return (
+    <Wrap>
+      <Table>
+        <thead>
+          <tr>
+            <th style={{ width: '9rem' }}>축</th>
+            {boards.map(b => (
+              <ThDiv key={b.division_id} onClick={() => onPickDivision && onPickDivision(b.division_id)} title="누르면 이 사업부 판으로">{b.division_name}</ThDiv>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {axes.map(a => (
+            <tr key={a.key}>
+              <Name>{a.label}<Small>{a.question}</Small></Name>
+              {boards.map((b, i) => <td key={b.division_id}><AxisSummary axis={a} s={sums[i].axes[a.key]} /></td>)}
+            </tr>
+          ))}
+          <tr>
+            <Name>쌍 · 미평가 · 낡음</Name>
+            {sums.map((s, i) => (
+              <td key={boards[i].division_id}>
                 <Big>{s.pairs}</Big>
                 <Small>미평가 칸 {s.unassessed} · 낡음 {s.stale}</Small>
               </td>
-            </Row>
-          );
-        })}
-        {boards.length === 0 && <tr><Muted colSpan={axes.length + 2}>보이는 사업부가 없습니다 — 설정 「사업부 표시」를 확인하세요.</Muted></tr>}
-      </tbody>
-    </Table>
-  </Wrap>
-);
+            ))}
+          </tr>
+          {boards.length === 0 && <tr><Muted colSpan={2}>보이는 사업부가 없습니다 — 설정 「사업부 표시」를 확인하세요.</Muted></tr>}
+        </tbody>
+      </Table>
+    </Wrap>
+  );
+};
 
 export default OverviewGrid;

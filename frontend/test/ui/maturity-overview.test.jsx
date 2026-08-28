@@ -1,8 +1,8 @@
 // 성숙도 — 전체 「요약」의 사업부 × 축 표를 실제로 그려 본다. (2026-08-28)
 //
-//   ① 전체 판이면 「요약」이 기본이고 사업부가 행으로 보인다
+//   ① 전체 판이면 「요약」이 기본이고 가로가 사업부, 세로가 축이다
 //   ② 축마다 다른 대표 수치 — 정확도 평균 · 적용 범위 「이상 %」 · 자동화 평균 켠 수 · 모델링 시험 재현률
-//   ③ 행을 누르면 그 사업부로 내려간다 · 「상세」로 바꾸면 시험 표가 나온다
+//   ③ 사업부 머리를 누르면 그 사업부로 내려간다 · 「상세」로 바꾸면 시험 표가 나온다
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, settle, byText, html, suite, unmount } from './dom-helpers.mjs';
@@ -34,15 +34,15 @@ export default async function run() {
   try {
     await render(<BoardBody board={BOARD} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={() => {}} onPickDivision={(id) => { picked = id; }} />);
     await settle();
-    say(!!byText('td', 'MX') && !!byText('td', 'VD'), '① 전체 판은 「요약」으로 열리고 사업부가 행');
+    say(!!byText('th', 'MX') && !!byText('th', 'VD') && !!byText('td', '정확도'), '① 전체 판은 「요약」으로 열리고 사업부가 열, 축이 행');
     const h = html();
     say(h.includes('80%') && h.includes('값 있음 2/2'), '② 정확도: 평균 80% · 값 있음 2/2');
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');
     say(h.includes('1/2') && h.includes('평균 켠 수'), '② 자동화: 평균 켠 수 1/2');
     say(h.includes('시험 재현') && h.includes('유형 4'), '② 모델링: 시험 재현률 · 유형 수');
     say(h.includes('미검증 1'), '② VD 정확도에 「미검증 1」 배지');
-    await click(byText('td', 'VD').closest('tr'));
-    say(picked === 18, '③ 행을 누르면 그 사업부(18)로');
+    await click(byText('th', 'VD'));
+    say(picked === 18, '③ 사업부 머리를 누르면 그 사업부(18)로');
     await click(byText('button', '상세')); await settle();
     say(html().includes('낙하 시험') && html().includes('진동 시험'), '③ 「상세」로 바꾸면 시험 표');
     await unmount();
