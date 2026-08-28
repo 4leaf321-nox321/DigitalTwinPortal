@@ -397,7 +397,8 @@ def pair_dict(pair, rule=None, stale_days=None, with_changes=False):
             continue
         d = a.to_dict()
         if axis['kind'] == 'value':
-            d['rung'] = D.rung_for_value(a.value, rule['thresholds'], rule['boundary'])
+            r = {'thresholds': axis['thresholds'], 'boundary': axis.get('boundary', 'gte')} if axis.get('thresholds') else rule
+            d['rung'] = D.rung_for_value(a.value, r['thresholds'], r['boundary'])
         if axis['kind'] == 'set':
             d['flags'] = D.set_flags(axis, a.rung) or []
         if axis['kind'] == 'matrix':

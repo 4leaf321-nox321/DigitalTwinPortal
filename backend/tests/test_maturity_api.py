@@ -12,6 +12,8 @@
 """
 import pytest
 
+from app.modules.dev_dt_maturity import definitions as D
+
 from app.extensions import db as _db
 from app.modules.auth.models import UserRole
 from app.modules.dev_dt_maturity.models import (
@@ -228,7 +230,7 @@ def test_설정은_사무국만_바꾼다(client, auth, world, mx_user, office):
     res = client.get(f'{BASE}/definitions', headers=auth(mx_user))
     d = res.get_json()['data']
     assert d['stale_days'] == 180
-    assert [s['key'] for s in d['sectors'] if s['active']] == ['simulation']
+    assert [s['key'] for s in d['sectors'] if s['active']] == ['simulation', 'digital_thread']
     assert d['my_division_id'] == world['mx'].id
 
 
@@ -616,3 +618,77 @@ def test_검토_대장_CSV_는_틀_그대로_붙여_넣는다(client, auth, worl
     assert res.status_code == 200 and res.get_json()['data']['created'] == 2
     rows = client.get(f'{BASE}/reviews?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']
     assert {r['timing'] for r in rows} == {'before_spec', 'after_issue'} and rows[1]['basis'] == 'margin'
+
+
+# ── 디지털 스레드 ──────────────────────────────────────────────────────────
+
+def test_스레드_사전은_처음_읽을_때_초안이_들어가고_사무국만_고친다(client, auth, world, mx_user, office):
+    res = client.get(f'{BASE}/threads', headers=auth(mx_user))
+    assert res.status_code == 200
+    threads = res.get_json()['data']
+    assert [t['key'] for t in threads] == ['simulation', 'cost', 'quality', 'manufacturing', 'bom_change']
+    assert len(threads[1]['segments']) == 5 and threads[1]['segments'][0]['from_stage'] == 'planning'
+    assert client.get(f'{BASE}/threads', headers=auth(mx_user)).get_json()['data'][0]['id'] == threads[0]['id']   # 멱등
+    systems = client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']
+    assert {s['name'] for s in systems if s['kind'] == 'informal'} == set(D.INFORMAL_ITEMS)
+    assert client.post(f'{BASE}/threads', json={'key': 'supply', 'name': '부품·공급망'}, headers=auth(mx_user)).status_code == 403
+    res = client.post(f'{BASE}/threads', json={'key': 'supply', 'name': '부품·공급망 스레드'}, headers=auth(office))
+    assert res.status_code == 201
+    tid = res.get_json()['data']['id']
+    res = client.post(f'{BASE}/threads/{tid}/segment-defs', json={'key': 'a', 'name': '부품 스펙 → 공급사', 'from_stage': 'development', 'to_stage': 'purchasing'}, headers=auth(office))
+    assert res.status_code == 201
+    assert client.post(f'{BASE}/threads/{tid}/segment-defs', json={'key': 'b', 'name': 'x', 'from_stage': 'nowhere', 'to_stage': 'purchasing'}, headers=auth(office)).status_code == 400
+
+
+def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_user, office):
+    mx = world['mx'].id
+    threads = client.get(f'{BASE}/threads', headers=auth(mx_user)).get_json()['data']
+    cost = next(t for t in threads if t['key'] == 'cost')
+    # 시스템 — 개발 조직이 적는다. 같은 이름은 거절
+    plm = client.post(f'{BASE}/systems', json={'name': 'Teamcenter', 'kind': 'plm', 'link_means': 'api', 'stages': ['development']}, headers=auth(mx_user)).get_json()['data']
+    costsys = client.post(f'{BASE}/systems', json={'name': '원가 산정 시스템', 'kind': 'cost'}, headers=auth(mx_user)).get_json()['data']
+    assert client.post(f'{BASE}/systems', json={'name': 'Teamcenter', 'kind': 'plm'}, headers=auth(mx_user)).status_code == 400
+    mail = next(s for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data'] if s['name'] == '메일')
+    # 조직 — 손으로 둘
+    dev = client.post(f'{BASE}/orgs', json={'division_id': mx, 'name': 'MX 설계그룹', 'role': 'development'}, headers=auth(mx_user)).get_json()['data']
+    fin = client.post(f'{BASE}/orgs', json={'division_id': mx, 'name': '원가팀', 'role': 'management'}, headers=auth(mx_user)).get_json()['data']
+    # 구간 — 표준 구간 둘: 목표 원가→설계 BOM(API), 설계 BOM→예상 원가(메일 매개)
+    d1, d2 = cost['segments'][0], cost['segments'][1]
+    s1 = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': d1['id'], 'from_org_id': dev['id'], 'from_system_id': plm['id'], 'via_system_id': plm['id'], 'to_org_id': dev['id'], 'to_system_id': plm['id']}, headers=auth(mx_user))
+    assert s1.status_code == 201, s1.get_json()
+    s1 = s1.get_json()['data']
+    assert s1['name'] == d1['name'] and s1['thread_key'] == 'cost' and s1['pair_id'] and s1['via_informal'] is False
+    s2 = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': d2['id'], 'from_org_id': dev['id'], 'from_system_id': plm['id'], 'via_system_id': mail['id'], 'to_org_id': fin['id'], 'to_system_id': costsys['id']}, headers=auth(mx_user)).get_json()['data']
+    assert s2['via_informal'] is True
+    # 매기기 — 기존 평가 API 그대로. 비공식 매개면 연결 방식은 둘째 칸까지
+    _assess(client, auth, mx_user, s1['pair_id'], 'link_mode', {'rung': 'api', 'note': 'PLM 내부 링크'})
+    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'api', 'note': 'x'}, expect=400)
+    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'manual_file', 'note': '엑셀 메일'})
+    _assess(client, auth, mx_user, s1['pair_id'], 'traceability', {'flags': ['identity', 'version'], 'note': 'BOM id·리비전'})
+    out = _assess(client, auth, mx_user, s1['pair_id'], 'stability', {'value': 95, 'note': '월 1회 손봄'})
+    assert out['data']['assessments']['stability']['rung'] == 'auto'          # 축 자체의 문턱(90)
+    # 스레드 셈 — 재료비: 구간 2, 이어진 1(50%), 도달 단계는 첫 구간의 to(개발), 최약은 s2, 비공식 50%
+    st = client.get(f'{BASE}/threads/stats?division_id={mx}', headers=auth(mx_user)).get_json()['data']['threads']
+    c = next(t for t in st if t['thread_key'] == 'cost')
+    assert c['segment_count'] == 2 and c['assessed'] == 2 and c['continuity'] == 50
+    assert c['reach_stage'] == 'development' and c['weakest']['id'] == s2['id'] and c['informal_ratio'] == 50 and c['closed_loop'] is False
+    # 조직 연계표 · 시스템 허브
+    m = client.get(f'{BASE}/threads/org-matrix?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert any(x['from_org'] == 'MX 설계그룹' and x['to_org'] == '원가팀' and x['count'] == 1 and x['min_link_label'] == '수동 파일 교환' and '메일' in x['systems'] for x in m)
+    hubs = client.get(f'{BASE}/systems/hubs?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert hubs[0]['name'] == 'Teamcenter' and hubs[0]['segments'] == 4 and hubs[0]['threads'] == 1
+    # 판에도 구간이 대상으로 뜬다(수단 없는 연계)
+    b = client.get(f'{BASE}/board?division_id={mx}&sector=digital_thread', headers=auth(mx_user)).get_json()['data']
+    assert {s['name'] for s in b['subjects']} == {d1['name'], d2['name']} and b['subjects'][0]['pairs'][0]['agent'] is None
+    # 매개를 공식 시스템으로 바꾸면 API 를 고를 수 있다
+    client.put(f'{BASE}/segments/{s2["id"]}', json={'via_system_id': plm['id']}, headers=auth(mx_user))
+    _assess(client, auth, mx_user, s2['pair_id'], 'link_mode', {'rung': 'api', 'note': '허브 연동'})
+    # 정돈 — TC 를 Teamcenter 로 합치면 구간이 옮겨 가고 TC 는 사라진다
+    tc = client.post(f'{BASE}/systems', json={'name': 'TC', 'kind': 'plm'}, headers=auth(mx_user)).get_json()['data']
+    client.put(f'{BASE}/segments/{s1["id"]}', json={'to_system_id': tc['id']}, headers=auth(mx_user))
+    assert client.post(f'{BASE}/systems/merge', json={'keep_id': plm['id'], 'drop_id': tc['id']}, headers=auth(mx_user)).status_code == 403
+    res = client.post(f'{BASE}/systems/merge', json={'keep_id': plm['id'], 'drop_id': tc['id']}, headers=auth(office))
+    assert res.status_code == 200 and res.get_json()['data']['moved'] == 1
+    assert 'TC' not in {s['name'] for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']}
+    # 지우면 대상·연계·평가가 같이 간다
+    assert client.delete(f'{BASE}/segments/{s1["id"]}', headers=auth(mx_user)).get_json()['data']['assessments'] == 3

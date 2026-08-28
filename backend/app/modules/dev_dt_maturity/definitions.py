@@ -35,7 +35,7 @@ SECTORS = [
     {'key': 'design_automation', 'label': '설계 자동화', 'has_agent': True,
      'subject_label': '설계 업무', 'agent_label': '자동화 도구', 'phase': 2},
     {'key': 'digital_thread', 'label': '디지털 스레드', 'has_agent': False,
-     'subject_label': '시스템 연계 구간', 'agent_label': None, 'phase': 3},
+     'subject_label': '연계 구간', 'agent_label': None, 'phase': 3},
 ]
 SECTOR_KEYS = [s['key'] for s in SECTORS]
 SECTOR_BY_KEY = {s['key']: s for s in SECTORS}
@@ -149,8 +149,141 @@ AXES = {
     # 나머지 부문은 사다리가 없다 — 자료 조사 뒤(PLAN 3-1) / 3차(3-2).
     'verification_automation': [],
     'design_automation': [],
-    'digital_thread': [],
+    # ── 디지털 스레드(2026-08-28) — 대상은 「구간」(데이터가 조직·시스템을 건너는 자리), 수단 없음 ──
+    'digital_thread': [
+        {
+            'key': 'link_mode', 'label': '연결 방식', 'kind': 'rung',
+            'question': '데이터가 어떻게 건너가는가',
+            'evidence': ['attachment'], 'evidence_label': '근거 링크',
+            # 매개가 「비공식 매개」면 둘째 칸까지만(threads.guard_assess)
+            'rungs': [
+                {'key': 'verbal', 'label': '문서·구두 전달', 'description': '사람이 문서나 말로 넘긴다'},
+                {'key': 'manual_file', 'label': '수동 파일 교환', 'description': '사람이 파일을 내려 보낸다(메일·공유폴더)'},
+                {'key': 'auto_file', 'label': '자동 파일 교환', 'description': '정해진 폴더·포맷으로 자동 배치'},
+                {'key': 'api', 'label': 'API 연동', 'description': '시스템끼리 API·링크로 바로 잇는다'},
+                {'key': 'sync', 'label': '자동 동기', 'description': '바뀌면 저절로 따라간다'},
+                {'key': 'closed_loop', 'label': '폐루프', 'description': '하류의 결과가 상류를 갱신한다'},
+            ],
+        },
+        {
+            'key': 'traceability', 'label': '추적성', 'kind': 'set', 'hide_empty': True,
+            'question': '건너면서 무엇을 잃지 않는가',
+            'evidence': ['attachment'], 'evidence_label': '근거 링크',
+            'rungs': [
+                {'key': 'none', 'label': '없음', 'description': '아무것도 유지되지 않는다'},
+                {'key': 'identity', 'label': '식별자 유지', 'short': '식별자', 'description': '같은 물건을 같은 id 로 안다'},
+                {'key': 'version', 'label': '버전 유지', 'short': '버전', 'description': '어느 판인지 안다'},
+                {'key': 'provenance', 'label': '출처 기록', 'short': '출처', 'description': '누가 언제 만들었는지 남는다'},
+                {'key': 'up_link', 'label': '상류 링크', 'short': '상류', 'description': '어디서 왔는지로 거슬러 간다'},
+                {'key': 'down_link', 'label': '하류 링크', 'short': '하류', 'description': '어디에 쓰였는지로 내려간다'},
+            ],
+        },
+        {
+            'key': 'consistency', 'label': '데이터 정합', 'kind': 'rung',
+            'question': '두 쪽이 같은 뜻으로 읽는가',
+            'evidence': ['attachment'], 'evidence_label': '근거 링크',
+            'rungs': [
+                {'key': 'retyped', 'label': '사람이 옮겨 적음', 'description': '값을 손으로 다시 넣는다'},
+                {'key': 'mapped', 'label': '매핑표', 'description': '같은 뜻 다른 코드를 표로 맞춘다'},
+                {'key': 'master', 'label': '같은 마스터 참조', 'description': '둘 다 같은 기준 자료를 본다'},
+                {'key': 'single_source', 'label': '단일 원천', 'description': '한 곳에만 있고 나머지는 참조'},
+            ],
+        },
+        {
+            'key': 'scope', 'label': '적용 범위', 'kind': 'rung',
+            'question': '어느 개발 과제에서 흐르는가',
+            'evidence': ['product_families'], 'evidence_label': '대상 제품군',
+            'rungs': [
+                {'key': 'issue', 'label': '이슈 대응', 'description': '문제가 난 뒤, 그 과제에만'},
+                {'key': 'basic', 'label': '대표(Basic) 모델', 'description': '제품군의 대표 모델 개발에서'},
+                {'key': 'derived_some', 'label': '신규 개발 전 모델', 'description': '신규 개발 과제 전부에서'},
+                {'key': 'all', 'label': '파생·지역 변형까지', 'description': '파생·지역 변형 과제까지 전부에서'},
+            ],
+        },
+        {
+            'key': 'stability', 'label': '운영 안정성', 'kind': 'value', 'unit': '%',
+            'question': '수동 개입 없이 흐른 비율',
+            'evidence': ['attachment'], 'evidence_label': '근거 링크',
+            # 값 축 — 정확도처럼 기록이 줄줄이 쌓인다. 문턱은 축 자체에(사업부 설정 아님).
+            'thresholds': [{'rung': 'manual_heavy', 'min': 0}, {'rung': 'partly', 'min': 50}, {'rung': 'auto', 'min': 90}],
+            'boundary': 'gte',
+            'rungs': [
+                {'key': 'manual_heavy', 'label': '손이 많이 감', 'description': '절반 넘게 사람이 고친다'},
+                {'key': 'partly', 'label': '대체로 자동', 'description': '가끔 손을 댄다'},
+                {'key': 'auto', 'label': '자동 운영', 'description': '거의 손을 안 댄다'},
+            ],
+        },
+    ],
 }
+
+# ── 디지털 스레드의 사전 어휘 ──────────────────────────────────────────────
+THREAD_STAGES = [
+    {'key': 'planning', 'label': '기획'}, {'key': 'development', 'label': '개발'},
+    {'key': 'mfg_eng', 'label': '제조기술'}, {'key': 'manufacturing', 'label': '제조'},
+    {'key': 'quality', 'label': '품질'}, {'key': 'purchasing', 'label': '구매'},
+    {'key': 'market', 'label': '시장(CS)'}, {'key': 'management', 'label': '경영'},
+]
+STAGE_LABELS = {s['key']: s['label'] for s in THREAD_STAGES}
+SYSTEM_KINDS = [
+    {'key': 'plm', 'label': 'PLM'}, {'key': 'cad', 'label': 'CAD'}, {'key': 'cae', 'label': 'CAE'}, {'key': 'spdm', 'label': 'SPDM'},
+    {'key': 'requirements', 'label': '요구사항 관리'}, {'key': 'erp', 'label': 'ERP'}, {'key': 'mes', 'label': 'MES'},
+    {'key': 'qms', 'label': '품질(QMS)'}, {'key': 'cost', 'label': '원가'}, {'key': 'purchase', 'label': '구매'},
+    {'key': 'cs', 'label': '서비스(CS)'}, {'key': 'test', 'label': '시험 관리'}, {'key': 'hub', 'label': '데이터 허브·ESB'},
+    {'key': 'informal', 'label': '비공식 매개'}, {'key': 'other', 'label': '기타'},
+]
+SYSTEM_KIND_KEYS = [k['key'] for k in SYSTEM_KINDS]
+INFORMAL_ITEMS = ['메일', '엑셀·문서 전달', '파일서버·공유폴더', '메신저', '구두·회의']
+LINK_MEANS = [{'key': 'api', 'label': 'API 있음'}, {'key': 'file', 'label': '파일 배치'}, {'key': 'none', 'label': '없음'}, {'key': 'unknown', 'label': '미확인'}]
+LINK_MEANS_KEYS = [k['key'] for k in LINK_MEANS]
+SYSTEM_STATUS = [{'key': 'active', 'label': '운영'}, {'key': 'adopting', 'label': '도입 중'}, {'key': 'retiring', 'label': '폐지 예정'}]
+SYSTEM_STATUS_KEYS = [k['key'] for k in SYSTEM_STATUS]
+
+# 표준 스레드의 첫 판 — 표가 비어 있을 때 넣는 초안. 사무국이 화면에서 고친다(key 는 고정).
+THREAD_DEFAULTS = [
+    {'key': 'simulation', 'name': '시뮬레이션 스레드', 'description': '요구사항에서 해석 조건·모델·결과·설계 판정·시험 비교까지', 'axes_off': ['consistency'],
+     'segments': [
+         {'key': 'req_to_cond', 'name': '요구사항 → 해석 조건', 'from': 'planning', 'to': 'development'},
+         {'key': 'cad_to_model', 'name': '설계 형상 → 해석 모델', 'from': 'development', 'to': 'development'},
+         {'key': 'result_to_review', 'name': '해석 결과 → 설계 판정', 'from': 'development', 'to': 'development'},
+         {'key': 'test_vs_result', 'name': '시험 결과 ↔ 해석 결과', 'from': 'quality', 'to': 'development'},
+         {'key': 'eco_to_rerun', 'name': '설계 변경 → 해석 재수행', 'from': 'development', 'to': 'development'},
+     ]},
+    {'key': 'cost', 'name': '재료비 스레드', 'description': '목표 원가에서 설계 BOM·예상 원가·구매 단가·실적 원가·손익까지',
+     'segments': [
+         {'key': 'target_to_bom', 'name': '목표 원가 → 설계 BOM', 'from': 'planning', 'to': 'development'},
+         {'key': 'bom_to_estimate', 'name': '설계 BOM → 예상 원가', 'from': 'development', 'to': 'management'},
+         {'key': 'estimate_to_price', 'name': '예상 원가 → 구매 단가', 'from': 'management', 'to': 'purchasing'},
+         {'key': 'price_to_actual', 'name': '구매 단가 → 실적 원가', 'from': 'purchasing', 'to': 'manufacturing'},
+         {'key': 'actual_to_pl', 'name': '실적 원가 → 손익', 'from': 'manufacturing', 'to': 'management'},
+     ]},
+    {'key': 'quality', 'name': '품질 스레드', 'description': '스펙에서 신뢰성 시험·양산 검사·시장 불량·원인 분석·설계 변경까지(폐루프)',
+     'segments': [
+         {'key': 'spec_to_test', 'name': '스펙 → 신뢰성 시험 결과', 'from': 'development', 'to': 'quality'},
+         {'key': 'test_to_inspection', 'name': '시험 결과 → 양산 검사', 'from': 'quality', 'to': 'manufacturing'},
+         {'key': 'inspection_to_field', 'name': '양산 검사 → 시장 불량', 'from': 'manufacturing', 'to': 'market'},
+         {'key': 'field_to_cause', 'name': '시장 불량 → 원인 분석', 'from': 'market', 'to': 'development'},
+         {'key': 'cause_to_eco', 'name': '원인 분석 → 설계 변경', 'from': 'development', 'to': 'development'},
+     ]},
+    {'key': 'manufacturing', 'name': '제조 스레드', 'description': '설계 형상·공차에서 공정 설계·설비 파라미터·생산 실적·설계 피드백까지',
+     'segments': [
+         {'key': 'design_to_process', 'name': '설계 형상·공차 → 공정 설계', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'process_to_equipment', 'name': '공정 설계 → 설비 파라미터', 'from': 'mfg_eng', 'to': 'manufacturing'},
+         {'key': 'equipment_to_yield', 'name': '설비 파라미터 → 생산 실적·수율', 'from': 'manufacturing', 'to': 'manufacturing'},
+         {'key': 'yield_to_design', 'name': '생산 실적 → 설계 피드백', 'from': 'manufacturing', 'to': 'development'},
+     ]},
+    {'key': 'bom_change', 'name': 'BOM·설계 변경 스레드', 'description': '설계 BOM에서 제조 BOM·구매·설계 변경 전파까지',
+     'segments': [
+         {'key': 'ebom_to_mbom', 'name': '설계 BOM → 제조 BOM', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'mbom_to_purchase', 'name': '제조 BOM → 구매 요청', 'from': 'mfg_eng', 'to': 'purchasing'},
+         {'key': 'eco_to_mbom', 'name': '설계 변경 → 제조 BOM 반영', 'from': 'development', 'to': 'mfg_eng'},
+         {'key': 'eco_to_field', 'name': '설계 변경 → 서비스 부품 반영', 'from': 'development', 'to': 'market'},
+     ]},
+]
+
+
+def thread_definitions():
+    return {'stages': THREAD_STAGES, 'system_kinds': SYSTEM_KINDS, 'informal_items': INFORMAL_ITEMS,
+            'link_means': LINK_MEANS, 'system_status': SYSTEM_STATUS}
 AXIS_KINDS = {'rung', 'value', 'set', 'matrix'}   # matrix: 바탕 토글 + 불량 유형 × 열 표(모델링 수준)
 
 

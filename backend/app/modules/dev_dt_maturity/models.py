@@ -174,3 +174,80 @@ class MaturityReviewCase(BaseModel):
         d = super().to_dict()
         d['month'] = self.month.isoformat() if self.month else None
         return d
+
+
+# ── 디지털 스레드 부문(2026-08-28, b8e6f4d92a75) ─────────────────────────────
+
+class ThreadDef(BaseModel):
+    """스레드 사전(전사) — 제품 생애를 따라 한 데이터가 이어지는 줄. 사무국이 고친다."""
+    __tablename__ = 'dt_thread_def'
+    key = db.Column(db.String(60), nullable=False, unique=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    axes_off = db.Column(db.JSON, default=list)             # 이 스레드에서 안 쓰는 축
+    order = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    segment_defs = db.relationship('ThreadSegmentDef', backref='thread', cascade='all, delete-orphan', passive_deletes=True)
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['axes_off'] = list(self.axes_off or [])
+        return d
+
+
+class ThreadSegmentDef(BaseModel):
+    """표준 구간 — 스레드 위에서 데이터가 한 단계를 건너는 자리(from_stage → to_stage)."""
+    __tablename__ = 'dt_thread_segment_def'
+    thread_id = db.Column(db.Integer, db.ForeignKey('dt_thread_def.id', ondelete='CASCADE'), nullable=False, index=True)
+    key = db.Column(db.String(60), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    from_stage = db.Column(db.String(30), nullable=False)
+    to_stage = db.Column(db.String(30), nullable=False)
+    order = db.Column(db.Integer, nullable=False, default=0)
+
+
+class ThreadSystem(BaseModel):
+    """시스템 사전(전사 하나) — 스레드 주체가 자기 구간을 적으며 채운다. 「비공식 매개」(메일·엑셀…)도 한 종류."""
+    __tablename__ = 'dt_thread_system'
+    name = db.Column(db.String(200), nullable=False, unique=True)
+    kind = db.Column(db.String(30), nullable=False)
+    owner_org = db.Column(db.String(200))
+    stages = db.Column(db.JSON, default=list)
+    link_means = db.Column(db.String(20), nullable=False, default='unknown')
+    status = db.Column(db.String(20), nullable=False, default='active')
+    created_division_id = db.Column(db.Integer)
+    note = db.Column(db.Text)
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['stages'] = list(self.stages or [])
+        return d
+
+
+class ThreadOrg(BaseModel):
+    """조직 사전 — 포탈 부서·프로세스 노드를 참조하거나 손으로. 구간의 출발·도착이 이것을 가리킨다."""
+    __tablename__ = 'dt_thread_org'
+    name = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(30))
+    division_id = db.Column(db.Integer, index=True)
+    source_kind = db.Column(db.String(20), nullable=False, default='manual')
+    source_id = db.Column(db.String(100))
+    note = db.Column(db.Text)
+
+
+class ThreadSegment(BaseModel):
+    """사업부 구간 — 대상(sector digital_thread) 하나에 붙는 속성. 평가·이력은 대상의 연계에 있다."""
+    __tablename__ = 'dt_thread_segment'
+    subject_id = db.Column(db.Integer, db.ForeignKey('dt_maturity_subject.id', ondelete='CASCADE'), nullable=False, unique=True)
+    division_id = db.Column(db.Integer, nullable=False, index=True)
+    thread_id = db.Column(db.Integer, db.ForeignKey('dt_thread_def.id', ondelete='SET NULL'), index=True)
+    segment_def_id = db.Column(db.Integer, db.ForeignKey('dt_thread_segment_def.id', ondelete='SET NULL'))
+    from_org_id = db.Column(db.Integer)
+    from_system_id = db.Column(db.Integer)
+    via_system_id = db.Column(db.Integer)
+    to_org_id = db.Column(db.Integer)
+    to_system_id = db.Column(db.Integer)
+    note = db.Column(db.Text)
+    subject = db.relationship('MaturitySubject', backref=db.backref('thread_segment', uselist=False, cascade='all, delete-orphan', passive_deletes=True))
+    thread = db.relationship('ThreadDef')
+    segment_def = db.relationship('ThreadSegmentDef')

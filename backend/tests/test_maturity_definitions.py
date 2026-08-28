@@ -31,7 +31,8 @@ def test_부문과_축의_key_는_유일하고_종류가_맞다():
 
 def test_시뮬레이션만_살아_있고_나머지는_자리만_있다():
     assert D.sector_is_active('simulation')
-    for k in ('verification_automation', 'design_automation', 'digital_thread'):
+    assert D.sector_is_active('digital_thread')                    # 2026-08-28 열림
+    for k in ('verification_automation', 'design_automation'):
         assert not D.sector_is_active(k)
     assert D.SECTOR_BY_KEY['digital_thread']['has_agent'] is False   # 수단 없는 연계
 
@@ -192,3 +193,19 @@ def test_가져오기_틀은_필수_열_셋이다():
     assert required == ['division', 'subject', 'agent']
     keys = [c['key'] for c in D.IMPORT_COLUMNS]
     assert len(keys) == len(set(keys))
+
+
+def test_디지털_스레드_축과_사전_어휘():
+    axes = {a['key']: a for a in D.AXES['digital_thread']}
+    assert list(axes) == ['link_mode', 'traceability', 'consistency', 'scope', 'stability']
+    assert D.rung_keys(axes['link_mode']) == ['verbal', 'manual_file', 'auto_file', 'api', 'sync', 'closed_loop']
+    assert axes['traceability']['kind'] == 'set' and D.set_flag_keys(axes['traceability']) == ['identity', 'version', 'provenance', 'up_link', 'down_link']
+    assert axes['stability']['kind'] == 'value' and D.rung_for_value(92, axes['stability']['thresholds']) == 'auto'
+    assert D.rung_for_value(50, axes['stability']['thresholds']) == 'partly'
+    keys = [t['key'] for t in D.THREAD_DEFAULTS]
+    assert keys == ['simulation', 'cost', 'quality', 'manufacturing', 'bom_change']
+    stages = {s['key'] for s in D.THREAD_STAGES}
+    for t in D.THREAD_DEFAULTS:
+        for seg in t['segments']:
+            assert seg['from'] in stages and seg['to'] in stages
+    assert 'informal' in D.SYSTEM_KIND_KEYS and len(D.INFORMAL_ITEMS) == 5

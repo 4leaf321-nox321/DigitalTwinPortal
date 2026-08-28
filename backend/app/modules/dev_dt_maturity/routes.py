@@ -88,6 +88,7 @@ def definitions(actor):
         'import_columns': D.IMPORT_COLUMNS,
         'stale_days': D.get_stale_days(),
         'review': D.review_definitions(),
+        'thread': D.thread_definitions(),
         'can_curate': P.can_curate(actor),
         'my_division_id': P.actor_division_id(actor),
     })
@@ -351,7 +352,9 @@ def assess(actor, pair_id, axis):
     if denied:
         return denied
     try:
-        S.assess(pair, axis, request.get_json() or {}, actor)
+        payload = request.get_json() or {}
+        T.guard_assess(pair, axis, payload)
+        S.assess(pair, axis, payload, actor)
         db.session.commit()
         return success_response(S.pair_dict(pair, with_changes=True))
     except S.Refused as e:
@@ -839,3 +842,248 @@ def review_import_apply(actor):
         return error_response(str(e), status_code=400)
     except Exception:
         return _crashed()
+
+
+# ── 디지털 스레드 (2026-08-28) ─────────────────────────────────────────────
+from . import threads as T                                                      # noqa: E402
+from .models import ThreadDef, ThreadOrg, ThreadSegment, ThreadSegmentDef, ThreadSystem   # noqa: E402
+
+
+def _curate_or_403(actor):
+    return None if P.can_curate(actor) else error_response('사무국·관리자만 고칩니다.', status_code=403)
+
+
+def _refused(fn):
+    """Refused → 400, 나머지 → 500. 사전·구간 라우트의 공통 꼬리."""
+    try:
+        out = fn()
+        db.session.commit()
+        return out
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/threads', methods=['GET'])
+@read_required
+def list_threads(actor):
+    return _refused(lambda: success_response(T.list_threads(active_only=request.args.get('all') not in ('1', 'true'))))
+
+
+@bp.route('/threads', methods=['POST'])
+@read_required
+def create_thread(actor):
+    denied = _curate_or_403(actor)
+    if denied:
+        return denied
+    return _refused(lambda: success_response(T.thread_dict(T.create_thread(request.get_json() or {})), status_code=201))
+
+
+@bp.route('/threads/<int:row_id>', methods=['PUT'])
+@read_required
+def update_thread(actor, row_id):
+    denied = _curate_or_403(actor)
+    if denied:
+        return denied
+    row = ThreadDef.query.get(row_id)
+    if not row:
+        return error_response('없는 스레드입니다.', status_code=404)
+    return _refused(lambda: success_response(T.thread_dict(T.update_thread(row, request.get_json() or {}))))
+
+
+@bp.route('/threads/<int:row_id>/segment-defs', methods=['POST'])
+@read_required
+def add_segment_def(actor, row_id):
+    denied = _curate_or_403(actor)
+    if denied:
+        return denied
+    row = ThreadDef.query.get(row_id)
+    if not row:
+        return error_response('없는 스레드입니다.', status_code=404)
+    return _refused(lambda: success_response(T.add_segment_def(row, request.get_json() or {}).to_dict(), status_code=201))
+
+
+@bp.route('/threads/segment-defs/<int:row_id>', methods=['PUT', 'DELETE'])
+@read_required
+def segment_def(actor, row_id):
+    denied = _curate_or_403(actor)
+    if denied:
+        return denied
+    row = ThreadSegmentDef.query.get(row_id)
+    if not row:
+        return error_response('없는 표준 구간입니다.', status_code=404)
+    if request.method == 'DELETE':
+        def go():
+            db.session.delete(row)
+            return success_response({'deleted': row_id})
+        return _refused(go)
+    return _refused(lambda: success_response(T.update_segment_def(row, request.get_json() or {}).to_dict()))
+
+
+@bp.route('/systems', methods=['GET'])
+@read_required
+def list_systems(actor):
+    return _refused(lambda: success_response(T.list_systems()))
+
+
+@bp.route('/systems', methods=['POST'])
+@read_required
+def create_system(actor):
+    p = request.get_json() or {}
+    return _refused(lambda: success_response(T.create_system(p, P.actor_division_id(actor)).to_dict(), status_code=201))
+
+
+@bp.route('/systems/<int:row_id>', methods=['PUT', 'DELETE'])
+@read_required
+def system(actor, row_id):
+    row = ThreadSystem.query.get(row_id)
+    if not row:
+        return error_response('없는 시스템입니다.', status_code=404)
+    if request.method == 'DELETE':
+        if not P.can_curate(actor) and row.created_division_id not in (None, P.actor_division_id(actor)):
+            return error_response('다른 사업부가 처음 적은 시스템입니다.', status_code=403)
+
+        def go():
+            if T.system_usage(row.id):
+                raise S.Refused('쓰는 구간이 있어 지울 수 없습니다 — 「정돈」으로 합치세요.')
+            db.session.delete(row)
+            return success_response({'deleted': row_id})
+        return _refused(go)
+    return _refused(lambda: success_response(T.update_system(row, request.get_json() or {}, P.actor_division_id(actor), P.can_curate(actor)).to_dict()))
+
+
+@bp.route('/systems/merge', methods=['POST'])
+@read_required
+def merge_systems(actor):
+    denied = _curate_or_403(actor)
+    if denied:
+        return denied
+    p = request.get_json() or {}
+    return _refused(lambda: success_response({'moved': T.merge_systems(int(p.get('keep_id')), int(p.get('drop_id')))}))
+
+
+@bp.route('/systems/hubs', methods=['GET'])
+@read_required
+def system_hubs(actor):
+    raw = request.args.get('division_id')
+    ids = None if raw in (None, '', 'all') else [int(raw)]
+    if raw == 'all':
+        ids = [d for d, _ in _visible_division_ids()]
+    return _refused(lambda: success_response(T.system_hubs(ids)))
+
+
+@bp.route('/orgs', methods=['GET'])
+@read_required
+def list_orgs(actor):
+    return _refused(lambda: success_response(T.list_orgs(_int_arg('division_id'))))
+
+
+@bp.route('/orgs/from-departments', methods=['GET'])
+@read_required
+def orgs_from_departments(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return _refused(lambda: success_response(T.departments_as_orgs(division_id)))
+
+
+@bp.route('/orgs', methods=['POST'])
+@read_required
+def create_org(actor):
+    p = request.get_json() or {}
+    division_id = p.get('division_id')
+    if division_id not in (None, ''):
+        denied = _deny(actor, division_id)
+        if denied:
+            return denied
+    return _refused(lambda: success_response(T.create_org(p, int(division_id) if division_id not in (None, '') else None).to_dict(), status_code=201))
+
+
+@bp.route('/orgs/<int:row_id>', methods=['PUT', 'DELETE'])
+@read_required
+def org(actor, row_id):
+    row = ThreadOrg.query.get(row_id)
+    if not row:
+        return error_response('없는 조직입니다.', status_code=404)
+    if row.division_id is not None:
+        denied = _deny(actor, row.division_id)
+        if denied:
+            return denied
+    if request.method == 'DELETE':
+        def go():
+            if T.org_usage(row.id):
+                raise S.Refused('쓰는 구간이 있어 지울 수 없습니다.')
+            db.session.delete(row)
+            return success_response({'deleted': row_id})
+        return _refused(go)
+    return _refused(lambda: success_response(T.update_org(row, request.get_json() or {}).to_dict()))
+
+
+@bp.route('/segments', methods=['GET'])
+@read_required
+def list_segments(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return _refused(lambda: success_response(T.list_segments(division_id)))
+
+
+@bp.route('/segments', methods=['POST'])
+@read_required
+def create_segment(actor):
+    p = request.get_json() or {}
+    if p.get('division_id') is None:
+        return error_response('사업부가 필요합니다.', status_code=400)
+    denied = _deny(actor, p['division_id'])
+    if denied:
+        return denied
+
+    def go():
+        seg, _, _ = T.create_segment(p['division_id'], p)
+        db.session.flush()
+        return success_response(T.segment_dict(seg), status_code=201)
+    return _refused(go)
+
+
+@bp.route('/segments/<int:row_id>', methods=['PUT', 'DELETE'])
+@read_required
+def segment(actor, row_id):
+    row = ThreadSegment.query.get(row_id)
+    if not row:
+        return error_response('없는 구간입니다.', status_code=404)
+    denied = _deny(actor, row.division_id)
+    if denied:
+        return denied
+    if request.method == 'DELETE':
+        return _refused(lambda: success_response(T.delete_segment(row)))
+    return _refused(lambda: success_response(T.segment_dict(T.update_segment(row, request.get_json() or {}))))
+
+
+@bp.route('/threads/stats', methods=['GET'])
+@read_required
+def thread_stats(actor):
+    raw = request.args.get('division_id')
+    if raw == 'all':
+        def go():
+            out = []
+            for did, name in _visible_division_ids():
+                s = T.thread_stats(did)
+                s['division_name'] = name
+                out.append(s)
+            return success_response({'divisions': out})
+        return _refused(go)
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return _refused(lambda: success_response(T.thread_stats(division_id)))
+
+
+@bp.route('/threads/org-matrix', methods=['GET'])
+@read_required
+def thread_org_matrix(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return _refused(lambda: success_response(T.org_matrix(division_id)))
