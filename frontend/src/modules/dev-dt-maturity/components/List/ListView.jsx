@@ -36,7 +36,7 @@ const Table = styled.table`
   td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
 `;
 const SubjectCell = styled.td`
-  font-weight: 600; color: #1e293b; background: #fcfcfd; border-right: 1px solid #f1f5f9; vertical-align: top !important;
+  font-weight: 600; color: #1e293b; background: transparent; border-right: 1px solid #e2e8f0; vertical-align: top !important;
   overflow-wrap: anywhere;   /* 좁으면 줄을 바꾼다 — 연필이 칸 밖으로 밀리지 않게 */
   small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }
   position: relative; padding-right: 1.8rem !important;
@@ -60,6 +60,11 @@ const SimCell = styled.td`
 const Badge = styled.span`
   display: inline-block; margin-left: 0.4rem; padding: 0 0.45rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600;
   background: #fef3c7; color: #92400e; border: 1px solid #fde68a; vertical-align: 1px;
+`;
+// 시험 항목 묶음마다 얼룩말(흰색/옅은 회색) + 묶음이 바뀌는 곳은 경계선을 한 단계 진하게 — 헤더를 칠하지 않고 경계를 세운다(2026-08-28).
+const GroupTr = styled.tr`
+  background: ${p => (p.$band ? '#f8fafc' : 'white')};
+  ${p => (p.$first ? '& > td { border-top: 2px solid #cbd5e1; }' : '')}
 `;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
 const DeptCell = styled.td`color: #475569; white-space: nowrap; small { color: #cbd5e1; }`;
@@ -153,7 +158,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
             <thead><tr><th style={{ width: '34%' }}>시험</th><th>시뮬레이션</th><th style={{ width: '22%' }}>담당 부서</th><th style={{ width: '2.5rem' }} /></tr></thead>
             <tbody>
               {rows.length === 0 && <tr><Muted colSpan={4}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
-              {rows.map(({ subject: s, pairs: ps }) => {
+              {rows.map(({ subject: s, pairs: ps }, gi) => {
                 const groupRow = allMode && s.division_id !== lastDiv
                   ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={4}>{divName(s.division_id)}</GroupRow></tr>
                   : null;
@@ -172,7 +177,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   return (
                     <React.Fragment key={s.id}>
                       {groupRow}
-                      <tr>{cell}<Muted>아직 이은 시뮬레이션이 없습니다.</Muted><td /><td /></tr>
+                      <GroupTr $band={gi % 2 === 1} $first>{cell}<Muted>아직 이은 시뮬레이션이 없습니다.</Muted><td /><td /></GroupTr>
                     </React.Fragment>
                   );
                 }
@@ -180,7 +185,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   <React.Fragment key={s.id}>
                     {groupRow}
                     {ps.map((p, i) => (
-                      <tr key={p.id}>
+                      <GroupTr key={p.id} $band={gi % 2 === 1} $first={i === 0}>
                         {i === 0 && cell}
                         <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 사다리가 나옵니다">
                           {p.agent?.name}
@@ -197,7 +202,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                             <Trash2 size={14} />
                           </Icon>
                         </td>
-                      </tr>
+                      </GroupTr>
                     ))}
                   </React.Fragment>
                 );

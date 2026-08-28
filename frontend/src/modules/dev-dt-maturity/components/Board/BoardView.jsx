@@ -61,10 +61,14 @@ const Td = styled.td`
   &:first-child { position: sticky; left: 0; background: white; z-index: 1; }
 `;
 const SubjectTd = styled.td`
-  padding: 0.45rem 0.6rem; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; background: #fcfcfd; vertical-align: top; font-size: 0.8125rem;
+  padding: 0.45rem 0.6rem; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; background: transparent; vertical-align: top; font-size: 0.8125rem;
 `;
 const SimName = styled.button`border: none; background: transparent; font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; cursor: pointer; padding: 0; text-align: left; &:hover { color: #1d4ed8; text-decoration: underline; }`;
-const PairRow = styled.tr`background: #fcfcfd;`;
+// 시험 항목 묶음마다 얼룩말 + 묶음 경계선 — 목록 탭과 같은 문법(2026-08-28)
+const PairRow = styled.tr`
+  background: ${p => (p.$band ? '#f8fafc' : 'white')};
+  ${p => (p.$first ? '& > td { border-top: 2px solid #cbd5e1; }' : '')}
+`;
 const Name = styled.span`font-weight: 600;`;
 const DivTag = styled.span`
   display: inline-block; font-size: 0.6875rem; font-weight: 700; color: #1e40af; background: #eff6ff;
@@ -299,7 +303,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
               </tr>
             </thead>
             <tbody>
-              {subjects.map(s => {
+              {subjects.map((s, gi) => {
                 const span = Math.max(1, s.pairs.length);
                 const acc = axes.find(a => a.key === 'accuracy');
                 const cell = (
@@ -310,10 +314,10 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
                   </SubjectTd>
                 );
                 if (s.pairs.length === 0) {
-                  return <tr key={s.id}>{cell}<Td colSpan={axes.length + 3}><Muted>아직 이은 시뮬레이션이 없습니다.</Muted></Td></tr>;
+                  return <PairRow key={s.id} $band={gi % 2 === 1} $first>{cell}<Td colSpan={axes.length + 3}><Muted>아직 이은 시뮬레이션이 없습니다.</Muted></Td></PairRow>;
                 }
                 return s.pairs.map((p, i) => (
-                  <PairRow key={p.id}>
+                  <PairRow key={p.id} $band={gi % 2 === 1} $first={i === 0}>
                     {i === 0 && cell}
                     <Td>
                       <SimName onClick={() => onOpenPair(p.id)} title="연계 상세 열기">{p.agent?.name}</SimName>
