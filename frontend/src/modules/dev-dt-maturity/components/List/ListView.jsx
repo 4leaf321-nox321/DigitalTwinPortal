@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Trash2, Link2, AlertTriangle, Pencil } from 'lucide-react';
+import { Trash2, Link2, AlertTriangle, Pencil, Plus, X } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import PairSide from '../Pair/PairSide';
 
@@ -72,9 +72,9 @@ const Icon = styled.button`
   border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem;
   &:hover { color: #b91c1c; background: #fef2f2; } &:disabled { opacity: 0.3; cursor: not-allowed; }
 `;
-const Form = styled.form`
-  flex-shrink: 0; display: flex; gap: 0.4rem; padding: 0.5rem 0.75rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap; align-items: center; background: #f8fafc;
-`;
+const Backdrop = styled.div`position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 60;`;
+const Box = styled.div`width: min(46rem, 94vw); display: flex; flex-direction: column; gap: 0.6rem; background: white; border-radius: 0.75rem; padding: 1rem 1.25rem; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);`;
+const Form = styled.form`display: flex; gap: 0.4rem; padding: 0.2rem 0; flex-wrap: wrap; align-items: center;`;
 const Select = styled.select`padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; max-width: 18rem;`;
 const Button = styled.button`
   padding: 0.4rem 0.8rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; background: white; color: #475569;
@@ -95,6 +95,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
   const [pairs, setPairs] = useState([]);
   const [error, setError] = useState(null);
   const [link, setLink] = useState({ division_id: '', subject_id: '', agent_id: '' });
+  const [linkOpen, setLinkOpen] = useState(false);   // 연계 추가는 상단 단추의 모달에서(2026-08-28)
 
   const canTouch = (divId) => (allMode ? !divisions.find(x => x.id === divId)?.deny_reason : !denyReason);
   const divName = (id) => divisions.find(x => x.id === id)?.name || '';
@@ -149,6 +150,9 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
       <Left>
         <BoxHead>
           <Link2 size={14} /> 시험 × 시뮬레이션 <Count>연계 {pairs.length}</Count>
+          {(allMode ? touchable.length > 0 : !denyReason) && (
+            <Button type="button" onClick={() => setLinkOpen(true)} style={{ marginLeft: '0.5rem', borderColor: '#1d4ed8', color: '#1d4ed8' }}><Plus size={13} /> 연계 추가</Button>
+          )}
           <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 관리·가져오기는 헤더 단추에서</Hint>
         </BoxHead>
         {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
@@ -210,9 +214,15 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
             </tbody>
           </Table>
         </Scroll>
-        {(allMode ? touchable.length > 0 : !denyReason) && (
+      </Left>
+
+      <PairSide pairId={pairId} axes={axes} onChanged={() => { load(); if (onChanged) onChanged(); }} onClose={onClosePair} />
+      {linkOpen && (allMode ? touchable.length > 0 : !denyReason) && (
+        <Backdrop onClick={() => setLinkOpen(false)}>
+          <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="연계 추가">
+          <BoxHead><Link2 size={14} /> 연계 추가 — 시험 × 시뮬레이션<span style={{ flex: 1 }} /><Icon type="button" onClick={() => setLinkOpen(false)} aria-label="닫기" title="닫기" style={{ color: '#64748b' }}><X size={16} /></Icon></BoxHead>
           <Form onSubmit={e => { e.preventDefault(); if (!canLink || !link.subject_id || !link.agent_id) return;
-            run(async () => { await maturityApi.createPair(Number(link.subject_id), Number(link.agent_id)); setLink(l => ({ ...l, subject_id: '', agent_id: '' })); }); }}>
+            run(async () => { await maturityApi.createPair(Number(link.subject_id), Number(link.agent_id)); setLink(l => ({ ...l, subject_id: '', agent_id: '' })); setLinkOpen(false); }); }}>
             {allMode && (
               <Select value={link.division_id} onChange={e => setLink({ division_id: e.target.value, subject_id: '', agent_id: '' })}>
                 <option value="">사업부</option>
@@ -231,12 +241,11 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
               {linkAgents.filter(a => !linkedAgents.has(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
             <Button type="submit" disabled={!canLink || !link.subject_id || !link.agent_id}><Link2 size={13} /> 잇기</Button>
-            {allMode && <Sub>연계은 같은 사업부끼리만 잇습니다.</Sub>}
+            {allMode && <Sub>연계는 같은 사업부끼리만 잇습니다.</Sub>}
           </Form>
-        )}
-      </Left>
-
-      <PairSide pairId={pairId} axes={axes} onChanged={() => { load(); if (onChanged) onChanged(); }} onClose={onClosePair} />
+          </Box>
+        </Backdrop>
+      )}
     </Wrap>
   );
 };
