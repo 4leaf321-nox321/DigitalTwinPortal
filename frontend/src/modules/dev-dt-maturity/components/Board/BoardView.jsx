@@ -32,13 +32,15 @@ const Chip = styled.button`
 const Select = styled.select`
   padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem;
 `;
+// 합계와 축 분포를 한 줄로 — 표가 세로로 밀려 스크롤이 생기지 않게(2026-08-29)
 const Totals = styled.div`
-  display: flex; gap: 0.75rem; flex-wrap: wrap; font-size: 0.8125rem; color: #475569;
+  display: flex; gap: 0.9rem; flex-wrap: nowrap; align-items: center; font-size: 0.8125rem; color: #475569;
+  overflow-x: auto; min-width: 0; white-space: nowrap;
   strong { color: #1e293b; }
 `;
-const Dist = styled.div`display: flex; gap: 1rem; flex-wrap: wrap;`;
-const DistAxis = styled.div`min-width: 160px; font-size: 0.75rem; color: #64748b;`;
-const DistBar = styled.div`display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: #e2e8f0; margin-top: 0.2rem;`;
+const Sep = styled.span`width: 1px; align-self: stretch; background: #e2e8f0; flex: none;`;
+const DistAxis = styled.span`display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #64748b; flex: none;`;
+const DistBar = styled.span`display: inline-flex; width: 72px; height: 8px; border-radius: 3px; overflow: hidden; background: #e2e8f0;`;
 const Seg = styled.div`background: ${p => p.$color}; width: ${p => p.$pct}%;`;
 const Notice = styled.div`
   display: flex; gap: 0.4rem; align-items: flex-start; padding: 0.6rem 0.75rem; border-radius: 0.5rem;
@@ -270,15 +272,13 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
         <span>미평가 항목 <strong>{board.totals.unassessed}</strong></span>
         <span>재평가 필요 <strong>{board.totals.stale}</strong> ({board.stale_days}일 기준)</span>
         {board.deny_reason && <Muted>· {board.deny_reason}</Muted>}
-      </Totals>
-
-      <Dist>
+        <Sep />
         {axes.map(axis => {
           const d = dist[axis.key];
           const total = d.counts.reduce((a, b) => a + b, 0) + d.unassessed;
           return (
             <DistAxis key={axis.key} title={axis.rungs.map((r, i) => `${r.label} ${d.counts[i]}`).join(' · ') + ` · 미평가 ${d.unassessed}`}>
-              {axis.label} — 미평가 {d.unassessed}
+              {axis.label} 미평가 {d.unassessed}
               <DistBar>
                 {axis.rungs.map((r, i) => (
                   <Seg key={r.key} $color={colorFor(i, axis.rungs.length)} $pct={total ? (d.counts[i] * 100) / total : 0} />
@@ -287,7 +287,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
             </DistAxis>
           );
         })}
-      </Dist>
+      </Totals>
 
       {mode === 'tiles' ? (
         // 「모판」 — 연계가 네모, 고른 축이 색. 담당 부서로 묶는다.
