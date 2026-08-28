@@ -15,7 +15,8 @@ import { colorFor, divisionSummary, headlineIndex, DATE_BASES, baseDate, summary
 // 사업부 머리를 누르면 그 사업부 판으로 내려간다.
 
 // 남는 높이를 이 칸이 갖고 스크롤도 여기 걸린다. 표는 그 80% 만 — 아래 20% 는 비워 둔다.
-const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0;`;
+// 코멘트 보기 토글(2026-08-29) — 끄면 큰 숫자만 남고 작은 글줄(.ov-note)이 다 숨는다. 기본 켜짐.
+const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0; ${p => (p.$notes ? '' : '.ov-note { display: none; }')}`;
 const Table = styled.table`
   width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem; table-layout: fixed;   /* 아래 남는 공간 없이 채운다 · 열 폭은 내용과 무관하게 같다(2026-08-28) */
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
@@ -29,7 +30,7 @@ const ThDiv = styled.th`
 `;
 const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 0.9375rem; text-align: left !important;`;
 const Big = styled.div`font-size: 1.5rem; font-weight: 700; color: #1e293b; line-height: 1.1;`;
-const Small = styled.div`font-size: 0.75rem; color: #64748b; margin-top: 0.2rem; white-space: normal; overflow-wrap: anywhere;`;
+const Small = styled.div.attrs({ className: 'ov-note' })`font-size: 0.75rem; color: #64748b; margin-top: 0.2rem; white-space: normal; overflow-wrap: anywhere;`;
 const Bar = styled.div`display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden; background: #f1f5f9; margin: 0.5rem auto 0; min-width: 7rem; max-width: 14rem;`;
 const Seg = styled.div`width: ${p => p.$pct}%; background: ${p => p.$color};`;
 const Strip = styled.div`display: flex; gap: 3px; margin-top: 0.5rem; justify-content: center;`;
@@ -149,6 +150,7 @@ const pctText = (v) => (v == null ? '—' : `${v}%`);
 const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulation', changeSets = {} }) => {
   const sums = boards.map(b => divisionSummary(b, axes));
   const [since, setSince] = useState(null);      // 날짜 기준 — 대표 수치마다 그 날 대비 델타
+  const [notes, setNotes] = useState(true);      // 코멘트 보기 — 끄면 작은 글줄을 숨긴다
   const sinceIso = baseDate(since);
   const thens = useMemo(() => (sinceIso
     ? boards.map(b => summaryAtDate(b.subjects || [], changeSets[b.division_id] || [], axes, sinceIso))
@@ -183,7 +185,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
     </>
   );
   return (
-    <Wrap>
+    <Wrap $notes={notes} data-notes={notes ? 'on' : 'off'}>
       <Table>
         <caption style={{ captionSide: 'top', textAlign: 'left', padding: '0 0.4rem 0.4rem' }}>
           <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginRight: '0.4rem' }}>날짜 기준</span>
@@ -192,6 +194,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
                      onClick={() => setSince(v => (v === d.key ? null : d.key))} title="대표 수치마다 이 날짜 대비 변화량을 붙입니다">{d.label}</DateBtn>
           ))}
           {sinceIso && <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '0.4rem' }}>{sinceIso} 대비 Δ</span>}
+          <DateBtn type="button" $on={notes} aria-pressed={notes} onClick={() => setNotes(v => !v)} title="평가 완료 n/m 같은 작은 글줄을 켜고 끕니다" style={{ float: 'right' }}>코멘트 보기</DateBtn>
         </caption>
         <colgroup>
           <col style={{ width: '11rem' }} />

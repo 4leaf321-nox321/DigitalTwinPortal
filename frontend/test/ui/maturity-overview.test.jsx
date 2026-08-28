@@ -50,6 +50,11 @@ export default async function run() {
     say(html().includes('대비 Δ') && (html().includes('Δ —') || html().includes('Δ 0') || html().includes('▲') || html().includes('▼')), '① 날짜 기준을 고르면 대표 수치마다 Δ');
     await click(byText('button', '1주 전')); await settle();
     say(!html().includes('대비 Δ'), '① 날짜 기준을 풀면 Δ 가 사라짐');
+    say(document.querySelector('[data-notes="on"]') && document.querySelector('.ov-note'), '① 코멘트 보기 기본 켜짐(작은 글줄 있음)');
+    await click(byText('button', '코멘트 보기')); await settle();
+    say(document.querySelector('[data-notes="off"]'), '① 코멘트를 끄면 숨김 상태로 감');
+    await click(byText('button', '코멘트 보기')); await settle();
+    say(document.querySelector('[data-notes="on"]'), '① 다시 켜면 보임');
     const h = html();
     say(h.includes('80%') && h.includes('평가 완료 2/2'), '② 정확도: 평균 80% · 평가 완료 2/2');
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');
