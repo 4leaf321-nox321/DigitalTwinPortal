@@ -54,6 +54,13 @@ export default async function run() {
     say(h.includes('미평가 1'), '② VD 정확도에 「미평가 1」 배지');
     await click(byText('th', 'VD'));
     say(picked === 18, '③ 사업부 머리를 누르면 그 사업부(18)로');
+    // ⑥ 모판 — 연계가 네모, 축을 바꾸면 색 기준이 바뀜, 부서로 묶임
+    await click(byText('button', '모판')); await settle();
+    const h6 = html();
+    say(h6.includes('색의 기준') && h6.includes('부서 미지정') && document.querySelectorAll('button[title*="—"]').length >= 2, '⑥ 모판 — 부서 묶음과 네모들');
+    say(h6.includes('80%') || h6.includes('90%'), '⑥ 정확도 축이면 네모에 % 배지');
+    await click(byText('button', '자동화')); await settle();
+    say(html().includes('2/2') || html().includes('1/2'), '⑥ 축을 자동화로 바꾸면 배지가 켠 수로');
     await click(byText('button', '상세')); await settle();
     say(html().includes('낙하 시험') && html().includes('진동 시험') && byText('td', '낙하 시험')?.getAttribute('rowspan') === '2', '③ 「상세」— 시험 항목은 셀을 합치고(rowspan 2) 한 줄에 시뮬레이션 하나');
     const h3 = html();
