@@ -40,7 +40,7 @@ const SECTORS = [
 const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector }) => (
   <CommonHeader
     logo={<Gauge size={24} strokeWidth={2} />}
-    title="개발 디지털 트윈 성숙도"
+    title="디지털 트윈 성숙도"
     titleColor="#1d4ed8"
     onGoHome={onGoHome}
     showStats={false}

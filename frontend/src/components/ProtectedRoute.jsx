@@ -18,7 +18,7 @@ export const MODULE_NAMES = {
   '/spdm-status': '플랫폼 현황',
   '/digital-twin-task-management': '제조 디지털 트윈 과제 관리',
   '/digital-twin-reference': '개발 디지털 트윈 로드맵 정보',
-  '/dev-dt-maturity': '개발 디지털 트윈 성숙도',
+  '/dev-dt-maturity': '디지털 트윈 성숙도',
   '/digital-twin-investment': '디지털 트윈 투자 현황',
   '/digital-twin-intel': '디지털 트윈 기술정보',
   '/auto-document': '문서 자동 작성',

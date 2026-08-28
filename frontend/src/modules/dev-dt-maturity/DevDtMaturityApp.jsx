@@ -16,7 +16,7 @@ import maturityApi from './services/maturityApi';
 import { setSampleMode } from './sample/sampleStore';
 import { filtersFromParams, filtersToParams } from './utils/board';
 
-// 개발 디지털 트윈 성숙도 — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가.
+// 디지털 트윈 성숙도 — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가.
 // 계획: ./PLAN.md
 //
 // 최상위 상태는 **사업부**다. 이 모듈에는 「전체」가 없다(PLAN 7-1) — 전 사업부 ×

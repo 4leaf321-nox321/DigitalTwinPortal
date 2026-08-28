@@ -1,4 +1,4 @@
-// 개발 디지털 트윈 성숙도 API. 전략 모듈의 request 와 같은 모양.
+// 디지털 트윈 성숙도 API. 전략 모듈의 request 와 같은 모양.
 import { isSampleMode, sampleAnswer } from '../sample/sampleStore';
 
 const API_BASE = '/api/dev-dt-maturity';

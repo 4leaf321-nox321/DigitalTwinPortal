@@ -1235,7 +1235,7 @@ const SIMULATION_FEATURES = [
   },
   {
     id: "dev-dt-maturity",
-    name: "개발 디지털 트윈 성숙도",
+    name: "디지털 트윈 성숙도",
     desc: "시험별 시뮬레이션 정확도·자동화·대체 수준",
     color: 8,
     gridColumn: "span 1",
