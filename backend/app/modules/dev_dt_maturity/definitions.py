@@ -337,7 +337,7 @@ IMPORT_COLUMNS = [
 #   phenomena      {division_id: [태그…]}                            사업부별 현상 태그 사전
 #   stale_days     int
 #   hidden_divisions [division_id…]   이 화면에서 뺄 조직 — SR·GTR·CS 처럼 사업부가 아닌 것(2026-08-28)
-SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days', 'hidden_divisions')
+SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days', 'hidden_divisions', 'review_promote_min')
 
 
 def _setting(key):
@@ -406,3 +406,61 @@ def get_hidden_divisions():
 def get_stale_days():
     v = _setting('stale_days')
     return int(v) if isinstance(v, (int, float)) and v > 0 else DEFAULT_STALE_DAYS
+
+
+# ── 검토 대장 — 시험과 짝이 없는 스팟성 시뮬레이션(2026-08-28) ──────────────
+#
+# 건(件)의 속성이다 — 사다리 칸이 아니라. 같은 문구를 「이 시뮬레이션은 어느 칸」이 아니라
+# 「이번 건은 이랬다」로 쓴다. 순서는 있고(오른쪽이 앞선 것), 연간 셈은 「k 이상 %」로 낸다.
+REVIEW_KINDS = [
+    {'key': 'spec', 'label': '설계 스펙 검토', 'item_label': '스펙 항목'},
+    {'key': 'cause', 'label': '원인 분석', 'item_label': '불량 유형'},
+]
+REVIEW_KIND_KEYS = [k['key'] for k in REVIEW_KINDS]
+REVIEW_FIELDS = {
+    'timing': {'label': '시점', 'options': [
+        {'key': 'after_issue', 'label': '문제 난 뒤'},
+        {'key': 'review_meeting', 'label': '설계 검토 회의 때'},
+        {'key': 'before_spec', 'label': '착수 전 스펙 결정 때'},
+        {'key': 'concept', 'label': '컨셉 단계'},
+    ]},
+    'decision': {'label': '결정 반영', 'options': [
+        {'key': 'reference', 'label': '참고'},
+        {'key': 'change_basis', 'label': '설계 변경 근거'},
+        {'key': 'gate', 'label': '스펙 확정 관문'},
+        {'key': 'rule', 'label': '규칙으로 정착'},
+    ]},
+    'basis': {'label': '판정 근거', 'options': [
+        {'key': 'trend', 'label': '경향'},
+        {'key': 'margin', 'label': '정량 마진'},
+        {'key': 'confirmed', 'label': '실측·시험으로 확인'},
+    ]},
+}
+REVIEW_COLUMNS = [
+    {'key': 'month', 'label': '연-월', 'required': True},
+    {'key': 'kind', 'label': '종류', 'required': True},
+    {'key': 'target', 'label': '대상', 'required': False},
+    {'key': 'item', 'label': '항목', 'required': False},
+    {'key': 'agent', 'label': '시뮬레이션', 'required': True},
+    {'key': 'timing', 'label': '시점', 'required': False},
+    {'key': 'decision', 'label': '결정 반영', 'required': False},
+    {'key': 'basis', 'label': '판정 근거', 'required': False},
+    {'key': 'lead_days', 'label': '리드타임(일)', 'required': False},
+    {'key': 'note', 'label': '메모', 'required': False},
+]
+DEFAULT_REVIEW_PROMOTE_MIN = 3
+
+
+def get_review_promote_min():
+    """정착 후보 문턱 — 같은 시뮬레이션 × 항목이 한 해에 이만큼이면. 설정 review_promote_min."""
+    v = _setting('review_promote_min')
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        return DEFAULT_REVIEW_PROMOTE_MIN
+    return v if v >= 1 else DEFAULT_REVIEW_PROMOTE_MIN
+
+
+def review_definitions():
+    return {'kinds': REVIEW_KINDS, 'fields': REVIEW_FIELDS, 'columns': REVIEW_COLUMNS,
+            'promote_min': get_review_promote_min()}

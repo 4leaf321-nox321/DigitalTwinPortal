@@ -5,7 +5,7 @@
 //   ③ 사업부 머리를 누르면 그 사업부로 내려간다 · 「상세」로 바꾸면 시험 표가 나온다
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
-import { render, click, settle, byText, html, suite, unmount } from './dom-helpers.mjs';
+import { render, click, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import { BoardBody } from '../../src/modules/dev-dt-maturity/components/Board/BoardView';
 
 const AXES = [
@@ -28,12 +28,22 @@ const VD = { division_id: 18, division_name: 'VD', subjects: [subj(2, '진동 �
 const BOARD = { boards: [MX, VD], subjects: [...MX.subjects.map(s => ({ ...s, division_name: 'MX' })), ...VD.subjects.map(s => ({ ...s, division_name: 'VD' }))],
   totals: { subjects: 2, pairs: 3, unassessed: 2, stale: 0 }, stale_days: 365, deny_reason: null };
 
+const REVIEW = { kinds: [{ key: 'spec', label: '설계 스펙 검토' }, { key: 'cause', label: '원인 분석' }], fields: {}, promote_min: 3 };
+
 export default async function run() {
   const { say, done } = suite();
   let picked = null;
+  fakeFetch(({ url }) => {
+    if (url.includes('/reviews/years')) return [2026];
+    if (url.includes('/reviews/stats')) return { year: 2026, divisions: [
+      { division_id: 17, kinds: { spec: { count: 4, early: 75, gate: 50, confirmed: 25, lead_median: 4, promote: [{ agent_name: 'x', item: 'y', count: 3 }] }, cause: { count: 2, early: 0, gate: 50, confirmed: 100, lead_median: 6, promote: [] } } },
+      { division_id: 18, kinds: { spec: { count: 0, early: null, gate: null, confirmed: null, lead_median: null, promote: [] }, cause: { count: 0, early: null, gate: null, confirmed: null, lead_median: null, promote: [] } } } ] };
+    return {};
+  });
   try {
-    await render(<BoardBody board={BOARD} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={() => {}} onPickDivision={(id) => { picked = id; }} />);
-    await settle();
+    await render(<BoardBody board={BOARD} changes={[]} axes={AXES} filters={{}} onFiltersChange={() => {}} onOpenPair={() => {}} onPickDivision={(id) => { picked = id; }} review={REVIEW} />);
+    await settle(60);
+    say(html().includes('검토 대장') && html().includes('4') && html().includes('착수 전 이상 75%') && html().includes('정착 후보 1'), '① 맨 아래 검토 대장 블록 — 건수·착수 전 이상·정착 후보');
     say(!!byText('th', 'MX') && !!byText('th', 'VD') && !!byText('td', '정확도'), '① 전체 판은 「요약」으로 열리고 사업부가 열, 축이 행');
     const h = html();
     say(h.includes('80%') && h.includes('값 있음 2/2'), '② 정확도: 평균 80% · 값 있음 2/2');

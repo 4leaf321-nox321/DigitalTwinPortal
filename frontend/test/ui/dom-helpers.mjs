@@ -21,7 +21,9 @@ export const click = async (el) => {
 };
 export const type = async (input, value) => {
   if (!input) throw new Error('칠 칸이 없습니다');
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  // textarea 도 친다 — 제 원형의 value setter 를 써야 React 가 바뀜을 본다
+  const proto = input instanceof window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
   await act(async () => {
     setter.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));

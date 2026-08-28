@@ -146,3 +146,31 @@ class MaturityChange(BaseModel):
     note = db.Column(db.Text)
     actor_user_id = db.Column(db.Integer)
     actor_name = db.Column(db.String(100))
+
+
+class MaturityReviewCase(BaseModel):
+    """검토 대장의 한 줄 — 시험과 짝이 없는 스팟성 시뮬레이션 한 건(2026-08-28, a7d5f3c81e64).
+
+    쌍·평가와는 표가 다르다: 저쪽은 상태(갱신·이력), 여기는 사건(누적). 연간으로 센다.
+    """
+    __tablename__ = 'dt_maturity_review_case'
+
+    division_id = db.Column(db.Integer, nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False)            # spec | cause
+    month = db.Column(db.Date, nullable=False, index=True)      # 그 달 1일
+    target = db.Column(db.String(300))                          # 제품·과제
+    item = db.Column(db.String(300))                            # 스펙 항목 / 불량 유형
+    agent_id = db.Column(db.Integer, index=True)                # 시뮬레이션 관리의 것 — FK 아님
+    agent_name = db.Column(db.String(300))
+    timing = db.Column(db.String(20))
+    decision = db.Column(db.String(20))
+    basis = db.Column(db.String(20))
+    lead_days = db.Column(db.Float)
+    note = db.Column(db.Text)
+    actor_user_id = db.Column(db.Integer)
+    actor_name = db.Column(db.String(100))
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['month'] = self.month.isoformat() if self.month else None
+        return d

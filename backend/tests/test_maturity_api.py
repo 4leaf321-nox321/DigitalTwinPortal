@@ -554,3 +554,65 @@ def test_설정에서_뺀_조직은_사업부_목록과_전체_판에서_빠진�
     client.put(f'{BASE}/settings', json={'hidden_divisions': []}, headers=auth(office))
     ids = [d['id'] for d in client.get(f'{BASE}/divisions', headers=auth(mx_user)).get_json()['data']]
     assert vd in ids
+
+
+def test_검토_대장은_건으로_쌓고_연간으로_센다(client, auth, world, mx_user, vd_user):
+    mx = world['mx'].id
+    a = client.post(f'{BASE}/agents', json={'division_id': mx, 'name': '폴딩 응력 해석'}, headers=auth(mx_user)).get_json()['data']
+
+    def add(p, expect=201):
+        res = client.post(f'{BASE}/reviews', json={'division_id': mx, **p}, headers=auth(mx_user))
+        assert res.status_code == expect, res.get_json()
+        return res.get_json().get('data')
+
+    r1 = add({'month': '2026-03', 'kind': 'spec', 'item': '힌지 강성', 'agent_id': a['id'], 'timing': 'before_spec', 'decision': 'gate', 'basis': 'margin', 'lead_days': 4})
+    assert r1['month'] == '2026-03-01' and r1['agent_name'] == '폴딩 응력 해석'
+    add({'month': '2026-04', 'kind': 'spec', 'item': '힌지 강성', 'agent_name': '폴딩 응력 해석', 'timing': 'concept', 'decision': 'rule', 'basis': 'confirmed', 'lead_days': 2})
+    add({'month': '2026-05', 'kind': 'spec', 'item': '힌지 강성', 'agent_name': '폴딩 응력 해석', 'timing': 'after_issue', 'decision': 'reference'})
+    add({'month': '2026-06', 'kind': 'cause', 'item': '크랙', 'agent_name': '이름만 있는 해석', 'timing': 'after_issue', 'decision': 'change_basis', 'basis': '실측·시험으로 확인', 'lead_days': 6})
+    add({'month': '2099-01', 'kind': 'spec', 'agent_name': 'x'}, expect=400)                       # 미래
+    add({'month': '2026-01', 'kind': 'spec'}, expect=400)                                          # 시뮬레이션 없음
+    add({'month': '2026-01', 'kind': 'spec', 'agent_name': 'x', 'timing': '이상한값'}, expect=400)
+    add({'month': '2025-12', 'kind': 'spec', 'agent_name': 'x'})                                   # 작년
+
+    rows = client.get(f'{BASE}/reviews?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']
+    assert len(rows) == 4 and rows[0]['month'] == '2026-06-01'                                     # 늦은 달이 위
+    assert [r['kind'] for r in client.get(f'{BASE}/reviews?division_id={mx}&year=2026&kind=cause', headers=auth(mx_user)).get_json()['data']] == ['cause']
+    assert client.get(f'{BASE}/reviews/years?division_id={mx}', headers=auth(mx_user)).get_json()['data'] == [2026, 2025]
+
+    s = client.get(f'{BASE}/reviews/stats?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']['kinds']
+    assert s['spec']['count'] == 3 and s['spec']['early'] == 67 and s['spec']['gate'] == 67 and s['spec']['confirmed'] == 50
+    assert s['spec']['lead_median'] == 3.0
+    assert s['spec']['promote'] == [{'agent_name': '폴딩 응력 해석', 'item': '힌지 강성', 'count': 3}]   # 연 3건 → 정착 후보
+    assert s['cause']['count'] == 1 and s['cause']['confirmed'] == 100 and s['cause']['promote'] == []
+
+    allst = client.get(f'{BASE}/reviews/stats?division_id=all&year=2026', headers=auth(mx_user)).get_json()['data']
+    assert any(d['division_id'] == mx and d['kinds']['spec']['count'] == 3 for d in allst['divisions'])
+
+    # 고치기·지우기 — 자기 사업부만
+    res = client.put(f'{BASE}/reviews/{r1["id"]}', json={'lead_days': 5, 'note': '두께 축소'}, headers=auth(mx_user))
+    assert res.status_code == 200 and res.get_json()['data']['lead_days'] == 5
+    assert client.put(f'{BASE}/reviews/{r1["id"]}', json={'note': 'x'}, headers=auth(vd_user)).status_code == 403
+    assert client.delete(f'{BASE}/reviews/{r1["id"]}', headers=auth(mx_user)).status_code == 200
+    assert len(client.get(f'{BASE}/reviews?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']) == 3
+
+
+def test_검토_대장_CSV_는_틀_그대로_붙여_넣는다(client, auth, world, mx_user):
+    mx = world['mx'].id
+    res = client.get(f'{BASE}/reviews/template', headers=auth(mx_user))
+    assert res.status_code == 200 and res.data.decode('utf-8-sig').startswith('연-월,종류,대상,항목,시뮬레이션')
+    text = '연-월\t종류\t대상\t항목\t시뮬레이션\t시점\t결정 반영\t판정 근거\t리드타임(일)\t메모\n' \
+           '2026-03\t설계 스펙 검토\tFold8\t힌지 강성\t폴딩 응력 해석\t착수 전 스펙 결정 때\t스펙 확정 관문\t정량 마진\t4\t두께 축소\n' \
+           '2026-04\t원인 분석\t#1234\t크랙\t낙하 구조 해석\t문제 난 뒤\t설계 변경 근거\t\t\t\n' \
+           '2099-01\t설계 스펙 검토\t\t\t해석\t\t\t\t\t\n'
+    res = client.post(f'{BASE}/reviews/import/preview', json={'division_id': mx, 'text': text}, headers=auth(mx_user))
+    plan = res.get_json()['data']
+    assert plan['count'] == 2 and len(plan['problems']) == 1 and plan['problems'][0]['line'] == 4
+    assert plan['items'][0]['payload']['timing'] == '착수 전 스펙 결정 때' and plan['items'][0]['agent_known'] is False
+    res = client.post(f'{BASE}/reviews/import/apply', json={'division_id': mx, 'text': text}, headers=auth(mx_user))
+    assert res.status_code == 400                                                                   # 문제 줄이 있으면 안 넣는다
+    good = '\n'.join(text.split('\n')[:3]) + '\n'
+    res = client.post(f'{BASE}/reviews/import/apply', json={'division_id': mx, 'text': good}, headers=auth(mx_user))
+    assert res.status_code == 200 and res.get_json()['data']['created'] == 2
+    rows = client.get(f'{BASE}/reviews?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']
+    assert {r['timing'] for r in rows} == {'before_spec', 'after_issue'} and rows[1]['basis'] == 'margin'

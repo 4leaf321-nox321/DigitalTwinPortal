@@ -32,7 +32,7 @@ from app.extensions import db                                                # n
 from app.modules.dev_dt_maturity import definitions as D                     # noqa: E402
 from app.modules.dev_dt_maturity import services as S                        # noqa: E402
 from app.modules.dev_dt_maturity.models import (                             # noqa: E402
-    MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturitySubject,
+    MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturityReviewCase, MaturitySubject,
 )
 from app.modules.digital_twin_dashboard.models import Department, Division   # noqa: E402
 
@@ -447,6 +447,7 @@ def main():
         ids = [d.id for d in same_name]
         n_old = MaturitySubject.query.filter(MaturitySubject.division_id.in_(ids)).delete(synchronize_session=False)
         MaturityAgent.query.filter(MaturityAgent.division_id.in_(ids)).delete(synchronize_session=False)
+        MaturityReviewCase.query.filter(MaturityReviewCase.division_id.in_(ids)).delete(synchronize_session=False)
         db.session.flush()
 
         counts = {'subjects': 0, 'agents': 0, 'pairs': 0, 'assessments': 0, 'changes': 0}
@@ -504,12 +505,65 @@ def main():
                                            note=note or '', actor_name=who)
                         db.session.add(c); db.session.flush()
                         c.created_at = _days_ago(days); counts['changes'] += 1
+        counts['reviews'] = _seed_reviews(divisions)          # 검토 대장 — 스팟 건
         db.session.commit()
         print(f'지운 시험 {n_old}개 → 넣음:', counts)
         for dname, div in divisions.items():
             n = MaturitySubject.query.filter_by(division_id=div.id).count()
             print(f'  {dname}: 시험 {n}')
 
+
+
+
+# ── 검토 대장 씨앗 — 사업부마다 올해·작년 스팟 건 몇 개(2026-08-28) ──────────
+REVIEW_SEED = {
+    'MX': [
+        ('2026-02', 'spec', 'Galaxy Z Fold8', '힌지 강성 스펙', '폴딩 응력 해석', 'before_spec', 'gate', 'margin', 4, '힌지 두께 0.2mm 축소 결정'),
+        ('2026-03', 'spec', 'Galaxy Z Fold8', '힌지 강성 스펙', '폴딩 응력 해석', 'before_spec', 'gate', 'margin', 3, ''),
+        ('2026-05', 'spec', 'Galaxy S27', '힌지 강성 스펙', '폴딩 응력 해석', 'review_meeting', 'change_basis', 'trend', 5, ''),
+        ('2026-04', 'spec', 'Galaxy S27', '방열 마진', '열 해석 (정상상태)', 'concept', 'rule', 'confirmed', 2, '방열 시트 두께 규칙화'),
+        ('2026-06', 'cause', 'QM #4412', '커버 글라스 크랙', '낙하 구조 해석', 'after_issue', 'change_basis', 'confirmed', 6, '코너 R 확대'),
+        ('2026-07', 'cause', 'QM #4501', '배터리 스웰링 변형', '셀 팽창 구조 해석', 'after_issue', 'reference', 'trend', 8, ''),
+        ('2025-11', 'spec', 'Galaxy Z Flip7', '힌지 강성 스펙', '폴딩 응력 해석', 'review_meeting', 'change_basis', 'margin', 4, ''),
+    ],
+    'VD': [
+        ('2026-01', 'spec', 'Neo QLED 98', '스탠드 처짐 스펙', '스탠드 구조 해석', 'before_spec', 'gate', 'margin', 3, ''),
+        ('2026-03', 'spec', 'Neo QLED 98', '전원 보드 온도 스펙', '전원 보드 열 해석', 'review_meeting', 'change_basis', 'margin', 5, ''),
+        ('2026-05', 'cause', 'QM #2201', '무라', '패널 열-구조 연성 해석', 'after_issue', 'change_basis', 'confirmed', 9, ''),
+    ],
+    '생활가전': [
+        ('2026-02', 'spec', '비스포크 AI 세탁기', '드럼 진동 스펙', '드럼 동역학 해석', 'before_spec', 'gate', 'confirmed', 4, ''),
+        ('2026-04', 'spec', '비스포크 냉장고', '냉기 분배 스펙', '냉기 유동 해석', 'concept', 'change_basis', 'trend', 6, ''),
+        ('2026-06', 'cause', 'QM #3310', '결로', '실내 기류 해석', 'after_issue', 'change_basis', 'margin', 5, ''),
+        ('2026-07', 'cause', 'QM #3355', '드럼 편심 진동', '드럼 동역학 해석', 'after_issue', 'reference', 'trend', 3, ''),
+    ],
+    'NW': [
+        ('2026-03', 'spec', 'RU 6G', '방열 마진', 'RU 열 해석', 'before_spec', 'gate', 'margin', 7, ''),
+        ('2026-05', 'cause', 'FI #880', '외함 부식', '부식 예측 모델', 'after_issue', 'reference', 'trend', 12, ''),
+    ],
+    '의료기기': [
+        ('2026-02', 'spec', 'RS90', '프로브 온도 스펙', '프로브 열 해석', 'before_spec', 'gate', 'confirmed', 3, ''),
+        ('2026-06', 'cause', 'QM #120', '케이블 단선', '케이블 피로 해석', 'after_issue', 'change_basis', 'confirmed', 7, ''),
+    ],
+}
+
+
+def _seed_reviews(divisions):
+    from datetime import date as _date
+    n = 0
+    for dname, rows in REVIEW_SEED.items():
+        div = divisions.get(dname)
+        if not div:
+            continue
+        for (ym, kind, target, item, agent_name, timing, decision, basis, lead, note) in rows:
+            agent = MaturityAgent.query.filter_by(division_id=div.id, name=agent_name).first()
+            y, m = ym.split('-')
+            db.session.add(MaturityReviewCase(
+                division_id=div.id, kind=kind, month=_date(int(y), int(m), 1), target=target, item=item,
+                agent_id=agent.id if agent else None, agent_name=agent_name, timing=timing, decision=decision,
+                basis=basis, lead_days=lead, note=note or None, actor_name=PEOPLE[n % len(PEOPLE)]))
+            n += 1
+    return n
 
 if __name__ == '__main__':
     main()

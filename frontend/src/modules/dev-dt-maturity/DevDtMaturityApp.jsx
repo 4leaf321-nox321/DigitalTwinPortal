@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import Header from './components/Layout/Header';
 import BoardView from './components/Board/BoardView';
 import ListView from './components/List/ListView';
+import ReviewLedger from './components/Review/ReviewLedger';
 import PairModal from './components/Pair/PairModal';
 import ModalHost from './components/List/ModalHost';
 import SettingsModal from './components/Settings/SettingsModal';
@@ -84,7 +85,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     return divisions[0]?.id ?? null;
   }, [params, divisions, defs]);
   const division = divisions.find(d => d.id === divisionId);
-  const tab = params.get('tab') === 'list' ? 'list' : 'board';
+  const tab = ['list', 'reviews'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
   const filters = useMemo(() => filtersFromParams(k => params.get(k)), [params]);
 
@@ -131,13 +132,16 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         <Tabs>
           <Tab $on={tab === 'board'} onClick={() => patch({ tab: null })}>성숙도</Tab>
           <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list' })}>목록</Tab>
+          <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">검토 대장</Tab>
         </Tabs>
       </StickyBar>
       <Main $fill>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters}
-                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} />
+                     onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} review={defs.review} />
+        ) : tab === 'reviews' ? (
+          <ReviewLedger divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} review={defs.review} refreshKey={refreshKey} />
         ) : (
           <ListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null}
                     axes={axes} pairId={pairId}

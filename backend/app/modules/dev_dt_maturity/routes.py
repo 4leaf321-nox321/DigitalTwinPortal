@@ -87,6 +87,7 @@ def definitions(actor):
         'accuracy_rules': sorted(D.ACCURACY_RULES),
         'import_columns': D.IMPORT_COLUMNS,
         'stale_days': D.get_stale_days(),
+        'review': D.review_definitions(),
         'can_curate': P.can_curate(actor),
         'my_division_id': P.actor_division_id(actor),
     })
@@ -688,6 +689,152 @@ def set_defect_cell(actor, pair_id, axis):
         db.session.commit()
         return success_response(S.pair_dict(pair, with_changes=True))
     except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+# ── 검토 대장 (2026-08-28) ─────────────────────────────────────────────────
+from . import reviews as R                          # noqa: E402
+from .models import MaturityReviewCase              # noqa: E402
+
+
+def _visible_division_ids():
+    from app.modules.digital_twin_dashboard.models import Division
+    hidden = D.get_hidden_divisions()
+    rows = (Division.query.filter_by(is_active=True, is_kpi_owner=True)
+            .order_by(Division.order, Division.id).all())
+    return [(d.id, d.name) for d in rows if d.id not in hidden]
+
+
+@bp.route('/reviews', methods=['GET'])
+@read_required
+def list_reviews(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    year = _int_arg('year')
+    kind = request.args.get('kind') or None
+    return success_response([r.to_dict() for r in R.list_cases(division_id, year, kind)])
+
+
+@bp.route('/reviews/years', methods=['GET'])
+@read_required
+def review_years(actor):
+    return success_response(R.years(_int_arg('division_id')))
+
+
+@bp.route('/reviews/stats', methods=['GET'])
+@read_required
+def review_stats(actor):
+    """한 사업부 또는 전체(division_id=all)의 연간 셈."""
+    year = _int_arg('year') or __import__('datetime').date.today().year
+    if request.args.get('division_id') == 'all':
+        out = []
+        for did, name in _visible_division_ids():
+            s = R.stats(did, year)
+            s['division_name'] = name
+            out.append(s)
+        return success_response({'year': year, 'divisions': out})
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return success_response(R.stats(division_id, year))
+
+
+@bp.route('/reviews', methods=['POST'])
+@read_required
+def create_review(actor):
+    p = request.get_json() or {}
+    if p.get('division_id') is None:
+        return error_response('사업부가 필요합니다.', status_code=400)
+    denied = _deny(actor, p['division_id'])
+    if denied:
+        return denied
+    try:
+        row = R.create(p['division_id'], p, actor)
+        db.session.commit()
+        return success_response(row.to_dict(), status_code=201)
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/reviews/<int:row_id>', methods=['PUT'])
+@read_required
+def update_review(actor, row_id):
+    row = MaturityReviewCase.query.get(row_id)
+    if not row:
+        return error_response('없는 건입니다.', status_code=404)
+    denied = _deny(actor, row.division_id)
+    if denied:
+        return denied
+    try:
+        R.update(row, request.get_json() or {}, actor)
+        db.session.commit()
+        return success_response(row.to_dict())
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/reviews/<int:row_id>', methods=['DELETE'])
+@read_required
+def delete_review(actor, row_id):
+    row = MaturityReviewCase.query.get(row_id)
+    if not row:
+        return error_response('없는 건입니다.', status_code=404)
+    denied = _deny(actor, row.division_id)
+    if denied:
+        return denied
+    try:
+        db.session.delete(row)
+        db.session.commit()
+        return success_response({'deleted': row_id})
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/reviews/template', methods=['GET'])
+@read_required
+def review_template(actor):
+    return Response(R.template_csv(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': "attachment; filename*=UTF-8''review_cases.csv"})
+
+
+@bp.route('/reviews/import/preview', methods=['POST'])
+@read_required
+def review_import_preview(actor):
+    p = request.get_json() or {}
+    if p.get('division_id') is None or not isinstance(p.get('text'), str):
+        return error_response('사업부와 text 가 필요합니다.', status_code=400)
+    try:
+        return success_response(R.parse(p['text'], int(p['division_id'])))
+    except I.TableFormatError as e:
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
+@bp.route('/reviews/import/apply', methods=['POST'])
+@read_required
+def review_import_apply(actor):
+    p = request.get_json() or {}
+    if p.get('division_id') is None or not isinstance(p.get('text'), str):
+        return error_response('사업부와 text 가 필요합니다.', status_code=400)
+    denied = _deny(actor, p['division_id'])
+    if denied:
+        return denied
+    try:
+        out = R.apply(p['text'], int(p['division_id']), actor)
+        db.session.commit()
+        return success_response(out)
+    except I.TableFormatError as e:
         db.session.rollback()
         return error_response(str(e), status_code=400)
     except Exception:

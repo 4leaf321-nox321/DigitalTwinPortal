@@ -59,6 +59,16 @@ export const maturityApi = {
     request(`/pairs/${pairId}/assessments/${axis}`, json('PUT', payload)),
 
   templateUrl: (divisionId) => `${API_BASE}/import/template?division_id=${divisionId}`,
+  // 검토 대장 — 스팟성 시뮬레이션 건(件)
+  listReviews: (divisionId, year, kind) => request(`/reviews?division_id=${divisionId}&year=${year}${kind ? `&kind=${kind}` : ''}`),
+  reviewYears: (divisionId) => request(`/reviews/years?division_id=${divisionId}`),
+  reviewStats: (divisionId, year) => request(`/reviews/stats?division_id=${divisionId}&year=${year}`),
+  createReview: (divisionId, payload) => request('/reviews', json('POST', { division_id: divisionId, ...payload })),
+  updateReview: (id, payload) => request(`/reviews/${id}`, json('PUT', payload)),
+  deleteReview: (id) => request(`/reviews/${id}`, { method: 'DELETE' }),
+  reviewTemplateUrl: () => `${API_BASE}/reviews/template`,
+  reviewImportPreview: (divisionId, text) => request('/reviews/import/preview', json('POST', { division_id: divisionId, text })),
+  reviewImportApply: (divisionId, text) => request('/reviews/import/apply', json('POST', { division_id: divisionId, text })),
   /** 틀 내려받기는 토큰을 헤더로 보내야 해서 fetch 로 받아 blob 으로 연다. */
   downloadTemplate: async (divisionId) => {
     const token = localStorage.getItem('accessToken');
