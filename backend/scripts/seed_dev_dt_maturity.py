@@ -32,7 +32,7 @@ from app.extensions import db                                                # n
 from app.modules.dev_dt_maturity import definitions as D                     # noqa: E402
 from app.modules.dev_dt_maturity import services as S                        # noqa: E402
 from app.modules.dev_dt_maturity.models import (                             # noqa: E402
-    MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturityReviewCase, MaturitySubject, ThreadOrg,
+    MaturityAgent, MaturityAssessment, MaturityChange, MaturityPair, MaturityReviewCase, MaturitySubject, ThreadCase, ThreadOrg,
 )
 from app.modules.digital_twin_dashboard.models import Department, Division   # noqa: E402
 
@@ -449,6 +449,7 @@ def main():
         MaturityAgent.query.filter(MaturityAgent.division_id.in_(ids)).delete(synchronize_session=False)
         MaturityReviewCase.query.filter(MaturityReviewCase.division_id.in_(ids)).delete(synchronize_session=False)
         ThreadOrg.query.filter(ThreadOrg.division_id.in_(ids)).delete(synchronize_session=False)
+        ThreadCase.query.filter(ThreadCase.division_id.in_(ids)).delete(synchronize_session=False)
         db.session.flush()
 
         counts = {'subjects': 0, 'agents': 0, 'pairs': 0, 'assessments': 0, 'changes': 0}
@@ -508,6 +509,7 @@ def main():
                         c.created_at = _days_ago(days); counts['changes'] += 1
         counts['reviews'] = _seed_reviews(divisions)          # 해석 활용 기록 — 스팟 건
         counts['segments'] = _seed_threads(divisions)         # 디지털 스레드 — 구간과 평가
+        counts['thread_cases'] = _seed_thread_cases(divisions)   # 연계 개발 기록
         db.session.commit()
         print(f'지운 시험 {n_old}개 → 넣음:', counts)
         for dname, div in divisions.items():
@@ -715,5 +717,56 @@ def _seed_threads(divisions):
     return n
 
 
+
+# 사업부 → [(연-월, 무엇을, 상태, 스레드 key, 구간 key|None, 시스템, 전, 후, 메모)]
+THREAD_CASE_SEED = {
+    'MX': [
+        ('2026-02', 'integrate', 'done', 'simulation', 'cad_to_model', 'SPDM', 'manual_file', 'api', 'NX → SPDM 형상 자동 등록'),
+        ('2026-04', 'adopt', 'doing', 'simulation', None, 'SPDM', None, None, 'SPDM 2차 — 결과 관리 모듈'),
+        ('2026-05', 'integrate', 'planned', 'cost', 'bom_to_estimate', '데이터 허브', 'manual_file', 'auto_file', 'BOM → 원가 허브 배치'),
+        ('2026-06', 'harmonize', 'done', 'bom_change', 'ebom_to_mbom', 'SAP ERP', 'auto_file', 'api', '부품 코드 마스터 통일'),
+        ('2025-10', 'integrate', 'done', 'manufacturing', 'design_to_process', 'Teamcenter', 'api', 'sync', '공정 설계 동기화'),
+    ],
+    'VD': [
+        ('2026-03', 'adopt', 'doing', 'simulation', None, 'SPDM', None, None, 'SPDM 도입 검토'),
+        ('2026-05', 'integrate', 'planned', 'quality', 'spec_to_test', 'QMS', 'manual_file', 'auto_file', '스펙 → QMS 배치'),
+    ],
+    '생활가전': [
+        ('2026-01', 'automate', 'done', 'manufacturing', 'process_to_equipment', 'MES', 'auto_file', 'api', '설비 파라미터 API'),
+        ('2026-06', 'integrate', 'doing', 'manufacturing', 'yield_to_design', '데이터 허브', 'manual_file', 'auto_file', '수율 → 설계 피드백'),
+    ],
+    'NW': [('2026-04', 'harmonize', 'planned', 'cost', 'bom_to_estimate', '원가 산정 시스템', 'manual_file', 'auto_file', '원가 항목 매핑표')],
+    '의료기기': [('2026-02', 'integrate', 'done', 'quality', 'field_to_cause', 'QMS', 'manual_file', 'auto_file', 'CS → QMS 배치')],
+}
+
+
+def _seed_thread_cases(divisions):
+    from datetime import date as _date
+    from app.modules.dev_dt_maturity.models import ThreadDef, ThreadSegment, ThreadSegmentDef, ThreadSystem
+    systems = {s.name: s for s in ThreadSystem.query.all()}
+    threads = {t.key: t for t in ThreadDef.query.all()}
+    n = 0
+    for dname, rows in THREAD_CASE_SEED.items():
+        div = divisions.get(dname)
+        if not div:
+            continue
+        for (ym, action, status, tkey, skey, sysname, lf, lt, note) in rows:
+            t = threads.get(tkey)
+            seg = None
+            if t and skey:
+                sd = ThreadSegmentDef.query.filter_by(thread_id=t.id, key=skey).first()
+                if sd:
+                    seg = ThreadSegment.query.filter_by(division_id=div.id, segment_def_id=sd.id).first()
+            sysrow = systems.get(sysname)
+            y, m = ym.split('-')
+            db.session.add(ThreadCase(division_id=div.id, month=_date(int(y), int(m), 1), action=action, status=status,
+                                      thread_id=t.id if t else None, segment_id=seg.id if seg else None,
+                                      system_id=sysrow.id if sysrow else None, system_name=sysname, link_from=lf, link_to=lt, note=note,
+                                      actor_name=PEOPLE[n % len(PEOPLE)]))
+            n += 1
+    return n
+
+
 if __name__ == '__main__':
     main()
+

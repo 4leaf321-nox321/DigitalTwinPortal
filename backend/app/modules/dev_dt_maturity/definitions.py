@@ -281,9 +281,20 @@ THREAD_DEFAULTS = [
 ]
 
 
+# 연계 개발 기록 — 건의 「무엇을」과 상태(2026-08-28)
+THREAD_CASE_ACTIONS = [
+    {'key': 'integrate', 'label': '연동'}, {'key': 'adopt', 'label': '도입'}, {'key': 'harmonize', 'label': '정합화'},
+    {'key': 'automate', 'label': '자동화'}, {'key': 'retire', 'label': '폐지'}, {'key': 'other', 'label': '기타'},
+]
+THREAD_CASE_ACTION_KEYS = [a['key'] for a in THREAD_CASE_ACTIONS]
+THREAD_CASE_STATUS = [{'key': 'planned', 'label': '계획'}, {'key': 'doing', 'label': '진행 중'}, {'key': 'done', 'label': '완료'}]
+THREAD_CASE_STATUS_KEYS = [s['key'] for s in THREAD_CASE_STATUS]
+
+
 def thread_definitions():
     return {'stages': THREAD_STAGES, 'system_kinds': SYSTEM_KINDS, 'informal_items': INFORMAL_ITEMS,
-            'link_means': LINK_MEANS, 'system_status': SYSTEM_STATUS}
+            'link_means': LINK_MEANS, 'system_status': SYSTEM_STATUS,
+            'case_actions': THREAD_CASE_ACTIONS, 'case_status': THREAD_CASE_STATUS}
 AXIS_KINDS = {'rung', 'value', 'set', 'matrix'}   # matrix: 바탕 토글 + 불량 유형 × 열 표(모델링 수준)
 
 

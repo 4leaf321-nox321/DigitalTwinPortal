@@ -117,6 +117,11 @@ def main():
             out[f'/orgs/from-departments?division_id={did}'] = T.departments_as_orgs(did)
             out[f'/threads/stats?division_id={did}'] = T.thread_stats(did)
             out[f'/threads/org-matrix?division_id={did}'] = T.org_matrix(did)
+            out[f'/thread-cases/years?division_id={did}'] = T.case_years(did)
+            for y in T.case_years(did):
+                out[f'/thread-cases/stats?division_id={did}&year={y}'] = T.case_stats(did, y)
+                for st in ('', 'planned', 'doing', 'done'):
+                    out[f'/thread-cases?division_id={did}&year={y}' + (f'&status={st}' if st else '')] = T.list_cases(did, y, st or None)
             out[f'/systems/hubs?division_id={did}'] = T.system_hubs([did])
             for seg in ThreadSegment.query.filter_by(division_id=did).all():
                 for p in seg.subject.pairs:

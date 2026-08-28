@@ -1093,3 +1093,70 @@ def thread_org_matrix(actor):
     if division_id is None:
         return error_response('사업부를 고르세요.', status_code=400)
     return _refused(lambda: success_response(T.org_matrix(division_id)))
+
+
+# ── 연계 개발 기록 ─────────────────────────────────────────────────────────
+from .models import ThreadCase                                                  # noqa: E402
+
+
+@bp.route('/thread-cases', methods=['GET'])
+@read_required
+def list_thread_cases(actor):
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return _refused(lambda: success_response(T.list_cases(division_id, _int_arg('year'), request.args.get('status') or None)))
+
+
+@bp.route('/thread-cases/years', methods=['GET'])
+@read_required
+def thread_case_years(actor):
+    return _refused(lambda: success_response(T.case_years(_int_arg('division_id'))))
+
+
+@bp.route('/thread-cases/stats', methods=['GET'])
+@read_required
+def thread_case_stats(actor):
+    year = _int_arg('year') or __import__('datetime').date.today().year
+    if request.args.get('division_id') == 'all':
+        def go():
+            out = []
+            for did, name in _visible_division_ids():
+                s = T.case_stats(did, year)
+                s['division_name'] = name
+                out.append(s)
+            return success_response({'year': year, 'divisions': out})
+        return _refused(go)
+    division_id = _int_arg('division_id')
+    if division_id is None:
+        return error_response('사업부를 고르세요.', status_code=400)
+    return _refused(lambda: success_response(T.case_stats(division_id, year)))
+
+
+@bp.route('/thread-cases', methods=['POST'])
+@read_required
+def create_thread_case(actor):
+    p = request.get_json() or {}
+    if p.get('division_id') is None:
+        return error_response('사업부가 필요합니다.', status_code=400)
+    denied = _deny(actor, p['division_id'])
+    if denied:
+        return denied
+    return _refused(lambda: success_response(T.case_dict(T.create_case(p['division_id'], p, actor)), status_code=201))
+
+
+@bp.route('/thread-cases/<int:row_id>', methods=['PUT', 'DELETE'])
+@read_required
+def thread_case(actor, row_id):
+    row = ThreadCase.query.get(row_id)
+    if not row:
+        return error_response('없는 건입니다.', status_code=404)
+    denied = _deny(actor, row.division_id)
+    if denied:
+        return denied
+    if request.method == 'DELETE':
+        def go():
+            db.session.delete(row)
+            return success_response({'deleted': row_id})
+        return _refused(go)
+    return _refused(lambda: success_response(T.case_dict(T.update_case(row, request.get_json() or {}, actor))))

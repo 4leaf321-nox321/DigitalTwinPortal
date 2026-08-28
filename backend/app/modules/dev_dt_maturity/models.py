@@ -251,3 +251,32 @@ class ThreadSegment(BaseModel):
     subject = db.relationship('MaturitySubject', backref=db.backref('thread_segment', uselist=False, cascade='all, delete-orphan', passive_deletes=True))
     thread = db.relationship('ThreadDef')
     segment_def = db.relationship('ThreadSegmentDef')
+
+
+class ThreadCase(BaseModel):
+    """연계 개발 기록의 한 줄 — 연동·도입·정합화·자동화·폐지 건(2026-08-28, c9f7a5e03b86).
+
+    끝나면 그 구간의 연결 방식이 전 → 후로 몇 칸 올라갔는지를 같이 적는다 — 계획과 상태가 이어진다.
+    """
+    __tablename__ = 'dt_thread_case'
+    division_id = db.Column(db.Integer, nullable=False, index=True)
+    month = db.Column(db.Date, nullable=False, index=True)
+    action = db.Column(db.String(20), nullable=False)
+    thread_id = db.Column(db.Integer, db.ForeignKey('dt_thread_def.id', ondelete='SET NULL'))
+    segment_id = db.Column(db.Integer, db.ForeignKey('dt_thread_segment.id', ondelete='SET NULL'))
+    system_id = db.Column(db.Integer)
+    system_name = db.Column(db.String(200))
+    org_id = db.Column(db.Integer)
+    link_from = db.Column(db.String(30))
+    link_to = db.Column(db.String(30))
+    status = db.Column(db.String(20), nullable=False, default='done')
+    note = db.Column(db.Text)
+    actor_user_id = db.Column(db.Integer)
+    actor_name = db.Column(db.String(100))
+    thread = db.relationship('ThreadDef')
+    segment = db.relationship('ThreadSegment')
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['month'] = self.month.isoformat() if self.month else None
+        return d

@@ -8,6 +8,7 @@ import ListView from './components/List/ListView';
 import ReviewLedger from './components/Review/ReviewLedger';
 import ThreadListView from './components/Thread/ThreadListView';
 import ThreadDictModal from './components/Thread/ThreadDictModal';
+import ThreadCaseLedger from './components/Thread/ThreadCaseLedger';
 import PairModal from './components/Pair/PairModal';
 import ModalHost from './components/List/ModalHost';
 import SettingsModal from './components/Settings/SettingsModal';
@@ -102,7 +103,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     return 'all';
   }, [params, divisions]);
   const division = divisions.find(d => d.id === divisionId);
-  const tab = ['list', 'reviews'].includes(params.get('tab')) ? params.get('tab') : 'board';
+  const tab = ['list', 'reviews', 'cases'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
   const filters = useMemo(() => filtersFromParams(k => params.get(k)), [params]);
 
@@ -168,6 +169,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           <Tab $on={tab === 'board'} onClick={() => patch({ tab: null, pair: null })}>성숙도</Tab>
           <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list', pair: null })}>목록</Tab>
           {!isThread && <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">해석 활용 기록</Tab>}
+          {isThread && <Tab $on={tab === 'cases'} onClick={() => patch({ tab: 'cases', pair: null })} title="시스템 연동·도입·정합화·자동화·폐지 건을 쌓는다 — 끝나면 구간의 연결 방식이 몇 칸 올라갔나">연계 개발 기록</Tab>}
         </Tabs>
       </StickyBar>
       <Main $fill>
@@ -175,6 +177,8 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)}
                      onOpenPair={(id) => patch({ pair: id })} onPickDivision={(id) => patch({ division: id, pair: null })} refreshKey={refreshKey} review={isThread ? null : defs.review} />
+        ) : isThread && tab === 'cases' ? (
+          <ThreadCaseLedger divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} thread={defs.thread} axes={axes} refreshKey={refreshKey} />
         ) : isThread ? (
           <ThreadListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} axes={axes} pairId={pairId} thread={defs.thread}
                           onOpenPair={(id) => patch({ pair: id })} onClosePair={() => patch({ pair: null })} onChanged={bump} refreshKey={refreshKey}

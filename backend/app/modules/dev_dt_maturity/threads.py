@@ -14,7 +14,7 @@ from app.extensions import db
 
 from . import definitions as D
 from .models import (
-    MaturityAssessment, MaturityPair, MaturitySubject, ThreadDef, ThreadOrg, ThreadSegment, ThreadSegmentDef, ThreadSystem,
+    MaturityAssessment, MaturityPair, MaturitySubject, ThreadCase, ThreadDef, ThreadOrg, ThreadSegment, ThreadSegmentDef, ThreadSystem,
 )
 from .services import Refused, _clean_list, create_pair, create_subject, pair_dict
 
@@ -538,3 +538,122 @@ def decorate_board(board):
     # 스레드 순으로 — 표에서 스레드가 묶음이 된다
     subs.sort(key=lambda s: ((s.get('segment') or {}).get('thread_id') or 0, s.get('order') or 0, s['id']))
     return board
+
+
+
+# ── 연계 개발 기록 — 건마다 한 줄, 연간으로 센다(2026-08-28) ─────────────────
+
+def _case_month(value):
+    from .reviews import _month
+    return _month(value)
+
+
+def _fill_case(row, payload, division_id):
+    axis = D.axis_of(SECTOR, LINK_AXIS)
+    keys = D.rung_keys(axis)
+    if 'month' in payload or row.month is None:
+        row.month = _case_month(payload.get('month') or row.month)
+    if 'action' in payload or row.action is None:
+        action = payload.get('action') or row.action
+        if action not in D.THREAD_CASE_ACTION_KEYS:
+            raise Refused('「무엇을」을 고르세요 — 연동 · 도입 · 정합화 · 자동화 · 폐지 · 기타.')
+        row.action = action
+    if 'status' in payload:
+        st = payload.get('status') or 'done'
+        if st not in D.THREAD_CASE_STATUS_KEYS:
+            raise Refused('상태는 계획 · 진행 중 · 완료 중 하나입니다.')
+        row.status = st
+    if 'segment_id' in payload:
+        sid = payload.get('segment_id')
+        seg = ThreadSegment.query.get(int(sid)) if sid not in (None, '') else None
+        if sid not in (None, '') and (seg is None or seg.division_id != int(division_id)):
+            raise Refused('이 사업부의 구간이 아닙니다.')
+        row.segment_id = seg.id if seg else None
+        if seg is not None:
+            row.thread_id = seg.thread_id
+    if 'thread_id' in payload and not row.segment_id:
+        tid = payload.get('thread_id')
+        row.thread_id = int(tid) if tid not in (None, '') else None
+    if 'system_id' in payload or 'system_name' in payload:
+        sid = payload.get('system_id')
+        if sid not in (None, ''):
+            sysrow = ThreadSystem.query.get(int(sid))
+            if sysrow is None:
+                raise Refused('없는 시스템입니다.')
+            row.system_id, row.system_name = sysrow.id, sysrow.name
+        else:
+            row.system_id, row.system_name = None, ((payload.get('system_name') or '').strip()[:200] or row.system_name)
+    if 'org_id' in payload:
+        oid = payload.get('org_id')
+        row.org_id = int(oid) if oid not in (None, '') else None
+    for f in ('link_from', 'link_to'):
+        if f in payload:
+            v = payload.get(f) or None
+            if v is not None and v not in keys:
+                raise Refused('연결 방식 칸이 아닙니다.')
+            setattr(row, f, v)
+    if 'note' in payload:
+        row.note = (payload.get('note') or '').strip()[:2000] or None
+    if not row.system_id and not row.system_name and not row.segment_id:
+        raise Refused('대상 시스템이나 구간 가운데 하나는 적으세요.')
+    return row
+
+
+def create_case(division_id, payload, actor):
+    row = ThreadCase(division_id=int(division_id), actor_user_id=getattr(actor, 'id', None), actor_name=getattr(actor, 'name', None))
+    if 'status' not in payload:
+        payload = {**payload, 'status': 'done'}
+    _fill_case(row, payload, division_id)
+    db.session.add(row)
+    db.session.flush()
+    return row
+
+
+def update_case(row, payload, actor):
+    _fill_case(row, payload, row.division_id)
+    row.actor_user_id = getattr(actor, 'id', None)
+    row.actor_name = getattr(actor, 'name', None)
+    return row
+
+
+def case_dict(row):
+    axis = D.axis_of(SECTOR, LINK_AXIS)
+    keys = D.rung_keys(axis)
+    d = row.to_dict()
+    d['thread_name'] = row.thread.name if row.thread else None
+    d['segment_name'] = row.segment.subject.name if row.segment and row.segment.subject else None
+    d['link_from_label'] = axis['rungs'][keys.index(row.link_from)]['label'] if row.link_from in keys else None
+    d['link_to_label'] = axis['rungs'][keys.index(row.link_to)]['label'] if row.link_to in keys else None
+    d['lift'] = (keys.index(row.link_to) - keys.index(row.link_from)) if row.link_from in keys and row.link_to in keys else None
+    return d
+
+
+def list_cases(division_id, year=None, status=None):
+    from datetime import date
+    q = ThreadCase.query.filter_by(division_id=int(division_id))
+    if year:
+        q = q.filter(ThreadCase.month >= date(int(year), 1, 1), ThreadCase.month < date(int(year) + 1, 1, 1))
+    if status:
+        q = q.filter_by(status=status)
+    return [case_dict(r) for r in q.order_by(ThreadCase.month.desc(), ThreadCase.id.desc()).all()]
+
+
+def case_years(division_id=None):
+    from datetime import date
+    q = db.session.query(ThreadCase.month)
+    if division_id is not None:
+        q = q.filter_by(division_id=int(division_id))
+    ys = sorted({m.year for (m,) in q.all()}, reverse=True)
+    return ys or [date.today().year]
+
+
+def case_stats(division_id, year):
+    """한 사업부·한 해 — 건수 · 상태별 · 무엇을별 · 올라간 칸 합계 · 시스템별 건수."""
+    rows = list_cases(division_id, year)
+    by_action = Counter(r['action'] for r in rows)
+    by_status = Counter(r['status'] for r in rows)
+    lift = sum(r['lift'] for r in rows if r['lift'] and r['status'] == 'done')
+    systems = Counter(r['system_name'] for r in rows if r['system_name'])
+    return {'division_id': int(division_id), 'year': int(year), 'count': len(rows),
+            'by_action': dict(by_action), 'by_status': dict(by_status), 'lift': lift,
+            'systems': [{'name': n, 'count': c} for n, c in systems.most_common(8)]}

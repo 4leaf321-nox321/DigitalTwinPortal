@@ -692,3 +692,35 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert 'TC' not in {s['name'] for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']}
     # 지우면 대상·연계·평가가 같이 간다
     assert client.delete(f'{BASE}/segments/{s1["id"]}', headers=auth(mx_user)).get_json()['data']['assessments'] == 3
+
+
+def test_연계_개발_기록은_건으로_쌓고_올라간_칸을_센다(client, auth, world, mx_user, vd_user):
+    mx = world['mx'].id
+    threads = client.get(f'{BASE}/threads', headers=auth(mx_user)).get_json()['data']
+    cost = next(t for t in threads if t['key'] == 'cost')
+    plm = client.post(f'{BASE}/systems', json={'name': 'Teamcenter', 'kind': 'plm'}, headers=auth(mx_user)).get_json()['data']
+    seg = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': cost['segments'][1]['id'], 'via_system_id': plm['id']}, headers=auth(mx_user)).get_json()['data']
+
+    def add(p, expect=201):
+        res = client.post(f'{BASE}/thread-cases', json={'division_id': mx, **p}, headers=auth(mx_user))
+        assert res.status_code == expect, res.get_json()
+        return res.get_json().get('data')
+
+    c1 = add({'month': '2026-03', 'action': 'integrate', 'segment_id': seg['id'], 'system_id': plm['id'], 'link_from': 'manual_file', 'link_to': 'api', 'note': '허브 연동'})
+    assert c1['thread_name'] == '재료비 스레드' and c1['segment_name'] == seg['name'] and c1['lift'] == 2 and c1['status'] == 'done'
+    add({'month': '2026-05', 'action': 'adopt', 'system_name': 'SPDM(새 시스템)', 'status': 'doing'})
+    add({'month': '2026-06', 'action': 'harmonize', 'system_id': plm['id'], 'link_from': 'api', 'link_to': 'sync', 'status': 'planned'})
+    add({'month': '2026-01', 'action': 'weird', 'system_id': plm['id']}, expect=400)
+    add({'month': '2026-01', 'action': 'integrate'}, expect=400)                                   # 시스템도 구간도 없음
+    add({'month': '2026-01', 'action': 'integrate', 'system_id': plm['id'], 'link_to': 'nope'}, expect=400)
+    rows = client.get(f'{BASE}/thread-cases?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']
+    assert [r['action'] for r in rows] == ['harmonize', 'adopt', 'integrate']
+    assert [r['status'] for r in client.get(f'{BASE}/thread-cases?division_id={mx}&year=2026&status=doing', headers=auth(mx_user)).get_json()['data']] == ['doing']
+    st = client.get(f'{BASE}/thread-cases/stats?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']
+    assert st['count'] == 3 and st['by_action'] == {'integrate': 1, 'adopt': 1, 'harmonize': 1} and st['by_status']['done'] == 1
+    assert st['lift'] == 2 and st['systems'][0] == {'name': 'Teamcenter', 'count': 2}     # 완료 건의 올라간 칸만
+    assert client.get(f'{BASE}/thread-cases/years?division_id={mx}', headers=auth(mx_user)).get_json()['data'] == [2026]
+    assert client.put(f'{BASE}/thread-cases/{c1["id"]}', json={'note': 'x'}, headers=auth(vd_user)).status_code == 403
+    res = client.put(f'{BASE}/thread-cases/{c1["id"]}', json={'status': 'doing', 'link_to': 'sync'}, headers=auth(mx_user))
+    assert res.status_code == 200 and res.get_json()['data']['lift'] == 3
+    assert client.delete(f'{BASE}/thread-cases/{c1["id"]}', headers=auth(mx_user)).status_code == 200

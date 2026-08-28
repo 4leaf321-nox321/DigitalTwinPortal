@@ -9,6 +9,7 @@ import { render, click, type, select, settle, byText, html, fakeFetch, suite, un
 import ThreadListView from '../../src/modules/dev-dt-maturity/components/Thread/ThreadListView';
 import ThreadDictModal from '../../src/modules/dev-dt-maturity/components/Thread/ThreadDictModal';
 import { BoardBody } from '../../src/modules/dev-dt-maturity/components/Board/BoardView';
+import ThreadCaseLedger from '../../src/modules/dev-dt-maturity/components/Thread/ThreadCaseLedger';
 
 const AXES = [
   { key: 'link_mode', label: '연결 방식', kind: 'rung', rungs: [{ key: 'verbal', label: '문서·구두 전달' }, { key: 'manual_file', label: '수동 파일 교환' }, { key: 'auto_file', label: '자동 파일 교환' }, { key: 'api', label: 'API 연동' }, { key: 'sync', label: '자동 동기' }, { key: 'closed_loop', label: '폐루프' }] },
@@ -19,6 +20,8 @@ const THREAD = {
   system_kinds: [{ key: 'plm', label: 'PLM' }, { key: 'cost', label: '원가' }, { key: 'informal', label: '비공식 매개' }, { key: 'other', label: '기타' }],
   link_means: [{ key: 'api', label: 'API 있음' }, { key: 'file', label: '파일 배치' }, { key: 'none', label: '없음' }, { key: 'unknown', label: '미확인' }],
   system_status: [{ key: 'active', label: '운영' }, { key: 'adopting', label: '도입 중' }],
+  case_actions: [{ key: 'integrate', label: '연동' }, { key: 'adopt', label: '도입' }, { key: 'harmonize', label: '정합화' }],
+  case_status: [{ key: 'planned', label: '계획' }, { key: 'doing', label: '진행 중' }, { key: 'done', label: '완료' }],
 };
 const THREADS = [
   { id: 1, key: 'cost', name: '재료비 스레드', axes_off: [], segments: [
@@ -35,6 +38,10 @@ const SEG = { id: 101, subject_id: 501, division_id: 17, thread_id: 1, thread_na
 export default async function run() {
   const { say, done } = suite();
   const calls = fakeFetch(({ url, method, body }) => {
+    if (url.includes('/thread-cases/years')) return [2026];
+    if (url.includes('/thread-cases/stats')) return { count: 1, by_action: { integrate: 1 }, by_status: { done: 1 }, lift: 2, systems: [{ name: 'Teamcenter', count: 1 }] };
+    if (url.includes('/thread-cases') && method === 'POST') return { id: 8, ...body, month: `${body.month}-01`, thread_name: '재료비 스레드', segment_name: '설계 BOM → 예상 원가', system_name: 'Teamcenter', link_from_label: '수동 파일 교환', link_to_label: 'API 연동', lift: 2, actor_name: '나' };
+    if (url.includes('/thread-cases')) return [{ id: 7, month: '2026-03-01', action: 'integrate', status: 'done', thread_id: 1, thread_name: '재료비 스레드', segment_id: 101, segment_name: '설계 BOM → 예상 구간', system_id: 5, system_name: 'Teamcenter', link_from: 'manual_file', link_to: 'api', link_from_label: '수동 파일 교환', link_to_label: 'API 연동', lift: 2, note: '허브 연동', actor_name: '홍' }];
     if (url.includes('/threads/stats')) return { division_id: 17, threads: [{ thread_id: 1, thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_stage: null, reach_label: null, weakest: { id: 101, name: '설계 BOM → 예상 원가', link_index: 1, link_label: '수동 파일 교환' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }, { thread_id: 2, thread_key: 'quality', thread_name: '품질 스레드', def_count: 0, segment_count: 0, assessed: 0, continuity: null, reach_label: null, weakest: null, closed_loop: false, informal_ratio: null, unassessed: 0 }], divisions: [{ division_id: 17, division_name: 'MX', threads: [{ thread_key: 'cost', thread_name: '재료비 스레드', def_count: 2, segment_count: 1, assessed: 1, continuity: 0, reach_label: null, weakest: { name: '설계 BOM → 예상 원가', link_label: '수동 파일 교환' }, closed_loop: false, informal_ratio: 100, unassessed: 0 }] }] };
     if (url.includes('/threads/org-matrix')) return [{ from_org_id: 21, from_org: 'MX 설계그룹', to_org_id: 22, to_org: '원가팀', count: 1, min_link: 1, min_link_label: '수동 파일 교환', systems: ['Teamcenter', '메일', '원가 산정 시스템'], informal: 1 }];
     if (url.includes('/systems/hubs')) return [{ id: 5, name: 'Teamcenter', kind: 'plm', threads: 1, segments: 1, avg_link: 1, link_means: 'api', unknown_means: false }];
@@ -109,6 +116,28 @@ export default async function run() {
     say(opened === 901, '④ 줄의 구간을 누르면 그 구간 상세');
     await click(byText('button', '상세')); await settle();
     say(html().includes('스레드 · 구간') && html().includes('출발 → 매개 → 도착') && html().includes('MX 설계그룹'), '④ 상세 표의 첫 두 열이 구간과 출발 → 매개 → 도착');
+    await unmount();
+
+    // ⑤ 연계 개발 기록 — 건이 보이고, 토글로 적어 추가
+    calls.length = 0;
+    await render(<ThreadCaseLedger divisionId={17} divisions={[{ id: 17, name: 'MX' }]} denyReason={null} thread={THREAD} axes={AXES} refreshKey={0} />);
+    await settle(80);
+    const h5 = html();
+    say(h5.includes('1건') && h5.includes('올라간 칸') && h5.includes('허브 연동') && h5.includes('수동 파일 교환') && h5.includes('API 연동'), '⑤ 셈과 건이 보임(전 → 후, +2)');
+    await click(byText('button', '정합화'));
+    await click([...document.querySelector('[aria-label="상태"]').querySelectorAll('button')].find(b => b.textContent === '진행 중'));
+    const segIn = document.querySelectorAll('input[data-search-select]');
+    await type(segIn[0], '예상'); await settle(); await click(byText('li', '재료비 스레드 · 설계 BOM → 예상 원가')); await settle();
+    await type(document.querySelectorAll('input[data-search-select]')[1], 'Team'); await settle(); await click(byText('li', 'Teamcenter')); await settle();
+    const fromGroup = document.querySelector('[aria-label="연결 방식 전"]');
+    await click([...fromGroup.querySelectorAll('button')].find(b => b.textContent === '수동 파일 교환'));
+    const toGroup = document.querySelector('[aria-label="연결 방식 후"]');
+    await click([...toGroup.querySelectorAll('button')].find(b => b.textContent === 'API 연동'));
+    await type(document.querySelector('input[aria-label="메모"]'), '코드 통일');
+    await click(byText('button', '추가')); await settle(80);
+    const pc = calls.find(c => c.method === 'POST' && c.url.endsWith('/thread-cases'));
+    say(!!pc && pc.body.action === 'harmonize' && pc.body.status === 'doing' && pc.body.segment_id === 101 && pc.body.system_id === 5 && pc.body.link_from === 'manual_file' && pc.body.link_to === 'api',
+        `⑤ POST /thread-cases: ${JSON.stringify(pc?.body)}`);
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);
