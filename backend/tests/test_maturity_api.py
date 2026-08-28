@@ -220,16 +220,6 @@ def test_사업부_없이는_판을_못_열고_전체는_사업부마다_묶어_
 
 # ── 태그 사전 · 설정 ───────────────────────────────────────────────────────
 
-def test_현상_태그는_그_사업부_사전에_쌓인다(client, auth, world, mx_user, office):
-    _, _, p = _pair(client, auth, mx_user, world['mx'])
-    _assess(client, auth, mx_user, p['id'], 'modeling',
-            {'flags': ['performance'], 'note': '휨 예측 확인', 'evidence': {'phenomena': ['휨', '깨짐', '휨']}})
-    res = client.get(f'{BASE}/pairs/{p["id"]}', headers=auth(mx_user))
-    assert res.get_json()['data']['phenomena'] == ['휨', '깨짐']
-    res = client.get(f'{BASE}/settings', headers=auth(office))
-    assert res.get_json()['data']['phenomena'] == {str(world['mx'].id): ['휨', '깨짐']}
-
-
 def test_설정은_사무국만_바꾼다(client, auth, world, mx_user, office):
     res = client.put(f'{BASE}/settings', json={'stale_days': 180}, headers=auth(mx_user))
     assert res.status_code == 403

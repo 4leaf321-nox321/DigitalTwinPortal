@@ -276,8 +276,6 @@ def assess(pair, axis_key, payload, actor):
         value = None
 
     evidence = _clean_evidence(axis, payload.get('evidence'))
-    if axis_key == 'modeling':
-        _grow_phenomena(subject.division_id, evidence.get('phenomena') or [])
 
     # 값 축(정확도)은 **줄줄이** 쌓는다 — 저장마다 이력 한 줄, 같은 값이어도. 현재 값은 가장 늦은 줄.
     # 옛 달로 넣으면(backfill) 줄만 붙고 현재는 그대로다. (2026-08-28)
@@ -379,27 +377,6 @@ def _clean_list(v):
             seen.add(s)
             out.append(s[:100])
     return out
-
-
-def _grow_phenomena(division_id, tags):
-    """새 태그는 그 사업부 사전에 들어간다. 정리(합치기·이름 바꾸기)는 설정에서 사무국이."""
-    if not tags:
-        return
-    from app.modules.digital_twin_dashboard.models import ModuleSettings
-    row = ModuleSettings.query.filter_by(
-        module_name=D.MODULE_KEY, settings_key='phenomena').first()
-    data = dict(row.settings_data or {}) if row else {}
-    key = str(division_id)
-    have = list(data.get(key) or [])
-    new = [t for t in tags if t not in have]
-    if not new:
-        return
-    data[key] = have + new
-    if row is None:
-        row = ModuleSettings(module_name=D.MODULE_KEY, settings_key='phenomena',
-                             description='사업부별 현상 태그 사전')
-        db.session.add(row)
-    row.settings_data = data
 
 
 # ── 읽기 · 사업부 판 ───────────────────────────────────────────────────────

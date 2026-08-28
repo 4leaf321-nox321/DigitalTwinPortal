@@ -92,7 +92,7 @@ AXES = {
         {
             'key': 'modeling', 'label': '모델링 수준', 'kind': 'matrix',
             'question': '어느 불량까지 재현하는가',
-            'evidence': ['phenomena', 'defects'], 'evidence_label': '재현 가능한 현상 태그',
+            'evidence': ['defects'], 'evidence_label': '불량 유형 표',   # 현상 태그는 뺐다(2026-08-28) — 불량 유형 표가 그 자리
             # 두 층이다(2026-08-28): 바탕(형상·거동)은 시뮬레이션 전체의 토글, 불량 재현은 **시뮬레이션의
             # 불량 유형마다** 열(시험·시장)을 켠다 — evidence.defects = {유형: {test: '2025-03', market: None}}.
             # rungs 는 판에 보이는 **서열**이다(matrix_level 이 접는다). ⚠️ base·columns 의 key 는 고정.

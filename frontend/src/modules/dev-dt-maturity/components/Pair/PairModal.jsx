@@ -104,9 +104,6 @@ const Button = styled.button`
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 const Primary = styled(Button)`background: #1d4ed8; border-color: transparent; color: white;`;
-const Tag = styled.span`
-  font-size: 0.75rem; background: #eff6ff; color: #1e40af; border-radius: 0.25rem; padding: 0.1rem 0.4rem;
-`;
 const HistoryList = styled.div`display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8125rem; color: #475569;`;
 const HistoryRow = styled.div`display: flex; gap: 0.5rem; flex-wrap: wrap;`;
 const When = styled.span`color: #94a3b8; min-width: 6.5rem;`;
@@ -329,7 +326,6 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
   const error = saveError || loadError;
 
   const canEdit = pair && !pair.deny_reason;
-  const phenomena = pair?.phenomena || [];
 
   const startEdit = (axis, rungKey) => {
     if (!canEdit) return;
@@ -532,9 +528,6 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                 {a && (
                   <Note>
                     <strong>근거</strong> {a.note}
-                    {axis.key === 'modeling' && (a.evidence?.phenomena || []).length > 0 && (
-                      <> · {a.evidence.phenomena.map(t => <Tag key={t}>{t}</Tag>)}</>
-                    )}
                     {Object.entries(a.evidence || {})
                       .filter(([k]) => evidenceFields[k])
                       .map(([k, v]) => <span key={k}> · {evidenceFields[k].label} {v}</span>)}
@@ -597,19 +590,6 @@ export const PairPanel = ({ pair, pairId, axes, loadError, onClose, onSaved }) =
                                  }))} />
                         </label>
                       ))}
-                      {axis.key === 'modeling' && (
-                        <label style={{ fontSize: '0.75rem', color: '#64748b', flex: 1 }}>
-                          예측 가능한 현상 (쉼표로 여럿){' '}
-                          <Input $grow list={`phen-${pairId}`}
-                                 value={(editing.evidence.phenomena || []).join(', ')}
-                                 onChange={e => setEditing(s => ({
-                                   ...s, evidence: { ...s.evidence, phenomena: e.target.value.split(',').map(x => x.trim()).filter(Boolean) },
-                                 }))} />
-                          <datalist id={`phen-${pairId}`}>
-                            {phenomena.map(t => <option key={t} value={t} />)}
-                          </datalist>
-                        </label>
-                      )}
                     </Row>
                     <Row>
                       <Primary disabled={busy || !editing.note.trim()

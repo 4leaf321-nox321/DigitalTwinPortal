@@ -290,7 +290,6 @@ def get_pair(actor, pair_id):
         d = S.pair_dict(pair, with_changes=True)
         d['deny_reason'] = P.deny_reason(actor, pair.subject.division_id,
                                          _division_name(pair.subject.division_id))
-        d['phenomena'] = D.get_phenomena(pair.subject.division_id)
         return success_response(d)
     except Exception:
         return _crashed()

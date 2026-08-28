@@ -141,6 +141,7 @@ def _modeling_seed(val, defect_types, evidence, days):
     if 'multi' in parts and names:
         defects.setdefault(names[0], {'test': when})['market'] = when
     ev = dict(evidence or {})
+    ev.pop('phenomena', None)          # 현상 태그는 뺐다 — 불량 유형 표가 그 자리
     if defects:
         ev['defects'] = defects
     return (','.join(base) or 'none'), ev
@@ -487,8 +488,6 @@ def main():
                                                note=note or f'{who} 평가', evidence=evidence or {},
                                                assessed_at=_days_ago(days), assessed_by_name=who)
                         db.session.add(a); counts['assessments'] += 1
-                        if axis_key == 'modeling':
-                            S._grow_phenomena(div.id, (evidence or {}).get('phenomena') or [])   # 사업부 태그 사전
                         # 이력이 따로 없으면 「처음 매긴 날」 한 줄
                         if not any(h[2] == (rung or f'{value:g}') for h in history if h):
                             c = MaturityChange(pair_id=pair.id, axis=axis_key, before=None,
