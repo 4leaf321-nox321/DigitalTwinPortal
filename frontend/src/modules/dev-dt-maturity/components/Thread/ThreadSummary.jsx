@@ -19,13 +19,22 @@ const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; fo
 const SecHead = styled.td`background: #f8fafc !important; text-align: left !important; border-top: 2px solid #e2e8f0; padding: 0.4rem 0.9rem !important; font-size: 0.8125rem; color: #64748b; strong { color: #1e293b; font-size: 0.9375rem; margin-right: 0.5rem; }`;
 const TdAll = styled.td`border-left: 2px solid #e2e8f0; background: #fafafa;`;
 
+// 자동 전달 · 수집 · 활용 — 셋을 같은 급으로 나란히(2026-08-29)
+const Trio = styled.div`display: flex; justify-content: center; gap: 1rem;`;
+const Stat = styled.div`text-align: center;`;
+const StatV = styled.div`font-size: 1.05rem; font-weight: 700; color: #1e293b; line-height: 1.15;`;
+const StatL = styled.div`font-size: 0.6875rem; color: #64748b;`;
 const cellOf = (t) => {
   if (!t || t.segment_count === 0) return <Small style={{ color: '#94a3b8' }}>구간 없음</Small>;
+  const v = (x) => (x != null ? `${x}%` : '—');
   return (
     <>
-      <Big>{t.continuity != null ? `${t.continuity}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 자동 전달</span></Big>
-      <Small>수집 {t.capture_rate != null ? `${t.capture_rate}%` : '—'} · 활용 {t.usage_rate != null ? `${t.usage_rate}%` : '—'}{t.closed_loop && <Pill $good>폐루프</Pill>}</Small>
-      <Small>구간 {t.assessed}/{t.segment_count}{t.unassessed > 0 && <Pill $warn>미평가 {t.unassessed}</Pill>}{t.unknown > 0 && <Pill $warn>확인 필요 {t.unknown}</Pill>}{t.informal_ratio > 0 && <Pill $warn>비공식 {t.informal_ratio}%</Pill>}</Small>
+      <Trio>
+        <Stat><StatV>{v(t.continuity)}</StatV><StatL>자동 전달</StatL></Stat>
+        <Stat><StatV>{v(t.capture_rate)}</StatV><StatL>수집</StatL></Stat>
+        <Stat><StatV>{v(t.usage_rate)}</StatV><StatL>활용</StatL></Stat>
+      </Trio>
+      <Small>구간 {t.assessed}/{t.segment_count}{t.closed_loop && <Pill $good>폐루프</Pill>}{t.unassessed > 0 && <Pill $warn>미평가 {t.unassessed}</Pill>}{t.unknown > 0 && <Pill $warn>확인 필요 {t.unknown}</Pill>}{t.informal_ratio > 0 && <Pill $warn>비공식 {t.informal_ratio}%</Pill>}</Small>
     </>
   );
 };
