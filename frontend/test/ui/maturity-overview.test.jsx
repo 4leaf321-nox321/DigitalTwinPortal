@@ -47,9 +47,9 @@ export default async function run() {
     say(!!byText('th', 'MX') && !!byText('th', 'VD') && !!byText('td', '정확도'), '① 전체 판은 「요약」으로 열리고 사업부가 열, 축이 행');
     say(!!byText('th', '전체') && html().includes('평가 완료 2/3'), '① 맨 오른쪽 「전체」 열 — 사업부를 합쳐 다시 센 것(정확도 평가 완료 2/3)');
     await click(byText('button', '1주 전')); await settle();
-    say(html().includes('대비 Δ') && (html().includes('Δ —') || html().includes('Δ 0') || html().includes('▲') || html().includes('▼')), '① 날짜 기준을 고르면 대표 수치마다 Δ');
+    say(html().includes('대비 증감') && (html().includes('Δ —') || html().includes('Δ 0') || html().includes('▲') || html().includes('▼')), '① 기준 시점을 고르면 대표 수치마다 증감');
     await click(byText('button', '1주 전')); await settle();
-    say(!html().includes('대비 Δ'), '① 날짜 기준을 풀면 Δ 가 사라짐');
+    say(!html().includes('대비 증감'), '① 기준 시점을 풀면 증감이 사라짐');
     say(document.querySelector('[data-notes="on"]') && document.querySelector('.ov-note'), '① 코멘트 보기 기본 켜짐(작은 글줄 있음)');
     await click(byText('button', '코멘트 보기')); await settle();
     say(document.querySelector('[data-notes="off"]'), '① 코멘트를 끄면 숨김 상태로 감');
@@ -69,10 +69,10 @@ export default async function run() {
     say(h6.includes('색의 기준') && h6.includes('부서 미지정') && document.querySelectorAll('button[title*="—"]').length >= 2, '⑥ 모판 — 부서 묶음과 네모들');
     say(h6.includes('80%') || h6.includes('90%'), '⑥ 정확도 축이면 네모에 % 배지');
     await click(byText('button', '지난 분기 마감')); await settle();
-    say(html().includes('그 뒤 바뀜'), '⑥ 모판의 날짜 기준 — 범례에 「그 뒤 바뀜」이 붙음');
+    say(html().includes('변경 사항 발생'), '⑥ 모판의 기준 시점 — 범례에 「변경 사항 발생」이 붙음');
     // ⑥-2 그 상태로 액자를 누르면 — 날짜 기준이 창까지 따라간다
     await click(byText('button', '지난 분기 마감')); await settle();
-    say(!html().includes('그 뒤 바뀜'), '⑥ 날짜 기준을 풀면 표시가 사라짐');
+    say(!html().includes('변경 사항 발생'), '⑥ 기준 시점을 풀면 표시가 사라짐');
     await click(byText('button', '자동화')); await settle();
     say(html().includes('2/2') || html().includes('1/2'), '⑥ 축을 자동화로 바꾸면 배지가 켠 수로');
     await click(document.querySelector('[aria-label$="펼치기"]')); await settle();   // 전체 모드라 「MX · 부서 미지정」 — 끝맺음으로 찾는다

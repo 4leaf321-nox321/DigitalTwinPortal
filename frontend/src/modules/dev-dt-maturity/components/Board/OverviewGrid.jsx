@@ -154,7 +154,7 @@ const pctText = (v) => (v == null ? '—' : `${v}%`);
 
 const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulation', changeSets = {} }) => {
   const sums = boards.map(b => divisionSummary(b, axes));
-  const [since, setSince] = useState(null);      // 날짜 기준 — 대표 수치마다 그 날 대비 델타
+  const [since, setSince] = useState(null);      // 기준 시점 — 대표 수치마다 그 날 대비 델타
   const [notes, setNotes] = useState(true);      // 코멘트 보기 — 끄면 작은 글줄을 숨긴다
   const sinceIso = baseDate(since);
   const thens = useMemo(() => (sinceIso
@@ -192,12 +192,12 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
   return (
     <Wrap $notes={notes} data-notes={notes ? 'on' : 'off'}>
       <Head>
-        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginRight: '0.4rem' }}>날짜 기준</span>
+        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginRight: '0.4rem' }}>기준 시점</span>
         {DATE_BASES.map(d => (
           <DateBtn key={d.key} type="button" $on={since === d.key} aria-pressed={since === d.key}
-                   onClick={() => setSince(v => (v === d.key ? null : d.key))} title="대표 수치마다 이 날짜 대비 변화량을 붙입니다">{d.label}</DateBtn>
+                   onClick={() => setSince(v => (v === d.key ? null : d.key))} title="대표 수치마다 이 시점 이후의 증감을 붙입니다">{d.label}</DateBtn>
         ))}
-        {sinceIso && <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '0.4rem' }}>{sinceIso} 대비 Δ</span>}
+        {sinceIso && <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '0.4rem' }}>기준 시점 {sinceIso} 대비 증감</span>}
         <DateBtn type="button" $on={notes} aria-pressed={notes} onClick={() => setNotes(v => !v)} title="평가 완료 n/m 같은 작은 글줄을 켜고 끕니다" style={{ float: 'right' }}>코멘트 보기</DateBtn>
       </Head>
       <Body>

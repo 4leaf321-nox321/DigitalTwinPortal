@@ -68,7 +68,7 @@ const AxisBlock = styled.div`
   border: 1px solid ${p => (p.$hot ? '#a3e635' : '#e2e8f0')}; border-radius: 0.6rem; padding: 0 0.875rem 0.75rem; background: white;
   box-shadow: ${p => (p.$hot ? '0 0 0 2px #a3e635, 0 1px 2px rgba(15,23,42,0.05)' : '0 1px 2px rgba(15, 23, 42, 0.05)')};
 `;
-// 모판에서 날짜 기준을 켠 채 들어왔을 때 — 그 날 뒤에 바뀐 축을 모판과 같은 형광으로 짚는다(2026-08-29).
+// 모판에서 기준 시점을 켠 채 들어왔을 때 — 그 뒤 변경이 있었던 축을 모판과 같은 형광으로 짚는다(2026-08-29).
 const Hot = styled.span`
   display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.5rem; border-radius: 999px;
   background: #ecfccb; color: #3f6212; border: 1px solid #a3e635; font-size: 0.6875rem; font-weight: 700;
@@ -386,7 +386,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
   };
 
   const histCount = (pair?.changes || []).filter(c => axes.find(x => x.key === c.axis)?.kind !== 'value').length;
-  // 날짜 기준(모판에서 들고 온 것) 뒤에 바뀐 축 — 「시점 적기」만 있는 줄은 바뀜으로 안 친다(모판과 같은 셈).
+  // 기준 시점(모판에서 들고 온 것) 이후 변경이 있었던 축 — 「시점 적기」만 있는 줄은 변경으로 안 친다(모판과 같은 셈).
   const hotAxes = useMemo(() => {
     if (!since || !pair) return null;
     const set = new Set();
@@ -487,9 +487,9 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
 
           {pair && hotAxes && (
             <SinceBar>
-              <strong>{since}</strong> 뒤로 바뀐 축 <strong>{hotAxes.size}개</strong>
+              기준 시점 <strong>{since}</strong> 이후 변경 사항 <strong>{hotAxes.size}건</strong>
               {hotAxes.size > 0 && <span>— {axes.filter(a => hotAxes.has(a.key)).map(a => a.label).join(' · ')}</span>}
-              {hotAxes.size === 0 && <span>— 이 연계는 그 뒤로 손대지 않았습니다.</span>}
+              {hotAxes.size === 0 && <span>— 변경 사항 없음</span>}
             </SinceBar>
           )}
           {pair && axes.map(axis => {
@@ -501,7 +501,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
               <AxisBlock key={axis.key} $hot={!!hotAxes?.has(axis.key)}>
                 <AxisHead>
                   <AxisName>{axis.label}</AxisName>
-                  {hotAxes?.has(axis.key) && <Hot title={`${since} 뒤에 바뀐 축입니다`}>그 뒤 바뀜</Hot>}
+                  {hotAxes?.has(axis.key) && <Hot title={`기준 시점 ${since} 이후 이 축에 변경이 있었습니다`}>변경 사항 발생</Hot>}
                   <AxisQ>{axis.question}</AxisQ>
                   {a ? (
                     <Meta>

@@ -29,7 +29,7 @@ const GroupLabel = styled.div`
 const Frame = styled.button`
   position: absolute; font-family: inherit; cursor: pointer; padding: 0; overflow: hidden; text-align: left; border-radius: 2px;
   background: ${p => p.$c}; border: ${p => (p.$empty ? '1.5px dashed #94a3b8' : '1px solid rgba(15, 23, 42, 0.55)')};
-  box-shadow: ${p => (p.$hot ? '0 0 0 2.5px #a3e635, 0 0 10px 2px rgba(163, 230, 53, 0.65)' : 'inset 0 0 0 1px rgba(255, 255, 255, 0.25)')};   /* 형광 = 날짜 기준 뒤에 바뀐 액자 */
+  box-shadow: ${p => (p.$hot ? '0 0 0 2.5px #a3e635, 0 0 10px 2px rgba(163, 230, 53, 0.65)' : 'inset 0 0 0 1px rgba(255, 255, 255, 0.25)')};   /* 형광 = 기준 시점 뒤에 바뀐 액자 */
   z-index: ${p => (p.$hot ? 1 : 'auto')};
   &:hover { outline: 2px solid white; z-index: 2; }
 `;
@@ -66,7 +66,7 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
   const isThread = sector === 'digital_thread';
   const [axisKey, setAxisKey] = useState(axes[0]?.key);
   const [focus, setFocus] = useState(null);   // 드릴다운한 묶음 이름
-  const [since, setSince] = useState(null);   // 날짜 기준 — 그 뒤에 바뀐 액자를 형광으로
+  const [since, setSince] = useState(null);   // 기준 시점 — 그 뒤에 바뀐 액자를 형광으로
   const axis = axes.find(a => a.key === axisKey) || axes[0];
   const total = axis ? axis.rungs.length : 1;
 
@@ -110,15 +110,15 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
         {focus != null && <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#1e293b' }}>{focus}</span>}
         <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginLeft: focus != null ? '0.5rem' : 0 }}>색의 기준</span>
         {axes.map(a => <AxisBtn key={a.key} type="button" $on={a.key === axis.key} aria-pressed={a.key === axis.key} onClick={() => setAxisKey(a.key)}>{a.label}</AxisBtn>)}
-        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginLeft: '0.6rem' }}>날짜 기준</span>
+        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginLeft: '0.6rem' }}>기준 시점</span>
         {DATE_BASES.map(d => (
           <AxisBtn key={d.key} type="button" $on={since === d.key} aria-pressed={since === d.key}
-                   onClick={() => setSince(v => (v === d.key ? null : d.key))} title="이 날짜 뒤에 바뀐 액자를 형광 테두리로">{d.label}</AxisBtn>
+                   onClick={() => setSince(v => (v === d.key ? null : d.key))} title="이 시점 이후 변경이 있었던 항목을 형광 테두리로">{d.label}</AxisBtn>
         ))}
         <Legend aria-label="범례">
           {axis.rungs.map((r, i) => (axis.hide_empty && i === 0 ? null : <span key={r.key}><Sw $c={wallColor(i, total)} />{r.label}</span>))}
           <span><Sw $dashed />미평가</span>
-          {since != null && <span><Sw style={{ background: 'transparent', boxShadow: '0 0 0 2px #a3e635' }} />그 뒤 바뀜</span>}
+          {since != null && <span><Sw style={{ background: 'transparent', boxShadow: '0 0 0 2px #a3e635' }} />변경 사항 발생</span>}
         </Legend>
       </Bar>
       {pairsCount === 0 ? <Muted>아직 {isThread ? '구간' : '연계'}이 없습니다 — 목록 탭에서 더하세요.</Muted> : (

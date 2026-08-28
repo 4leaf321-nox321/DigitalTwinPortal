@@ -226,16 +226,16 @@ export default async function run() {
     ] };
     await render(<PairPanel pair={HOT} pairId={101} axes={AXES} since="2026-08-01" onClose={() => {}} onSaved={() => {}} />);
     await settle();
-    say(html().includes('2026-08-01') && html().includes('뒤로 바뀐 축'), '⑧ 창 위에 날짜 기준 줄');
-    say(html().includes('<strong>1개</strong>') || html().includes('1개'), '⑧ 바뀐 축의 수');
-    say(html().includes('그 뒤 바뀜'), '⑧ 바뀐 축에 「그 뒤 바뀜」 표');
-    const hotCount = (html().match(/그 뒤 바뀜/g) || []).length;
+    say(html().includes('2026-08-01') && html().includes('이후 변경 사항'), '⑧ 창 위에 기준 시점 줄');
+    say(html().includes('1건'), '⑧ 변경이 있었던 축의 수');
+    say(html().includes('변경 사항 발생'), '⑧ 변경이 있었던 축에 「변경 사항 발생」 표');
+    const hotCount = (html().match(/변경 사항 발생/g) || []).length;
     say(hotCount === 1, `⑧ 자동화만 짚는다(적용 범위는 그 전, 정확도는 「시점 적기」뿐): ${hotCount}`);
     await unmount();
     // 날짜 기준 없이 열면 아무 표시도 없다
     await render(<PairPanel pair={HOT} pairId={101} axes={AXES} onClose={() => {}} onSaved={() => {}} />);
     await settle();
-    say(!html().includes('그 뒤 바뀜') && !html().includes('뒤로 바뀐 축'), '⑧ 날짜 기준 없이 열면 표시가 없다');
+    say(!html().includes('변경 사항 발생') && !html().includes('이후 변경 사항'), '⑧ 기준 시점 없이 열면 표시가 없다');
     await unmount();
 
     // ⑦ initialId — 표의 연필로 연 것처럼

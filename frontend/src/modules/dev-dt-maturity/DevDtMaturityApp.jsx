@@ -109,7 +109,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const division = divisions.find(d => d.id === divisionId);
   const tab = ['list', 'reviews', 'cases'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
-  const sinceIso = params.get('since') || null;      // 모판의 날짜 기준 — 창에서 바뀐 축을 짚어 준다
+  const sinceIso = params.get('since') || null;      // 모판의 기준 시점 — 창에서 바뀐 축을 짚어 준다
   const filters = useMemo(() => filtersFromParams(k => params.get(k)), [params]);
 
   const patch = useCallback((changes) => {
