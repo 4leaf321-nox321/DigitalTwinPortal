@@ -16,9 +16,9 @@ import { colorFor, divisionSummary } from '../../utils/board';
 // 남는 높이를 이 칸이 갖고 스크롤도 여기 걸린다. 표는 그 80% 만 — 아래 20% 는 비워 둔다.
 const Wrap = styled.div`overflow: auto; flex: 1; min-height: 0;`;
 const Table = styled.table`
-  width: 100%; height: 80%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem;
+  width: 100%; height: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9375rem;   /* 아래 남는 공간 없이 채운다(2026-08-28) */
   th { text-align: left; position: sticky; top: 0; background: white; z-index: 1; font-size: 0.8125rem; font-weight: 700; color: #64748b; padding: 0.5rem 0.9rem; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-  td { padding: 0.6rem 0.9rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  td { padding: 0.75rem 0.9rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }   /* 행 사이 간격을 조금 — 줄이 구분되게 */
 `;
 const ThDiv = styled.th`cursor: pointer; font-size: 1.05rem !important; color: #1e293b !important; &:hover { color: #1d4ed8 !important; text-decoration: underline; }`;
 const Name = styled.td`font-weight: 700; color: #1e293b; white-space: nowrap; font-size: 1rem;`;
@@ -172,7 +172,7 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision }) => {
             <>
               <tr>
                 <SecHead colSpan={boards.length + 2}>
-                  <strong>해석 활용 기록</strong> <span>시험과 짝이 없는 스팟성 시뮬레이션 — 건수로 센다</span>
+                  <strong>해석 활용 기록</strong>
                   <select value={year} onChange={e => setYear(Number(e.target.value))} aria-label="해석 활용 기록 연도">
                     {[...new Set([...years, new Date().getFullYear()])].sort((a, b) => b - a).map(y => <option key={y} value={y}>{y}년</option>)}
                   </select>
