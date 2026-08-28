@@ -15,7 +15,7 @@ export default async function run() {
     if (url.includes('/pairs') && method === 'POST') return { id: 77 };
     if (url.includes('/subjects')) return [{ id: 1, name: '낙하 시험', division_id: 17, product_families: [] }];
     if (url.includes('/agents')) return [{ id: 5, name: '구조 해석', division_id: 17, tools: [] }, { id: 6, name: '열 해석', division_id: 17, tools: [] }];
-    if (url.includes('/board')) return { subjects: [{ id: 1, name: '낙하 시험', pairs: [{ id: 9, subject_id: 1, agent_id: 5, agent: { name: '구조 해석', tools: [] }, unassessed: [], assessments: {} }] }], totals: {} };
+    if (url.includes('/board')) return { subjects: [{ id: 1, name: '낙하 시험', pairs: [{ id: 9, subject_id: 1, agent_id: 5, agent: { name: '구조 해석', tools: ['LS-DYNA', 'HyperMesh'], department_name: 'CAE그룹(MX)', projects: [{ uuid: 'u1', code: 'MX-1', title: '낙하 해석 자동화' }] }, unassessed: [], assessments: {} }] }], totals: {} };
     return {};
   });
   try {
@@ -23,6 +23,12 @@ export default async function run() {
                            onOpenPair={() => {}} onClosePair={() => {}} onEditSubject={() => {}} onEditAgent={() => {}} onChanged={() => {}} refreshKey={0} />);
     await settle(60);
     say(html().includes('낙하 시험') && !document.querySelector('[role="dialog"]'), '① 표는 보이고 잇기 양식은 안 보임');
+    // ①-2 열이 다섯 — 시험 · 시뮬레이션 · 사용 툴 · 담당 부서 · 디지털 트윈 연결 과제
+    const heads = [...document.querySelectorAll('thead th')].map(x => x.textContent.trim());
+    say(JSON.stringify(heads.slice(0, 5)) === JSON.stringify(['시험', '시뮬레이션', '사용 툴', '담당 부서', '디지털 트윈 연결 과제']), `①-2 열 이름: ${heads}`);
+    const tds = [...document.querySelectorAll('tbody tr td')].map(x => x.textContent.trim());
+    say(tds.includes('LS-DYNA, HyperMesh'), `①-2 사용 툴이 제 열에: ${tds}`);
+    say(tds.includes('낙하 해석 자동화') && !tds.some(x => x.includes('MX-1')), '①-2 과제는 코드가 아니라 이름으로 제 열에');
     await click(byText('button', '연계 추가')); await settle();
     const dlg = document.querySelector('[role="dialog"][aria-label="연계 추가"]');
     say(!!dlg, '① 「연계 추가」를 누르면 모달');

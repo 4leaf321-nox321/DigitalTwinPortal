@@ -68,6 +68,9 @@ const GroupTr = styled.tr`
 `;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
 const DeptCell = styled.td`color: #475569; white-space: nowrap; small { color: #cbd5e1; }`;
+// 사용 툴 · 디지털 트윈 연결 과제 — 제 열로 뺐다(2026-08-29). 과제는 코드가 아니라 **이름**으로.
+const ToolCell = styled.td`color: #64748b; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; }`;
+const ProjCell = styled.td`color: #475569; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; } em { font-style: normal; color: #cbd5e1; }`;
 const Icon = styled.button`
   border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem;
   &:hover { color: #b91c1c; background: #fef2f2; } &:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -159,12 +162,16 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
         {!allMode && denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
         <Scroll>
           <Table>
-            <thead><tr><th style={{ width: '34%' }}>시험</th><th>시뮬레이션</th><th style={{ width: '22%' }}>담당 부서</th><th style={{ width: '2.5rem' }} /></tr></thead>
+            <thead><tr>
+              <th style={{ width: '20%' }}>시험</th><th style={{ width: '20%' }}>시뮬레이션</th>
+              <th style={{ width: '16%' }}>사용 툴</th><th style={{ width: '14%' }}>담당 부서</th>
+              <th style={{ width: '24%' }}>디지털 트윈 연결 과제</th><th style={{ width: '2.5rem' }} />
+            </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><Muted colSpan={4}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
+              {rows.length === 0 && <tr><Muted colSpan={6}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
               {rows.map(({ subject: s, pairs: ps }, gi) => {
                 const groupRow = allMode && s.division_id !== lastDiv
-                  ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={4}>{divName(s.division_id)}</GroupRow></tr>
+                  ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={6}>{divName(s.division_id)}</GroupRow></tr>
                   : null;
                 lastDiv = s.division_id;
                 const span = Math.max(1, ps.length);
@@ -181,7 +188,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   return (
                     <React.Fragment key={s.id}>
                       {groupRow}
-                      <GroupTr $band={gi % 2 === 1} $first>{cell}<Muted>아직 이은 시뮬레이션이 없습니다.</Muted><td /><td /></GroupTr>
+                      <GroupTr $band={gi % 2 === 1} $first>{cell}<Muted colSpan={4}>아직 이은 시뮬레이션이 없습니다.</Muted><td /></GroupTr>
                     </React.Fragment>
                   );
                 }
@@ -193,19 +200,22 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                         {i === 0 && cell}
                         <SimCell $on={p.id === pairId} onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 사다리가 나옵니다">
                           {p.agent?.name}
-                          {(p.agent?.tools || []).length > 0 && <small>{p.agent.tools.join(', ')}</small>}
-                          {(p.agent?.projects || []).length > 0 && (
-                            <small title={`수행 디지털 트윈 과제 — ${p.agent.projects.map(x => x.title || x.uuid).join(' · ')}`}>
-                              과제 {p.agent.projects.map(x => x.code || x.title || '?').join(', ')}
-                            </small>
-                          )}
                           {p.unassessed.length > 0 && <Badge title={`아직 안 매긴 축: ${p.unassessed.length}`}>미평가 {p.unassessed.length}개</Badge>}
                           {onEditAgent && (
                             <EditBtn type="button" title="시뮬레이션 관리에서 열기" aria-label={`${p.agent?.name} 편집`}
                                      onClick={e => { e.stopPropagation(); onEditAgent(p.agent_id); }}><Pencil size={11} /></EditBtn>
                           )}
                         </SimCell>
+                        <ToolCell title={(p.agent?.tools || []).join(' · ')}>
+                          {(p.agent?.tools || []).length > 0 ? p.agent.tools.join(', ') : <small>—</small>}
+                        </ToolCell>
                         <DeptCell>{p.agent?.department_name || <small>—</small>}</DeptCell>
+                        <ProjCell title={(p.agent?.projects || []).map(x => `${x.code ? `${x.code} · ` : ''}${x.title || x.uuid}`).join(' / ')}>
+                          {(p.agent?.projects || []).length > 0
+                            ? p.agent.projects.map(x => x.title || <em key={x.uuid}>(없어진 과제)</em>).map((t, i) => (
+                              <span key={i}>{i > 0 && ', '}{t}</span>))
+                            : <small>—</small>}
+                        </ProjCell>
                         <td>
                           <Icon disabled={!canTouch(p.division_id)} title="연결 끊기 — 평가·이력이 같이 사라집니다" onClick={() => cut(p)}>
                             <Trash2 size={14} />
