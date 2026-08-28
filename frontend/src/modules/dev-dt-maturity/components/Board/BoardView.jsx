@@ -62,7 +62,7 @@ const Td = styled.td`
   &:first-child { position: sticky; left: 0; background: white; z-index: 1; }
 `;
 const SubjectTd = styled.td`
-  padding: 0.45rem 0.6rem; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; background: transparent; vertical-align: top; font-size: 0.8125rem;
+  padding: 0.45rem 0.6rem; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; background: transparent; vertical-align: top; font-size: 0.8125rem; overflow-wrap: anywhere;
 `;
 const SimName = styled.button`border: none; background: transparent; font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; cursor: pointer; padding: 0; text-align: left; &:hover { color: #1d4ed8; text-decoration: underline; }`;
 // 시험 항목 묶음마다 얼룩말 + 묶음 경계선 — 목록 탭과 같은 문법(2026-08-28)
@@ -87,7 +87,7 @@ const ScrollCol = styled.div`flex: 1; min-height: 0; overflow: auto; display: fl
 const InformalTag = styled.span`display: inline-block; padding: 0 0.4rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; background: #fef3c7; color: #92400e;`;
 // 상세의 묶음·표 축 — 선택한 것들의 배지 묶음. 왼쪽 띠가 서열 색, 배지는 그 색으로 채운다.
 const Badges = styled.div`
-  display: inline-flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.15rem 0.3rem 0.15rem 0.45rem; border-radius: 0.3rem; cursor: pointer; min-width: 4.5rem;
+  display: inline-flex; flex-wrap: nowrap; gap: 0.2rem; padding: 0.15rem 0.3rem 0.15rem 0.45rem; border-radius: 0.3rem; cursor: pointer; min-width: 4.5rem;   /* 한 줄 표시 — 좁으면 표가 가로로 흐른다(2026-08-29) */
   border-left: 4px solid ${p => p.$color}; border-top: 2px solid ${p => (p.$stale ? '#f59e0b' : 'transparent')}; border-bottom: 2px solid ${p => (p.$stale ? '#f59e0b' : 'transparent')};
   &:hover { background: #f8fafc; }
 `;
@@ -307,9 +307,9 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
           <Table>
             <thead>
               <tr>
-                <Th style={{ width: '18%' }}>{isThread ? '스레드 · 구간' : (sectorDef?.subject_label || '시험 항목')}</Th>
-                <Th style={{ width: isThread ? '22%' : '14%' }}>{isThread ? '출발 → 매개 → 도착' : (sectorDef?.agent_label || '시뮬레이션')}</Th>
-                {!isThread && <Th style={{ width: '9%' }}>담당 그룹</Th>}
+                <Th style={{ width: isThread ? '13%' : '12%' }}>{isThread ? '스레드 · 구간' : (sectorDef?.subject_label || '시험 항목')}</Th>
+                <Th style={{ width: isThread ? '20%' : '12%' }}>{isThread ? '출발 → 매개 → 도착' : (sectorDef?.agent_label || '시뮬레이션')}</Th>
+                {!isThread && <Th style={{ width: '8%' }}>담당 그룹</Th>}
                 {axes.map(a => <Th key={a.key}>{a.label}</Th>)}
                 <Th>미평가</Th>
               </tr>
