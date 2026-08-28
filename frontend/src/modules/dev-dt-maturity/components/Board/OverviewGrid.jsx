@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import maturityApi from '../../services/maturityApi';
 import { ThreadOverviewRows } from '../Thread/ThreadSummary';
 import styled from 'styled-components';
-import { colorFor, divisionSummary, headlineIndex } from '../../utils/board';
+import { colorFor, divisionSummary, headlineIndex, DATE_BASES, baseDate, summaryAtDate } from '../../utils/board';
 
 // 전체 「요약」 — 축 × 사업부 표(가로가 사업부). 한 화면에 사업부 여섯이 들어가야 하고, **세로로 화면을 채운다**(2026-08-28).
 //
@@ -146,8 +146,16 @@ const AxisSummary = ({ axis, s, then }) => {
 // 해석 활용 기록 줄도 **같은 표**에 붙는다 — 표를 따로 두면 열 폭이 달라 사업부 열과 어긋난다. 맨 오른쪽은 「전체」(평균·누계).
 const pctText = (v) => (v == null ? '—' : `${v}%`);
 
-const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulation' }) => {
+const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulation', changeSets = {} }) => {
   const sums = boards.map(b => divisionSummary(b, axes));
+  const [since, setSince] = useState(null);      // 날짜 기준 — 대표 수치마다 그 날 대비 델타
+  const sinceIso = baseDate(since);
+  const thens = useMemo(() => (sinceIso
+    ? boards.map(b => summaryAtDate(b.subjects || [], changeSets[b.division_id] || [], axes, sinceIso))
+    : null), [boards, changeSets, axes, sinceIso]);
+  const thenWhole = useMemo(() => (sinceIso
+    ? summaryAtDate(boards.flatMap(b => b.subjects || []), boards.flatMap(b => changeSets[b.division_id] || []), axes, sinceIso)
+    : null), [boards, changeSets, axes, sinceIso]);
   const whole = divisionSummary({ subjects: boards.flatMap(b => b.subjects || []) }, axes);   // 전체 = 사업부를 합쳐 다시 센다
   const [year, setYear] = useState(new Date().getFullYear());
   const [years, setYears] = useState([]);
@@ -177,6 +185,14 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
   return (
     <Wrap>
       <Table>
+        <caption style={{ captionSide: 'top', textAlign: 'left', padding: '0 0.4rem 0.4rem' }}>
+          <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginRight: '0.4rem' }}>날짜 기준</span>
+          {DATE_BASES.map(d => (
+            <DateBtn key={d.key} type="button" $on={since === d.key} aria-pressed={since === d.key}
+                     onClick={() => setSince(v => (v === d.key ? null : d.key))} title="대표 수치마다 이 날짜 대비 변화량을 붙입니다">{d.label}</DateBtn>
+          ))}
+          {sinceIso && <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '0.4rem' }}>{sinceIso} 대비 Δ</span>}
+        </caption>
         <colgroup>
           <col style={{ width: '11rem' }} />
           {boards.map(b => <col key={b.division_id} />)}
@@ -195,8 +211,8 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
           {axes.map(a => (
             <tr key={a.key}>
               <Name>{a.label}<Small>{a.question}</Small></Name>
-              {boards.map((b, i) => <td key={b.division_id}><AxisSummary axis={a} s={sums[i].axes[a.key]} /></td>)}
-              <TdAll><AxisSummary axis={a} s={whole.axes[a.key]} /></TdAll>
+              {boards.map((b, i) => <td key={b.division_id}><AxisSummary axis={a} s={sums[i].axes[a.key]} then={thens ? thens[i][a.key] : undefined} /></td>)}
+              <TdAll><AxisSummary axis={a} s={whole.axes[a.key]} then={thenWhole ? thenWhole[a.key] : undefined} /></TdAll>
             </tr>
           ))}
           <tr>
