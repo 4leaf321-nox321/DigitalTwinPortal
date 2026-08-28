@@ -75,10 +75,10 @@ export default async function run() {
     // ⑤ 「변화」 — 축마다 그래프 하나, 표 없음
     await click(byText('button', '변화')); await settle();
     const h5 = html();
-    say(['정확도', '자동화', '모델링 수준', '적용 범위'].every(l => !!document.querySelector(`section[aria-label="${l}"]`)) && h5.includes('12개월') && h5.includes('24개월'), '⑤ 변화는 축마다 그래프 판 + 기간 12/24개월');
+    say(['정확도', '자동화', '모델링 수준', '적용 범위', '해석 활용 기록'].every(l => !!document.querySelector(`section[aria-label="${l}"]`)) && h5.includes('12개월') && h5.includes('24개월'), '⑤ 변화는 축마다 그래프 판 + 해석 활용 기록 막대 + 기간 12/24개월');
     say(!h5.includes('<table'), '⑤ 표는 없다');
-    await click(document.querySelector('section[aria-label="정확도"] button[aria-pressed]')); await settle();
-    say(!!document.querySelector('[aria-label="정확도 연계 고르기"]') && html().includes('연계마다 선 하나'), '⑤ 「상세」를 누르면 연계마다 선 + 오른쪽 고르기 목록');
+    await click(document.querySelector('section[aria-label="자동화"] button[aria-pressed]')); await settle();
+    say(!!document.querySelector('[aria-label="자동화 연계 고르기"]') && html().includes('자동화 — 연계마다 선 하나'), '⑤ 「상세」를 누르면 오른쪽 판에 그 축의 연계마다 선 + 고르기 목록');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

@@ -334,9 +334,9 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
         </TableWrap>
       ) : (
         // 「변화」 — 축마다 선 그래프. 「전체」면 사업부마다 선 하나.
-        <ChartsView axes={axes} series={board.boards
-          ? board.boards.map(b => ({ name: b.division_name, subjects: applyFilters(b.subjects || [], filters), changes: changeSets[b.division_id] || [] }))
-          : [{ name: '이 사업부', subjects, changes }]} />
+        <ChartsView axes={axes} review={review} series={board.boards
+          ? board.boards.map(b => ({ name: b.division_name, divisionId: b.division_id, subjects: applyFilters(b.subjects || [], filters), changes: changeSets[b.division_id] || [] }))
+          : [{ name: '이 사업부', divisionId: board.division_id, subjects, changes }]} />
       )}
     </Wrap>
   );
