@@ -644,11 +644,14 @@ def departments(actor):
 @bp.route('/projects', methods=['GET'])
 @read_required
 def list_projects(actor):
-    """「수행 디지털 트윈 과제」 고르기의 재료 — 그 사업부의 대시보드 과제."""
+    """「수행 디지털 트윈 과제」 고르기의 재료 — 대시보드 과제. all 이면 전 사업부."""
+    q, process = request.args.get('q'), request.args.get('process')
+    if request.args.get('division_id') == 'all':
+        return _refused(lambda: success_response(S.projects_of(None, q, process)))
     division_id = _int_arg('division_id')
     if division_id is None:
         return error_response('사업부를 고르세요.', status_code=400)
-    return _refused(lambda: success_response(S.projects_of(division_id, request.args.get('q'))))
+    return _refused(lambda: success_response(S.projects_of(division_id, q, process)))
 
 
 @bp.route('/pairs/<int:pair_id>/reached/<axis>/<rung>', methods=['PUT'])

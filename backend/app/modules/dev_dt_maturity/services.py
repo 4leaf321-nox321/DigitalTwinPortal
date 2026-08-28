@@ -93,16 +93,24 @@ def departments_of(division_id):
     return [{'id': r.id, 'name': r.name} for r in rows]
 
 
-def projects_of(division_id, q=None, limit=200):
-    """「수행 디지털 트윈 과제」 고르기의 재료 — 그 사업부의 대시보드 과제. 읽기만 한다."""
+def projects_of(division_id=None, q=None, process=None, limit=400):
+    """「수행 디지털 트윈 과제」 고르기의 재료 — 대시보드 과제. 읽기만 한다.
+
+    division_id=None 이면 전 사업부(고르기 창이 사업부·프로세스로 좁힌다).
+    """
     from app.modules.digital_twin_dashboard.models_v2 import Dt2Project
-    rows = Dt2Project.query.filter_by(division_id=int(division_id))
+    rows = Dt2Project.query
+    if division_id is not None:
+        rows = rows.filter_by(division_id=int(division_id))
+    if process:
+        rows = rows.filter(Dt2Project.process == process)
     if q:
         like = f'%{q.strip()}%'
         rows = rows.filter(db.or_(Dt2Project.title.ilike(like), Dt2Project.code.ilike(like)))
     rows = rows.order_by(Dt2Project.year.desc().nullslast(), Dt2Project.code).limit(int(limit)).all()
-    return [{'uuid': r.uuid, 'code': r.code, 'title': r.title, 'status': r.status,
-             'year': r.year, 'division': r.division} for r in rows]
+    return [{'uuid': r.uuid, 'code': r.code, 'title': r.title, 'status': r.status, 'year': r.year,
+             'division': r.division, 'division_id': r.division_id, 'process': r.process,
+             'domain': r.domain, 'category': r.category, 'pl_name': r.pl_name} for r in rows]
 
 
 def _department_or_refuse(division_id, department_id):

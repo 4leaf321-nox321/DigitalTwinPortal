@@ -9,7 +9,7 @@
 //   ⑦ 관리 창: 표의 연필로 열면 그 항목이 골라진 채 열린다(initialId)
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
-import { render, click, type, keydown, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import { render, click, type, keydown, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import PairSide from '../../src/modules/dev-dt-maturity/components/Pair/PairSide';
 import ItemManagerModal from '../../src/modules/dev-dt-maturity/components/List/ItemManagerModal';
 
@@ -39,8 +39,9 @@ export default async function run() {
   let refuse = null;   // 서버 거절을 흉내낼 때
   const calls = fakeFetch(({ url, method, body }) => {
     if (url.includes('/projects?')) return [
-      { uuid: 'u1', code: 'MX-1', title: '낙하 해석 자동화', status: '진행', year: 2026, division: 'MX' },
-      { uuid: 'u2', code: 'MX-2', title: '열 해석 정확도', status: '완료', year: 2025, division: 'MX' },
+      { uuid: 'u1', code: 'MX-1', title: '낙하 해석 자동화', status: '진행', year: 2026, division: 'MX', division_id: 17, process: '설계', pl_name: '김해석' },
+      { uuid: 'u2', code: 'MX-2', title: '열 해석 정확도', status: '완료', year: 2025, division: 'MX', division_id: 17, process: '검증', pl_name: '박시험' },
+      { uuid: 'u3', code: 'VD-9', title: '패널 해석 표준화', status: '진행', year: 2026, division: 'VD', division_id: 18, process: '설계', pl_name: '이구조' },
     ];
     if (url.includes('/pairs/101/assessments/')) {
       if (refuse) { const e = new Error(refuse); throw e; }
@@ -190,15 +191,23 @@ export default async function run() {
     await type(defIn, '크랙'); await keydown(defIn, 'Enter'); await settle();
     say(html().includes('크랙') && defIn.value === '', '⑥-2 Enter 로 칩이 붙고 칸이 비워짐');
     // ⑥-3 수행 디지털 트윈 과제 — 대시보드 과제를 여럿 매단다
-    const projIn = [...document.querySelectorAll('input[data-search-select]')].find(x => (x.placeholder || '').includes('과제'));
-    say(!!projIn, '⑥-3 과제 고르기 칸이 있음');
-    await type(projIn, '자동화'); await settle();
-    const p1 = byText('li', 'MX-1 · 낙하 해석 자동화 (2026)');
-    say(!!p1 && !byText('li', 'MX-2 · 열 해석 정확도 (2025)'), '⑥-3 글자를 치면 좁혀짐');
-    await click(p1); await settle();
-    const projIn2 = [...document.querySelectorAll('input[data-search-select]')].find(x => (x.placeholder || '').includes('과제'));
-    await type(projIn2, '정확도'); await settle();
-    await click(byText('li', 'MX-2 · 열 해석 정확도 (2025)')); await settle();
+    const projIn = [...document.querySelectorAll('input[data-search-select]')].find(x => (x.placeholder || '').includes('최근 과제'));
+    say(!!projIn, '⑥-3 과제 드롭다운이 있음');
+    await type(projIn, '해석'); await settle();
+    say(byText('li', 'MX-1 · 낙하 해석 자동화 (2026)') != null && byText('li', 'VD-9 · 패널 해석 표준화 (2026)') == null,
+        '⑥-3 드롭다운은 후보 둘까지만');
+    await click(byText('li', 'MX-1 · 낙하 해석 자동화 (2026)')); await settle();
+    // 「상세」 창 — 사업부·프로세스로 좁혀 여럿 고르기
+    await click(byText('button', '상세')); await settle(60);
+    const dlg = document.querySelector('[aria-label="과제 고르기"]');
+    say(!!dlg, '⑥-3 상세 창이 열림');
+    say(dlg.innerHTML.includes('패널 해석 표준화'), '⑥-3 다른 사업부 과제까지 보임');
+    const proc = dlg.querySelector('select[aria-label="프로세스"]');
+    await select(proc, '검증'); await settle();
+    say(!dlg.innerHTML.includes('패널 해석 표준화') && dlg.innerHTML.includes('열 해석 정확도'), '⑥-3 프로세스로 좁혀짐');
+    say(dlg.innerHTML.includes('매달림') === false, '⑥-3 아직 매달린 과제는 이 목록에 없음');
+    await click([...dlg.querySelectorAll('tbody tr')][0]); await settle();
+    await click(byText('button', '고른 1건 매달기')); await settle(60);
     say(html().includes('낙하 해석 자동화') && html().includes('열 해석 정확도'), '⑥-3 둘 다 칩으로 붙음');
     say(!byText('button', '저장').disabled, '⑥ 고르면 저장이 선택됨');
     await click(byText('button', '저장')); await settle();

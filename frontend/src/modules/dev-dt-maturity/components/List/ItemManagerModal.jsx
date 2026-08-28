@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { X, Plus, Trash2, Loader2, AlertTriangle, Link2, Layers, Wrench, Sparkles, Check, Search } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import ToolPickerModal from './ToolPickerModal';
+import ProjectPickerModal from './ProjectPickerModal';
 import SearchSelect from '../common/SearchSelect';
 import { nextSelection, dragSelection } from '../../utils/selection';
 
@@ -343,6 +344,8 @@ const ItemManagerModal = ({
   const [newDefect, setNewDefect] = useState('');
   // 수행 디지털 트윈 과제 — 그 사업부의 대시보드 과제를 처음 쓸 때 한 번 불러 둔다(2026-08-29)
   const [projectsBy, setProjectsBy] = useState({});
+  const [projPicker, setProjPicker] = useState(false);   // 「상세」로 여는 과제 고르기 창
+  const [pickedProjects, setPickedProjects] = useState([]);   // 창에서 고른 것의 이름표(다른 사업부 것은 목록에 없다)
   const curDiv = current && kind === 'agent' ? (draft?.division_id ?? current.division_id) : null;
   useEffect(() => {
     if (curDiv == null || projectsBy[curDiv]) return;
@@ -539,6 +542,7 @@ const ItemManagerModal = ({
         <Chips>
           {(d.project_uuids || []).map(u => {
             const p = (projectsBy[d.division_id] || []).find(x => x.uuid === u)
+              || pickedProjects.find(x => x.uuid === u)
               || (current.projects || []).find(x => x.uuid === u) || { uuid: u };
             return (
               <Chip key={u} title={p.title || '없어진 과제'}>
@@ -550,16 +554,23 @@ const ItemManagerModal = ({
           {(d.project_uuids || []).length === 0 && <small>아직 없습니다.</small>}
         </Chips>
         {canEditCur && (
-          <SearchSelect
-            options={(projectsBy[d.division_id] || [])
-              .filter(p => !(d.project_uuids || []).includes(p.uuid))
-              .map(p => ({ id: p.uuid, name: `${p.code ? `${p.code} · ` : ''}${p.title}${p.year ? ` (${p.year})` : ''}` }))}
-            value={null}
-            onChange={(uuid) => uuid && set({ project_uuids: [...(d.project_uuids || []), uuid] })}
-            placeholder="과제 이름·코드로 찾아 더하기"
-            hint={projectsBy[d.division_id] == null ? '불러오는 중…' : '이 사업부에 그런 과제가 없습니다.'} />
+          <ChipAdd style={{ gap: '0.3rem' }}>
+            {/* 드롭다운은 **가까운 후보 둘만** — 목록 전체는 「상세」에서 사업부·프로세스로 좁혀 고른다(2026-08-29) */}
+            <span style={{ flex: 1, minWidth: '12rem' }}>
+              <SearchSelect
+                options={(projectsBy[d.division_id] || [])
+                  .filter(p => !(d.project_uuids || []).includes(p.uuid))
+                  .slice(0, 2)
+                  .map(p => ({ id: p.uuid, name: `${p.code ? `${p.code} · ` : ''}${p.title}${p.year ? ` (${p.year})` : ''}` }))}
+                value={null}
+                onChange={(uuid) => uuid && set({ project_uuids: [...(d.project_uuids || []), uuid] })}
+                placeholder="최근 과제에서 고르기"
+                hint={projectsBy[d.division_id] == null ? '불러오는 중…' : '「상세」에서 사업부·프로세스로 찾으세요.'} />
+            </span>
+            <FindBtn type="button" onClick={() => setProjPicker(true)} title="과제 목록을 사업부·프로세스로 좁혀 고릅니다"><Search size={11} /> 상세</FindBtn>
+          </ChipAdd>
         )}
-        <small>이 시뮬레이션을 키우는 디지털 트윈 과제 — 대시보드의 {divName(d.division_id)} 사업부 과제에서 고릅니다. 여럿 매달 수 있습니다.</small>
+        <small>이 시뮬레이션을 키우는 디지털 트윈 과제 — 여기 드롭다운은 {divName(d.division_id)} 사업부의 최근 과제 둘만 보여 줍니다. 나머지는 「상세」에서 사업부·프로세스로 좁혀 고르세요.</small>
       </Field>
       <Info>걸린 연계 <strong>{pairCount[current.id] || 0}</strong>개. 연계을 잇거나 끊는 것은 목록 탭에서.</Info>
     </>
@@ -808,6 +819,15 @@ const ItemManagerModal = ({
           title={many ? `${TIDY.label} 찾기 — ${picked.length}개 ${meta.unit} 전체에 넣기` : `${TIDY.label} 찾기 — ${current?.name || ''}`}
           countLabel={kind === 'subject' ? '제품군' : '기술정보 모듈의 도구'}
           onPick={addMany} onClose={() => setPicker(false)} />
+      )}
+      {projPicker && draft && (
+        <ProjectPickerModal
+          divisionId={draft.division_id} divisions={divisions} already={draft.project_uuids || []}
+          onPick={(ps) => {
+            setPickedProjects(m => [...m, ...ps.filter(p => !m.some(x => x.uuid === p.uuid))]);
+            setDraft(x => ({ ...x, project_uuids: [...new Set([...(x.project_uuids || []), ...ps.map(p => p.uuid)])] }));
+          }}
+          onClose={() => setProjPicker(false)} />
       )}
     </Overlay>
   );
