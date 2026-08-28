@@ -23,6 +23,8 @@ for (const f of files) {
     entryPoints: [join(here, f)],
     bundle: true, format: 'esm', platform: 'node', outfile, logLevel: 'error',
     alias: { 'styled-components': join(here, 'sc-stub.js'), 'react-force-graph-2d': join(here, 'fg-stub.js') },
+    // Vite 의 import.meta.env 는 esbuild 에 없다 — 다른 모듈 부품을 끌어 쓰면 여기서 터진다.
+    define: { 'import.meta.env': '{}' },
     external: ['jsdom'],
     jsx: 'automatic',
   });

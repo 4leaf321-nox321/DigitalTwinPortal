@@ -14,6 +14,12 @@ globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.Node = dom.window.Node;
 globalThis.MouseEvent = dom.window.MouseEvent;
 globalThis.Event = dom.window.Event;
+// framer-motion(대시보드의 과제 보고 창)이 찾는 것들 — 없으면 mount 에서 터진다
+globalThis.SVGElement = dom.window.SVGElement;
+globalThis.Element = dom.window.Element;
+globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+globalThis.requestAnimationFrame = dom.window.requestAnimationFrame?.bind(dom.window) || (cb => setTimeout(cb, 0));
+globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame?.bind(dom.window) || clearTimeout;
 window.localStorage.setItem('accessToken', 'test-token');
 globalThis.localStorage = window.localStorage;
 window.confirm = () => true;

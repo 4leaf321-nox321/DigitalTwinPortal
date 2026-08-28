@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Trash2, Link2, AlertTriangle, Pencil, Plus, X, ChevronRight } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
+import { fetchProjectDetail } from '../../services/projectApi';
+import { isSampleMode } from '../../sample/sampleStore';
+import ProjectDetailModal from '../../../digital-twin-dashboard/components/Dashboard/ProjectDetailModal';
 import PairSide from '../Pair/PairSide';
 
 // 목록 — 왼쪽은 시험 × 시뮬레이션 표(시험 칸은 같은 것끼리 합침), 오른쪽은 고른 연계의 상세.
@@ -83,11 +86,14 @@ const ProjCell = styled.td`
   display: flex; flex-wrap: wrap; gap: 0.2rem; align-items: center;   /* 과제가 여럿이면 배지가 줄줄이 감긴다 */
 `;
 // 디지털 트윈 연결 과제 — 배지로(2026-08-29). 없어진 과제는 옅은 회색 점선.
-const ProjBadge = styled.span`
+// 누르면 대시보드의 **결과 보고 화면**이 그대로 뜬다(편집 창이 아니다).
+const ProjBadge = styled.button`
   display: inline-block; max-width: 100%; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600;
+  font-family: inherit; cursor: ${p => (p.$gone ? 'default' : 'pointer')};
   background: ${p => (p.$gone ? '#f8fafc' : '#eff6ff')}; color: ${p => (p.$gone ? '#94a3b8' : '#1e40af')};
   border: 1px ${p => (p.$gone ? 'dashed' : 'solid')} ${p => (p.$gone ? '#e2e8f0' : '#bfdbfe')};
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  &:hover:not(:disabled) { background: #dbeafe; border-color: #1d4ed8; }
 `;
 const Icon = styled.button`
   border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0.15rem; border-radius: 0.25rem;
@@ -119,6 +125,14 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
   const [linkOpen, setLinkOpen] = useState(false);   // 연계 추가는 상단 단추의 모달에서(2026-08-28)
 
   const canTouch = (divId) => (allMode ? !divisions.find(x => x.id === divId)?.deny_reason : !denyReason);
+  // 연결 과제 배지 — 누르면 대시보드의 결과 보고 화면. 샘플 뷰에서는 부르지 않는다(개발 uuid 라 없다).
+  const [project, setProject] = useState(null);
+  const [projectError, setProjectError] = useState(null);
+  const openProject = async (uuid) => {
+    if (isSampleMode()) { setProjectError('샘플 뷰에서는 과제 보고 화면을 열 수 없습니다 — 실제 자료에서 보세요.'); return; }
+    setProjectError(null);
+    try { setProject(await fetchProjectDetail(uuid)); } catch (e) { setProjectError(e.message); }
+  };
   const divName = (id) => divisions.find(x => x.id === id)?.name || '';
 
   const load = async () => {
@@ -177,6 +191,11 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
           <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 줄을 누르면 오른쪽에 사다리가 열립니다</Hint>
         </BoxHead>
         {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
+        {projectError && (
+          <Notice><AlertTriangle size={14} /> <span>{projectError}</span>
+            <Icon type="button" title="닫기" onClick={() => setProjectError(null)} style={{ marginLeft: 'auto' }}><X size={14} /></Icon>
+          </Notice>
+        )}
         {!allMode && denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason} 조회는 그대로 하실 수 있습니다.</span></Notice>}
         <Scroll>
           <Table>
@@ -232,8 +251,9 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                         <ProjCell>
                           {(p.agent?.projects || []).length > 0
                             ? p.agent.projects.map(x => (
-                              <ProjBadge key={x.uuid} $gone={!x.title}
-                                         title={`${x.code ? `${x.code} · ` : ''}${x.title || '없어진 과제'}${x.year ? ` · ${x.year}` : ''}${x.status ? ` · ${x.status}` : ''}`}>
+                              <ProjBadge key={x.uuid} type="button" $gone={!x.title} disabled={!x.title}
+                                         title={`${x.code ? `${x.code} · ` : ''}${x.title || '없어진 과제'}${x.year ? ` · ${x.year}` : ''}${x.status ? ` · ${x.status}` : ''} — 누르면 과제 보고 화면`}
+                                         onClick={e => { e.stopPropagation(); openProject(x.uuid); }}>
                                 {x.title || '없어진 과제'}
                               </ProjBadge>))
                             : <small>—</small>}
@@ -285,6 +305,9 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
           </Box>
         </Backdrop>
       )}
+
+      {/* 연결 과제의 결과 보고 화면 — 대시보드의 것을 그대로 띄운다(읽기 전용) */}
+      {project && <ProjectDetailModal project={project} onClose={() => setProject(null)} />}
     </Wrap>
   );
 };
