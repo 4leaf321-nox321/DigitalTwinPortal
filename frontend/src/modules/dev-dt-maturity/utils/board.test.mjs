@@ -224,3 +224,38 @@ test('monthRange — 두 연-월 사이, 거꾸로면 바로잡고, 60달 상한
   assert.deepEqual(monthRange('2026-02', ''), []);
   assert.equal(monthRange('2015-01', '2026-08').length, 60);
 });
+
+// ── 날짜 기준 ──
+import { baseDate, changedPairsSince, summaryAtDate } from './board.js';
+
+test('baseDate — 1주·2주·1개월·지난 분기 마감', () => {
+  const now = new Date(2026, 7, 29);                               // 2026-08-29
+  assert.equal(baseDate('w1', now), '2026-08-22');
+  assert.equal(baseDate('w2', now), '2026-08-15');
+  assert.equal(baseDate('m1', now), '2026-07-29');
+  assert.equal(baseDate('quarter', now), '2026-06-30');
+  assert.equal(baseDate(null, now), null);
+});
+
+test('changedPairsSince — 기준일 뒤에 그 축이 바뀐 연계만, 시점 적기는 뺀다', () => {
+  const changes = [
+    { pair_id: 1, axis: 'accuracy', before: '70', after: '90', created_at: '2026-08-25T00:00:00' },
+    { pair_id: 2, axis: 'accuracy', before: null, after: '60', created_at: '2026-08-10T00:00:00' },
+    { pair_id: 3, axis: 'scope', before: null, after: 'basic', created_at: '2026-08-27T00:00:00' },
+    { pair_id: 4, axis: 'accuracy', before: null, after: 'basic', note: REACHED_NOTE, created_at: '2026-08-28T00:00:00' },
+  ];
+  assert.deepEqual([...changedPairsSince(changes, 'accuracy', '2026-08-22')], [1]);
+  assert.equal(changedPairsSince(changes, 'accuracy', null).size, 0);
+});
+
+test('summaryAtDate — 그 날의 대표 수치(요약 델타의 밑값)', () => {
+  const axes = [{ key: 'accuracy', kind: 'value', rungs: [{ key: 'a' }, { key: 'b' }, { key: 'c' }] }];
+  const subjects = [{ pairs: [{ id: 1, agent: {} }, { id: 2, agent: {} }] }];
+  const changes = [
+    { id: 1, pair_id: 1, axis: 'accuracy', before: null, after: '70', created_at: '2026-08-01T00:00:00' },
+    { id: 2, pair_id: 1, axis: 'accuracy', before: '70', after: '90', created_at: '2026-08-25T00:00:00' },
+    { id: 3, pair_id: 2, axis: 'accuracy', before: null, after: '50', created_at: '2026-08-24T00:00:00' },
+  ];
+  assert.equal(summaryAtDate(subjects, changes, axes, '2026-08-22').accuracy, 70);
+  assert.equal(summaryAtDate(subjects, changes, axes, '2026-08-26').accuracy, 70);   // (90+50)/2
+});

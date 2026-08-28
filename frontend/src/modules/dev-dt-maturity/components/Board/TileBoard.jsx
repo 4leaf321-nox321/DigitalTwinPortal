@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { hierarchy, treemap, treemapSquarify } from 'd3-hierarchy';
-import { flagDefs } from '../../utils/board';
+import { flagDefs, DATE_BASES, baseDate, changedPairsSince } from '../../utils/board';
 
 // 「모판」(2026-08-29) — 미술관 벽의 액자 모음처럼, 화면 전체가 한 뭉치다(트리맵).
 // 바깥 액자 = 묶음(시뮬레이션은 담당 부서, 디지털 스레드는 스레드), 그 안의 액자 = 연계·구간 하나.
@@ -29,7 +29,8 @@ const GroupLabel = styled.div`
 const Frame = styled.button`
   position: absolute; font-family: inherit; cursor: pointer; padding: 0; overflow: hidden; text-align: left; border-radius: 2px;
   background: ${p => p.$c}; border: ${p => (p.$empty ? '1.5px dashed #94a3b8' : '1px solid rgba(15, 23, 42, 0.55)')};
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);   /* 재평가 필요 표시는 모판엔 없다(2026-08-29) — 색이 곧 정보 */
+  box-shadow: ${p => (p.$hot ? '0 0 0 2.5px #a3e635, 0 0 10px 2px rgba(163, 230, 53, 0.65)' : 'inset 0 0 0 1px rgba(255, 255, 255, 0.25)')};   /* 형광 = 날짜 기준 뒤에 바뀐 액자 */
+  z-index: ${p => (p.$hot ? 1 : 'auto')};
   &:hover { outline: 2px solid white; z-index: 2; }
 `;
 const FName = styled.span`
@@ -61,10 +62,11 @@ export const tileValue = (axis, p) => {
 
 const W = 100, H = 100;   // 트리맵의 가상 크기(%) — 화면 비율은 CSS 가 맡는다
 
-const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sector = 'simulation' }) => {
+const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sector = 'simulation', changes = [] }) => {
   const isThread = sector === 'digital_thread';
   const [axisKey, setAxisKey] = useState(axes[0]?.key);
   const [focus, setFocus] = useState(null);   // 드릴다운한 묶음 이름
+  const [since, setSince] = useState(null);   // 날짜 기준 — 그 뒤에 바뀐 액자를 형광으로
   const axis = axes.find(a => a.key === axisKey) || axes[0];
   const total = axis ? axis.rungs.length : 1;
 
@@ -94,6 +96,8 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
   // 드릴다운한 묶음이 필터로 사라지면 전체로
   if (focus != null && root == null) setFocus(null);
 
+  const changedSet = useMemo(() => changedPairsSince(changes, axis?.key, baseDate(since)), [changes, axis, since]);
+
   if (!axis || !root) return null;
   const pairsCount = subjects.reduce((n, s) => n + (s.pairs || []).length, 0);
   return (
@@ -105,9 +109,15 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
         {focus != null && <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#1e293b' }}>{focus}</span>}
         <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginLeft: focus != null ? '0.5rem' : 0 }}>색의 기준</span>
         {axes.map(a => <AxisBtn key={a.key} type="button" $on={a.key === axis.key} aria-pressed={a.key === axis.key} onClick={() => setAxisKey(a.key)}>{a.label}</AxisBtn>)}
+        <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 700, marginLeft: '0.6rem' }}>날짜 기준</span>
+        {DATE_BASES.map(d => (
+          <AxisBtn key={d.key} type="button" $on={since === d.key} aria-pressed={since === d.key}
+                   onClick={() => setSince(v => (v === d.key ? null : d.key))} title="이 날짜 뒤에 바뀐 액자를 형광 테두리로">{d.label}</AxisBtn>
+        ))}
         <Legend aria-label="범례">
           {axis.rungs.map((r, i) => (axis.hide_empty && i === 0 ? null : <span key={r.key}><Sw $c={wallColor(i, total)} />{r.label}</span>))}
           <span><Sw $dashed />미평가</span>
+          {since != null && <span><Sw style={{ background: 'transparent', boxShadow: '0 0 0 2px #a3e635' }} />그 뒤 바뀜</span>}
         </Legend>
       </Bar>
       {pairsCount === 0 ? <Muted>아직 {isThread ? '구간' : '연계'}이 없습니다 — 목록 탭에서 더하세요.</Muted> : (
@@ -130,7 +140,7 @@ const TileBoard = ({ subjects = [], axes = [], onOpenPair, allMode = false, sect
             const showName = w > 6 && h > 3.2;
             const lines = h > 8 ? 3 : h > 5 ? 2 : 1;
             return (
-              <Frame key={d.id} type="button" $c={c} $empty={d.idx == null}
+              <Frame key={d.id} type="button" $c={c} $empty={d.idx == null} $hot={changedSet.has(d.id)}
                      style={{ left: `${n.x0}%`, top: `${n.y0}%`, width: `${w}%`, height: `${h}%` }}
                      title={`${d.name}${d.sub ? ` — ${d.sub}` : ''} · ${axis.label}: ${label}`}
                      onClick={() => onOpenPair && onOpenPair(d.id)}>

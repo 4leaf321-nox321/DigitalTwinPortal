@@ -291,10 +291,10 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
 
       {mode === 'tiles' ? (
         // 「모판」 — 연계가 네모, 고른 축이 색. 담당 부서로 묶는다.
-        <TileBoard subjects={subjects} axes={axes} onOpenPair={onOpenPair} allMode={!!board.boards} sector={sector} />
+        <TileBoard subjects={subjects} axes={axes} onOpenPair={onOpenPair} allMode={!!board.boards} sector={sector} changes={changes} />
       ) : mode === 'scan' && board.boards ? (
         // 전체 「요약」 — 사업부 × 축. 한 화면에 사업부 여섯. 행을 누르면 그 사업부로.
-        <OverviewGrid boards={board.boards} axes={axes} review={review} onPickDivision={onPickDivision} sector={sector} />
+        <OverviewGrid boards={board.boards} axes={axes} review={review} onPickDivision={onPickDivision} sector={sector} changeSets={changeSets} />
       ) : mode === 'scan' ? (
         // 사업부 하나의 「요약」 — 축마다 판 하나, 화면 가득. 앞선 연계·취약 연계가 근거로 붙는다.
         isThread ? (

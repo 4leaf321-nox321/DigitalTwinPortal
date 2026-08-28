@@ -46,6 +46,10 @@ export default async function run() {
     say(html().includes('해석 활용 기록') && html().includes('4') && html().includes('스펙 확정 전 이상 75%') && html().includes('정착 후보 1'), '① 맨 아래 해석 활용 기록 블록 — 건수·스펙 확정 전 이상·정착 후보');
     say(!!byText('th', 'MX') && !!byText('th', 'VD') && !!byText('td', '정확도'), '① 전체 판은 「요약」으로 열리고 사업부가 열, 축이 행');
     say(!!byText('th', '전체') && html().includes('평가 완료 2/3'), '① 맨 오른쪽 「전체」 열 — 사업부를 합쳐 다시 센 것(정확도 평가 완료 2/3)');
+    await click(byText('button', '1주 전')); await settle();
+    say(html().includes('대비 Δ') && (html().includes('Δ —') || html().includes('Δ 0') || html().includes('▲') || html().includes('▼')), '① 날짜 기준을 고르면 대표 수치마다 Δ');
+    await click(byText('button', '1주 전')); await settle();
+    say(!html().includes('대비 Δ'), '① 날짜 기준을 풀면 Δ 가 사라짐');
     const h = html();
     say(h.includes('80%') && h.includes('평가 완료 2/2'), '② 정확도: 평균 80% · 평가 완료 2/2');
     say(h.includes('50%') && h.includes('신규 개발 전 모델 이상'), '② 적용 범위: 「신규 개발 전 모델」 이상 50%');
@@ -59,6 +63,10 @@ export default async function run() {
     const h6 = html();
     say(h6.includes('색의 기준') && h6.includes('부서 미지정') && document.querySelectorAll('button[title*="—"]').length >= 2, '⑥ 모판 — 부서 묶음과 네모들');
     say(h6.includes('80%') || h6.includes('90%'), '⑥ 정확도 축이면 네모에 % 배지');
+    await click(byText('button', '지난 분기 마감')); await settle();
+    say(html().includes('그 뒤 바뀜'), '⑥ 모판의 날짜 기준 — 범례에 「그 뒤 바뀜」이 붙음');
+    await click(byText('button', '지난 분기 마감')); await settle();
+    say(!html().includes('그 뒤 바뀜'), '⑥ 날짜 기준을 풀면 표시가 사라짐');
     await click(byText('button', '자동화')); await settle();
     say(html().includes('2/2') || html().includes('1/2'), '⑥ 축을 자동화로 바꾸면 배지가 켠 수로');
     await click(document.querySelector('[aria-label$="펼치기"]')); await settle();   // 전체 모드라 「MX · 부서 미지정」 — 끝맺음으로 찾는다

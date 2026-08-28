@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import maturityApi from '../../services/maturityApi';
 import { ThreadOverviewRows } from '../Thread/ThreadSummary';
 import styled from 'styled-components';
@@ -42,6 +42,14 @@ const Pill = styled.span`
   background: ${p => (p.$warn ? '#fef3c7' : '#f1f5f9')}; color: ${p => (p.$warn ? '#92400e' : '#64748b')};
 `;
 const Muted = styled.td`color: #94a3b8; font-size: 0.75rem;`;
+const DateBtn = styled.button`
+  padding: 0.2rem 0.65rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#cbd5e1')}; border-radius: 999px; font-family: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-right: 0.25rem;
+  background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};
+`;
+const DeltaTag = styled.span`
+  display: inline-block; margin-left: 0.4rem; font-size: 0.75rem; font-weight: 700; vertical-align: 0.35rem;
+  color: ${p => (p.$z ? '#94a3b8' : p.$up ? '#16a34a' : '#dc2626')};
+`;
 const SecHead = styled.td`
   background: #f8fafc !important; text-align: left !important; border-top: 2px solid #e2e8f0; padding: 0.4rem 0.9rem !important; font-size: 0.8125rem; color: #64748b;
   strong { color: #1e293b; font-size: 0.9375rem; margin-right: 0.5rem; }
@@ -58,12 +66,31 @@ const pct = (n, d) => (d ? Math.round((n * 100) / d) : null);
 const shade = (p) => (p == null ? '#e2e8f0' : p >= 75 ? '#1d4ed8' : p >= 50 ? '#3b82f6' : p >= 25 ? '#93c5fd' : '#dbeafe');
 const dark = (c) => ['#3b82f6', '#1d4ed8', '#1e3a8a'].includes(c);
 
-const AxisSummary = ({ axis, s }) => {
+/** 대표 수치의 현재값 — 델타 계산용. summaryAtDate 와 같은 정의. */
+const headOf = (axis, s) => {
+  if (!s || s.total === 0) return null;
+  if (axis.kind === 'value') return s.mean;
+  if (axis.kind === 'rung') return s.atLeast[headlineIndex(axis)];
+  if (axis.kind === 'set') return s.avg;
+  if (axis.kind === 'matrix') return s.testRate;
+  return null;
+};
+
+const Delta = ({ axis, s, then }) => {
+  if (then === undefined) return null;
+  const now = headOf(axis, s);
+  if (now == null || then == null) return <DeltaTag $z>Δ —</DeltaTag>;
+  const d = Math.round((now - then) * 10) / 10;
+  if (d === 0) return <DeltaTag $z>Δ 0</DeltaTag>;
+  return <DeltaTag $up={d > 0}>{d > 0 ? '▲' : '▼'} {Math.abs(d)}{axis.kind === 'set' ? '' : '%p'}</DeltaTag>;
+};
+
+const AxisSummary = ({ axis, s, then }) => {
   if (!s || s.total === 0) return <Muted as="div">연계 없음</Muted>;
   if (axis.kind === 'value') {
     return (
       <>
-        <Big>{s.mean != null ? `${s.mean}%` : '—'}</Big>
+        <Big>{s.mean != null ? `${s.mean}%` : '—'}<Delta axis={axis} s={s} then={then} /></Big>
         <Small>평가 완료 {s.filled}/{s.total}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Bar title={axis.rungs.map((r, i) => `${r.label} ${s.counts[i]}`).join(' · ')}>
           {axis.rungs.map((r, i) => <Seg key={r.key} $pct={pct(s.counts[i], s.filled) || 0} $color={colorFor(i, axis.rungs.length)} />)}
@@ -75,7 +102,7 @@ const AxisSummary = ({ axis, s }) => {
     const k = headlineIndex(axis);   // 축의 headline_min, 없으면 끝에서 둘째 칸
     return (
       <>
-        <Big>{s.atLeast[k] != null ? `${s.atLeast[k]}%` : '—'}</Big>
+        <Big>{s.atLeast[k] != null ? `${s.atLeast[k]}%` : '—'}<Delta axis={axis} s={s} then={then} /></Big>
         <Small>{axis.rungs[k]?.label} 이상{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Bar title={axis.rungs.map((r, i) => `${r.label} ${s.counts[i]}`).join(' · ')}>
           {axis.rungs.map((r, i) => <Seg key={r.key} $pct={pct(s.counts[i], s.assessed) || 0} $color={colorFor(i, axis.rungs.length)} />)}
@@ -87,7 +114,7 @@ const AxisSummary = ({ axis, s }) => {
     const full = axis.implies?.full != null ? s.adoption.full : null;
     return (
       <>
-        <Big>{s.avg != null ? `${s.avg}/${s.flags.length}` : '—'}</Big>
+        <Big>{s.avg != null ? `${s.avg}/${s.flags.length}` : '—'}<Delta axis={axis} s={s} then={then} /></Big>
         <Small>적용 단계 수 (평균){full != null && <> · 완전 대체 {s.adoptionCount.full}</>}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Strip>
           {s.flags.map(f => {
@@ -101,7 +128,7 @@ const AxisSummary = ({ axis, s }) => {
   if (axis.kind === 'matrix') {
     return (
       <>
-        <Big>{s.testRate != null ? `${s.testRate}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 시험 불량 재현</span></Big>
+        <Big>{s.testRate != null ? `${s.testRate}%` : '—'}<span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500 }}> 시험 불량 재현</span><Delta axis={axis} s={s} then={then} /></Big>
         <Small>시장 불량 재현 {s.marketRate != null ? `${s.marketRate}%` : '—'} · 불량 유형 {s.defectTotal}{s.unassessed > 0 && <Pill $warn>미평가 {s.unassessed}</Pill>}</Small>
         <Strip>
           {axis.base.map(b => {

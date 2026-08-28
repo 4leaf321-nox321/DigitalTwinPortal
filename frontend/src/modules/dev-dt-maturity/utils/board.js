@@ -327,3 +327,68 @@ export const pairSeries = (subjects, changes, axis, months) => {
   }));
   return out;
 };
+
+// ── 날짜 기준(2026-08-29) — 모판의 하이라이트·요약의 델타가 같은 넷을 쓴다 ──────────
+export const DATE_BASES = [
+  { key: 'w1', label: '1주 전' }, { key: 'w2', label: '2주 전' }, { key: 'm1', label: '1개월 전' }, { key: 'quarter', label: '지난 분기 마감' },
+];
+
+/** 기준 키 → 그 날짜(ISO, 그 날의 끝까지 포함해 비교한다). now 는 시험에서 고정용. */
+export const baseDate = (key, now = new Date()) => {
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;   // 로컬 날짜 — toISOString 은 UTC 라 하루 민다
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (key === 'w1') d.setDate(d.getDate() - 7);
+  else if (key === 'w2') d.setDate(d.getDate() - 14);
+  else if (key === 'm1') d.setMonth(d.getMonth() - 1);
+  else if (key === 'quarter') { const q = Math.floor(d.getMonth() / 3); return fmt(new Date(d.getFullYear(), q * 3, 0)); }
+  else return null;
+  return fmt(d);
+};
+
+/** 기준일 뒤에 그 축이 바뀐 연계 id 집합 — 모판의 형광 테두리. 「시점 적기」 이력은 뺀다. */
+export const changedPairsSince = (changes, axisKey, sinceIso) => {
+  const out = new Set();
+  if (!sinceIso) return out;
+  (changes || []).forEach(c => {
+    if (c.axis !== axisKey) return;
+    if (c.before == null && c.note === REACHED_NOTE) return;
+    if (String(c.created_at || '').slice(0, 10) > sinceIso) out.add(c.pair_id);
+  });
+  return out;
+};
+
+/**
+ * 기준일의 대표 수치 — 요약의 델타용. monthlySeries 와 같은 셈(이력을 그 날까지 되감음):
+ *   value 평균 % · rung headline 이상 % · set 적용 단계 수 평균 · matrix 시험 불량 재현 %
+ * 살아 있는 divisionSummary 의 mean/atLeast[k]/avg/testRate 와 정의가 같아 그대로 뺄 수 있다.
+ */
+export const summaryAtDate = (subjects, changes, axes, sinceIso) => {
+  const pairs = (subjects || []).flatMap(s => s.pairs || []);
+  const defectTotal = Object.fromEntries(pairs.map(p => [p.id, (p.agent?.defect_types || []).length]));
+  const byPairAxis = {};
+  (changes || []).filter(c => !(c.before == null && c.note === REACHED_NOTE)).forEach(c => {
+    const k = `${c.pair_id}|${c.axis}`;
+    (byPairAxis[k] = byPairAxis[k] || []).push(c);
+  });
+  Object.values(byPairAxis).forEach(list => list.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id)));
+  const out = {};
+  axes.forEach(axis => {
+    let n = 0;
+    const states = [];
+    pairs.forEach(p => {
+      const list = (byPairAxis[`${p.id}|${axis.key}`] || []).filter(c => String(c.created_at || '').slice(0, 10) <= sinceIso);
+      if (!list.length) return;
+      const st = stateOf(axis, list[list.length - 1].after);
+      if (st) { states.push({ st, total: defectTotal[p.id] || 0 }); n += 1; }
+    });
+    let value = null;
+    if (n) {
+      if (axis.kind === 'value') value = Math.round((states.reduce((a, x) => a + x.st.value, 0) / n) * 10) / 10;
+      else if (axis.kind === 'rung') { const k = headlineIndex(axis); value = Math.round((states.filter(x => x.st.idx >= k).length * 100) / n); }
+      else if (axis.kind === 'set') value = Math.round((states.reduce((a, x) => a + x.st.flags.length, 0) / n) * 10) / 10;
+      else if (axis.kind === 'matrix') { const cells = states.reduce((a, x) => a + x.total, 0); value = cells ? Math.round((states.reduce((a, x) => a + x.st.test, 0) * 100) / cells) : null; }
+    }
+    out[axis.key] = value;
+  });
+  return out;
+};
