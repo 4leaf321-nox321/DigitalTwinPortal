@@ -63,7 +63,7 @@ const Badge = styled.span`
   background: #fef3c7; color: #92400e; border: 1px solid #fde68a; vertical-align: 1px;
 `;
 // 시험 항목 묶음마다 얼룩말(흰색/옅은 회색) + 묶음이 바뀌는 곳은 경계선을 한 단계 진하게 — 헤더를 칠하지 않고 경계를 세운다(2026-08-28).
-// 줄 전체가 눌린다 — 사다리를 여는 곳이 「시뮬레이션 칸」뿐이면 아무도 못 알아챈다(2026-08-29).
+// 줄 전체가 눌린다 — 척도를 여는 곳이 「시뮬레이션 칸」뿐이면 아무도 못 알아챈다(2026-08-29).
 // 고른 줄은 왼쪽에 파란 띠, 지나가면 옅게 물든다. 시험 칸(묶음 머리)과 단추들은 제 일을 한다.
 const GroupTr = styled.tr`
   background: ${p => (p.$on ? '#eff6ff' : p.$band ? '#f8fafc' : 'white')};
@@ -195,7 +195,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
           {(allMode ? touchable.length > 0 : !denyReason) && (
             <Button type="button" onClick={() => setLinkOpen(true)} style={{ marginLeft: '0.5rem', background: '#1d4ed8', borderColor: '#1d4ed8', color: 'white' }}><Plus size={13} /> 연계 추가</Button>
           )}
-          <Hint>{SUBJ} {subjects.length} · {AGENT} {agents.length} — 줄을 누르면 오른쪽에 사다리가 열립니다</Hint>
+          <Hint>{SUBJ} {subjects.length} · {AGENT} {agents.length} — 줄을 누르면 오른쪽에 평가 척도가 열립니다</Hint>
         </BoxHead>
         {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {projectError && (
@@ -241,7 +241,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                     {groupRow}
                     {ps.map((p, i) => (
                       <GroupTr key={p.id} $band={gi % 2 === 1} $first={i === 0} $on={p.id === pairId} $click
-                               onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 사다리가 나옵니다">
+                               onClick={() => onOpenPair(p.id)} title="누르면 오른쪽에 이 연계의 평가 척도가 나옵니다">
                         {i === 0 && cell}
                         <SimCell>
                           {p.agent?.name}

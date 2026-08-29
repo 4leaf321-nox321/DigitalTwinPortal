@@ -5,7 +5,7 @@ import maturityApi from '../../services/maturityApi';
 import { colorFor, reachedDates, flagDefs, matrixLevel, REACHED_NOTE } from '../../utils/board';
 import { AccuracyPreview, DEFAULT_RULE } from '../Settings/SettingsModal';
 
-// 연계 상세 — 사다리를 **그 안에서** 그린다. (PLAN 7-1)
+// 연계 상세 — 척도를 **그 안에서** 그린다. (PLAN 7-1)
 //
 // 축마다 가로 스텝: 지나온 칸엔 도달일, 현재 칸은 채움. 칸을 누르면 그 칸으로
 // 옮기는 편집이 열리고 근거를 적는다. 정확도만 다르다 — 값을 적고 칸은 환산된다.
@@ -335,7 +335,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
   // 칸의 도달 시점을 그 자리에서 고친다 — { axis, rung, month }. 한 평가에 시점 하나면
   // 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야 해서(2026-08-28).
   const [dating, setDating] = useState(null);
-  // 이력은 머리의 ⓘ 단추로 여닫는다 — 아래에 늘 펼쳐 두면 사다리 자리를 먹는다(2026-08-28).
+  // 이력은 머리의 ⓘ 단추로 여닫는다 — 아래에 늘 펼쳐 두면 척도 자리를 먹는다(2026-08-28).
   const [histOpen, setHistOpen] = useState(false);
   const removeEntry = async (changeId) => {
     if (!window.confirm('이 정확도 기록을 지울까요? 남은 줄 가운데 가장 늦은 것이 현재가 됩니다.')) return;

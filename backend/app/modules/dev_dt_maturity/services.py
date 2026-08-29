@@ -336,7 +336,7 @@ def assess(pair, axis_key, payload, actor):
             actor_name=getattr(actor, 'name', None))
         db.session.add(change)
         if when is not None:
-            # 옛 시점으로 넣었으면 이력도 그 달에 선다 — 사다리의 「언제 올라왔나」가 그것을 읽는다.
+            # 옛 시점으로 넣었으면 이력도 그 달에 선다 — 척도의 「언제 올라왔나」가 그것을 읽는다.
             db.session.flush()
             change.created_at = when
     return row
@@ -797,7 +797,7 @@ def delete_entry(pair, change_id, actor):
 def set_reached(pair, axis_key, rung_key, month, actor):
     """「이 칸에 언제 올라왔나」를 그 칸에서 바로 적는다. (2026-08-28)
 
-    한 평가에 시점 하나면 사다리를 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야
+    한 평가에 시점 하나면 척도를 거슬러 온 이력을 넣으려면 칸마다 저장을 되풀이해야
     한다. 대신 도달한 칸의 연-월을 그 자리에서 고친다 — 이력(change)이 그 칸의 시점이다.
       · 그 칸을 만든 이력이 있으면(after 가 그 칸 / 묶음이면 그 항목을 선택한 것) 가장 이른 것의 날짜를 옮긴다
       · 없으면(가져온 자료 등) 그 칸을 적는 이력을 하나 만든다 — 근거는 「시점 적기」

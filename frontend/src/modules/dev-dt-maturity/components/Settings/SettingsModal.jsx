@@ -66,6 +66,11 @@ const VocabTable = styled.table`
   td.act button:disabled { opacity: 0.35; cursor: not-allowed; }
   td textarea { width: 100%; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.75rem; resize: vertical; min-height: 1.9rem; }
 `;
+const Words = styled.div`
+  display: grid; grid-template-columns: 7rem 1fr; gap: 0.4rem 0.6rem; align-items: center; width: 100%;
+  label { font-size: 0.75rem; color: #64748b; font-weight: 600; }
+  input { padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; }
+`;
 const Fixed = styled.div`font-size: 0.75rem; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.375rem; padding: 0.4rem 0.6rem;`;
 
 const DIVS = '__divisions__';
@@ -118,6 +123,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   // 기준 정보 — 화면의 선택지. 서버가 준 지금 값과, 고치는 중인 것을 따로 든다(2026-08-30)
   const [vocabs, setVocabs] = useState(null);         // [{key,label,hint,items,is_custom}]
   const [vocabDraft, setVocabDraft] = useState({});   // {사전키: [{key,label}…]} — 손댄 것만
+  const [wordDraft, setWordDraft] = useState({});     // 축의 글 칸 {'사전키:자리': 값} — 손댄 것만
   const [vocabPick, setVocabPick] = useState(null);
   const [accKey, setAccKey] = useState('*');                       // 정확도 — 보던 사업부('*' = 전사 기본)
   const [hiddenSectors, setHiddenSectors] = useState([]);          // 감춘 부문(2026-08-29)
@@ -144,20 +150,33 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   }, []);
   const hiddenChanged = JSON.stringify([...hidden].sort()) !== JSON.stringify([...hiddenSaved].sort());
   const sectorsChanged = JSON.stringify([...hiddenSectors].sort()) !== JSON.stringify([...hiddenSectorsSaved].sort());
-  const vocabChanged = Object.keys(vocabDraft).length > 0;
+  const vocabChanged = Object.keys(vocabDraft).length > 0 || Object.keys(wordDraft).length > 0;
   // 그 사전의 지금 값 — 손댔으면 손댄 것, 아니면 서버가 준 것
   const vocabItems = (k) => vocabDraft[k] || (vocabs || []).find(v => v.key === k)?.items || [];
   const setVocabItems = (k, items) => { setSaved(false); setVocabDraft(d => ({ ...d, [k]: items })); };
-  /** 저장 몸 — 사전은 `vocab`, 사다리 문구는 `ladders` 로 나뉜다(설정 키가 다르다). */
+  // 축의 글 칸(이름·묻는 것·근거 이름표)과 곁표(바탕·열) — 표와 같은 광주리에 담는다
+  const fieldValue = (k, f) => wordDraft[`${k}:${f.key}`] ?? f.value ?? '';
+  const setFieldValue = (k, f, val) => { setSaved(false); setWordDraft(d => ({ ...d, [`${k}:${f.key}`]: val })); };
+  const extraItems = (k, x) => vocabDraft[`${k}:${x.key}`] || x.items;
+  const setExtraItems = (k, x, items) => { setSaved(false); setVocabDraft(d => ({ ...d, [`${k}:${x.key}`]: items })); };
+  /** 저장 몸 — 사전은 `vocab`, 척도 문구는 `ladders` 로 나뉜다(설정 키가 다르다). */
   const vocabPayload = () => {
-    const vocab = {}; const ladders = {};
+    const vocab = {}; const ladders = {}; const words = {};
     (vocabs || []).forEach(v => {
       const items = vocabItems(v.key);
       if (v.store === 'ladders') {
-        (ladders[v.sector] = ladders[v.sector] || {})[v.axis] = items;
+        const row = { rungs: items };
+        (v.fields || []).forEach(f => { row[f.key] = fieldValue(v.key, f); });
+        (v.extras || []).forEach(x => { row[x.key] = extraItems(v.key, x); });
+        (ladders[v.sector] = ladders[v.sector] || {})[v.axis] = row;
+      } else if (v.store === 'sector_words') {
+        items.forEach(it => {
+          const [sk, field] = it.key.split(':');
+          (words[sk] = words[sk] || {})[field] = it.label;
+        });
       } else { vocab[v.key] = items; }
     });
-    return { vocab, ladders };
+    return { vocab, ladders, sector_words: words };
   };
   const staleValid = Number.isInteger(Number(staleDays)) && Number(staleDays) >= 1 && Number(staleDays) <= 3650;
   const staleChanged = staleValid && Number(staleDays) !== staleSaved;
@@ -188,7 +207,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
       else if (key === VOCAB) {
         // 서버가 다듬은 뒤의 값을 다시 받는다 — 빈 이름처럼 버려진 줄이 화면에 남지 않게
         const fresh = await maturityApi.getVocabs().then(x => (Array.isArray(x.data) ? x.data : [])).catch(() => vocabs);
-        setVocabs(fresh); setVocabDraft({});
+        setVocabs(fresh); setVocabDraft({}); setWordDraft({});
       }
       else setConf(r.data?.accuracy || next);
       setSaved(true);
@@ -249,7 +268,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                   시뮬레이션·모니터링·디지털 스레드 화면에서 <strong>고르는 값들</strong>입니다. 코드의 값이 처음 기준치이고,
                   여기서 고치면 그것이 이깁니다. 이름을 고치거나 항목을 더하고 뺄 수 있습니다.
                   다만 <strong>key 는 자료에 박히는 값이라 바뀌지 않습니다</strong> — 이미 그 값을 쓰는 자료는 그대로 남고,
-                  뺀 값은 화면에 key 로 보입니다. <strong>「사다리 · …」</strong>는 평가할 때 고르는 칸이라 <strong>문구만</strong> 고칩니다.
+                  뺀 값은 화면에 key 로 보입니다. <strong>「척도 · …」</strong>는 평가할 때 고르는 칸이라 <strong>문구만</strong> 고칩니다(축 이름과 묻는 말도 함께).
                   저장은 고른 사전만이 아니라 <strong>기준 정보 전체</strong>를 함께 보냅니다.
                 </Hint>
                 {vocabs == null ? <Hint>불러오는 중…</Hint> : (
@@ -284,6 +303,17 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                           <>
                             <VocabHead>{v.label}<Where>{v.sector_label || '공통'} 화면</Where></VocabHead>
                             <Hint>{v.hint}</Hint>
+                            {(v.fields || []).length > 0 && (
+                              <Words>
+                                {v.fields.map(f => (
+                                  <React.Fragment key={f.key}>
+                                    <label htmlFor={`w-${v.key}-${f.key}`}>{f.label}</label>
+                                    <input id={`w-${v.key}-${f.key}`} value={fieldValue(v.key, f)} aria-label={`${v.label} ${f.label}`}
+                                           onChange={e => setFieldValue(v.key, f, e.target.value)} />
+                                  </React.Fragment>
+                                ))}
+                              </Words>
+                            )}
                             {v.fixed && (
                               <Fixed>
                                 <strong>문구만 고칩니다.</strong> 이 목록은 셈과 이력이 key 로 묶여 있어 항목을 더하거나 뺄 수 없습니다
@@ -326,6 +356,26 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                                 <Plus size={13} /> 항목 더하기
                               </Button>
                             )}
+                            {(v.extras || []).map(x => (
+                              <React.Fragment key={x.key}>
+                                <VocabHead>{x.label}</VocabHead>
+                                <VocabTable>
+                                  <thead><tr><th style={{ width: '2rem' }} /><th>이름</th><th>설명</th><th style={{ width: '10rem' }}>key (안 바뀜)</th></tr></thead>
+                                  <tbody>
+                                    {extraItems(v.key, x).map((it, i) => (
+                                      <tr key={it.key}>
+                                        <td className="no">{i + 1}</td>
+                                        <td><input value={it.label} aria-label={`${x.label} ${i + 1}번 이름`}
+                                                   onChange={e => setExtraItems(v.key, x, extraItems(v.key, x).map((y, j) => (j === i ? { ...y, label: e.target.value } : y)))} /></td>
+                                        <td><textarea rows={2} value={it.description || ''} aria-label={`${x.label} ${i + 1}번 설명`}
+                                                      onChange={e => setExtraItems(v.key, x, extraItems(v.key, x).map((y, j) => (j === i ? { ...y, description: e.target.value } : y)))} /></td>
+                                        <td><code>{it.key}</code></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </VocabTable>
+                              </React.Fragment>
+                            ))}
                           </>
                         );
                       })()}
@@ -342,7 +392,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                     <label key={x.key}>
                       <input type="checkbox" checked={hiddenSectors.includes(x.key)} onChange={() => toggleSector(x.key)} aria-label={`${x.label} 감춤`} />
                       {x.label}
-                      {!x.active && <small> — 사다리 없음(준비 중)</small>}
+                      {!x.active && <small> — 평가 척도 없음(준비 중)</small>}
                       {hiddenSectors.includes(x.key) && <small> — 감춤</small>}
                     </label>
                   ))}

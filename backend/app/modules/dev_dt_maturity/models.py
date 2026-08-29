@@ -164,7 +164,7 @@ class MaturityAssessment(BaseModel):
 
 
 class MaturityChange(BaseModel):
-    """무엇이 언제 왜 바뀌었나. 사다리의 「이 칸에 언제 올라왔나」가 여기서 나온다."""
+    """무엇이 언제 왜 바뀌었나. 척도의 「이 칸에 언제 올라왔나」가 여기서 나온다."""
     __tablename__ = 'dt_maturity_change'
 
     pair_id = db.Column(db.Integer, db.ForeignKey('dt_maturity_pair.id', ondelete='CASCADE'),

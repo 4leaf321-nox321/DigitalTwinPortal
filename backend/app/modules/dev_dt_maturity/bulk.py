@@ -32,7 +32,7 @@ def kinds_for(sector, division_id=None):
     그 목록에 있으면 골라지고 없으면 「못 찾음」으로 남는다. 무엇을 쓸 수 있는지 화면이
     말해 주지 않으면 사람이 글자를 추측해서 적게 된다(2026-08-30).
     """
-    sec = D.SECTOR_BY_KEY.get(sector) or {}
+    sec = D.sector_of(sector)
     subject_label = sec.get('subject_label') or '대상'
     agent_label = sec.get('agent_label') or '수단'
     out = []

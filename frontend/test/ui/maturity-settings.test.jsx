@@ -26,11 +26,18 @@ export default async function run() {
       items: [{ key: 'plm', label: 'PLM' }, { key: 'mes', label: 'MES' }] },
     { key: 'thread_stages', label: '생애 단계', sector_label: '디지털 스레드', hint: '차례가 뜻을 갖습니다.', is_custom: false,
       items: [{ key: 'plan', label: '기획' }, { key: 'dev', label: '개발' }] },
-    { key: 'ladder:simulation:automation', label: '사다리 · 자동화', sector_label: '시뮬레이션', store: 'ladders',
+    { key: 'ladder:simulation:automation', label: '척도 · 자동화', sector_label: '시뮬레이션', store: 'ladders',
       sector: 'simulation', axis: 'automation', fixed: true, has_description: true, is_custom: false,
       hint: '어느 단계가 사람 손 없이 도는가',
+      fields: [{ key: 'label', label: '축 이름', value: '자동화' }, { key: 'question', label: '묻는 것', value: '어디까지 도는가' },
+               { key: 'evidence_label', label: '근거 이름표', value: '1회 소요 시간(Hr)' }],
+      extras: [{ key: 'base', label: '바탕', items: [{ key: 'geometry', label: '형상 재현', description: '치수·재질' }] }],
       items: [{ key: 'manual', label: '수동', description: '전 과정을 사람이 한다' },
               { key: 'pre', label: '전처리 자동', description: '준비가 자동' }] },
+    { key: 'sector_words', label: '부문의 말', sector_label: '공통', store: 'sector_words', fixed: true, is_custom: false,
+      hint: '관리 창 이름·표 머리가 이 말을 씁니다.',
+      items: [{ key: 'simulation:subject_label', label: '시험 항목', description: '시뮬레이션 — 대상' },
+              { key: 'simulation:agent_label', label: '시뮬레이션', description: '시뮬레이션 — 수단' }] },
   ];
   const calls = fakeFetch(({ url, method, body }) => {
     if (url.endsWith('/vocabs')) return vocabs;
@@ -38,7 +45,7 @@ export default async function run() {
       if (body.vocab) vocabs = vocabs.map(v => ({ ...v, items: body.vocab[v.key] || v.items, is_custom: true }));
       if (body.ladders) {
         vocabs = vocabs.map(v => (v.store === 'ladders'
-          ? { ...v, items: (body.ladders[v.sector] || {})[v.axis] || v.items, is_custom: true } : v));
+          ? { ...v, items: ((body.ladders[v.sector] || {})[v.axis] || {}).rungs || v.items, is_custom: true } : v));
       }
       stored = { ...stored, ...body }; return stored;
     }
@@ -100,7 +107,7 @@ export default async function run() {
     await click(byText('button', '부문 표시')); await settle();
     const mon = document.querySelector('input[aria-label="모니터링 감춤"]');
     say(!!mon && !!document.querySelector('input[aria-label="시뮬레이션 감춤"]'), '⑤-2 부문이 체크 목록으로 보임');
-    say(html().includes('사다리 없음(준비 중)'), '⑤-2 아직 사다리가 없는 부문은 표시됨');
+    say(html().includes('평가 척도 없음(준비 중)'), '⑤-2 아직 척도가 없는 부문은 표시됨');
     say(byText('button', '저장').disabled, '⑤-2 안 바꾸면 저장 잠김');
     await click(mon); await settle();
     await click(byText('button', '저장')); await settle();
@@ -134,16 +141,37 @@ export default async function run() {
     const groupHead = (t) => [...document.querySelectorAll('div')].some(d => d.textContent.trim() === t);
     say(groupHead('시뮬레이션') && groupHead('디지털 스레드'), '⑧ 사전이 어느 화면의 것인지 갈래로 묶임');
     say(html().includes('디지털 스레드 화면'), '⑧ 고른 사전 위에 어느 화면의 것인지 붙음');
-    // ⑧-2 사다리 문구 — 평가할 때 고르는 칸. 문구만 고치고 칸은 못 늘린다.
-    await click(byText('button', '사다리 · 자동화')); await settle();
+    // ⑧-2 척도 문구 — 평가할 때 고르는 칸. 문구만 고치고 칸은 못 늘린다.
+    await click(byText('button', '척도 · 자동화')); await settle();
     say(!byText('button', '항목 더하기') && html().includes('문구만 고칩니다'), '⑧-2 못 박힌 목록은 더하기·빼기가 없음');
-    say(!!document.querySelector('textarea[aria-label="사다리 · 자동화 1번 설명"]'), '⑧-2 설명도 함께 고침');
-    await type(document.querySelector('input[aria-label="사다리 · 자동화 2번 이름"]'), '앞단 자동');
+    say(!!document.querySelector('textarea[aria-label="척도 · 자동화 1번 설명"]'), '⑧-2 설명도 함께 고침');
+    await type(document.querySelector('input[aria-label="척도 · 자동화 2번 이름"]'), '앞단 자동');
     await click(byText('button', '저장')); await settle();
     const putL = calls.find(x => x.method === 'PUT' && x.body?.ladders);
-    say(putL?.body?.ladders?.simulation?.automation?.[1]?.label === '앞단 자동',
-        `⑧-2 사다리는 ladders 광주리로 감: ${JSON.stringify(putL?.body?.ladders)}`);
+    say(putL?.body?.ladders?.simulation?.automation?.rungs?.[1]?.label === '앞단 자동',
+        `⑧-2 척도는 ladders 광주리로 감: ${JSON.stringify(putL?.body?.ladders)}`);
     say(!('ladder:simulation:automation' in (putL?.body?.vocab || {})), '⑧-2 사전 광주리에는 안 섞임');
+    // ⑧-3 축 이름·묻는 것·근거 이름표, 그리고 바탕 곁표까지 한 판에서
+    await click(byText('button', '척도 · 자동화')); await settle();
+    calls.length = 0;
+    const ask = document.querySelector('input[aria-label="척도 · 자동화 묻는 것"]');
+    say(!!ask && !!document.querySelector('input[aria-label="척도 · 자동화 축 이름"]'), '⑧-3 축 이름·묻는 것도 고침');
+    say(!!document.querySelector('input[aria-label="바탕 1번 이름"]'), '⑧-3 바탕 곁표도 함께');
+    await type(ask, '어느 단계가 저절로 도는가');
+    await type(document.querySelector('input[aria-label="바탕 1번 이름"]'), '형상만');
+    await click(byText('button', '저장')); await settle();
+    const putA = calls.find(x => x.method === 'PUT' && x.body?.ladders?.simulation?.automation?.question);
+    say(putA?.body?.ladders?.simulation?.automation?.question === '어느 단계가 저절로 도는가', '⑧-3 묻는 것이 함께 감');
+    say(putA?.body?.ladders?.simulation?.automation?.base?.[0]?.label === '형상만', '⑧-3 바탕도 함께 감');
+    // ⑧-4 부문의 말 — 화면 전체의 이름표
+    calls.length = 0;
+    await click(byText('button', '부문의 말')); await settle();
+    say(!byText('button', '항목 더하기'), '⑧-4 부문의 말도 줄은 못 늘림');
+    await type(document.querySelector('input[aria-label="부문의 말 1번 이름"]'), '검증 항목');
+    await click(byText('button', '저장')); await settle();
+    const putW = calls.find(x => x.method === 'PUT' && x.body?.sector_words);
+    say(putW?.body?.sector_words?.simulation?.subject_label === '검증 항목',
+        `⑧-4 부문·자리로 갈라 보냄: ${JSON.stringify(putW?.body?.sector_words)}`);
     calls.length = 0;
     await click(byText('button', '시스템 종류')); await settle();
     say(byText('button', '저장').disabled, '⑧ 안 바꾸면 저장 잠김');

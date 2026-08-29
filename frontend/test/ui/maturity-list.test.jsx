@@ -38,10 +38,10 @@ export default async function run() {
     // ①-2 열이 다섯 — 시험 · 시뮬레이션 · 사용 툴 · 담당 부서 · 디지털 트윈 연결 과제
     const heads = [...document.querySelectorAll('thead th')].map(x => x.textContent.trim());
     say(JSON.stringify(heads.slice(0, 5)) === JSON.stringify(['시험 항목', '시뮬레이션', '사용 툴', '담당 부서', '디지털 트윈 연결 과제']), `①-2 열 이름: ${heads}`);
-    // ①-3 줄 아무 데나 눌러도 사다리가 열린다 — 시뮬레이션 칸만 눌리면 아무도 못 알아챈다
+    // ①-3 줄 아무 데나 눌러도 척도가 열린다 — 시뮬레이션 칸만 눌리면 아무도 못 알아챈다
     const row = document.querySelector('tbody tr');
     await click([...row.querySelectorAll('td')].find(x => x.textContent.includes('CAE그룹'))); await settle();
-    say(opened === 9, `①-3 담당 부서 칸을 눌러도 사다리가 열림: ${opened}`);
+    say(opened === 9, `①-3 담당 부서 칸을 눌러도 척도가 열림: ${opened}`);
     const tds = [...document.querySelectorAll('tbody tr td')].map(x => x.textContent.trim());
     say(tds.includes('LS-DYNA, HyperMesh'), `①-2 사용 툴이 제 열에: ${tds}`);
     say(tds.includes('낙하 해석 자동화') && !tds.some(x => x.includes('MX-1')), '①-2 과제는 코드가 아니라 이름으로 제 열에');
@@ -58,11 +58,11 @@ export default async function run() {
     say(html().includes('공정 × 수집 수단'), '①-5 표 머리도 부문의 말로');
     const badge = [...document.querySelectorAll('td button')].find(x => x.textContent === '낙하 해석 자동화');
     say(!!badge && (badge.getAttribute('title') || '').includes('MX-1'), '①-2 과제는 배지로 — 코드·연도는 마우스를 올렸을 때');
-    // ①-4 배지를 누르면 대시보드의 과제 보고를 불러온다(줄의 사다리는 안 열린다)
+    // ①-4 배지를 누르면 대시보드의 과제 보고를 불러온다(줄의 척도는 안 열린다)
     opened = null;
     await click(badge); await settle(60);
     const got = calls.find(c => (c.url || '').includes('/dt-v2/projects/u1'));
-    say(!!got && opened === null, `①-4 배지 → 과제 보고 부름: ${got?.url} · 사다리는 안 열림(${opened})`);
+    say(!!got && opened === null, `①-4 배지 → 과제 보고 부름: ${got?.url} · 척도는 안 열림(${opened})`);
     await click(byText('button', '연계 추가')); await settle();
     const dlg = document.querySelector('[role="dialog"][aria-label="연계 추가"]');
     say(!!dlg, '① 「연계 추가」를 누르면 모달');

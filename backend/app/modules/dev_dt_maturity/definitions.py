@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """디지털 트윈 성숙도 — 정의의 단일 출처. (PLAN.md 3·4절)
 
-부문(sector) · 축(axis) · 사다리(ladder) · 정확도 규칙 · 가져오기 틀이 전부 여기
+부문(sector) · 축(axis) · 척도(ladder) · 정확도 규칙 · 가져오기 틀이 전부 여기
 있다. 화면·API·시험이 이 파일 하나를 읽는다 — 정의가 두 곳이면 둘이 갈린다.
 
-⚠️⚠️ **한 엔진, 부문별 사다리 세트.** 부문마다 코드를 갈라 만들지 않는다.
-   부문을 하나 더 붙이는 일이 `SECTORS` 와 사다리 한 벌을 더하는 것으로 끝나야 한다.
+⚠️⚠️ **한 엔진, 부문별 척도 세트.** 부문마다 코드를 갈라 만들지 않는다.
+   부문을 하나 더 붙이는 일이 `SECTORS` 와 척도 한 벌을 더하는 것으로 끝나야 한다.
    그렇지 않으면 3절의 설계가 틀린 것이다.
 
 ⚠️ **축은 세 종류다.** `rung`(칸을 고른다) · `value`(값을 적고 문턱으로 칸이 정해진다) ·
@@ -13,7 +13,7 @@
    정확도가 둘이 된다 — 칸을 바꾸려면 값을 바꿔야 한다. set 은 첫 칸(수동)이 「아무것도
    안 켬」이고 서열은 켠 개수다 — 전처리·실행·후처리에는 순서가 없다(2026-08-28).
 
-⚠️ **사다리 문구는 설정으로 갈아 끼울 수 있지만 key 는 고정이다.** 이력과 평가가
+⚠️ **척도 문구는 설정으로 갈아 끼울 수 있지만 key 는 고정이다.** 이력과 평가가
    key 로 묶여 있다. 문구를 고치는 것과 칸을 지우는 것은 다른 일이다.
 
 ⚠️ **DX KPI 와 무관하다.** 가상 검증률을 읽지도 쓰지도 않는다. 이 파일의 문턱은
@@ -29,7 +29,7 @@ MODULE_KEY = 'dev_dt_maturity'
 SECTORS = [
     {'key': 'simulation', 'label': '시뮬레이션', 'has_agent': True,
      'subject_label': '시험 항목', 'agent_label': '시뮬레이션', 'phase': 1},
-    # ⚠️ 아래 둘은 자리만 잡아 둔다. 사다리가 없으면 화면에 안 뜬다(active=False).
+    # ⚠️ 아래 둘은 자리만 잡아 둔다. 척도가 없으면 화면에 안 뜬다(active=False).
     #    검토안은 PLAN-automation.md — 대상·수단·축까지 적혀 있고 담당 확인만 남았다.
     {'key': 'design_automation', 'label': '설계 자동화', 'has_agent': True,
      'subject_label': '설계 업무', 'agent_label': '자동화 수단', 'phase': 2},
@@ -58,7 +58,7 @@ MODEL_KINDS = [
 ]
 MODEL_KIND_KEYS = {m['key'] for m in MODEL_KINDS}
 
-# ── 축과 사다리 — 시뮬레이션 부문 (합의됨, PLAN 4절) ───────────────────────
+# ── 축과 척도 — 시뮬레이션 부문 (합의됨, PLAN 4절) ───────────────────────
 #
 # 칸은 **낮은 것부터** 나열한다. 순서가 곧 서열이라 index 가 레벨이다.
 # 첫 칸은 「아직 아무것도 아님」이 아니다 — 미평가는 칸이 없는 상태(None)로 따로 센다.
@@ -70,7 +70,7 @@ AXES = {
             'evidence': ['compared_tests', 'error_pct', 'attachment'],
             'evidence_label': '비교 시험 건수 · 오차 · 첨부',
             # ⚠️ value 축의 칸은 사람이 고르지 않는다 — 값이 문턱을 넘으면 올라간다.
-            #    '미평가' 은 값이 없는 상태라 사다리에 없다(None).
+            #    '미평가' 은 값이 없는 상태라 척도에 없다(None).
             'rungs': [
                 # 문구는 2026-08-28 — 한 줄 막대의 세 영역. key 는 고정.
                 {'key': 'trend', 'label': '경향 일치',
@@ -87,7 +87,7 @@ AXES = {
             'evidence': ['hours_per_run'], 'evidence_label': '1회 소요 시간(Hr)',
             # ⚠️ 이것은 **해석 파이프라인**의 자동화다. 「검증 자동화」 부문(로직 검증)과
             #    다른 것을 잰다 — 같은 시험에 둘 다 걸려도 겹치지 않는다(PLAN 3-1).
-            # ⚠️ 사다리가 아니라 **묶음**이다. 전처리·실행·후처리·보고·파이프라인은 선후가
+            # ⚠️ 척도가 아니라 **묶음**이다. 전처리·실행·후처리·보고·파이프라인은 선후가
             #    없어 따로 선택·해제한다. 「수동」은 아무것도 안 켠 상태. 서열(색)은 켠 개수다.
             'rungs': [
                 {'key': 'manual', 'label': '수동', 'short': '수동', 'description': '아무 단계도 자동이 아니다 — 전 과정을 사람이 한다'},
@@ -141,7 +141,7 @@ AXES = {
             'key': 'substitution', 'label': '시험 대체', 'kind': 'set',
             'question': '시험을 어떤 자리에서 대신하는가',
             'evidence': ['tests_saved_per_year'], 'evidence_label': '줄어든 시험 횟수/년',
-            # 묶음이다(2026-08-28) — 시험 병행·원인 분석·사전 검증·인증 게이트·완전 대체는 사다리가 아니라
+            # 묶음이다(2026-08-28) — 시험 병행·원인 분석·사전 검증·인증 게이트·완전 대체는 척도가 아니라
             # **쓰임새**라 겹칠 수 있다. 첫 칸 「없음」은 아무것도 안 켠 상태이고 화면엔 안 보인다(hide_empty).
             # 「완전 대체」를 선택하면 나머지가 다 켜진다(implies). 오른쪽일수록 앞선 것.
             'hide_empty': True,
@@ -156,7 +156,7 @@ AXES = {
             ],
         },
     ],
-    # 나머지 부문은 사다리가 없다 — 자료 조사 뒤(PLAN 3-1) / 3차(3-2).
+    # 나머지 부문은 척도가 없다 — 자료 조사 뒤(PLAN 3-1) / 3차(3-2).
     'verification_automation': [],
     'design_automation': [],
     # ── 디지털 스레드(2026-08-28) — 대상은 「구간」(데이터가 조직·시스템을 건너는 자리), 수단 없음 ──
@@ -582,62 +582,105 @@ def clean_vocab_payload(raw):
     return out
 
 
-# ── 사다리 문구 — 평가할 때 고르는 칸(2026-08-30) ────────────────────────────
+# ── 척도 문구 — 평가할 때 고르는 칸(2026-08-30) ────────────────────────────
 #
 # ⚠️ 칸의 key 는 **평가와 이력이 묶여 있는 자리**다. 더하고 빼지 못하고 문구만 고친다
 #    (get_axes 가 key 가 맞는 칸만 덮는다). 칸을 더하는 것은 코드의 일이다.
 def ladder_all():
-    """부문 × 축마다 한 벌 — 설정 화면이 사다리 문구를 그린다."""
+    """부문 × 축마다 한 벌 — 설정 화면이 축의 문구를 그린다.
+
+    축 이름·묻는 것·근거 이름표는 글 칸으로, 칸(과 바탕·열)은 표로 고친다.
+    """
     conf = _setting('ladders') or {}
+    rows = lambda part: [{'key': r['key'], 'label': r['label'], 'description': r.get('description') or ''}
+                         for r in part]
     out = []
-    for sector in SECTORS:
+    for sector in sectors():
         sk = sector['key']
         if not AXES.get(sk):
             continue
         for axis in get_axes(sk):
             saved = (conf.get(sk) or {}).get(axis['key']) if isinstance(conf, dict) else None
+            extras = [{'key': p, 'label': {'base': '바탕', 'columns': '열'}[p], 'items': rows(axis[p])}
+                      for p in ('base', 'columns') if axis.get(p)]
             out.append({
                 'key': f"ladder:{sk}:{axis['key']}", 'store': 'ladders',
                 'sector': sk, 'sector_label': sector['label'], 'axis': axis['key'],
-                'label': f"사다리 · {axis['label']}", 'fixed': True, 'has_description': True,
-                'hint': axis.get('question') or '이 축에서 고르는 칸입니다.',
-                'items': [{'key': r['key'], 'label': r['label'], 'description': r.get('description') or ''}
-                          for r in axis['rungs']],
+                'label': f"척도 · {axis['label']}", 'fixed': True, 'has_description': True,
+                'hint': '평가할 때 고르는 칸입니다. 축 이름과 묻는 말도 여기서 고칩니다.',
+                'fields': [{'key': 'label', 'label': '축 이름', 'value': axis['label']},
+                           {'key': 'question', 'label': '묻는 것', 'value': axis.get('question') or ''},
+                           {'key': 'evidence_label', 'label': '근거 이름표', 'value': axis.get('evidence_label') or ''}],
+                'items': rows(axis['rungs']), 'extras': extras,
                 'is_custom': bool(saved),
             })
     return out
 
 
+def sector_words_all():
+    """부문의 말 — 화면 전체의 이름표. 한 벌로 묶어 보여 준다."""
+    conf = _setting('sector_words') or {}
+    items = []
+    for s in sectors():
+        items.append({'key': f"{s['key']}:label", 'label': s['label'], 'description': '부문 이름'})
+        items.append({'key': f"{s['key']}:subject_label", 'label': s['subject_label'], 'description': f"{s['label']} — 대상"})
+        if s.get('agent_label'):
+            items.append({'key': f"{s['key']}:agent_label", 'label': s['agent_label'], 'description': f"{s['label']} — 수단"})
+    return {
+        'key': 'sector_words', 'store': 'sector_words', 'sector_label': '공통', 'fixed': True,
+        'label': '부문의 말', 'has_description': False,
+        'hint': '관리 창 이름·표 머리·추출 시트가 모두 이 말을 씁니다. 「시험 항목」을 「검증 항목」이라 부르면 여기서 고치세요.',
+        'items': items, 'is_custom': bool(conf),
+    }
+
+
 def clean_ladders_payload(raw):
-    """들어온 사다리 문구를 다듬는다 — **아는 부문·축·칸만**, 문구만."""
+    """들어온 축의 문구를 다듬는다 — **아는 부문·축·줄만**, 문구만."""
     if not isinstance(raw, dict):
-        raise ValueError('사다리 문구의 꼴이 아닙니다.')
+        raise ValueError('축 문구의 꼴이 아닙니다.')
+
+    def _words(base_rows, rows):
+        known = {r['key'] for r in base_rows}
+        out = []
+        for r in rows if isinstance(rows, list) else []:
+            if not isinstance(r, dict) or r.get('key') not in known:
+                continue
+            item = {'key': r['key']}
+            for f, cap in (('label', 100), ('description', 400), ('short', 40)):
+                if str(r.get(f) or '').strip():
+                    item[f] = str(r[f]).strip()[:cap]
+            if len(item) > 1:
+                out.append(item)
+        return out
+
     out = {}
     for sk, axes in raw.items():
         if sk not in AXES or not isinstance(axes, dict):
             continue
         keep = {}
-        for ak, rows in axes.items():
+        for ak, val in axes.items():
             axis = next((a for a in AXES[sk] if a['key'] == ak), None)
-            if axis is None or not isinstance(rows, list):
+            if axis is None:
                 continue
-            known = {r['key'] for r in axis['rungs']}
-            items = []
-            for r in rows:
-                if not isinstance(r, dict) or r.get('key') not in known:
-                    continue
-                item = {'key': r['key']}
-                if str(r.get('label') or '').strip():
-                    item['label'] = str(r['label']).strip()[:100]
-                if str(r.get('description') or '').strip():
-                    item['description'] = str(r['description']).strip()[:400]
-                if len(item) > 1:
-                    items.append(item)
-            if items:
-                keep[ak] = items
+            ov = _axis_override(val)
+            row = {}
+            for f in ('label', 'question', 'evidence_label'):
+                if axis.get(f) and str(ov.get(f) or '').strip():
+                    row[f] = str(ov[f]).strip()[:200]
+            rungs = _words(axis['rungs'], ov.get('rungs'))
+            if rungs:
+                row['rungs'] = rungs
+            for part in ('base', 'columns'):
+                if axis.get(part):
+                    got = _words(axis[part], ov.get(part))
+                    if got:
+                        row[part] = got
+            if row:
+                keep[ak] = row
         if keep:
             out[sk] = keep
     return out
+
 
 
 def vocab_all():
@@ -652,8 +695,54 @@ def vocab_all():
     return out
 
 
+def sectors():
+    """부문 — 설정(`sector_words`)의 말을 덮은 것.
+
+    subject_label·agent_label 은 이 화면 전체의 이름표다(관리 창 제목, 표 머리, 추출
+    시트 이름…). 회사마다 「시험 항목」을 「검증 항목」이라 부르므로 고칠 수 있어야 한다.
+    ⚠️ key·has_agent·phase 는 짜임이라 안 바뀐다 — **말만** 덮는다.
+    """
+    conf = _setting('sector_words') or {}
+    if not isinstance(conf, dict):
+        return list(SECTORS)
+    out = []
+    for s in SECTORS:
+        w = conf.get(s['key'])
+        if not isinstance(w, dict):
+            out.append(s)
+            continue
+        row = dict(s)
+        for f in ('label', 'subject_label', 'agent_label'):
+            if s.get(f) and str(w.get(f) or '').strip():
+                row[f] = str(w[f]).strip()[:40]
+        out.append(row)
+    return out
+
+
+def sector_of(key):
+    return next((s for s in sectors() if s['key'] == key), None) or SECTOR_BY_KEY.get(key) or {}
+
+
+def clean_sector_words_payload(raw):
+    """부문의 말 — 아는 부문의 아는 자리만, 빈 것은 버린다."""
+    if not isinstance(raw, dict):
+        raise ValueError('부문의 말의 꼴이 아닙니다.')
+    out = {}
+    for key, w in raw.items():
+        base = SECTOR_BY_KEY.get(key)
+        if base is None or not isinstance(w, dict):
+            continue
+        keep = {}
+        for f in ('label', 'subject_label', 'agent_label'):
+            if base.get(f) and str(w.get(f) or '').strip():
+                keep[f] = str(w[f]).strip()[:40]
+        if keep:
+            out[key] = keep
+    return out
+
+
 def sector_is_active(sector_key):
-    """사다리가 있는 부문만 화면에 뜬다. 자리만 잡힌 부문은 안 뜬다."""
+    """척도가 있는 부문만 화면에 뜬다. 자리만 잡힌 부문은 안 뜬다."""
     return bool(AXES.get(sector_key))
 
 
@@ -843,8 +932,9 @@ IMPORT_COLUMNS = [
 #   hidden_divisions [division_id…]   이 화면에서 뺄 조직 — SR·GTR·CS 처럼 사업부가 아닌 것(2026-08-28)
 #   hidden_sectors   [sector_key…]    이 화면에서 뺄 부문 — 아직 안 쓰는 부문을 토글에서 감춘다(2026-08-29)
 #   vocab            {이름: [{key,label}…]}  기준 정보 — 화면의 선택지. 코드의 값이 기본, 여기 있으면 이긴다(2026-08-30)
+#   sector_words     {부문: {label,subject_label,agent_label}}  부문의 말 — 화면 전체의 이름표(2026-08-30)
 SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days', 'hidden_divisions', 'review_promote_min',
-                 'hidden_sectors', 'vocab')
+                 'hidden_sectors', 'vocab', 'sector_words')
 
 
 def _setting(key):
@@ -855,7 +945,7 @@ def _setting(key):
 
 
 def get_axes(sector_key):
-    """사다리 — 기본 문구 위에 설정의 문구를 덮는다. **key 가 맞는 칸만** 덮는다.
+    """척도 — 기본 문구 위에 설정의 문구를 덮는다. **key 가 맞는 칸만** 덮는다.
 
     설정에 모르는 key 가 있어도 칸이 생기지 않는다. 칸을 더하는 것은 코드의 일이다
     — 이력과 평가가 key 로 묶여 있어, 설정에서 칸이 생기고 없어지면 이력이 미아가 된다.
@@ -864,12 +954,31 @@ def get_axes(sector_key):
     override = (_setting('ladders') or {}).get(sector_key) or {}
     out = []
     for axis in base:
-        words = {r['key']: r for r in (override.get(axis['key']) or []) if isinstance(r, dict)}
-        rungs = [{**r, **{k: v for k, v in words.get(r['key'], {}).items()
-                          if k in ('label', 'description')}}
-                 for r in axis['rungs']]
-        out.append({**axis, 'rungs': rungs})
+        ov = _axis_override(override.get(axis['key']))
+        row = {**axis, 'rungs': _overlay(axis['rungs'], ov.get('rungs'))}
+        for f in ('label', 'question', 'evidence_label'):
+            if axis.get(f) and str(ov.get(f) or '').strip():
+                row[f] = str(ov[f]).strip()
+        for part in ('base', 'columns'):      # 모델링 수준의 바탕 토글과 열
+            if axis.get(part):
+                row[part] = _overlay(axis[part], ov.get(part))
+        out.append(row)
     return out
+
+
+def _axis_override(raw):
+    """저장된 꼴을 하나로 — 옛 꼴(칸 목록만)도 그대로 받는다."""
+    if isinstance(raw, list):
+        return {'rungs': raw}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _overlay(base_rows, saved):
+    """**key 가 맞는 줄만** 문구를 덮는다 — 줄은 늘지도 줄지도 않는다."""
+    words = {r['key']: r for r in (saved or []) if isinstance(r, dict) and r.get('key')}
+    return [{**r, **{k: str(v) for k, v in (words.get(r['key']) or {}).items()
+                     if k in ('label', 'description', 'short') and str(v).strip()}}
+            for r in base_rows]
 
 
 def get_accuracy_rule(division_id=None):
@@ -928,7 +1037,7 @@ def get_stale_days():
 
 # ── 해석 활용 기록 — 시험과 짝이 없는 스팟성 시뮬레이션(2026-08-28) ──────────────
 #
-# 건(件)의 속성이다 — 사다리 칸이 아니라. 같은 문구를 「이 시뮬레이션은 어느 칸」이 아니라
+# 건(件)의 속성이다 — 척도 칸이 아니라. 같은 문구를 「이 시뮬레이션은 어느 칸」이 아니라
 # 「이번 건은 이랬다」로 쓴다. 순서는 있고(오른쪽이 앞선 것), 연간 셈은 「k 이상 %」로 낸다.
 REVIEW_KINDS = [
     {'key': 'spec', 'label': '설계 스펙 검토', 'item_label': '스펙 항목'},

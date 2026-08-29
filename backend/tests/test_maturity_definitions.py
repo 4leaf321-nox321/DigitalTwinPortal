@@ -3,7 +3,7 @@
 
 **여기서 지키는 것은 문구가 아니라 규칙이다.**
 
-  · 사다리 key 는 유일하고 순서가 곧 서열인가 — 이력과 평가가 key 로 묶인다
+  · 척도 key 는 유일하고 순서가 곧 서열인가 — 이력과 평가가 key 로 묶인다
   · 값 없는 정확도는 첫 칸이 아니라 **미평가(None)** 인가
   · 경계값(정확히 90)이 설정한 방향대로 가는가 — 시험 없이 두면 언젠가 뒤집힌다
   · 평균은 값 있는 것만으로 내는가 — 안 잰 시뮬레이션이 항목을 끌어내리면 안 된다
@@ -26,7 +26,7 @@ def test_부문과_축의_key_는_유일하고_종류가_맞다():
             assert a['kind'] in D.AXIS_KINDS
             rungs = D.rung_keys(a)
             assert len(rungs) == len(set(rungs)), (sector, a['key'])
-            assert len(rungs) >= 3, (sector, a['key'])          # 사다리가 두 칸이면 스위치다
+            assert len(rungs) >= 3, (sector, a['key'])          # 척도가 두 칸이면 스위치다
 
 
 def test_시뮬레이션만_살아_있고_나머지는_자리만_있다():

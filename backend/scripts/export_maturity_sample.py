@@ -42,7 +42,7 @@ def main():
         ids = [d.id for d in kpi]
 
         out['/definitions'] = {
-            'sectors': [{**s, 'active': D.sector_is_active(s['key'])} for s in D.SECTORS],
+            'sectors': [{**s, 'active': D.sector_is_active(s['key'])} for s in D.sectors()],
             'axes': {k: D.get_axes(k) for k in D.SECTOR_KEYS},
             'model_kinds': D.vocab('model_kinds'), 'accuracy_rules': sorted(D.ACCURACY_RULES),
             'import_columns': D.IMPORT_COLUMNS, 'stale_days': D.get_stale_days(),

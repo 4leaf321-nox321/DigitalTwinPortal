@@ -44,7 +44,7 @@ const RowBtn = styled.button`border: none; background: transparent; font-family:
 const Muted = styled.div`font-size: 0.8125rem; color: #94a3b8;`;
 
 // ⚠️ 말은 **서버가 준다** — 연계 수단·상태·연계 개발은 기준 정보에서, 「연결」 칸은
-//    사다리 문구에서 고친다. 여기에 표를 굳혀 두면 고쳐도 이 창만 옛말이 남는다.
+//    척도 문구에서 고친다. 여기에 표를 굳혀 두면 고쳐도 이 창만 옛말이 남는다.
 //    색과 칸 수는 화면의 것이라 여기 남긴다(칸의 차례가 곧 서열이다).
 const RUNG_COLORS = ['#fca5a5', '#93c5fd', '#3b82f6', '#1e3a8a'];
 const STATUS_COLORS = { active: ['#dcfce7', '#166534'], adopting: ['#dbeafe', '#1e40af'], retiring: ['#fef3c7', '#92400e'] };

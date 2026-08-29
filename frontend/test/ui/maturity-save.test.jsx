@@ -1,6 +1,6 @@
 // 성숙도 — 저장 흐름을 실제로 눌러 본다. (2026-08-28 「근거를 적어도 저장이 안 된다」 점검에서 시작)
 //
-//   ① 연계 상세: 칸 누르기 → 근거 적기 → 저장 → PUT 이 가고 사다리가 새 칸을 그린다
+//   ① 연계 상세: 칸 누르기 → 근거 적기 → 저장 → PUT 이 가고 척도가 새 칸을 그린다
 //   ② 연계 상세: 근거 칸에서 Enter 로도 저장된다
 //   ③ 연계 상세: 정확도 「정확도 기록 추가」 → 값·근거 → value 로 간다(rung 없음)
 //   ④ 연계 상세: 서버가 거절하면 그 이유가 저장 단추 옆에 보인다
@@ -99,7 +99,7 @@ export default async function run() {
     say(!!put && JSON.stringify(put.body.flags) === '["pre","run"]' && put.body.note === '템플릿 도입', `① PUT 이 flags 로 감: ${JSON.stringify(put?.body)}`);
     say(put?.body.assessed_at === undefined, '① 묶음 축은 시점을 같이 보내지 않음(칸 밑에서 따로 고침)');
     say(!document.querySelector('input[placeholder^="근거"]'), '① 저장 뒤 편집 칸이 닫힘');
-    say(html().includes('템플릿 도입') && html().includes('2026-08') && !html().includes('2026-08-28'), '① 사다리가 새 묶음·근거·시점(연-월)을 그림');
+    say(html().includes('템플릿 도입') && html().includes('2026-08') && !html().includes('2026-08-28'), '① 척도가 새 묶음·근거·시점(연-월)을 그림');
 
     // ② 수동을 누르면 전부 꺼지고, Enter 로 저장
     calls.length = 0;
@@ -118,7 +118,7 @@ export default async function run() {
     await keydown(monthIn, 'Enter'); await settle();
     const reachedCall = calls.find(c => c.url.includes('/reached/scope/issue'));
     say(!!reachedCall && reachedCall.body.month === '2024-09', `②-2 PUT reached 가 감: ${JSON.stringify(reachedCall?.body)}`);
-    say(html().includes('2024-09'), '②-2 사다리가 그 달을 그림');
+    say(html().includes('2024-09'), '②-2 척도가 그 달을 그림');
 
     // ②-3 모델링 수준 — 표의 칸은 근거 없이 바로 저장, 바탕은 근거와 함께
     calls.length = 0;

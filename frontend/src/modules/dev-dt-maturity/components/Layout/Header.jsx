@@ -44,7 +44,7 @@ const SectorBtn = styled.button`
   &:hover:not(:disabled) { background: ${p => (p.$on ? '#1e40af' : '#e9ecef')}; }
   &:disabled { color: #b0b7c0; cursor: not-allowed; opacity: 0.8; }
 `;
-// 부문 토글. `open` 은 「사다리가 없어도 눌리게 할 것인가」의 옛 장치 — 지금은 서버가
+// 부문 토글. `open` 은 「척도가 없어도 눌리게 할 것인가」의 옛 장치 — 지금은 서버가
 // active 로 답한다. 설정에서 감춘 부문(hidden)은 여기서 아예 빠진다(2026-08-29).
 const SECTORS = [
   { key: 'simulation', label: '시뮬레이션', icon: Activity, open: true },

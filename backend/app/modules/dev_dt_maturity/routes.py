@@ -84,7 +84,7 @@ def definitions(actor):
     return success_response({
         # 감춘 부문은 목록에 남기되 hidden 을 달아 보낸다 — 설정 화면이 그것을 켜고 끈다.
         'sectors': [{**s, 'active': D.sector_is_active(s['key']), 'hidden': s['key'] in D.get_hidden_sectors()}
-                    for s in D.SECTORS],
+                    for s in D.sectors()],
         'axes': {k: D.get_axes(k) for k in D.SECTOR_KEYS},
         'model_kinds': D.vocab('model_kinds'),
         'accuracy_rules': D.vocab('accuracy_rules'),   # key 만이 아니라 문구까지 — 화면이 그대로 쓴다
@@ -410,6 +410,8 @@ def put_settings(actor):
                 D.forget_vocab_cache()   # 같은 요청 안에서 옛 값을 되돌려 주지 않게
             elif key == 'ladders':
                 row.settings_data = D.clean_ladders_payload(p[key])
+            elif key == 'sector_words':
+                row.settings_data = D.clean_sector_words_payload(p[key])
             else:
                 row.settings_data = p[key]
         db.session.commit()
@@ -689,7 +691,7 @@ def bulk_input(actor):
 @read_required
 def get_vocabs(actor):
     """기준 정보 — 화면의 선택지들과 지금 값. 설정 화면이 이걸로 표를 그린다(2026-08-30)."""
-    return success_response(D.vocab_all() + D.ladder_all())
+    return success_response(D.vocab_all() + [D.sector_words_all()] + D.ladder_all())
 
 
 @bp.route('/bulk/kinds', methods=['GET'])

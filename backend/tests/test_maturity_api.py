@@ -3,7 +3,7 @@
 
 **여기서 지키는 것은 판단의 규칙이다.**
 
-  · 근거 없이 저장되는가 — 되면 사다리가 인상평이 된다
+  · 근거 없이 저장되는가 — 되면 척도가 인상평이 된다
   · 정확도를 칸으로 매길 수 있는가 — 되면 정확도가 둘이 된다
   · 다른 사업부 사람이 매길 수 있는가 — 되면 인상이고, 못 하면 이유가 적혀야 한다
   · 값이 안 바뀌었는데 이력이 남는가 — 남으면 진짜 변경이 잡음에 묻힌다
@@ -862,7 +862,7 @@ def test_기준_정보는_설정에서_고치고_고친_말이_모든_문으로_
     assert 'wms' in {s['kind'] for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']}
 
 
-def test_사다리_문구도_기준_정보에서_고치되_칸은_못_늘린다(client, auth, world, mx_user, office):
+def test_척도_문구도_기준_정보에서_고치되_칸은_못_늘린다(client, auth, world, mx_user, office):
     """평가할 때 고르는 칸이 가장 큰 선택지인데 고칠 길이 없었다(설정 키만 있고 화면이 없었다).
 
     ⚠️ 칸의 key 는 평가·이력이 묶인 자리다 — **문구만** 바뀌고 칸은 늘지도 줄지도 않는다.
@@ -877,18 +877,21 @@ def test_사다리_문구도_기준_정보에서_고치되_칸은_못_늘린다(
     ladder = by['ladder:simulation:automation']
     assert ladder['fixed'] is True and ladder['has_description'] is True and ladder['sector_label'] == '시뮬레이션'
     assert [x['key'] for x in ladder['items']] == ['manual', 'pre', 'run', 'post', 'report', 'pipeline']
-    assert all(v['store'] in ('vocab', 'ladders') for v in rows)
+    assert all(v['store'] in ('vocab', 'ladders', 'sector_words') for v in rows)
 
     # 문구를 고친다 — 칸을 더하려 해도 안 는다
     edited = [{**x} for x in ladder['items']]
     edited[1] = {**edited[1], 'label': '앞단 자동', 'description': '형상·메시가 자동'}
     res = client.put(f'{BASE}/settings', json={'ladders': {'simulation': {
-        'automation': edited + [{'key': '__new__', 'label': '몰래 넣은 칸'}],
-        'nope': [{'key': 'x', 'label': 'x'}],
+        'automation': {'label': '해석 자동화', 'question': '어디까지 저절로 도는가',
+                       'rungs': edited + [{'key': '__new__', 'label': '몰래 넣은 칸'}]},
+        'nope': {'rungs': [{'key': 'x', 'label': 'x'}]},
     }}}, headers=auth(office))
     assert res.status_code == 200
     axes = client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']['axes']['simulation']
-    rungs = next(a for a in axes if a['key'] == 'automation')['rungs']
+    automation = next(a for a in axes if a['key'] == 'automation')
+    assert automation['label'] == '해석 자동화' and automation['question'] == '어디까지 저절로 도는가'
+    rungs = automation['rungs']
     assert [r['key'] for r in rungs] == ['manual', 'pre', 'run', 'post', 'report', 'pipeline']   # 칸은 그대로
     assert rungs[1]['label'] == '앞단 자동' and rungs[1]['description'] == '형상·메시가 자동'
     after = {v['key']: v for v in client.get(f'{BASE}/vocabs', headers=auth(mx_user)).get_json()['data']}
@@ -911,3 +914,45 @@ def test_사다리_문구도_기준_정보에서_고치되_칸은_못_늘린다(
     assert '전화' in names and '메일' in names
     assert '전화' in client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']['thread']['informal_items']
     _ = mx
+
+
+def test_축의_문구와_부문의_말도_기준_정보에서_고친다(client, auth, world, mx_user, office):
+    """칸만 고칠 수 있으면 반쪽이다 — 축 이름·묻는 것·바탕·열, 그리고 부문의 이름표까지.
+
+    ⚠️ 어느 것도 **줄을 늘리지 않는다.** 화면의 짜임과 이력이 key 로 묶여 있다.
+    """
+    rows = client.get(f'{BASE}/vocabs', headers=auth(mx_user)).get_json()['data']
+    by = {v['key']: v for v in rows}
+
+    # ① 모델링 수준에는 바탕·열이 딸린다 — 여태 고칠 길이 없던 자리
+    modeling = by['ladder:simulation:modeling']
+    assert [f['key'] for f in modeling['fields']] == ['label', 'question', 'evidence_label']
+    assert [x['key'] for x in modeling['extras']] == ['base', 'columns']
+    client.put(f'{BASE}/settings', json={'ladders': {'simulation': {'modeling': {
+        'evidence_label': '불량 표',
+        'base': [{'key': 'geometry', 'label': '형상만'}, {'key': '__no__', 'label': '몰래'}],
+        'columns': [{'key': 'market', 'label': '시장 재현', 'short': '시장'}],
+    }}}}, headers=auth(office))
+    axis = next(a for a in client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']['axes']['simulation']
+                if a['key'] == 'modeling')
+    assert axis['evidence_label'] == '불량 표'
+    assert [b['key'] for b in axis['base']] == ['geometry', 'performance']       # 줄은 안 는다
+    assert axis['base'][0]['label'] == '형상만' and axis['base'][1]['label'] == '거동 재현'
+    assert next(c for c in axis['columns'] if c['key'] == 'market')['label'] == '시장 재현'
+
+    # ② 부문의 말 — 화면 전체의 이름표
+    words = by['sector_words']
+    assert words['fixed'] is True and words['sector_label'] == '공통'
+    assert {'simulation:subject_label', 'manufacturing_monitoring:agent_label'} <= {x['key'] for x in words['items']}
+    assert 'digital_thread:agent_label' not in {x['key'] for x in words['items']}   # 수단 없는 부문은 자리도 없다
+    client.put(f'{BASE}/settings', json={'sector_words': {
+        'simulation': {'subject_label': '검증 항목'},
+        'nope': {'label': 'x'},
+    }}, headers=auth(office))
+    sec = next(s for s in client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']['sectors']
+               if s['key'] == 'simulation')
+    assert sec['subject_label'] == '검증 항목' and sec['agent_label'] == '시뮬레이션'
+    # 일괄 입력의 갈래 이름도 같이 따라온다 — 한 군데만 고쳐지면 화면끼리 말이 어긋난다
+    kinds = client.get(f'{BASE}/bulk/kinds?sector=simulation&division_id={world["mx"].id}',
+                       headers=auth(mx_user)).get_json()['data']
+    assert next(k for k in kinds if k['key'] == 'subject')['label'] == '검증 항목'
