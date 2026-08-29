@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio, Factory } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio, Factory, FileSpreadsheet } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -46,7 +46,7 @@ const SECTORS = [
 const subjectLabel = (sectors, key) => sectors.find(s => s.key === key)?.subject_label || '시험 항목';
 const agentLabel = (sectors, key) => sectors.find(s => s.key === key)?.agent_label || '시뮬레이션';
 
-const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector }) => (
+const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector, exporting = false }) => (
 
   <CommonHeader
     logo={<Gauge size={24} strokeWidth={2} />}
@@ -99,8 +99,15 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
             );
           })}
         </SectorToggle>
+        {/* 추출 — 지금 부문의 입력 자료를 엑셀 한 권으로. 탭과 무관하게 늘 있다(2026-08-30).
+            샘플 뷰에서는 목업이 그대로 나온다 — 자료를 같은 길(maturityApi)로 받기 때문이다. */}
+        <HeaderButton onClick={() => onOpen('export')} disabled={exporting}
+                      title="지금 부문의 대상·수단·평가·이력을 엑셀(.xlsx) 한 권으로 내려받습니다"
+                      style={{ marginLeft: '0.5rem' }}>
+          <FileSpreadsheet size={16} /> {exporting ? '만드는 중…' : '추출'}
+        </HeaderButton>
         {canCurate && (
-          <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자" style={{ marginLeft: '0.5rem' }}>
+          <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자">
             <Settings size={16} /> 설정
           </HeaderButton>
         )}

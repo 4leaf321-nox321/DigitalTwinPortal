@@ -15,6 +15,7 @@ import SettingsModal from './components/Settings/SettingsModal';
 import maturityApi from './services/maturityApi';
 import { setSampleMode } from './sample/sampleStore';
 import { filtersFromParams, filtersToParams, tabInSector } from './utils/board';
+import { exportMaturity } from './services/exportXlsx';
 
 // 디지털 트윈 성숙도 — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가.
 // 계획: ./PLAN.md
@@ -140,6 +141,20 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     const cur = (defs?.sectors || []).find(s => s.key === sector);
     if (cur?.hidden) patch({ sector: null, pair: null, tab: null });
   }, [defs, sector]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // 추출 — 지금 부문의 입력 자료를 엑셀 한 권으로. 자료는 화면과 같은 길로 받으니 샘플 뷰도 따라온다.
+  const [exporting, setExporting] = useState(false);
+  const runExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportMaturity({
+        divisionId, divisionName: divisionId === 'all' ? '전체' : division?.name,
+        sector, sectorDef: (defs?.sectors || []).find(s => s.key === sector), axes, defs,
+      });
+      setError(null);
+    } catch (e) { setError(`추출하지 못했습니다 — ${e.message}`); }
+    finally { setExporting(false); }
+  };
   const isThread = sector === 'digital_thread';
   // ⚠️ 시뮬레이션 전용 화면은 **「시뮬레이션이면」으로** 가른다. 「스레드가 아니면」으로
   //    두면 부문이 늘 때마다 새 부문에 딸려 나온다(2026-08-30 점검).
@@ -160,7 +175,8 @@ const DevDtMaturityApp = ({ onGoHome }) => {
 
   return (
     <Container>
-      <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} canCurate={!!defs?.can_curate}
+      <Header onGoHome={onGoHome} onOpen={(kind) => (kind === 'export' ? runExport() : setModal({ kind }))}
+              counts={counts} canCurate={!!defs?.can_curate} exporting={exporting}
               sample={sample} onToggleSample={() => patch({ sample: sample ? null : '1', pair: null })}
               sector={sector} sectors={defs?.sectors || []} onSector={(k) => patch({ sector: k === 'simulation' ? null : k, pair: null, tab: tabInSector(tab, k) })} />
       {sample && (

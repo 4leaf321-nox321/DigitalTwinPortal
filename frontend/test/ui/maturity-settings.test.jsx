@@ -101,6 +101,15 @@ export default async function run() {
     await settle();
     const names = () => [...document.querySelectorAll('[aria-label="부문"] button')].map(b => b.textContent.trim());
     say(names().includes('모니터링') && names().includes('디지털 스레드'), `⑦ 부문 토글에 모니터링이 있음: ${names()}`);
+    // ⑦-2 「추출」은 탭과 무관하게 늘 있다 — 관리자가 아니어도 자기 사업부 자료는 받아 갈 수 있다
+    let asked = null;
+    await unmount();
+    await render(<Header sectors={SECTORS} sector="simulation" onGoHome={() => {}} onOpen={(k) => { asked = k; }} onSector={() => {}} />);
+    await settle();
+    const ex = byText('button', '추출');
+    say(!!ex, '⑦-2 헤더에 「추출」');
+    await click(ex); await settle();
+    say(asked === 'export', `⑦-2 누르면 추출이 돈다: ${asked}`);
     await unmount();
     await render(<Header sectors={SECTORS.map(x => (x.key === 'manufacturing_monitoring' ? { ...x, hidden: true } : x))}
                          sector="simulation" canCurate onGoHome={() => {}} onOpen={() => {}} onSector={() => {}} />);
