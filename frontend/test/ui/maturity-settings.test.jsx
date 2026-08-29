@@ -106,10 +106,16 @@ export default async function run() {
     await unmount();
     await render(<Header sectors={SECTORS} sector="simulation" onGoHome={() => {}} onOpen={(k) => { asked = k; }} onSector={() => {}} />);
     await settle();
-    const ex = byText('button', '추출');
-    say(!!ex, '⑦-2 헤더에 「추출」');
-    await click(ex); await settle();
-    say(asked === 'export', `⑦-2 누르면 추출이 돈다: ${asked}`);
+    // ⑦-2 「데이터」 아래에 추출·일괄 입력 둘
+    const data = byText('button', '데이터');
+    say(!!data, '⑦-2 헤더에 「데이터」');
+    await click(data); await settle();
+    say(!!byText('button', '추출') && !!byText('button', '일괄 입력'), '⑦-2 열면 추출·일괄 입력');
+    await click(byText('button', '추출')); await settle();
+    say(asked === 'export', `⑦-2 추출을 누르면 추출이 돈다: ${asked}`);
+    await click(byText('button', '데이터')); await settle();
+    await click(byText('button', '일괄 입력')); await settle();
+    say(asked === 'bulk', `⑦-2 일괄 입력을 누르면 창이 열린다: ${asked}`);
     await unmount();
     await render(<Header sectors={SECTORS.map(x => (x.key === 'manufacturing_monitoring' ? { ...x, hidden: true } : x))}
                          sector="simulation" canCurate onGoHome={() => {}} onOpen={() => {}} onSector={() => {}} />);

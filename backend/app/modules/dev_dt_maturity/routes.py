@@ -24,6 +24,7 @@ from app.shared.responses import error_response, success_response
 from . import definitions as D
 from . import permissions as P
 from . import services as S
+from . import bulk as B
 from .models import MaturityAgent, MaturityPair, MaturitySubject
 from . import bp
 
@@ -647,6 +648,42 @@ def departments(actor):
         return success_response(S.departments_of(division_id))
     except Exception:
         return _crashed()
+
+
+@bp.route('/bulk', methods=['POST'])
+@read_required
+def bulk_input(actor):
+    """일괄 입력 — 「추출」과 같은 머리글의 표를 붙여넣어 한 번에 세운다(bulk.py).
+
+    dry_run 이면 아무것도 저장하지 않고 줄마다 어떻게 될지만 돌려준다.
+    """
+    p = request.get_json() or {}
+    raw_div = p.get('division_id')
+    division_id = None if raw_div in (None, '', 'all') else int(raw_div)
+    if division_id is not None:
+        denied = _deny(actor, division_id)
+        if denied:
+            return denied
+    sector = p.get('sector') or 'simulation'
+    if not D.sector_is_active(sector):
+        return error_response('아직 열리지 않은 부문입니다.', status_code=400)
+    try:
+        out = B.run(division_id if division_id is not None else 'all', sector, p.get('kind'),
+                    p.get('text') or '', actor, dry_run=bool(p.get('dry_run', True)))
+        return success_response(out)
+    except (B.TableFormatError, S.Refused) as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        db.session.rollback()
+        return _crashed()
+
+
+@bp.route('/bulk/kinds', methods=['GET'])
+@read_required
+def bulk_kinds(actor):
+    """그 부문에서 고를 수 있는 종류와 머리글 — 화면이 드롭다운과 안내를 그대로 그린다."""
+    return success_response(B.kinds_for(request.args.get('sector') or 'simulation'))
 
 
 @bp.route('/projects', methods=['GET'])

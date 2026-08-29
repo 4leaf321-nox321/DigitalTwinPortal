@@ -4,16 +4,26 @@
 //   ② 시험·시뮬레이션을 고르고 「잇기」 → POST /pairs, 모달 닫힘
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
-import { render, click, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import { render, click, select, type, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import ListView from '../../src/modules/dev-dt-maturity/components/List/ListView';
+import BulkInputModal from '../../src/modules/dev-dt-maturity/components/List/BulkInputModal';
 
 const AXES = [{ key: 'accuracy', label: '정확도', kind: 'value', rungs: [{ key: 'trend', label: '경향 일치' }, { key: 'quantitative', label: '원인 분석' }, { key: 'correlated', label: '현상 재현' }] }];
 
 export default async function run() {
   const { say, done } = suite();
   let opened = null;
-  const calls = fakeFetch(({ url, method }) => {
+  const calls = fakeFetch(({ url, method, body }) => {
     if (url.includes('/pairs') && method === 'POST') return { id: 77 };
+    if (url.includes('/bulk/kinds')) return [
+      { key: 'subject', label: '시험 항목', columns: ['사업부', '시험 항목', '세부', '제품군'], required: ['시험 항목'], hint: '제품군은 · 로 나눠 적습니다.' },
+      { key: 'agent', label: '시뮬레이션', columns: ['사업부', '시뮬레이션', '종류'], required: ['시뮬레이션'], hint: '' },
+    ];
+    if ((url || '').endsWith('/bulk') && method === 'POST') return {
+      kind: body.kind,
+      summary: { rows: 2, new: 1, exists: 0, errors: 1 },
+      rows: [{ line: 2, status: 'new', name: '낙하 시험' }, { line: 3, status: 'error', name: '', message: '시험 항목 이름이 없습니다.' }],
+    };
     if (url.includes('/subjects')) return [{ id: 1, name: '낙하 시험', division_id: 17, product_families: [] }];
     if (url.includes('/agents')) return [{ id: 5, name: '구조 해석', division_id: 17, tools: [] }, { id: 6, name: '열 해석', division_id: 17, tools: [] }];
     if (url.includes('/board')) return { subjects: [{ id: 1, name: '낙하 시험', pairs: [{ id: 9, subject_id: 1, agent_id: 5, agent: { name: '구조 해석', tools: ['LS-DYNA', 'HyperMesh'], department_name: 'CAE그룹(MX)', projects: [{ uuid: 'u1', code: 'MX-1', title: '낙하 해석 자동화' }] }, unassessed: [], assessments: {} }] }], totals: {} };
@@ -67,6 +77,27 @@ export default async function run() {
     const post = calls.find(c => c.method === 'POST' && c.url.endsWith('/pairs'));
     say(!!post && post.body.subject_id === 1 && post.body.agent_id === 6, `② POST /pairs: ${JSON.stringify(post?.body)}`);
     say(!document.querySelector('[role="dialog"]'), '② 이으면 모달이 닫힘');
+    await unmount();
+    // ⑦ 일괄 입력 — 종류를 고르고 붙여넣어 미리보기(저장 없음) → 넣기
+    let changed = 0;
+    calls.length = 0;
+    await render(<BulkInputModal divisionId={17} divisionName="MX" sector="simulation" canEdit
+                                 onClose={() => {}} onChanged={() => { changed += 1; }} />);
+    await settle(60);
+    say(!!byText('button', '시험 항목') && !!byText('button', '시뮬레이션'), '⑦ 부문의 종류가 칩으로');
+    say(html().includes('필요한 열'), '⑦ 어떤 열이 필요한지 알려 준다');
+    const area = document.querySelector('textarea[aria-label="붙여넣기"]');
+    say(!!area, '⑦ 붙여넣는 칸');
+    say(byText('button', '미리보기').disabled, '⑦ 붙여넣기 전에는 미리보기가 잠김');
+    await type(area, '사업부\t시험 항목\nMX\t낙하 시험'); await settle();
+    await click(byText('button', '미리보기')); await settle(60);
+    const dry = calls.find(c => c.method === 'POST' && (c.url || '').endsWith('/bulk'));
+    say(!!dry && dry.body.dry_run === true && dry.body.kind === 'subject', `⑦ 미리보기는 dry_run 으로: ${JSON.stringify(dry?.body)}`);
+    say(html().includes('아직 저장하지 않았습니다') && html().includes('시험 항목 이름이 없습니다.'),
+        '⑦ 줄마다 어떻게 될지 — 오류 줄도 남는다');
+    await click(byText('button', '1줄 넣기')); await settle(60);
+    const put = calls.filter(c => c.method === 'POST' && (c.url || '').endsWith('/bulk')).pop();
+    say(put && put.body.dry_run === false && changed === 1, `⑦ 넣기는 dry_run=false 로 가고 화면이 새로 읽는다: ${JSON.stringify(put?.body?.dry_run)}`);
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

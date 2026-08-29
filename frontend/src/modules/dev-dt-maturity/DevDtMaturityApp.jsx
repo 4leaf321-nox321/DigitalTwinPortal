@@ -16,6 +16,7 @@ import maturityApi from './services/maturityApi';
 import { setSampleMode } from './sample/sampleStore';
 import { filtersFromParams, filtersToParams, tabInSector } from './utils/board';
 import { exportMaturity } from './services/exportXlsx';
+import BulkInputModal from './components/List/BulkInputModal';
 
 // 디지털 트윈 성숙도 — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가.
 // 계획: ./PLAN.md
@@ -237,7 +238,12 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                          accuracyRungs={(axes.find(a => a.key === 'accuracy') || {}).rungs || []}
                          onClose={() => setModal(null)} onChanged={bump} />
         )}
-        {modal && !['settings', 'system', 'org', 'thread'].includes(modal.kind) && defs && divisionId && (
+        {modal?.kind === 'bulk' && defs && divisionId && (
+          <BulkInputModal divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name}
+                          sector={sector} canEdit={!division?.deny_reason} denyReason={division?.deny_reason || null}
+                          onClose={() => setModal(null)} onChanged={bump} />
+        )}
+        {modal && !['settings', 'system', 'org', 'thread', 'bulk'].includes(modal.kind) && defs && divisionId && (
           <ModalHost kind={modal.kind} initialId={modal.id ?? null} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      sector={sector} processSteps={defs.monitoring?.process_steps || []}

@@ -1,12 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio, Factory, FileSpreadsheet } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio, Factory, FileSpreadsheet, ChevronDown, Download, ClipboardPaste } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
 // 단추는 로드맵 정보 헤더와 같은 모양 — 포탈 안에서 헤더 문법이 갈리면 안 된다.
 
 const Buttons = styled.div`display: flex; gap: 0.5rem; align-items: center;`;
+// 「데이터」 — 엑셀로 주고받는 둘(추출·일괄 입력)을 한 단추 아래 모은다(2026-08-30).
+const DataMenu = styled.div`position: relative; display: inline-flex;`;
+const DataList = styled.div`
+  position: absolute; right: 0; top: calc(100% + 0.35rem); z-index: 50; min-width: 17rem;
+  background: white; border: 1px solid #e2e8f0; border-radius: 0.5rem; box-shadow: 0 10px 30px rgba(15,23,42,0.16); padding: 0.25rem;
+  button {
+    display: flex; align-items: center; gap: 0.45rem; width: 100%; text-align: left; border: none; background: transparent;
+    font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; padding: 0.45rem 0.55rem; border-radius: 0.375rem; cursor: pointer;
+    &:hover { background: #eff6ff; color: #1d4ed8; }
+    small { display: block; font-weight: 400; font-size: 0.6875rem; color: #94a3b8; margin-left: auto; }
+  }
+`;
 
 const HeaderButton = styled.button`
   display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px;
@@ -46,7 +58,19 @@ const SECTORS = [
 const subjectLabel = (sectors, key) => sectors.find(s => s.key === key)?.subject_label || '시험 항목';
 const agentLabel = (sectors, key) => sectors.find(s => s.key === key)?.agent_label || '시뮬레이션';
 
-const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector, exporting = false }) => (
+const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector, exporting = false }) => {
+  const [dataOpen, setDataOpen] = useState(false);
+  // 바깥을 누르거나 Esc 면 닫는다 — 열려 있을 때만 듣는다.
+  useEffect(() => {
+    if (!dataOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setDataOpen(false); };
+    const onDown = (e) => { if (!e.target.closest?.('[data-data-menu]')) setDataOpen(false); };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onDown, true);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('mousedown', onDown, true); };
+  }, [dataOpen]);
+
+  return (
 
   <CommonHeader
     logo={<Gauge size={24} strokeWidth={2} />}
@@ -99,13 +123,24 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
             );
           })}
         </SectorToggle>
-        {/* 추출 — 지금 부문의 입력 자료를 엑셀 한 권으로. 탭과 무관하게 늘 있다(2026-08-30).
-            샘플 뷰에서는 목업이 그대로 나온다 — 자료를 같은 길(maturityApi)로 받기 때문이다. */}
-        <HeaderButton onClick={() => onOpen('export')} disabled={exporting}
-                      title="지금 부문의 대상·수단·평가·이력을 엑셀(.xlsx) 한 권으로 내려받습니다"
-                      style={{ marginLeft: '0.5rem' }}>
-          <FileSpreadsheet size={16} /> {exporting ? '만드는 중…' : '추출'}
-        </HeaderButton>
+        {/* 데이터 — 엑셀로 주고받는 자리(2026-08-30). 탭과 무관하게 늘 있다.
+            추출은 샘플 뷰에서 목업이 그대로 나온다 — 자료를 같은 길(maturityApi)로 받기 때문이다. */}
+        <DataMenu>
+          <HeaderButton onClick={() => setDataOpen(v => !v)} disabled={exporting}
+                        title="엑셀로 내려받거나, 엑셀 표를 붙여넣어 한 번에 세웁니다" style={{ marginLeft: '0.5rem' }}>
+            <FileSpreadsheet size={16} /> {exporting ? '만드는 중…' : '데이터'} <ChevronDown size={13} />
+          </HeaderButton>
+          {dataOpen && (
+            <DataList data-data-menu>
+              <button type="button" onClick={() => { setDataOpen(false); onOpen('export'); }}>
+                <Download size={14} /> 추출<small>대상·수단·평가·이력을 엑셀(.xlsx) 한 권으로</small>
+              </button>
+              <button type="button" onClick={() => { setDataOpen(false); onOpen('bulk'); }}>
+                <ClipboardPaste size={14} /> 일괄 입력<small>추출과 같은 머리글의 표를 붙여넣어 한 번에</small>
+              </button>
+            </DataList>
+          )}
+        </DataMenu>
         {canCurate && (
           <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자">
             <Settings size={16} /> 설정
@@ -120,6 +155,7 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
       </Buttons>
     }
   />
-);
+  );
+};
 
 export default Header;

@@ -75,6 +75,15 @@ def _pair(client, auth, user, division, subject='낙하 시험', agent='구조 �
     return s, a, p
 
 
+def _sys_names(client, auth, user):
+    return [x['name'] for x in client.get(f'{BASE}/systems', headers=auth(user)).get_json()['data']]
+
+
+def _table(*rows):
+    """붙여넣은 표를 흉내 — 탭으로 칸을, 줄바꿈으로 줄을 나눈다."""
+    return chr(10).join(chr(9).join(r) for r in rows)
+
+
 def _assess(client, auth, user, pair_id, axis, payload, expect=200):
     res = client.put(f'{BASE}/pairs/{pair_id}/assessments/{axis}',
                      json=payload, headers=auth(user))
@@ -704,6 +713,33 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
                        json={'rung': 'auto', 'note': '다른 축', 'evidence': {'coverage_pct': '90'},
                              'base_assessed_at': fresh['assessments']['capture']['assessed_at']}, headers=auth(mx_user))
     assert other.status_code == 200
+
+    # 일괄 입력 — 추출과 같은 머리글의 표를 붙여넣어 한 번에 세운다
+    kinds = client.get(f'{BASE}/bulk/kinds?sector=digital_thread', headers=auth(mx_user)).get_json()['data']
+    assert [k['key'] for k in kinds] == ['system', 'org', 'segment']
+    table = _table(('시스템', '종류', '연계 수단'),
+                   ('일괄 PLM', 'PLM', 'API 있음'),
+                   ('일괄 MES', 'MES', '파일 배치'),
+                   ('일괄 PLM', 'PLM', ''))
+    def _bulk(text, dry, kind='system'):
+        return client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'digital_thread', 'kind': kind,
+                                                 'text': text, 'dry_run': dry}, headers=auth(mx_user))
+    dry = _bulk(table, True).get_json()['data']
+    assert dry['summary'] == {'rows': 3, 'new': 2, 'exists': 1, 'errors': 0}      # 셋째 줄은 첫 줄과 같은 이름
+    assert not [x for x in _sys_names(client, auth, mx_user) if x.startswith('일괄')]   # 미리보기는 저장하지 않는다
+    assert _bulk(table, False).get_json()['data']['summary']['new'] == 2
+    names = _sys_names(client, auth, mx_user)
+    assert '일괄 PLM' in names and '일괄 MES' in names
+    # 다시 올려도 같다 — 이름이 같으면 새로 만들지 않는다
+    again = _bulk(table, False).get_json()['data']
+    assert again['summary']['new'] == 0 and again['summary']['exists'] == 3
+    # 모르는 값은 그 줄만 오류로 남고 나머지는 들어간다
+    bad = _bulk(_table(('시스템', '종류'), ('일괄 QMS', '없는종류'), ('일괄 CAD', 'CAD')), False).get_json()['data']
+    assert bad['summary']['errors'] == 1 and bad['summary']['new'] == 1
+    assert '없는종류' in bad['rows'][0]['message']
+    # 머리글이 틀리면 표 전체를 거절하고 무엇이 없는지 말한다
+    res = _bulk(_table(('이름', '종류'), ('A', 'PLM')), True)
+    assert res.status_code == 400 and '머리글' in res.get_json()['message']
 
     # 전사 연계 개발 기록 — division_id=all (시스템 창)
     _ = client.get(f'{BASE}/thread-cases?division_id=all', headers=auth(mx_user))
