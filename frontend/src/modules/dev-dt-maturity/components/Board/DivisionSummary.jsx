@@ -93,7 +93,7 @@ const Distribution = ({ axis, s }) => {
   );
 };
 
-const DivisionSummary = ({ board, subjects, axes, onOpenPair }) => {
+const DivisionSummary = ({ board, subjects, axes, onOpenPair, subjectLabel = '시험 항목' }) => {
   const s = divisionSummary({ subjects }, axes);
   const pairs = subjects.flatMap(sub => (sub.pairs || []).map(p => ({ ...p, subject_name: sub.name })));
   return (
@@ -126,7 +126,7 @@ const DivisionSummary = ({ board, subjects, axes, onOpenPair }) => {
       <Panel aria-label="전체">
         <Head><h4>전체</h4><span>연계 · 미평가 · 재평가 필요</span></Head>
         <Big>{s.pairs}<small>연계</small></Big>
-        <Line>미평가 항목 {s.unassessed} · 재평가 필요 {s.stale} · 시험 항목 {subjects.length}{board?.stale_days ? ` · 재평가 기준 ${board.stale_days}일` : ''}</Line>
+        <Line>미평가 항목 {s.unassessed} · 재평가 필요 {s.stale} · {subjectLabel} {subjects.length}{board?.stale_days ? ` · 재평가 기준 ${board.stale_days}일` : ''}</Line>
       </Panel>
     </Grid>
   );

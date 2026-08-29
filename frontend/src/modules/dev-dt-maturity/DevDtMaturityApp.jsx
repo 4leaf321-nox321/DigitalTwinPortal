@@ -141,19 +141,22 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     if (cur?.hidden) patch({ sector: null, pair: null, tab: null });
   }, [defs, sector]);   // eslint-disable-line react-hooks/exhaustive-deps
   const isThread = sector === 'digital_thread';
+  // ⚠️ 시뮬레이션 전용 화면은 **「시뮬레이션이면」으로** 가른다. 「스레드가 아니면」으로
+  //    두면 부문이 늘 때마다 새 부문에 딸려 나온다(2026-08-30 점검).
+  const isSim = sector === 'simulation';
   const axes = defs?.axes?.[sector] || [];
   const bump = () => setRefreshKey(k => k + 1);
 
   // 헤더 단추에 붙는 수 — 사업부가 바뀌거나 무엇이 바뀌면 다시 센다.
   useEffect(() => {
-    if (isThread) { setCounts({}); return undefined; }
+    if (!divisionId) { setCounts({}); return undefined; }
     if (!divisionId) return;
     let alive = true;
-    Promise.all([maturityApi.listSubjects(divisionId), maturityApi.listAgents(divisionId)])
+    Promise.all([maturityApi.listSubjects(divisionId, sector), maturityApi.listAgents(divisionId, sector)])
       .then(([s, a]) => { if (alive) setCounts({ subjects: s.data.length, agents: a.data.length }); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [isThread, divisionId, refreshKey]);
+  }, [sector, divisionId, refreshKey]);
 
   return (
     <Container>
@@ -189,7 +192,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)}
                      onOpenPair={(id, since) => patch({ pair: id, since: since || null })} onPickDivision={(id) => patch({ division: id, pair: null })}
-                     refreshKey={refreshKey} review={isThread ? null : defs.review} thread={defs.thread} />
+                     refreshKey={refreshKey} review={isSim ? defs.review : null} thread={defs.thread} />
         ) : isThread && tab === 'cases' ? (
           <ThreadCaseLedger divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} thread={defs.thread} axes={axes} refreshKey={refreshKey} />
         ) : isThread ? (

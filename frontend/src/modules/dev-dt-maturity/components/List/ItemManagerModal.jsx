@@ -347,6 +347,8 @@ const ItemManagerModal = ({
   // 수행 디지털 트윈 과제 — 그 사업부의 대시보드 과제를 처음 쓸 때 한 번 불러 둔다(2026-08-29)
   const [projectsBy, setProjectsBy] = useState({});
   const [projPicker, setProjPicker] = useState(false);   // 「상세」로 여는 과제 고르기 창
+  // ⚠️ 시뮬레이션 전용 손잡이(정돈·가져오기·제품군)는 **「시뮬레이션이면」으로** 가른다.
+  const isSim = sector === 'simulation';
   const [pickedProjects, setPickedProjects] = useState([]);   // 창에서 고른 것의 이름표(다른 사업부 것은 목록에 없다)
   const curDiv = current && kind === 'agent' ? (draft?.division_id ?? current.division_id) : null;
   useEffect(() => {
@@ -445,7 +447,7 @@ const ItemManagerModal = ({
 
   // 모니터링의 대상은 **라인 × 공정 단계**다(PLAN-monitoring 2-2) — 제품군·정확도 집계 대신
   // 라인과 공정을 받는다. 설비 개체는 세지 않고, 대수는 평가의 근거 칸으로 간다.
-  const isMon = sector === 'manufacturing_monitoring';
+  const isMon = sector === 'manufacturing_monitoring';   // 대상이 라인 × 공정인 부문
   const fieldsSubject = () => (
     <>
       <DivisionField d={d} set={set} canEdit={canEditCur} divisions={divisions} pairs={pairCount[current.id] || 0} />
@@ -665,10 +667,12 @@ const ItemManagerModal = ({
             )}
             <ListHint>
               Ctrl+클릭 하나씩 더 · Shift+클릭 범위 · 드래그 범위 → 여럿을 한 번에 고칩니다
+              {isSim && (
               <TidyBtn type="button" $on={showTidy} disabled={allMode} onClick={() => setTidyOpen(v => !v)} style={{ marginLeft: '0.5rem' }}
                        title={allMode ? '사업부를 하나 고르면 정돈할 수 있습니다' : `${TIDY.label} 이름을 ${TIDY.standard}과 대봅니다`}>
                 <Sparkles size={12} /> {TIDY.label} 정돈{tidy && tidy.off_standard > 0 && <em>{tidy.off_standard}</em>}
               </TidyBtn>
+              )}
             </ListHint>
             <List>
               {items.length === 0 && <Msg>아직 없습니다.{canAdd ? ' 위에 이름을 적고 Enter.' : ''}</Msg>}
@@ -736,7 +740,7 @@ const ItemManagerModal = ({
                   {picked.map(i => (allMode ? `${i.name} (${divName(i.division_id)})` : i.name)).slice(0, 8).join(' · ')}{picked.length > 8 ? ` … 외 ${picked.length - 8}` : ''}
                   {!canEditBulk && <><br />손댈 수 없는 사업부의 항목이 섞여 있어 저장할 수 없습니다.</>}
                 </Info>
-                {kind === 'subject' && (
+                {kind === 'subject' && isSim && (
                   <>
                     <Field><span>항목 정확도 집계</span>
                       <select value={bulk.accuracy_rule} disabled={!canEditBulk} onChange={e => setB({ accuracy_rule: e.target.value })}>

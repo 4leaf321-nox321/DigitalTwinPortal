@@ -78,9 +78,12 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
             <HeaderButton onClick={() => onOpen('agent')} title={`${agentLabel(sectors, sector)} 추가·수정·삭제`}>
               <Cpu size={16} /> {agentLabel(sectors, sector)} 관리 {counts.agents != null && <Count>{counts.agents}</Count>}
             </HeaderButton>
-            <HeaderButton $variant="primary" onClick={() => onOpen('import')} title="틀 내려받기 → 채워서 붙여넣기 → 미리보기 → 넣기">
-              <Upload size={16} /> 가져오기
-            </HeaderButton>
+            {/* 「가져오기」는 시뮬레이션의 엑셀 틀이다 — 다른 부문에는 그 틀이 없다 */}
+            {sector === 'simulation' && (
+              <HeaderButton $variant="primary" onClick={() => onOpen('import')} title="틀 내려받기 → 채워서 붙여넣기 → 미리보기 → 넣기">
+                <Upload size={16} /> 가져오기
+              </HeaderButton>
+            )}
           </>
         )}
         <SectorToggle role="group" aria-label="부문">

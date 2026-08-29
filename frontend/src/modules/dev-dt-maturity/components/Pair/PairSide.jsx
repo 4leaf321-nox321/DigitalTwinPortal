@@ -35,7 +35,7 @@ const PairSide = ({ pairId, axes, onChanged, onClose }) => {
   if (!pairId) {
     return (
       <Box>
-        <Empty><p>왼쪽 표에서 <strong>시뮬레이션</strong> 칸을 누르면 그 시험 × 시뮬레이션의 사다리가 여기에 나옵니다.</p></Empty>
+        <Empty><p>왼쪽 표에서 <strong>줄</strong>을 누르면 그 연계의 사다리가 여기에 나옵니다.</p></Empty>
       </Box>
     );
   }

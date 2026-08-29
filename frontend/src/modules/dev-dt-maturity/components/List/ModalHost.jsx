@@ -28,7 +28,8 @@ const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason,
       const [s, a, b, r] = await Promise.all([
         maturityApi.listSubjects(divisionId, sector), maturityApi.listAgents(divisionId, sector),
         maturityApi.getBoard(divisionId, sector),
-        allMode ? Promise.resolve({ data: null }) : maturityApi.reconcile(divisionId),
+        // 로드맵 어긋남은 **시뮬레이션의 셈**이다 — 다른 부문에는 로드맵 짝이 없다
+        (allMode || sector !== 'simulation') ? Promise.resolve({ data: null }) : maturityApi.reconcile(divisionId),
       ]);
       setSubjects(s.data); setAgents(a.data);
       setPairs(allMode

@@ -215,6 +215,9 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
 
 export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review, sector = 'simulation', sectorDef, thread }) => {
   const isThread = sector === 'digital_thread';
+  const isSim = sector === 'simulation';
+  const SUBJ = sectorDef?.subject_label || '시험 항목';       // 이름표는 부문이 정한다
+  const AGENT = sectorDef?.agent_label || '시뮬레이션';
   const [mode, setMode] = useState(board?.boards ? 'scan' : 'read');       // scan | read | progress — 전체는 요약부터
   useEffect(() => { if (!isThread && mode === 'sysgraph') setMode('scan'); }, [isThread, mode]);   // 시스템 연결도는 스레드 부문에만
   const subjects = useMemo(() => applyFilters(board?.subjects || [], filters), [board, filters]);
@@ -228,8 +231,9 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
   if (!board.subjects.length) {
     return (
       <Empty>
-        아직 시험 항목이 없습니다. 헤더의 <strong>가져오기</strong>로 로드맵의 틀을
-        내려받아 시뮬레이션 단위로 쪼개 올리거나, <strong>시험 항목 관리</strong>에서 직접 적으세요.
+        아직 {SUBJ}이 없습니다. {isSim
+          ? <>헤더의 <strong>가져오기</strong>로 로드맵의 틀을 내려받아 시뮬레이션 단위로 쪼개 올리거나, </>
+          : ''}헤더의 <strong>{SUBJ} 관리</strong>에서 직접 적으세요.
       </Empty>
     );
   }
@@ -247,16 +251,21 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
         <span style={{ width: '0.5rem' }} />
         <Chip $on={filters.unassessedOnly} onClick={() => set({ unassessedOnly: !filters.unassessedOnly })}>미평가만</Chip>
         <Chip $on={filters.staleOnly} onClick={() => set({ staleOnly: !filters.staleOnly })}>재평가 필요만</Chip>
-        <Select value={filters.family} onChange={e => set({ family: e.target.value })}>
-          <option value="">제품군 전체</option>
-          {families.map(f => <option key={f} value={f}>{f}</option>)}
-        </Select>
-        <Select value={filters.modelKind} onChange={e => set({ modelKind: e.target.value })}>
-          <option value="">모델 종류 전체</option>
-          <option value="physics">물리 기반</option>
-          <option value="data">데이터 기반</option>
-          <option value="hybrid">하이브리드</option>
-        </Select>
+        {/* 제품군·모델 종류는 **시뮬레이션의 속성**이다 — 다른 부문의 대상·수단에는 없다 */}
+        {isSim && (
+          <>
+            <Select value={filters.family} onChange={e => set({ family: e.target.value })}>
+              <option value="">제품군 전체</option>
+              {families.map(f => <option key={f} value={f}>{f}</option>)}
+            </Select>
+            <Select value={filters.modelKind} onChange={e => set({ modelKind: e.target.value })}>
+              <option value="">모델 종류 전체</option>
+              <option value="physics">물리 기반</option>
+              <option value="data">데이터 기반</option>
+              <option value="hybrid">하이브리드</option>
+            </Select>
+          </>
+        )}
         <Select value={filters.axis} onChange={e => set({ axis: e.target.value, minRung: e.target.value ? (filters.minRung ?? 1) : null })}>
           <option value="">축 조건 없음</option>
           {axes.map(a => <option key={a.key} value={a.key}>{a.label} 이상…</option>)}
@@ -271,7 +280,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
       </Bar>
 
       <Totals>
-        <span>시험 <strong>{subjects.length}</strong>/{board.totals.subjects}</span>
+        <span>{SUBJ} <strong>{subjects.length}</strong>/{board.totals.subjects}</span>
         <span>연계 <strong>{subjects.reduce((n, s) => n + s.pairs.length, 0)}</strong>/{board.totals.pairs}</span>
         <span>미평가 항목 <strong>{board.totals.unassessed}</strong></span>
         <span>재평가 필요 <strong>{board.totals.stale}</strong> ({board.stale_days}일 기준)</span>
@@ -307,11 +316,11 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
         isThread ? (
           // 스레드 부문 — 축 판 아래에 스레드 줄 그림 · 조직 연계표 · 시스템 허브도
           <ScrollCol>
-            <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
+            <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} subjectLabel={SUBJ} />
             <ThreadDivisionPanels divisionId={board.division_id} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
           </ScrollCol>
         ) : (
-          <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} />
+          <DivisionSummary board={board} subjects={subjects} axes={axes} onOpenPair={onOpenPair} subjectLabel={SUBJ} />
         )
       ) : mode !== 'progress' ? (
         // 「상세」 — 늘 펼친 표. 한 줄에 시뮬레이션 하나, 시험 항목은 셀을 합친다(목록 탭과 같은 문법, 2026-08-28).
@@ -320,8 +329,8 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
             <thead>
               <tr>
                 {isThread && <Th style={{ width: '8%' }}>스레드</Th>}
-                <Th style={{ width: '12%' }}>{isThread ? '구간' : (sectorDef?.subject_label || '시험 항목')}</Th>
-                <Th style={{ width: isThread ? '20%' : '12%' }}>{isThread ? '출발 → 매개 → 도착' : (sectorDef?.agent_label || '시뮬레이션')}</Th>
+                <Th style={{ width: '12%' }}>{isThread ? '구간' : SUBJ}</Th>
+                <Th style={{ width: isThread ? '20%' : '12%' }}>{isThread ? '출발 → 매개 → 도착' : AGENT}</Th>
                 {!isThread && <Th style={{ width: '8%' }}>담당 그룹</Th>}
                 {axes.map(a => <Th key={a.key}>{a.label}</Th>)}
                 <Th>미평가</Th>
@@ -361,7 +370,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
                   </SubjectTd>
                 );
                 if (s.pairs.length === 0) {
-                  return <PairRow key={s.id} $band={band} $first={first}>{threadCell}{cell}<Td colSpan={axes.length + (isThread ? 2 : 3)}><Muted>{isThread ? '연계가 없습니다.' : '아직 이은 시뮬레이션이 없습니다.'}</Muted></Td></PairRow>;
+                  return <PairRow key={s.id} $band={band} $first={first}>{threadCell}{cell}<Td colSpan={axes.length + (isThread ? 2 : 3)}><Muted>{isThread ? '연계가 없습니다.' : `아직 이은 ${AGENT}이 없습니다.`}</Muted></Td></PairRow>;
                 }
                 return s.pairs.map((p, i) => (
                   <PairRow key={p.id} $band={band} $first={i === 0 && first}>
