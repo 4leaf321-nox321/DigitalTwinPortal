@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -30,11 +30,14 @@ const SectorBtn = styled.button`
   &:hover:not(:disabled) { background: ${p => (p.$on ? '#1e40af' : '#e9ecef')}; }
   &:disabled { color: #b0b7c0; cursor: not-allowed; opacity: 0.8; }
 `;
+// 부문 토글. `open` 은 「사다리가 없어도 눌리게 할 것인가」의 옛 장치 — 지금은 서버가
+// active 로 답한다. 설정에서 감춘 부문(hidden)은 여기서 아예 빠진다(2026-08-29).
 const SECTORS = [
   { key: 'simulation', label: '시뮬레이션', icon: Activity, open: true },
   { key: 'design_automation', label: '설계 자동화', icon: PenTool, open: false },
   { key: 'verification_automation', label: '검증 자동화', icon: CheckSquare, open: false },
   { key: 'digital_thread', label: '디지털 스레드', icon: Link2, open: false },
+  { key: 'manufacturing_monitoring', label: '모니터링', icon: Radio, open: false },
 ];
 
 const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector }) => (
@@ -75,7 +78,7 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
           </>
         )}
         <SectorToggle role="group" aria-label="부문">
-          {SECTORS.map(x => {
+          {SECTORS.filter(x => !sectors.find(s => s.key === x.key)?.hidden).map(x => {
             const open = x.open || (sectors.find(s => s.key === x.key)?.active ?? false);
             return (
               <SectorBtn key={x.key} type="button" $on={x.key === sector} disabled={!open} aria-pressed={x.key === sector}

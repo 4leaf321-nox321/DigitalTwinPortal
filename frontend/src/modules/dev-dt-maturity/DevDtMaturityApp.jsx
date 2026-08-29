@@ -110,6 +110,11 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const tab = ['list', 'reviews', 'cases'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
   const sinceIso = params.get('since') || null;      // 모판의 기준 시점 — 창에서 바뀐 축을 짚어 준다
+  // 설정에서 감춘 부문을 보고 있으면 시뮬레이션으로 되돌린다 — 토글에 없는 화면에 갇히지 않게
+  useEffect(() => {
+    const cur = (defs?.sectors || []).find(s => s.key === sector);
+    if (cur?.hidden) patch({ sector: null, pair: null, tab: null });
+  }, [defs, sector]);   // eslint-disable-line react-hooks/exhaustive-deps
   const filters = useMemo(() => filtersFromParams(k => params.get(k)), [params]);
 
   const patch = useCallback((changes) => {
@@ -207,12 +212,14 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                            canCurate={!!defs.can_curate} denyReason={division?.deny_reason || null} onClose={() => setModal(null)} onChanged={bump} />
         )}
         {modal?.kind === 'settings' && defs && (
-          <SettingsModal divisions={divisions} accuracyRungs={(axes.find(a => a.key === 'accuracy') || {}).rungs || []}
+          <SettingsModal divisions={divisions} sectors={defs.sectors || []}
+                         accuracyRungs={(axes.find(a => a.key === 'accuracy') || {}).rungs || []}
                          onClose={() => setModal(null)} onChanged={bump} />
         )}
         {modal && !['settings', 'system', 'org', 'thread'].includes(modal.kind) && defs && divisionId && (
           <ModalHost kind={modal.kind} initialId={modal.id ?? null} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
+                     sector={sector} processSteps={defs.monitoring?.process_steps || []}
                      onClose={() => setModal(null)} onChanged={bump} />
         )}
       </Main>

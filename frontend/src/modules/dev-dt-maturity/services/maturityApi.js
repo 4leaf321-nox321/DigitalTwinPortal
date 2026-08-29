@@ -36,12 +36,12 @@ export const maturityApi = {
   getChanges: (divisionId, sector = 'simulation', days = 365) =>
     request(`/changes?division_id=${divisionId}&sector=${sector}&days=${days}`),
 
-  listSubjects: (divisionId) => request(`/subjects?division_id=${divisionId}`),
+  listSubjects: (divisionId, sector = 'simulation') => request(`/subjects?division_id=${divisionId}&sector=${sector}`),
   createSubject: (payload) => request('/subjects', json('POST', payload)),
   updateSubject: (id, payload) => request(`/subjects/${id}`, json('PUT', payload)),
   deleteSubject: (id) => request(`/subjects/${id}`, { method: 'DELETE' }),
 
-  listAgents: (divisionId) => request(`/agents?division_id=${divisionId}`),
+  listAgents: (divisionId, sector = 'simulation') => request(`/agents?division_id=${divisionId}&sector=${sector}`),
   createAgent: (payload) => request('/agents', json('POST', payload)),
   updateAgent: (id, payload) => request(`/agents/${id}`, json('PUT', payload)),
   deleteAgent: (id) => request(`/agents/${id}`, { method: 'DELETE' }),

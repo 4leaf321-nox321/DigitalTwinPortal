@@ -165,13 +165,14 @@ const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 
 const toDraft = (kind, item) => (kind === 'subject'
   ? { division_id: item.division_id, name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
-      accuracy_rule: item.accuracy_rule || 'auto' }
+      accuracy_rule: item.accuracy_rule || 'auto', line: item.line || '', process: item.process || '' }
   : { division_id: item.division_id, name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])],
       defect_types: [...(item.defect_types || [])], department_id: item.department_id ?? '',
       project_uuids: [...(item.project_uuids || [])] });
 
 const toPayload = (kind, d) => (kind === 'subject'
-  ? { division_id: d.division_id, name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule }
+  ? { division_id: d.division_id, name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule,
+      line: d.line, process: d.process }
   : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools, defect_types: d.defect_types,
       project_uuids: d.project_uuids, department_id: d.department_id === '' ? null : Number(d.department_id) });
 
@@ -183,6 +184,7 @@ const emptyBulk = (kind) => (kind === 'subject'
 const ItemManagerModal = ({
   kind, divisionId, allMode = false, divisions = [], items, pairCount, canEdit, denyReason,
   modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalogs = {}, departments = {}, initialId = null, onClose, onChanged,
+  sector = 'simulation', processSteps = [],
 }) => {
   const meta = KINDS[kind];
   const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
@@ -285,7 +287,7 @@ const ItemManagerModal = ({
   const add = async () => {
     const name = newName.trim();
     if (!name || busy || !addDivisionId) return;
-    const r = await run('add', () => api.create({ division_id: addDivisionId, name }));
+    const r = await run('add', () => api.create({ division_id: addDivisionId, name, sector }));
     if (r?.data?.id) { setNewName(''); setSelected([r.data.id]); setAnchor(r.data.id); setDraft(null); }
   };
   const save = async () => {
@@ -441,11 +443,33 @@ const ItemManagerModal = ({
     );
   };
 
+  // 모니터링의 대상은 **라인 × 공정 단계**다(PLAN-monitoring 2-2) — 제품군·정확도 집계 대신
+  // 라인과 공정을 받는다. 설비 개체는 세지 않고, 대수는 평가의 근거 칸으로 간다.
+  const isMon = sector === 'manufacturing_monitoring';
   const fieldsSubject = () => (
     <>
       <DivisionField d={d} set={set} canEdit={canEditCur} divisions={divisions} pairs={pairCount[current.id] || 0} />
       <Field><span>이름</span>
-        <input value={d.name} disabled={!canEditCur} onChange={e => set({ name: e.target.value })} /></Field>
+        <input value={d.name} disabled={!canEditCur} onChange={e => set({ name: e.target.value })}
+               placeholder={isMon ? '예: A라인 · SMT 실장' : ''} /></Field>
+      {isMon ? (
+        <>
+          <Pair>
+            <Field><span>라인·사업장</span>
+              <input value={d.line} disabled={!canEditCur} onChange={e => set({ line: e.target.value })} placeholder="예: A라인 · 구미 2공장" />
+              <small>사업부가 쓰는 이름 그대로. 모판 묶음과 필터의 기준입니다.</small></Field>
+            <Field><span>공정 단계</span>
+              <SearchSelect options={processSteps.map(p => ({ id: p.key, name: p.label, sub: p.group }))}
+                            value={d.process || null} disabled={!canEditCur}
+                            onChange={(k) => set({ process: k == null ? '' : String(k) })}
+                            placeholder="공정 이름으로 찾기" hint="없으면 세부에 적으세요." />
+              <small>표준 어휘에서 고릅니다 — 라인 이름이 갈려도 공정끼리는 사업부를 넘어 비교됩니다.</small></Field>
+          </Pair>
+          <Field><span>세부</span>
+            <input value={d.detail} disabled={!canEditCur} onChange={e => set({ detail: e.target.value })} placeholder="예: 마운터 8대 · 리플로우 2대" />
+            <small>설비 대수·기종을 적어 두세요. 설비 개체는 줄로 세우지 않습니다 — 대수는 평가의 근거(「상태 8/12대」)로 갑니다.</small></Field>
+        </>
+      ) : (
       <Pair>
         <Field><span>세부</span>
           <input value={d.detail} disabled={!canEditCur} onChange={e => set({ detail: e.target.value })} placeholder="예: 1.2m 6면 26모서리" /></Field>
@@ -455,6 +479,8 @@ const ItemManagerModal = ({
           </select>
           <small>시뮬레이션이 여럿일 때 항목 정확도를 어떻게 낼지. 사업부 엑셀의 규칙과 맞춥니다.</small></Field>
       </Pair>
+      )}
+      {!isMon && (
       <Field><span>적용 제품군</span>
         <Chips>
           {d.product_families.map(f => (
@@ -474,6 +500,7 @@ const ItemManagerModal = ({
         </Chips>
         <small>하나씩 넣습니다. 「찾기」로 이 사업부·로드맵 정보·다른 사업부의 제품군을 보고 고르세요 — 적용 범위 축의 비율은 이 목록을 사업부 전체 제품군과 대봐 셉니다.</small>
       </Field>
+      )}
       <Info>걸린 연계 <strong>{pairCount[current.id] || 0}</strong>개. 연계을 잇거나 끊는 것은 목록 탭에서.</Info>
     </>
   );

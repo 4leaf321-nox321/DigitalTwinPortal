@@ -81,7 +81,9 @@ def _int_arg(name):
 @read_required
 def definitions(actor):
     return success_response({
-        'sectors': [{**s, 'active': D.sector_is_active(s['key'])} for s in D.SECTORS],
+        # 감춘 부문은 목록에 남기되 hidden 을 달아 보낸다 — 설정 화면이 그것을 켜고 끈다.
+        'sectors': [{**s, 'active': D.sector_is_active(s['key']), 'hidden': s['key'] in D.get_hidden_sectors()}
+                    for s in D.SECTORS],
         'axes': {k: D.get_axes(k) for k in D.SECTOR_KEYS},
         'model_kinds': D.MODEL_KINDS,
         'accuracy_rules': sorted(D.ACCURACY_RULES),
@@ -89,6 +91,7 @@ def definitions(actor):
         'stale_days': D.get_stale_days(),
         'review': D.review_definitions(),
         'thread': D.thread_definitions(),
+        'monitoring': D.monitoring_definitions(),
         'can_curate': P.can_curate(actor),
         'my_division_id': P.actor_division_id(actor),
     })
@@ -170,7 +173,8 @@ def create_subject(actor):
     try:
         row = S.create_subject(p['division_id'], p.get('sector') or 'simulation',
                                p.get('name'), p.get('detail'), p.get('product_families'),
-                               p.get('accuracy_rule') or 'auto', p.get('roadmap_task_id'))
+                               p.get('accuracy_rule') or 'auto', p.get('roadmap_task_id'),
+                               p.get('line'), p.get('process'))
         db.session.commit()
         return success_response(row.to_dict(), status_code=201)
     except S.Refused as e:

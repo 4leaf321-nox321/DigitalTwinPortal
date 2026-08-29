@@ -43,6 +43,7 @@ const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; f
 
 const DIVS = '__divisions__';
 const STALE = '__stale__';   // 재평가 기간(일) — 이 날이 지난 평가는 「재평가 필요」
+const SECS = '__sectors__';  // 부문 표시 — 체크한 부문은 헤더 토글에서 사라진다(2026-08-29)
 const Sep = styled.div`font-size: 0.6875rem; font-weight: 700; color: #94a3b8; padding: 0.6rem 0.9rem 0.2rem; border-top: 1px solid #e2e8f0; margin-top: 0.3rem;`;
 const DivList = styled.div`
   display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8125rem; color: #1e293b;
@@ -76,7 +77,7 @@ export const AccuracyPreview = ({ q, c, boundary, rungs, value = null }) => {
   );
 };
 
-const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged }) => {
+const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClose, onChanged }) => {
   const [conf, setConf] = useState(null);         // 서버의 accuracy 판 전체
   const [key, setKey] = useState('*');
   const [draft, setDraft] = useState(null);       // { q, c, boundary } | null(전사 기본을 따름)
@@ -85,7 +86,9 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
   const [saved, setSaved] = useState(false);
   // 사업부 표시 — SR·GTR·CS 처럼 사업부가 아닌 조직을 이 화면에서 뺀다. 전체 목록은 ?all=1 로 받는다.
   const [allDivisions, setAllDivisions] = useState(null);
-  const [hidden, setHidden] = useState([]);           // 초안
+  const [hidden, setHidden] = useState([]);
+  const [hiddenSectors, setHiddenSectors] = useState([]);          // 감춘 부문(2026-08-29)
+  const [hiddenSectorsSaved, setHiddenSectorsSaved] = useState([]);           // 초안
   const [hiddenSaved, setHiddenSaved] = useState([]); // 서버 값
   const [staleDays, setStaleDays] = useState('');     // 초안(일)
   const [staleSaved, setStaleSaved] = useState(null);
@@ -97,13 +100,17 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
       setHidden(h); setHiddenSaved(h);
       const sd = r.data?.stale_days ?? 365;
       setStaleDays(String(sd)); setStaleSaved(sd);
+      const hs = r.data?.hidden_sectors || [];
+      setHiddenSectors(hs); setHiddenSectorsSaved(hs);
     }).catch(e => setError(e.message));
     maturityApi.getDivisions(true).then(r => setAllDivisions(r.data || [])).catch(() => setAllDivisions([]));
   }, []);
   const hiddenChanged = JSON.stringify([...hidden].sort()) !== JSON.stringify([...hiddenSaved].sort());
+  const sectorsChanged = JSON.stringify([...hiddenSectors].sort()) !== JSON.stringify([...hiddenSectorsSaved].sort());
   const staleValid = Number.isInteger(Number(staleDays)) && Number(staleDays) >= 1 && Number(staleDays) <= 3650;
   const staleChanged = staleValid && Number(staleDays) !== staleSaved;
   const toggleHidden = (id) => { setSaved(false); setHidden(h => (h.includes(id) ? h.filter(x => x !== id) : [...h, id])); };
+  const toggleSector = (k) => { setSaved(false); setHiddenSectors(h => (h.includes(k) ? h.filter(x => x !== k) : [...h, k])); };
   useEffect(() => { if (conf) setDraft(rowOf(conf, key)); }, [conf, key]);   // 「저장됨」은 줄을 옮길 때만 지운다
 
   const base = useMemo(() => rowOf(conf, '*') || { q: 70, c: 90, boundary: 'gte' }, [conf]);
@@ -117,10 +124,14 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
       if (draft) next[key] = { boundary: draft.boundary, thresholds: [
         { rung: 'trend', min: 0 }, { rung: 'quantitative', min: Number(draft.q) }, { rung: 'correlated', min: Number(draft.c) }] };
       else delete next[key];
-      const payload = key === DIVS ? { hidden_divisions: hidden } : key === STALE ? { stale_days: Number(staleDays) } : { accuracy: next };
+      const payload = key === DIVS ? { hidden_divisions: hidden }
+        : key === STALE ? { stale_days: Number(staleDays) }
+        : key === SECS ? { hidden_sectors: hiddenSectors }
+        : { accuracy: next };
       const r = await maturityApi.putSettings(payload);
       if (key === DIVS) { const h = (r.data?.hidden_divisions || hidden).map(Number); setHidden(h); setHiddenSaved(h); }
       else if (key === STALE) { const sd = r.data?.stale_days ?? Number(staleDays); setStaleDays(String(sd)); setStaleSaved(sd); }
+      else if (key === SECS) { const hs = r.data?.hidden_sectors || hiddenSectors; setHiddenSectors(hs); setHiddenSectorsSaved(hs); }
       else setConf(r.data?.accuracy || next);
       setSaved(true);
       if (onChanged) onChanged();
@@ -131,18 +142,23 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
   const rows = [{ key: '*', name: '전사 기본' }, ...divisions.map(d => ({ key: String(d.id), name: d.name }))];
   const onDivs = key === DIVS;
   const onStale = key === STALE;
+  const onSecs = key === SECS;
   const own = (k) => !!rowOf(conf, k);
   const set = (patch) => { setSaved(false); setDraft(d => ({ ...(d || base), ...patch })); };
 
   return (
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="설정">
-        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — {onDivs ? '사업부 표시' : onStale ? '재평가 기간' : '정확도 문턱과 경계'}</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
+        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — {onDivs ? '사업부 표시' : onStale ? '재평가 기간' : onSecs ? '부문 표시' : '정확도 문턱과 경계'}</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
         <Body>
           <Left>
             <Item type="button" $on={onDivs} onClick={() => { setKey(DIVS); setSaved(false); }}>
               <span>사업부 표시</span>
               <Tag $own={hidden.length > 0}>{hidden.length ? `${hidden.length}개 뺌` : '전부'}</Tag>
+            </Item>
+            <Item type="button" $on={onSecs} onClick={() => { setKey(SECS); setSaved(false); }}>
+              <span>부문 표시</span>
+              <Tag $own={hiddenSectors.length > 0}>{hiddenSectors.length ? `${hiddenSectors.length}개 뺌` : '전부'}</Tag>
             </Item>
             <Item type="button" $on={onStale} onClick={() => { setKey(STALE); setSaved(false); }}>
               <span>재평가 기간</span>
@@ -158,6 +174,21 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
           </Left>
           <Right>
             {!conf && !error && <Hint>불러오는 중…</Hint>}
+            {conf && onSecs && (
+              <>
+                <Hint>체크한 부문은 **헤더의 부문 토글에서 사라집니다.** 아직 안 쓰는 부문을 빼 두세요 — 자료는 지워지지 않고, 다시 켜면 그대로 보입니다. 보고 있던 부문을 감추면 시뮬레이션으로 돌아갑니다.</Hint>
+                <DivList>
+                  {(sectors || []).map(x => (
+                    <label key={x.key}>
+                      <input type="checkbox" checked={hiddenSectors.includes(x.key)} onChange={() => toggleSector(x.key)} aria-label={`${x.label} 감춤`} />
+                      {x.label}
+                      {!x.active && <small> — 사다리 없음(준비 중)</small>}
+                      {hiddenSectors.includes(x.key) && <small> — 감춤</small>}
+                    </label>
+                  ))}
+                </DivList>
+              </>
+            )}
             {conf && onDivs && (
               <>
                 <Hint>체크한 조직은 이 화면(왼쪽 위 사업부 줄·전체 판·설정의 문턱 목록)에서 빠집니다. SR·GTR·CS 처럼 사업부가 아닌 조직을 빼 두세요. 자료는 지워지지 않습니다.</Hint>
@@ -220,7 +251,7 @@ const SettingsModal = ({ divisions = [], accuracyRungs = [], onClose, onChanged 
           {!onDivs && !onStale && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
           <span style={{ flex: 1, fontSize: '0.75rem', color: '#16a34a' }}>{saved ? '저장됨' : ''}</span>
           <Button type="button" onClick={onClose}>닫기</Button>
-          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
+          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : onSecs ? !sectorsChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
         </Foot>
       </Box>
     </Backdrop>

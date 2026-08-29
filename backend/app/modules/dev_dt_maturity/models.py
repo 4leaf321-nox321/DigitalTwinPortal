@@ -37,6 +37,10 @@ class MaturitySubject(BaseModel):
     # 항목 정확도의 집계 규칙 — auto | single | mean (definitions.ACCURACY_RULES)
     accuracy_rule = db.Column(db.String(10), nullable=False, default='auto')
     roadmap_task_id = db.Column(db.Integer)          # 참고 링크. FK 아님
+    # 제조 모니터링의 대상은 **라인 × 공정 단계**다(f2c8d6b39e14). 다른 부문은 비어 있다.
+    # 공정은 표준 어휘(definitions.PROCESS_STEPS)의 key 지만 없는 것은 직접 적는다 — FK 가 아니다.
+    line = db.Column(db.String(200))
+    process = db.Column(db.String(60))
     order = db.Column(db.Integer, nullable=False, default=0)
 
     pairs = db.relationship('MaturityPair', backref='subject',
@@ -45,6 +49,8 @@ class MaturitySubject(BaseModel):
     def to_dict(self):
         d = super().to_dict()
         d['product_families'] = list(self.product_families or [])
+        from .definitions import PROCESS_STEP_LABELS
+        d['process_label'] = PROCESS_STEP_LABELS.get(self.process, self.process)
         return d
 
 

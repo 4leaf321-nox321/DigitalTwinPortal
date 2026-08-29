@@ -8,9 +8,12 @@ import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, type, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import SettingsModal from '../../src/modules/dev-dt-maturity/components/Settings/SettingsModal';
+import Header from '../../src/modules/dev-dt-maturity/components/Layout/Header';
 
 const DIVS = [{ id: 17, name: 'MX' }, { id: 18, name: 'VD' }];
 const RUNGS = [{ key: 'trend', label: '경향 일치' }, { key: 'quantitative', label: '원인 분석' }, { key: 'correlated', label: '현상 재현' }];
+const SECTORS = [{ key: 'simulation', label: '시뮬레이션', active: true, hidden: false }, { key: 'digital_thread', label: '디지털 스레드', active: true, hidden: false },
+  { key: 'manufacturing_monitoring', label: '모니터링', active: true, hidden: false }, { key: 'design_automation', label: '설계 자동화', active: false, hidden: false }];
 
 export default async function run() {
   const { say, done } = suite();
@@ -23,7 +26,7 @@ export default async function run() {
   });
 
   try {
-    await render(<SettingsModal divisions={DIVS} accuracyRungs={RUNGS} onClose={() => {}} onChanged={() => {}} />);
+    await render(<SettingsModal divisions={DIVS} sectors={SECTORS} accuracyRungs={RUNGS} onClose={() => {}} onChanged={() => {}} />);
     await settle();
     const q = () => document.querySelector('input[aria-label="원인 분석 문턱"]');
     const c = () => document.querySelector('input[aria-label="현상 재현 문턱"]');
@@ -65,6 +68,18 @@ export default async function run() {
     say(!!put3 && JSON.stringify(put3.body) === JSON.stringify({ hidden_divisions: [99] }), `⑤ PUT hidden_divisions: ${JSON.stringify(put3?.body)}`);
     say(html().includes('1개 뺌'), '⑤ 왼쪽에 「1개 뺌」');
 
+    // ⑤-2 부문 표시 — 모니터링을 감추면 hidden_sectors 로 저장
+    calls.length = 0;
+    await click(byText('button', '부문 표시')); await settle();
+    const mon = document.querySelector('input[aria-label="모니터링 감춤"]');
+    say(!!mon && !!document.querySelector('input[aria-label="시뮬레이션 감춤"]'), '⑤-2 부문이 체크 목록으로 보임');
+    say(html().includes('사다리 없음(준비 중)'), '⑤-2 아직 사다리가 없는 부문은 표시됨');
+    say(byText('button', '저장').disabled, '⑤-2 안 바꾸면 저장 잠김');
+    await click(mon); await settle();
+    await click(byText('button', '저장')); await settle();
+    const putSec = calls.find(x => x.method === 'PUT');
+    say(!!putSec && JSON.stringify(putSec.body) === JSON.stringify({ hidden_sectors: ['manufacturing_monitoring'] }), `⑤-2 PUT hidden_sectors: ${JSON.stringify(putSec?.body)}`);
+
     // ⑥ 재평가 기간 — 일 수를 바꿔 저장
     calls.length = 0;
     await click(byText('button', '재평가 기간')); await settle();
@@ -79,6 +94,18 @@ export default async function run() {
     const put4 = calls.find(x => x.method === 'PUT');
     say(!!put4 && JSON.stringify(put4.body) === JSON.stringify({ stale_days: 240 }), `⑥ PUT stale_days: ${JSON.stringify(put4?.body)}`);
     say(html().includes('240일'), '⑥ 왼쪽에 「240일」');
+    await unmount();
+
+    // ⑦ 헤더 토글 — 감춘 부문은 아예 안 보인다
+    await render(<Header sectors={SECTORS} sector="simulation" canCurate onGoHome={() => {}} onOpen={() => {}} onSector={() => {}} />);
+    await settle();
+    const names = () => [...document.querySelectorAll('[aria-label="부문"] button')].map(b => b.textContent.trim());
+    say(names().includes('모니터링') && names().includes('디지털 스레드'), `⑦ 부문 토글에 모니터링이 있음: ${names()}`);
+    await unmount();
+    await render(<Header sectors={SECTORS.map(x => (x.key === 'manufacturing_monitoring' ? { ...x, hidden: true } : x))}
+                         sector="simulation" canCurate onGoHome={() => {}} onOpen={() => {}} onSector={() => {}} />);
+    await settle();
+    say(!names().includes('모니터링') && names().includes('시뮬레이션'), `⑦ 감추면 토글에서 사라짐: ${names()}`);
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

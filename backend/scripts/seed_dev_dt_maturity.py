@@ -520,6 +520,7 @@ def main():
                         c.created_at = _days_ago(days); counts['changes'] += 1
         counts['reviews'] = _seed_reviews(divisions)          # 해석 활용 기록 — 스팟 건
         counts['segments'] = _seed_threads(divisions)         # 디지털 스레드 — 구간과 평가
+        counts['monitoring'] = _seed_monitoring(divisions)    # 제조 모니터링 — 라인 × 공정
         counts['thread_cases'] = _seed_thread_cases(divisions)   # 연계 개발 기록
         db.session.commit()
         print(f'지운 시험 {n_old}개 → 넣음:', counts)
@@ -816,6 +817,150 @@ def _seed_threads(divisions):
             n += 1
     return n
 
+
+
+# ── 제조 모니터링 씨앗(2026-08-29, PLAN-monitoring.md) ───────────────────────
+# 대상은 **라인 × 공정 단계**다 — 설비 개체가 아니다. 대수는 세부(근거)에만 적는다.
+# 전기·전자 제조라 SMT 갈래가 앞서고 사출·조립·포장이 뒤처지는 격차를 일부러 담았다.
+MON_AGENTS = [
+    ('설비 인터페이스(PLC·OPC-UA)', '수집'),
+    ('G-MES 수집', '수집'),
+    ('SPC 시스템', '판정'),
+    ('제조 데이터레이크 대시보드', '가시화'),
+    ('이상탐지 모델', '판정'),
+]
+# 사업부 → [(라인, 공정 key, 공정 이름, 세부, [(수단, {축: 값}, 며칠 전)…])]
+MON_SEED = {
+    'MX': [
+        ('A라인', 'smt', 'SMT 실장', '마운터 8대 · 리플로우 2대', [
+            ('설비 인터페이스(PLC·OPC-UA)', {'basic_metrics': ['state', 'ct', 'alarm'], 'collection': 'realtime',
+                                            'judgement': 'detect', 'response': 'standard', 'scope': 'all_equip', 'reliability': 93}, 20),
+            ('이상탐지 모델', {'basic_metrics': ['alarm'], 'collection': 'realtime', 'judgement': 'predict',
+                              'response': 'notify', 'scope': 'some', 'reliability': 72}, 12),
+        ]),
+        ('A라인', 'aoi', 'SPI·AOI 검사', 'AOI 3대 · SPI 1대', [
+            ('G-MES 수집', {'basic_metrics': ['state', 'quality'], 'collection': 'periodic', 'judgement': 'detect',
+                            'response': 'standard', 'scope': 'all_equip', 'reliability': 88}, 25),
+            ('SPC 시스템', {'basic_metrics': ['quality'], 'collection': 'periodic', 'judgement': 'diagnose',
+                            'response': 'standard', 'scope': 'some', 'reliability': 84}, 18),
+        ]),
+        ('A라인', 'reflow', '리플로우', '리플로우 2대', [
+            ('설비 인터페이스(PLC·OPC-UA)', {'basic_metrics': ['state', 'process_var'], 'collection': 'realtime',
+                                            'judgement': 'detect', 'response': 'notify', 'scope': 'all_equip', 'reliability': 90}, 30),
+        ]),
+        ('B라인', 'final_assy', '최종 조립', '조립 셀 6 · 스크류 체결기 12대', [
+            ('G-MES 수집', {'basic_metrics': ['state', 'ct'], 'collection': 'periodic', 'judgement': 'watch',
+                            'response': 'none', 'scope': 'some', 'reliability': 65}, 40),
+        ]),
+        ('B라인', 'func_test', '기능 검사(ICT·FCT)', 'FCT 지그 10대', [
+            ('G-MES 수집', {'basic_metrics': ['state', 'quality'], 'collection': 'periodic', 'judgement': 'detect',
+                            'response': 'standard', 'scope': 'all_equip', 'reliability': 91}, 22),
+        ]),
+        ('B라인', 'packing', '포장', '포장기 3대', [
+            ('설비 인터페이스(PLC·OPC-UA)', {'basic_metrics': ['state'], 'collection': 'periodic', 'judgement': 'watch',
+                                            'response': 'none', 'scope': 'pilot'}, 60),
+        ]),
+    ],
+    'VD': [
+        ('패널 1라인', 'smt', 'SMT 실장', '마운터 6대', [
+            ('설비 인터페이스(PLC·OPC-UA)', {'basic_metrics': ['state', 'ct', 'alarm'], 'collection': 'realtime',
+                                            'judgement': 'detect', 'response': 'notify', 'scope': 'all_equip', 'reliability': 89}, 28),
+        ]),
+        ('패널 1라인', 'module_assy', '모듈 조립', '합착기 4대', [
+            ('G-MES 수집', {'basic_metrics': ['state', 'ct', 'quality'], 'collection': 'periodic', 'judgement': 'detect',
+                            'response': 'standard', 'scope': 'some', 'reliability': 80}, 35),
+        ]),
+        ('패널 1라인', 'visual', '외관 검사', '검사기 5대', [
+            ('SPC 시스템', {'basic_metrics': ['quality'], 'collection': 'upload', 'judgement': 'watch',
+                            'response': 'none', 'scope': 'pilot', 'reliability': 58}, 45),
+        ]),
+    ],
+    'DA': [
+        ('세탁기 1라인', 'injection', '사출', '사출기 12대', [
+            ('설비 인터페이스(PLC·OPC-UA)', {'basic_metrics': ['state', 'ct', 'alarm', 'process_var'], 'collection': 'realtime',
+                                            'judgement': 'diagnose', 'response': 'act', 'scope': 'all_equip', 'reliability': 95}, 15),
+            ('제조 데이터레이크 대시보드', {'basic_metrics': ['state', 'ct'], 'collection': 'periodic', 'judgement': 'watch',
+                                        'response': 'none', 'scope': 'all_equip', 'reliability': 86}, 30),
+        ]),
+        ('세탁기 1라인', 'final_assy', '최종 조립', '컨베이어 2 · 체결기 20대', [
+            ('G-MES 수집', {'basic_metrics': ['state', 'ct'], 'collection': 'periodic', 'judgement': 'detect',
+                            'response': 'standard', 'scope': 'some', 'reliability': 77}, 33),
+        ]),
+        ('세탁기 1라인', 'reliability_test', '신뢰성 시험', '내구 시험기 8대', [
+            ('G-MES 수집', {'basic_metrics': ['state'], 'collection': 'manual_log', 'judgement': 'watch',
+                            'response': 'none', 'scope': 'pilot'}, 70),
+        ]),
+    ],
+    'NW': [
+        ('기지국 1라인', 'smt', 'SMT 실장', '마운터 4대', [
+            ('설비 인터페이스(PLC·OPC-UA)', {'basic_metrics': ['state', 'ct', 'alarm'], 'collection': 'periodic',
+                                            'judgement': 'detect', 'response': 'notify', 'scope': 'some', 'reliability': 82}, 38),
+        ]),
+        ('기지국 1라인', 'func_test', '기능 검사(ICT·FCT)', 'RF 시험 지그 6대', [
+            ('SPC 시스템', {'basic_metrics': ['quality'], 'collection': 'upload', 'judgement': 'detect',
+                            'response': 'notify', 'scope': 'some', 'reliability': 70}, 42),
+        ]),
+    ],
+    '의료기기': [
+        ('프로브 라인', 'module_assy', '모듈 조립', '조립 셀 3', [
+            ('G-MES 수집', {'basic_metrics': ['state', 'quality'], 'collection': 'upload', 'judgement': 'watch',
+                            'response': 'none', 'scope': 'pilot', 'reliability': 60}, 50),
+        ]),
+        ('프로브 라인', 'calibration', '캘리브레이션', '교정 장비 4대', [
+            ('설비 인터페이스(PLC·OPC-UA)', {'basic_metrics': ['state', 'process_var'], 'collection': 'periodic',
+                                            'judgement': 'detect', 'response': 'standard', 'scope': 'some', 'reliability': 88}, 26),
+        ]),
+    ],
+}
+
+
+def _seed_monitoring(divisions):
+    """라인 × 공정을 세우고 수집 수단을 걸어 축 여섯을 매긴다."""
+    from app.modules.dev_dt_maturity import definitions as D
+    axes = {a['key']: a for a in D.AXES['manufacturing_monitoring']}
+    n = 0
+    for dname, rows in MON_SEED.items():
+        div = divisions.get(dname)
+        if not div:
+            continue
+        agents = {}
+        for order, (line, pkey, pname, detail, links) in enumerate(rows, 1):
+            subject = MaturitySubject(division_id=div.id, sector='manufacturing_monitoring',
+                                      name=f'{line} · {pname}', detail=detail, line=line, process=pkey,
+                                      product_families=[], accuracy_rule='auto', order=order)
+            db.session.add(subject)
+            db.session.flush()
+            for (aname, marks, days) in links:
+                agent = agents.get(aname)
+                if agent is None:
+                    kind = next((k for (nm, k) in MON_AGENTS if nm == aname), '수집')
+                    agent = MaturityAgent(division_id=div.id, sector='manufacturing_monitoring',
+                                          name=aname, kind=kind, tools=[], defect_types=[], project_uuids=[])
+                    db.session.add(agent)
+                    db.session.flush()
+                    agents[aname] = agent
+                pair = MaturityPair(subject_id=subject.id, agent_id=agent.id)
+                db.session.add(pair)
+                db.session.flush()
+                who = PEOPLE[n % len(PEOPLE)]
+                for axis_key, val in marks.items():
+                    axis = axes[axis_key]
+                    if axis['kind'] == 'value':
+                        rung, value = None, float(val)
+                    elif axis['kind'] == 'set':
+                        rung, value = D.set_rung(axis, val), None
+                    else:
+                        rung, value = val, None
+                    db.session.add(MaturityAssessment(pair_id=pair.id, axis=axis_key, rung=rung, value=value,
+                                                      note=f'{who} 평가', evidence={}, assessed_at=_days_ago(days),
+                                                      assessed_by_name=who))
+                    c = MaturityChange(pair_id=pair.id, axis=axis_key, before=None,
+                                       after=(rung or f'{value:g}'), note='', actor_name=who)
+                    db.session.add(c)
+                    db.session.flush()
+                    c.created_at = _days_ago(days)
+                n += 1
+    return n
 
 
 # 사업부 → [(연-월, 무엇을, 상태, 스레드 key, 구간 key|None, 시스템, 전, 후, 메모)]

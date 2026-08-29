@@ -80,7 +80,9 @@ def main():
             ags = [a.to_dict() for a in MaturityAgent.query.filter_by(division_id=did, sector='simulation')
                    .order_by(MaturityAgent.name).all()]
             out[f'/subjects?division_id={did}'] = subs
+            out[f'/subjects?division_id={did}&sector=simulation'] = subs
             out[f'/agents?division_id={did}'] = ags
+            out[f'/agents?division_id={did}&sector=simulation'] = ags
             subjects_all += subs
             agents_all += ags
             deps = S.departments_of(did)
@@ -115,11 +117,22 @@ def main():
         out['/thread-cases?division_id=all'] = T.list_cases(None)      # 시스템 창
         out['/projects?division_id=all'] = S.projects_of(None)         # 과제 고르기 창
         out['/threads/stats?division_id=all'] = {'divisions': [{**T.thread_stats(d.id), 'division_name': d.name} for d in kpi]}
+
+        # 제조 모니터링 — 라인 × 공정(2026-08-29)
+        MON = 'manufacturing_monitoring'
+        out[f'/board?division_id=all&sector={MON}'] = S.board_all(MON)
+        out[f'/subjects?division_id=all&sector={MON}'] = [x.to_dict() for x in MaturitySubject.query.filter_by(sector=MON).order_by(MaturitySubject.order, MaturitySubject.id).all()]
+        out[f'/agents?division_id=all&sector={MON}'] = [x.to_dict() for x in MaturityAgent.query.filter_by(sector=MON).order_by(MaturityAgent.name).all()]
         for d in kpi:
             did = d.id
             out[f'/board?division_id={did}&sector=digital_thread'] = T.decorate_board(S.board(did, 'digital_thread'))
             for days in (365, 730, 1825):
                 out[f'/changes?division_id={did}&sector=digital_thread&days={days}'] = S.recent_changes(did, 'digital_thread', days)
+            out[f'/board?division_id={did}&sector={MON}'] = S.board(did, MON)
+            for days in (365, 730, 1825):
+                out[f'/changes?division_id={did}&sector={MON}&days={days}'] = S.recent_changes(did, MON, days)
+            out[f'/subjects?division_id={did}&sector={MON}'] = [x.to_dict() for x in MaturitySubject.query.filter_by(division_id=did, sector=MON).order_by(MaturitySubject.order, MaturitySubject.id).all()]
+            out[f'/agents?division_id={did}&sector={MON}'] = [x.to_dict() for x in MaturityAgent.query.filter_by(division_id=did, sector=MON).order_by(MaturityAgent.name).all()]
             out[f'/segments?division_id={did}'] = T.list_segments(did)
             out[f'/orgs?division_id={did}'] = T.list_orgs(did)
             out[f'/orgs/from-departments?division_id={did}'] = T.departments_as_orgs(did)
@@ -137,7 +150,9 @@ def main():
                     dct['deny_reason'] = None
                     out[f'/pairs/{p.id}'] = dct
         out['/subjects?division_id=all'] = subjects_all
+        out['/subjects?division_id=all&sector=simulation'] = subjects_all
         out['/agents?division_id=all'] = agents_all
+        out['/agents?division_id=all&sector=simulation'] = agents_all
         out['/departments?division_id=all'] = deps_all
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

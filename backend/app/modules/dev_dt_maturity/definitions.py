@@ -36,6 +36,11 @@ SECTORS = [
      'subject_label': '설계 업무', 'agent_label': '자동화 도구', 'phase': 2},
     {'key': 'digital_thread', 'label': '디지털 스레드', 'has_agent': False,
      'subject_label': '연계 구간', 'agent_label': None, 'phase': 3},
+    # 제조 모니터링(2026-08-29, PLAN-monitoring.md) — 대상은 **라인 × 공정 단계**다.
+    # 설비 개체가 아니다: 사업부마다 설비가 수백이라 목록이 폭발하고 교체 때 이력이 사라진다.
+    # 같은 공정의 설비 사이 차이는 근거의 비율(「상태 8/12대」)로 받는다.
+    {'key': 'manufacturing_monitoring', 'label': '모니터링', 'has_agent': True,
+     'subject_label': '공정', 'agent_label': '수집 수단', 'phase': 4},
 ]
 SECTOR_KEYS = [s['key'] for s in SECTORS]
 SECTOR_BY_KEY = {s['key']: s for s in SECTORS}
@@ -297,6 +302,122 @@ def thread_definitions():
     return {'stages': THREAD_STAGES, 'system_kinds': SYSTEM_KINDS, 'informal_items': INFORMAL_ITEMS,
             'link_means': LINK_MEANS, 'system_status': SYSTEM_STATUS, 'data_kinds': DATA_KINDS,
             'case_actions': THREAD_CASE_ACTIONS, 'case_status': THREAD_CASE_STATUS}
+AXES['manufacturing_monitoring'] = [
+    # 전기·전자 제조 기준(PLAN-monitoring.md). 설비가 대개 스스로 자료를 내놓는 편이라
+    # 갈림은 「수집」보다 **판단·대응**에서 난다 — 그래서 그 둘을 따로 둔다.
+    {
+        'key': 'basic_metrics', 'label': '기본 계측', 'kind': 'set',
+        'question': '그 공정에서 무엇을 잡고 있는가',
+        'evidence': ['coverage_pct', 'attachment'], 'evidence_label': '적용 설비 비율(%) · 수집 주기·보존 기간',
+        # 앞의 셋(상태·C/T·알람)이 이 부문의 집계 기준이다 — 화면이 그 셋을 먼저 읽는다.
+        'rungs': [
+            {'key': 'none', 'label': '없음', 'short': '없음', 'description': '아무것도 자동으로 남지 않는다 — 일지·구두뿐'},
+            {'key': 'state', 'label': '상태', 'short': '상태', 'description': '가동·정지·대기와 비가동 사유가 시간축으로 남는다'},
+            {'key': 'ct', 'label': 'C/T', 'short': 'C/T', 'description': '사이클 타임이 사이클마다(또는 주기로) 남는다'},
+            {'key': 'alarm', 'label': '알람', 'short': '알람', 'description': '설비 경보가 코드·시각과 함께 남는다'},
+            {'key': 'quality', 'label': '품질', 'short': '품질', 'description': '불량·수율이 그 공정 단위로 남는다(SPI·AOI·ICT·FCT 판정 포함)'},
+            {'key': 'process_var', 'label': '공정 변수', 'short': '공정변수', 'description': '리플로우 온도 프로파일·인쇄 압력·성형압 같은 공정 조건이 남는다'},
+        ],
+    },
+    {
+        'key': 'collection', 'label': '수집 방식', 'kind': 'rung',
+        'question': '그 값이 어떻게 올라오는가',
+        'evidence': ['coverage_pct', 'attachment'], 'evidence_label': '적용 설비 비율(%) · 수집 주기',
+        'headline_min': 'periodic',
+        'rungs': [
+            {'key': 'manual_log', 'label': '수기·일지', 'description': '사람이 종이·엑셀에 적는다'},
+            {'key': 'upload', 'label': '사람이 취합해 올림', 'description': '모아 둔 것을 나중에 시스템에 올린다'},
+            {'key': 'periodic', 'label': '설비에서 주기 수집', 'description': '설비 인터페이스로 정해진 주기마다 받아 온다'},
+            {'key': 'realtime', 'label': '실시간 자동 수집', 'description': '사람 없이 실시간으로 들어온다'},
+        ],
+    },
+    {
+        'key': 'judgement', 'label': '판단 수준', 'kind': 'rung',
+        'question': '모은 값으로 무엇까지 판단하는가',
+        'evidence': ['attachment'], 'evidence_label': '판정 규칙의 근거(관리도·모델)',
+        'headline_min': 'detect',
+        'rungs': [
+            {'key': 'watch', 'label': '사람이 본다', 'description': '화면·보고서로 보기만 한다'},
+            {'key': 'detect', 'label': '이상 판정', 'description': '기준선·관리도로 정상과 이상을 가른다'},
+            {'key': 'diagnose', 'label': '원인 진단', 'description': '어느 설비·어느 조건 탓인지까지 짚는다'},
+            {'key': 'predict', 'label': '예측', 'description': '고장·불량을 나기 전에 내다본다'},
+            {'key': 'auto_adjust', 'label': '자동 보정', 'description': '판단이 설비 파라미터를 스스로 고친다'},
+        ],
+    },
+    {
+        'key': 'response', 'label': '대응 연결', 'kind': 'rung',
+        'question': '판단이 났을 때 무엇이 일어나는가',
+        'evidence': ['attachment'], 'evidence_label': '평균 대응 시간 · 조치 표준',
+        'headline_min': 'standard',
+        # 판단 수준과 가른 이유: 예측까지 하면서 알림이 주인 없는 대시보드에만 뜨는 일이
+        # 흔하다. 합치면 그것이 「예측 단계」로 좋게 읽힌다(PLAN-monitoring 3-2).
+        'rungs': [
+            {'key': 'none', 'label': '알림 없음', 'description': '누가 찾아 봐야 안다'},
+            {'key': 'notify', 'label': '사람에게 알림', 'description': '알림은 가지만 받는 사람·할 일이 정해져 있지 않다'},
+            {'key': 'standard', 'label': '담당·조치 표준이 붙은 알림', 'description': '누가 무엇을 하는지가 알림에 함께 온다'},
+            {'key': 'act', 'label': '시스템이 조치', 'description': '설비 정지·파라미터 보정을 시스템이 한다'},
+            {'key': 'loop', 'label': '폐루프', 'description': '조치 결과가 다시 판단의 재료로 돌아간다'},
+        ],
+    },
+    {
+        'key': 'scope', 'label': '적용 범위', 'kind': 'rung',
+        'question': '그 공정의 어디까지 적용됐는가',
+        'evidence': ['coverage_pct'], 'evidence_label': '적용 설비 n/N 대',
+        'headline_min': 'all_equip',
+        'rungs': [
+            {'key': 'pilot', 'label': '시범 1~2대', 'description': '몇 대에만 붙여 봤다'},
+            {'key': 'some', 'label': '일부 설비', 'description': '주요 설비에는 붙었다'},
+            {'key': 'all_equip', 'label': '그 공정 전 설비', 'description': '그 공정의 설비 전부에 붙었다'},
+            {'key': 'standardized', 'label': '새 설비에도 기본 적용', 'description': '설비를 새로 들여도 저절로 붙는다 — 표준이 됐다'},
+        ],
+    },
+    {
+        'key': 'reliability', 'label': '신뢰도', 'kind': 'value', 'unit': '%',
+        'question': '그 값과 판정을 믿고 쓰는가',
+        'evidence': ['attachment'], 'evidence_label': '유효 데이터율 또는 알람 유효율(오경보 제외)',
+        # 오경보가 잦으면 판단 수준이 높아도 아무도 안 본다 — 그것이 한 표에서 보여야 한다.
+        # 문턱은 낮은 칸부터 — {rung, min}. 값이 넘는 가장 높은 칸을 고른다(rung_for_value).
+        'thresholds': [{'rung': 'low', 'min': 0}, {'rung': 'mid', 'min': 70}, {'rung': 'high', 'min': 90}],
+        'rungs': [
+            {'key': 'low', 'label': '낮음', 'description': '70% 미만 — 오경보·결측이 잦아 손으로 다시 본다'},
+            {'key': 'mid', 'label': '보통', 'description': '70~90% — 대체로 믿는다'},
+            {'key': 'high', 'label': '높음', 'description': '90% 이상 — 그대로 쓴다'},
+        ],
+    },
+]
+
+# 표준 공정 어휘 — 전기·전자 제품 제조(PLAN-monitoring 2-4). 없는 것은 직접 적는다.
+# 라인·설비 이름은 사업부마다 다르지만 **공정 이름이 같아야** 사업부끼리 비교된다.
+PROCESS_STEPS = [
+    {'key': 'iqc', 'label': '자재 입고 검사(IQC)', 'group': '그 밖'},
+    {'key': 'print', 'label': '솔더 인쇄', 'group': 'PCBA'},
+    {'key': 'smt', 'label': 'SMT 실장', 'group': 'PCBA'},
+    {'key': 'reflow', 'label': '리플로우', 'group': 'PCBA'},
+    {'key': 'aoi', 'label': 'SPI·AOI 검사', 'group': 'PCBA'},
+    {'key': 'manual_insert', 'label': '수삽·후공정', 'group': 'PCBA'},
+    {'key': 'coating', 'label': '코팅·세척', 'group': 'PCBA'},
+    {'key': 'injection', 'label': '사출', 'group': '기구 부품'},
+    {'key': 'press', 'label': '프레스·판금', 'group': '기구 부품'},
+    {'key': 'painting', 'label': '도장·증착', 'group': '기구 부품'},
+    {'key': 'machining', 'label': '후가공', 'group': '기구 부품'},
+    {'key': 'module_assy', 'label': '모듈 조립', 'group': '조립·검사'},
+    {'key': 'final_assy', 'label': '최종 조립', 'group': '조립·검사'},
+    {'key': 'func_test', 'label': '기능 검사(ICT·FCT)', 'group': '조립·검사'},
+    {'key': 'calibration', 'label': '캘리브레이션', 'group': '조립·검사'},
+    {'key': 'visual', 'label': '외관 검사', 'group': '조립·검사'},
+    {'key': 'reliability_test', 'label': '신뢰성 시험', 'group': '그 밖'},
+    {'key': 'packing', 'label': '포장', 'group': '그 밖'},
+    {'key': 'logistics', 'label': '물류', 'group': '그 밖'},
+    {'key': 'utility', 'label': '유틸리티(공조·용수·전력)', 'group': '그 밖'},
+]
+PROCESS_STEP_KEYS = [p['key'] for p in PROCESS_STEPS]
+PROCESS_STEP_LABELS = {p['key']: p['label'] for p in PROCESS_STEPS}
+
+
+def monitoring_definitions():
+    return {'process_steps': PROCESS_STEPS}
+
+
 AXIS_KINDS = {'rung', 'value', 'set', 'matrix'}   # matrix: 바탕 토글 + 불량 유형 × 열 표(모델링 수준)
 
 
@@ -483,7 +604,9 @@ IMPORT_COLUMNS = [
 #   phenomena      {division_id: [태그…]}                            사업부별 현상 태그 사전
 #   stale_days     int
 #   hidden_divisions [division_id…]   이 화면에서 뺄 조직 — SR·GTR·CS 처럼 사업부가 아닌 것(2026-08-28)
-SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days', 'hidden_divisions', 'review_promote_min')
+#   hidden_sectors   [sector_key…]    이 화면에서 뺄 부문 — 아직 안 쓰는 부문을 토글에서 감춘다(2026-08-29)
+SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days', 'hidden_divisions', 'review_promote_min',
+                 'hidden_sectors')
 
 
 def _setting(key):
@@ -547,6 +670,17 @@ def get_hidden_divisions():
         except (TypeError, ValueError):
             continue
     return out
+
+
+def get_hidden_sectors():
+    """토글에서 감출 부문 key 집합. 설정이 깨져 있으면 아무것도 안 감춘다.
+
+    감춘 부문은 **화면에서만 사라진다** — 자료는 그대로 있고, 다시 켜면 그대로 보인다.
+    """
+    raw = _setting('hidden_sectors')
+    if not isinstance(raw, list):
+        return set()
+    return {v for v in raw if isinstance(v, str) and v in SECTOR_BY_KEY}
 
 
 def get_stale_days():
