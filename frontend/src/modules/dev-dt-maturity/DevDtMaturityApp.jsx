@@ -14,7 +14,7 @@ import ModalHost from './components/List/ModalHost';
 import SettingsModal from './components/Settings/SettingsModal';
 import maturityApi from './services/maturityApi';
 import { setSampleMode } from './sample/sampleStore';
-import { filtersFromParams, filtersToParams } from './utils/board';
+import { filtersFromParams, filtersToParams, tabInSector } from './utils/board';
 
 // 디지털 트윈 성숙도 — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가.
 // 계획: ./PLAN.md
@@ -159,7 +159,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     <Container>
       <Header onGoHome={onGoHome} onOpen={(kind) => setModal({ kind })} counts={counts} canCurate={!!defs?.can_curate}
               sample={sample} onToggleSample={() => patch({ sample: sample ? null : '1', pair: null })}
-              sector={sector} sectors={defs?.sectors || []} onSector={(k) => patch({ sector: k === 'simulation' ? null : k, pair: null, tab: null })} />
+              sector={sector} sectors={defs?.sectors || []} onSector={(k) => patch({ sector: k === 'simulation' ? null : k, pair: null, tab: tabInSector(tab, k) })} />
       {sample && (
         <SampleBar role="status">
           <strong>샘플 뷰</strong> — 개발용 목업 자료로 그린 화면입니다. 실제 자료가 아니며, 저장되지 않습니다.

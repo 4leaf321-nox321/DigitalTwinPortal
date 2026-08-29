@@ -328,6 +328,23 @@ export const pairSeries = (subjects, changes, axis, months) => {
   return out;
 };
 
+// ── 탭이 어느 부문에 있나(2026-08-30) ─────────────────────────────────────
+//
+// 부문을 옮겨도 보던 탭을 지킨다 — 「목록」을 보다 스레드로 가면 스레드의 목록이다.
+// 다만 그 부문에 없는 탭(해석 활용 기록·연계 개발 기록)이면 성숙도로 되돌린다.
+export const TAB_SECTORS = {
+  reviews: ['simulation'],          // 해석 활용 기록 — 시험과 짝이 없는 스팟성 해석
+  cases: ['digital_thread'],        // 연계 개발 기록 — 연동·도입·정합화 건
+};
+
+/** 그 부문에서 살아남는 탭. 없는 탭이면 null(성숙도). */
+export const tabInSector = (tab, sectorKey) => {
+  if (!tab || tab === 'board') return null;
+  const only = TAB_SECTORS[tab];
+  if (only && !only.includes(sectorKey)) return null;
+  return tab;
+};
+
 // ── 날짜 기준(2026-08-29) — 모판의 하이라이트·요약의 델타가 같은 넷을 쓴다 ──────────
 export const DATE_BASES = [
   { key: 'w1', label: '1주 전' }, { key: 'w2', label: '2주 전' }, { key: 'm1', label: '1개월 전' }, { key: 'quarter', label: '지난 분기 마감' },

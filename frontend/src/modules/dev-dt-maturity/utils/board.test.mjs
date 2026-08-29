@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   colorFor, distribution, applyFilters, filtersToParams, filtersFromParams,
-  accuracyLabel, changesByMonth,
+  accuracyLabel, changesByMonth, tabInSector,
 } from './board.js';
 
 const AXES = [
@@ -258,4 +258,15 @@ test('summaryAtDate — 그 날의 대표 수치(요약 델타의 밑값)', () =
   ];
   assert.equal(summaryAtDate(subjects, changes, axes, '2026-08-22').accuracy, 70);
   assert.equal(summaryAtDate(subjects, changes, axes, '2026-08-26').accuracy, 70);   // (90+50)/2
+});
+
+test('부문을 옮겨도 보던 탭은 지키되, 그 부문에 없는 탭이면 성숙도로', () => {
+  assert.equal(tabInSector('list', 'digital_thread'), 'list');          // 목록은 어느 부문에나 있다
+  assert.equal(tabInSector('list', 'manufacturing_monitoring'), 'list');
+  assert.equal(tabInSector('reviews', 'simulation'), 'reviews');        // 해석 활용 기록은 시뮬레이션만
+  assert.equal(tabInSector('reviews', 'digital_thread'), null);
+  assert.equal(tabInSector('cases', 'digital_thread'), 'cases');        // 연계 개발 기록은 스레드만
+  assert.equal(tabInSector('cases', 'simulation'), null);
+  assert.equal(tabInSector(null, 'simulation'), null);                  // 성숙도는 그대로 성숙도
+  assert.equal(tabInSector('board', 'simulation'), null);
 });
