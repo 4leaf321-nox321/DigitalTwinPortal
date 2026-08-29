@@ -48,9 +48,11 @@ const ChartBox = styled.div`flex: 1; min-height: 7rem;`;
 const HeatWrap = styled.div`flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.3rem;`;
 const HeatScroll = styled.div`flex: 1; min-height: 0; overflow: auto;`;
 const HeatTable = styled.table`
-  border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.6875rem;
-  th { position: sticky; top: 0; z-index: 1; background: #f8fbff; color: #94a3b8; font-weight: 600; padding: 0 0.15rem 0.2rem; white-space: nowrap; }
-  th:first-child { left: 0; z-index: 2; text-align: left; width: 11rem; max-width: 11rem; }
+  /* ⚠️ table-layout: fixed — 머리글은 3칸마다만 적는데, 내용에 맞춰 폭을 잡으면 **글자가 있는
+     칸만 넓어진다.** 달 칸은 무조건 같은 폭이어야 그림으로 읽힌다(2026-08-30). */
+  border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.6875rem; table-layout: fixed;
+  th { position: sticky; top: 0; z-index: 1; background: #f8fbff; color: #94a3b8; font-weight: 600; padding: 0 0.15rem 0.2rem; white-space: nowrap; overflow: visible; }
+  th:first-child { left: 0; z-index: 2; text-align: left; width: 11rem; }
   td { padding: 0; height: 1.15rem; }
   td:first-child {
     position: sticky; left: 0; background: #f8fbff; color: #334155; padding-right: 0.4rem; white-space: nowrap;
