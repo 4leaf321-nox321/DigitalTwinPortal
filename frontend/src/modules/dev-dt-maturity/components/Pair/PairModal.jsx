@@ -404,6 +404,9 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
     try {
       // 시점은 값 축에서만 같이 간다 — 칸·묶음 축은 칸 밑에서 따로 고친다(옛 달이 새 이력에 묻으면 안 된다).
       const payload = { note: editing.note, evidence: editing.evidence, assessed_at: editing.kind === 'value' ? (editing.assessed_at || undefined) : undefined };
+      // 덮어쓰기 알림 — **내가 화면에 띄운 그 축의 평가 시각**을 같이 보낸다. 그 사이 남이
+      // 같은 축을 고쳤으면 서버가 409 로 돌려보낸다(2026-08-30). 미평가였으면 null.
+      payload.base_assessed_at = pair?.assessments?.[editing.axis]?.assessed_at || null;
       if (editing.kind === 'value') payload.value = Number(editing.value);
       else if (isFlagKind(editing.kind)) payload.flags = editing.flags;
       else payload.rung = editing.rung;
@@ -413,6 +416,9 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
       setSaveError(null);
     } catch (e) {
       setSaveError(e.message);
+      // 남이 먼저 고쳤으면(409) **최신을 바로 띄운다** — 덮지 않았다는 말과 함께 새 값이 보여야
+      // 무엇이 달라졌는지 알 수 있다. 적던 근거는 지우지 않는다.
+      if (e.status === 409) { try { const r = await maturityApi.getPair(pairId); onSaved(r.data); } catch { /* 그대로 둔다 */ } }
     } finally {
       setBusy(false);
     }

@@ -683,6 +683,28 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert c['reach_stage'] == 'development' and c['weakest']['id'] == s2['id'] and c['informal_ratio'] == 50 and c['closed_loop'] is False
     assert c['capture_rate'] == 50 and c['usage_rate'] == 100 and c['unknown'] == 1
     assert c['weak_axis']['segment_id'] == s2['id'] and c['weak_axis']['axis'] in ('link_mode', 'capture')
+    # 덮어쓰기 알림 — 그 사이 남이 같은 축을 고쳤으면 409 로 돌려보낸다(같은 축일 때만)
+    _stale_pair = s1['pair_id']
+    base = client.get(f'{BASE}/pairs/{_stale_pair}', headers=auth(mx_user)).get_json()['data']
+    old_at = base['assessments']['link_mode']['assessed_at']
+    _assess(client, auth, mx_user, _stale_pair, 'link_mode', {'rung': 'auto_transfer', 'note': '먼저 고침'})
+    res = client.put(f'{BASE}/pairs/{_stale_pair}/assessments/link_mode',
+                     json={'rung': 'manual', 'note': '늦게 고침', 'base_assessed_at': old_at}, headers=auth(mx_user))
+    assert res.status_code == 409 and '다시 읽고' in res.get_json()['message']
+    after = client.get(f'{BASE}/pairs/{_stale_pair}', headers=auth(mx_user)).get_json()['data']
+    assert after['assessments']['link_mode']['rung'] == 'auto_transfer'          # 덮이지 않았다
+    # 최신 시각을 들고 오면 저장된다
+    ok = client.put(f'{BASE}/pairs/{_stale_pair}/assessments/link_mode',
+                    json={'rung': 'manual', 'note': '다시 읽고 고침',
+                          'base_assessed_at': after['assessments']['link_mode']['assessed_at']}, headers=auth(mx_user))
+    assert ok.status_code == 200 and ok.get_json()['data']['assessments']['link_mode']['rung'] == 'manual'
+    # 부딪히는 것은 **같은 축**뿐이다 — 연결이 그 사이 두 번 바뀌었어도 확보 축은 제 시각만 맞으면 저장된다
+    fresh = client.get(f'{BASE}/pairs/{_stale_pair}', headers=auth(mx_user)).get_json()['data']
+    other = client.put(f'{BASE}/pairs/{_stale_pair}/assessments/capture',
+                       json={'rung': 'auto', 'note': '다른 축', 'evidence': {'coverage_pct': '90'},
+                             'base_assessed_at': fresh['assessments']['capture']['assessed_at']}, headers=auth(mx_user))
+    assert other.status_code == 200
+
     # 전사 연계 개발 기록 — division_id=all (시스템 창)
     _ = client.get(f'{BASE}/thread-cases?division_id=all', headers=auth(mx_user))
     assert _.status_code == 200 and isinstance(_.get_json()['data'], list)

@@ -17,6 +17,13 @@ class Refused(Exception):
     """사람이 고칠 수 있는 이유로 거절. 메시지가 그대로 화면에 간다."""
 
 
+class Stale(Refused):
+    """내가 화면에 띄운 뒤 **남이 같은 축을 고쳤다.** 덮지 않고 돌려보낸다(409).
+
+    ⚠️ 같은 연계의 **같은 축**일 때만이다 — 다른 축·다른 연계는 각각 제 줄이라 부딪히지 않는다.
+    """
+
+
 # ── 대상 · 수단 ─────────────────────────────────────────────────────────────
 
 def _sector_or_refuse(sector):
@@ -269,6 +276,7 @@ def assess(pair, axis_key, payload, actor):
         raise Refused('근거가 필요합니다. 무엇을 보고 이렇게 매겼는지 한 줄로 적으세요.')
 
     row = MaturityAssessment.query.filter_by(pair_id=pair.id, axis=axis_key).first()
+    _refuse_if_stale(axis, row, payload)
     before = _mark(row) if row else None
     if axis['kind'] == 'matrix' and not (pair.agent and pair.agent.defect_types):
         raw_defects = (payload.get('evidence') or {}).get('defects') if isinstance(payload.get('evidence'), dict) else None
@@ -332,6 +340,28 @@ def assess(pair, axis_key, payload, actor):
             db.session.flush()
             change.created_at = when
     return row
+
+
+def _refuse_if_stale(axis, row, payload):
+    """덮어쓰기 알림 — 화면이 보고 있던 평가 시각과 서버의 것이 다르면 거절한다.
+
+    화면은 `base_assessed_at` 에 **자기가 띄운 그 축의 평가 시각**(미평가면 null)을 담아 보낸다.
+    키가 아예 없으면 검사하지 않는다 — 옛 화면·씨앗·가져오기가 그대로 돈다.
+
+    값 축(정확도)은 **검사하지 않는다.** 저장마다 이력 한 줄이 쌓여 남의 기록이 사라지지 않는다 —
+    거기서 막으면 두 사람이 각자 기록을 더하는 정상적인 일이 거절된다.
+    """
+    if 'base_assessed_at' not in payload or axis['kind'] == 'value':
+        return
+    base = payload.get('base_assessed_at') or None
+    now_iso = row.assessed_at.isoformat() if (row and row.assessed_at) else None
+    if base == now_iso:
+        return
+    if row is None:
+        raise Stale('그 사이 다른 분이 이 축을 지웠거나 연계가 바뀌었습니다 — 다시 읽고 매기세요.')
+    who = row.assessed_by_name or '다른 분'
+    when = row.assessed_at.strftime('%Y-%m-%d %H:%M') if row.assessed_at else ''
+    raise Stale(f'그 사이 {who}님이 이 축을 고쳤습니다({when}). 덮지 않았습니다 — 다시 읽고 매기세요.')
 
 
 def _mark(row):

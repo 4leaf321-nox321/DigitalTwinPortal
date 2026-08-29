@@ -38,6 +38,7 @@ const PAIR = {
 export default async function run() {
   const { say, done } = suite();
   let refuse = null;   // 서버 거절을 흉내낼 때
+  let lastAssess = null;   // 마지막으로 서버에 간 평가 꾸러미
   const calls = fakeFetch(({ url, method, body }) => {
     if (url.includes('/projects?')) return [
       { uuid: 'u1', code: 'MX-1', title: '낙하 해석 자동화', status: '진행', year: 2026, division: 'MX', division_id: 17, process: '설계', pl_name: '김해석' },
@@ -46,6 +47,7 @@ export default async function run() {
     ];
     if (url.includes('/pairs/101/assessments/')) {
       if (refuse) { const e = new Error(refuse); throw e; }
+      lastAssess = body;
       const axis = url.split('/assessments/')[1];
       const a = AXES.find(x => x.key === axis);
       let idx, rung, flags;
@@ -218,7 +220,11 @@ export default async function run() {
     say(JSON.stringify(put6?.body?.project_uuids) === '["u1","u2"]', `⑥-3 PUT 에 project_uuids 가 감: ${JSON.stringify(put6?.body?.project_uuids)}`);
     await unmount();
 
-    // ⑧ 모판에서 날짜 기준을 켠 채 들어오면 — 그 뒤에 바뀐 축을 짚어 준다
+    // ⑦-2 덮어쓰기 알림 — 저장에 「내가 띄운 그 축의 평가 시각」이 함께 간다(같은 축을 남이 먼저 고쳤는지 서버가 본다)
+    say(lastAssess && 'base_assessed_at' in lastAssess,
+        `⑦-2 저장에 base_assessed_at 이 실려 감: ${JSON.stringify(lastAssess && lastAssess.base_assessed_at)}`);
+
+    // ⑧ 모판에서 기준 시점을 켠 채 들어오면 — 그 뒤 변경이 있었던 축을 짚어 준다
     const HOT = { ...PAIR, changes: [
       { id: 1, axis: 'automation', before: 'manual', after: 'pre', created_at: '2026-08-20T00:00:00', actor_name: '나', note: '스크립트' },
       { id: 2, axis: 'scope', before: 'issue', after: 'basic', created_at: '2026-05-02T00:00:00', actor_name: '홍', note: '넓힘' },

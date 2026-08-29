@@ -368,6 +368,10 @@ def assess(actor, pair_id, axis):
         S.assess(pair, axis, payload, actor)
         db.session.commit()
         return success_response(S.pair_dict(pair, with_changes=True))
+    except S.Stale as e:
+        # 그 사이 남이 같은 축을 고쳤다 — 덮지 않고 409. 화면은 다시 읽어 보여 준다.
+        db.session.rollback()
+        return error_response(str(e), status_code=409)
     except S.Refused as e:
         db.session.rollback()
         return error_response(str(e), status_code=400)
