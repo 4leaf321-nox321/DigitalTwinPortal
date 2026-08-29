@@ -64,7 +64,9 @@ const VocabTable = styled.table`
   td.act { white-space: nowrap; text-align: right; }
   td.act button { border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 0.3rem; cursor: pointer; padding: 0.15rem 0.35rem; margin-left: 0.2rem; line-height: 1; }
   td.act button:disabled { opacity: 0.35; cursor: not-allowed; }
+  td textarea { width: 100%; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.75rem; resize: vertical; min-height: 1.9rem; }
 `;
+const Fixed = styled.div`font-size: 0.75rem; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.375rem; padding: 0.4rem 0.6rem;`;
 
 const DIVS = '__divisions__';
 const STALE = '__stale__';   // 재평가 기간(일) — 이 날이 지난 평가는 「재평가 필요」
@@ -146,6 +148,17 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   // 그 사전의 지금 값 — 손댔으면 손댄 것, 아니면 서버가 준 것
   const vocabItems = (k) => vocabDraft[k] || (vocabs || []).find(v => v.key === k)?.items || [];
   const setVocabItems = (k, items) => { setSaved(false); setVocabDraft(d => ({ ...d, [k]: items })); };
+  /** 저장 몸 — 사전은 `vocab`, 사다리 문구는 `ladders` 로 나뉜다(설정 키가 다르다). */
+  const vocabPayload = () => {
+    const vocab = {}; const ladders = {};
+    (vocabs || []).forEach(v => {
+      const items = vocabItems(v.key);
+      if (v.store === 'ladders') {
+        (ladders[v.sector] = ladders[v.sector] || {})[v.axis] = items;
+      } else { vocab[v.key] = items; }
+    });
+    return { vocab, ladders };
+  };
   const staleValid = Number.isInteger(Number(staleDays)) && Number(staleDays) >= 1 && Number(staleDays) <= 3650;
   const staleChanged = staleValid && Number(staleDays) !== staleSaved;
   const toggleHidden = (id) => { setSaved(false); setHidden(h => (h.includes(id) ? h.filter(x => x !== id) : [...h, id])); };
@@ -166,7 +179,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
       const payload = key === DIVS ? { hidden_divisions: hidden }
         : key === STALE ? { stale_days: Number(staleDays) }
         : key === SECS ? { hidden_sectors: hiddenSectors }
-        : key === VOCAB ? { vocab: Object.fromEntries((vocabs || []).map(v => [v.key, vocabItems(v.key)])) }
+        : key === VOCAB ? vocabPayload()
         : { accuracy: next };
       const r = await maturityApi.putSettings(payload);
       if (key === DIVS) { const h = (r.data?.hidden_divisions || hidden).map(Number); setHidden(h); setHiddenSaved(h); }
@@ -236,7 +249,8 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                   시뮬레이션·모니터링·디지털 스레드 화면에서 <strong>고르는 값들</strong>입니다. 코드의 값이 처음 기준치이고,
                   여기서 고치면 그것이 이깁니다. 이름을 고치거나 항목을 더하고 뺄 수 있습니다.
                   다만 <strong>key 는 자료에 박히는 값이라 바뀌지 않습니다</strong> — 이미 그 값을 쓰는 자료는 그대로 남고,
-                  뺀 값은 화면에 key 로 보입니다. 저장은 고른 사전만이 아니라 <strong>기준 정보 전체</strong>를 함께 보냅니다.
+                  뺀 값은 화면에 key 로 보입니다. <strong>「사다리 · …」</strong>는 평가할 때 고르는 칸이라 <strong>문구만</strong> 고칩니다.
+                  저장은 고른 사전만이 아니라 <strong>기준 정보 전체</strong>를 함께 보냅니다.
                 </Hint>
                 {vocabs == null ? <Hint>불러오는 중…</Hint> : (
                   <VocabWrap>
@@ -270,13 +284,20 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                           <>
                             <VocabHead>{v.label}<Where>{v.sector_label || '공통'} 화면</Where></VocabHead>
                             <Hint>{v.hint}</Hint>
+                            {v.fixed && (
+                              <Fixed>
+                                <strong>문구만 고칩니다.</strong> 이 목록은 셈과 이력이 key 로 묶여 있어 항목을 더하거나 뺄 수 없습니다
+                                — 칸이 생기고 없어지면 지난 평가가 미아가 됩니다.
+                              </Fixed>
+                            )}
                             <VocabTable>
                               <thead>
                                 <tr>
                                   <th style={{ width: '2rem' }} />
                                   <th>이름</th>
-                                  <th style={{ width: '12rem' }}>key (안 바뀜)</th>
-                                  <th style={{ width: '7rem' }} />
+                                  {v.has_description && <th>설명</th>}
+                                  <th style={{ width: '10rem' }}>key (안 바뀜)</th>
+                                  {!v.fixed && <th style={{ width: '7rem' }} />}
                                 </tr>
                               </thead>
                               <tbody>
@@ -284,19 +305,27 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                                   <tr key={it.key}>
                                     <td className="no">{i + 1}</td>
                                     <td><input value={it.label} aria-label={`${v.label} ${i + 1}번 이름`} onChange={e => put(i, { label: e.target.value })} /></td>
+                                    {v.has_description && (
+                                      <td><textarea rows={2} value={it.description || ''} aria-label={`${v.label} ${i + 1}번 설명`}
+                                                    onChange={e => put(i, { description: e.target.value })} /></td>
+                                    )}
                                     <td><code>{it.key}</code></td>
-                                    <td className="act">
-                                      <button type="button" title="위로" aria-label={`${i + 1}번 위로`} onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
-                                      <button type="button" title="아래로" aria-label={`${i + 1}번 아래로`} onClick={() => move(i, 1)} disabled={i === items.length - 1}>↓</button>
-                                      <button type="button" title="빼기" aria-label={`${i + 1}번 빼기`} onClick={() => setVocabItems(v.key, items.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
-                                    </td>
+                                    {!v.fixed && (
+                                      <td className="act">
+                                        <button type="button" title="위로" aria-label={`${i + 1}번 위로`} onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
+                                        <button type="button" title="아래로" aria-label={`${i + 1}번 아래로`} onClick={() => move(i, 1)} disabled={i === items.length - 1}>↓</button>
+                                        <button type="button" title="빼기" aria-label={`${i + 1}번 빼기`} onClick={() => setVocabItems(v.key, items.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+                                      </td>
+                                    )}
                                   </tr>
                                 ))}
                               </tbody>
                             </VocabTable>
-                            <Button type="button" onClick={() => setVocabItems(v.key, [...items, { key: `custom_${Date.now().toString(36)}`, label: '새 항목' }])}>
-                              <Plus size={13} /> 항목 더하기
-                            </Button>
+                            {!v.fixed && (
+                              <Button type="button" onClick={() => setVocabItems(v.key, [...items, { key: `custom_${Date.now().toString(36)}`, label: '새 항목' }])}>
+                                <Plus size={13} /> 항목 더하기
+                              </Button>
+                            )}
                           </>
                         );
                       })()}

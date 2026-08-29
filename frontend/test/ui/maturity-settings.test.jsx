@@ -26,11 +26,20 @@ export default async function run() {
       items: [{ key: 'plm', label: 'PLM' }, { key: 'mes', label: 'MES' }] },
     { key: 'thread_stages', label: '생애 단계', sector_label: '디지털 스레드', hint: '차례가 뜻을 갖습니다.', is_custom: false,
       items: [{ key: 'plan', label: '기획' }, { key: 'dev', label: '개발' }] },
+    { key: 'ladder:simulation:automation', label: '사다리 · 자동화', sector_label: '시뮬레이션', store: 'ladders',
+      sector: 'simulation', axis: 'automation', fixed: true, has_description: true, is_custom: false,
+      hint: '어느 단계가 사람 손 없이 도는가',
+      items: [{ key: 'manual', label: '수동', description: '전 과정을 사람이 한다' },
+              { key: 'pre', label: '전처리 자동', description: '준비가 자동' }] },
   ];
   const calls = fakeFetch(({ url, method, body }) => {
     if (url.endsWith('/vocabs')) return vocabs;
     if (url.endsWith('/settings') && method === 'PUT') {
       if (body.vocab) vocabs = vocabs.map(v => ({ ...v, items: body.vocab[v.key] || v.items, is_custom: true }));
+      if (body.ladders) {
+        vocabs = vocabs.map(v => (v.store === 'ladders'
+          ? { ...v, items: (body.ladders[v.sector] || {})[v.axis] || v.items, is_custom: true } : v));
+      }
       stored = { ...stored, ...body }; return stored;
     }
     if (url.endsWith('/settings')) return stored;
@@ -125,6 +134,18 @@ export default async function run() {
     const groupHead = (t) => [...document.querySelectorAll('div')].some(d => d.textContent.trim() === t);
     say(groupHead('시뮬레이션') && groupHead('디지털 스레드'), '⑧ 사전이 어느 화면의 것인지 갈래로 묶임');
     say(html().includes('디지털 스레드 화면'), '⑧ 고른 사전 위에 어느 화면의 것인지 붙음');
+    // ⑧-2 사다리 문구 — 평가할 때 고르는 칸. 문구만 고치고 칸은 못 늘린다.
+    await click(byText('button', '사다리 · 자동화')); await settle();
+    say(!byText('button', '항목 더하기') && html().includes('문구만 고칩니다'), '⑧-2 못 박힌 목록은 더하기·빼기가 없음');
+    say(!!document.querySelector('textarea[aria-label="사다리 · 자동화 1번 설명"]'), '⑧-2 설명도 함께 고침');
+    await type(document.querySelector('input[aria-label="사다리 · 자동화 2번 이름"]'), '앞단 자동');
+    await click(byText('button', '저장')); await settle();
+    const putL = calls.find(x => x.method === 'PUT' && x.body?.ladders);
+    say(putL?.body?.ladders?.simulation?.automation?.[1]?.label === '앞단 자동',
+        `⑧-2 사다리는 ladders 광주리로 감: ${JSON.stringify(putL?.body?.ladders)}`);
+    say(!('ladder:simulation:automation' in (putL?.body?.vocab || {})), '⑧-2 사전 광주리에는 안 섞임');
+    calls.length = 0;
+    await click(byText('button', '시스템 종류')); await settle();
     say(byText('button', '저장').disabled, '⑧ 안 바꾸면 저장 잠김');
     await type(name('시스템 종류', 1), '제품 수명주기 관리');
     say(!byText('button', '저장').disabled, '⑧ 이름을 고치면 저장 켜짐');

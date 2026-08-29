@@ -178,6 +178,25 @@ export default async function run() {
     say(!!put5 && put5.body.detail === '1.2m', `⑤ PUT 이 감: ${JSON.stringify(put5?.body)}`);
     await unmount();
 
+    // ⑤-2 관리 창의 말은 **부문이 정한다** — 모니터링에서 「시험 항목·시뮬레이션」이 새면 안 된다
+    const MON = { key: 'manufacturing_monitoring', label: '모니터링', subject_label: '공정', agent_label: '수집 수단' };
+    await render(<ItemManagerModal kind="subject" sector="manufacturing_monitoring" sectorDef={MON} divisionId={17} divisions={DIVS}
+                                   items={[{ id: 9, name: 'SMT 실장', division_id: 17, detail: '', product_families: [], line: 'A라인' }]}
+                                   pairCount={{}} canEdit denyReason={null} modelKinds={[]} onClose={() => {}} onChanged={() => {}} />);
+    await settle();
+    say(html().includes('공정 관리') && !html().includes('시험 항목 관리'), '⑤-2 창 이름이 부문의 말로');
+    say(!!document.querySelector('input[placeholder^="새 공정 이름"]'), '⑤-2 새로 넣는 칸도 부문의 말로');
+    await unmount();
+    await render(<ItemManagerModal kind="agent" sector="manufacturing_monitoring" sectorDef={MON} divisionId={17} divisions={DIVS}
+                                   items={[{ id: 8, name: 'MES 수집', division_id: 17, kind: '', model_kind: '', tools: [], defect_types: [], department_id: null }]}
+                                   pairCount={{}} canEdit denyReason={null} modelKinds={[{ key: 'physics', label: '물리 기반' }]}
+                                   onClose={() => {}} onChanged={() => {}} />);
+    await click(byText('button', 'MES 수집')); await settle();
+    say(html().includes('수집 수단 관리'), '⑤-2 수단 쪽 창 이름도 부문의 말로');
+    say(!document.querySelector('input[aria-label="불량 유형 추가"]'), '⑤-2 불량 유형은 시뮬레이션의 것 — 모니터링에 안 샘');
+    say(!html().includes('모델 종류'), '⑤-2 모델 종류도 시뮬레이션의 것 — 모니터링에 안 샘');
+    await unmount();
+
     // ⑥ 담당 부서 — 찾아서 고르기
     calls.length = 0;
     await render(<ItemManagerModal kind="agent" divisionId={17} divisions={DIVS} items={[{ id: 5, name: '구조 해석', division_id: 17, kind: '', model_kind: '', tools: [], department_id: null }]} pairCount={{}} canEdit denyReason={null} modelKinds={[]} departments={{ 17: [{ id: 3, name: 'CAE그룹(MX)' }, { id: 4, name: 'Mecha그룹(MX)' }] }} onClose={() => {}} onChanged={() => {}} />);

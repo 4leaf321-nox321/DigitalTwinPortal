@@ -640,7 +640,7 @@ def test_스레드_사전은_처음_읽을_때_초안이_들어가고_사무국�
     assert len(threads[1]['segments']) == 5 and threads[1]['segments'][0]['from_stage'] == 'planning'
     assert client.get(f'{BASE}/threads', headers=auth(mx_user)).get_json()['data'][0]['id'] == threads[0]['id']   # 멱등
     systems = client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']
-    assert {s['name'] for s in systems if s['kind'] == 'informal'} == set(D.INFORMAL_ITEMS)
+    assert {s['name'] for s in systems if s['kind'] == 'informal'} == {x['label'] for x in D.INFORMAL_ITEMS}
     assert client.post(f'{BASE}/threads', json={'key': 'supply', 'name': '부품·공급망'}, headers=auth(mx_user)).status_code == 403
     res = client.post(f'{BASE}/threads', json={'key': 'supply', 'name': '부품·공급망 스레드'}, headers=auth(office))
     assert res.status_code == 201
@@ -860,3 +860,54 @@ def test_기준_정보는_설정에서_고치고_고친_말이_모든_문으로_
     assert 'nope' not in {v['key'] for v in after.values()}
     # 지운 값을 쓰던 자료는 남는다 — 없는 말로 조용히 바뀌지 않는다
     assert 'wms' in {s['kind'] for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']}
+
+
+def test_사다리_문구도_기준_정보에서_고치되_칸은_못_늘린다(client, auth, world, mx_user, office):
+    """평가할 때 고르는 칸이 가장 큰 선택지인데 고칠 길이 없었다(설정 키만 있고 화면이 없었다).
+
+    ⚠️ 칸의 key 는 평가·이력이 묶인 자리다 — **문구만** 바뀌고 칸은 늘지도 줄지도 않는다.
+    """
+    mx = world['mx'].id
+    rows = client.get(f'{BASE}/vocabs', headers=auth(mx_user)).get_json()['data']
+    by = {v['key']: v for v in rows}
+
+    # 여태 빠져 있던 것들이 들어왔다
+    assert '비시스템 매개' in {v['label'] for v in rows}
+    assert by['accuracy_rules']['fixed'] is True and by['informal_items']['fixed'] is False
+    ladder = by['ladder:simulation:automation']
+    assert ladder['fixed'] is True and ladder['has_description'] is True and ladder['sector_label'] == '시뮬레이션'
+    assert [x['key'] for x in ladder['items']] == ['manual', 'pre', 'run', 'post', 'report', 'pipeline']
+    assert all(v['store'] in ('vocab', 'ladders') for v in rows)
+
+    # 문구를 고친다 — 칸을 더하려 해도 안 는다
+    edited = [{**x} for x in ladder['items']]
+    edited[1] = {**edited[1], 'label': '앞단 자동', 'description': '형상·메시가 자동'}
+    res = client.put(f'{BASE}/settings', json={'ladders': {'simulation': {
+        'automation': edited + [{'key': '__new__', 'label': '몰래 넣은 칸'}],
+        'nope': [{'key': 'x', 'label': 'x'}],
+    }}}, headers=auth(office))
+    assert res.status_code == 200
+    axes = client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']['axes']['simulation']
+    rungs = next(a for a in axes if a['key'] == 'automation')['rungs']
+    assert [r['key'] for r in rungs] == ['manual', 'pre', 'run', 'post', 'report', 'pipeline']   # 칸은 그대로
+    assert rungs[1]['label'] == '앞단 자동' and rungs[1]['description'] == '형상·메시가 자동'
+    after = {v['key']: v for v in client.get(f'{BASE}/vocabs', headers=auth(mx_user)).get_json()['data']}
+    assert after['ladder:simulation:automation']['is_custom'] is True
+    assert after['ladder:simulation:accuracy']['is_custom'] is False
+
+    # 못 박힌 사전도 마찬가지 — 문구만 바뀌고 줄은 안 는다
+    client.put(f'{BASE}/settings', json={'vocab': {'accuracy_rules': [
+        {'key': 'auto', 'label': '자동(사업부 규칙)'}, {'key': 'zzz', 'label': '없는 규칙'}]}}, headers=auth(office))
+    rules = client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']['accuracy_rules']
+    assert [r['key'] for r in rules] == ['auto', 'mean', 'single']
+    assert rules[0]['label'] == '자동(사업부 규칙)'
+
+    # 비시스템 매개 — 더한 것은 시스템 사전에 줄로 선다
+    items = by['informal_items']['items']
+    client.put(f'{BASE}/settings', json={'vocab': {'informal_items': items + [{'key': 'call', 'label': '전화'}]}},
+               headers=auth(office))
+    names = {s['name'] for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']
+             if s['kind'] == 'informal'}
+    assert '전화' in names and '메일' in names
+    assert '전화' in client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']['thread']['informal_items']
+    _ = mx

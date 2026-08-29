@@ -207,7 +207,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
       <Main $fill>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {defs && divisionId && (tab === 'board' ? (
-          <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)}
+          <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)} modelKinds={defs.model_kinds || []}
                      onOpenPair={(id, since) => patch({ pair: id, since: since || null })} onPickDivision={(id) => patch({ division: id, pair: null })}
                      refreshKey={refreshKey} review={isSim ? defs.review : null} thread={defs.thread} />
         ) : isThread && tab === 'cases' ? (
@@ -246,6 +246,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {modal && !['settings', 'system', 'org', 'thread', 'bulk'].includes(modal.kind) && defs && divisionId && (
           <ModalHost kind={modal.kind} initialId={modal.id ?? null} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
+                     sectorDef={(defs.sectors || []).find(s => s.key === sector)} accuracyRules={defs.accuracy_rules || []}
                      sector={sector} processSteps={defs.monitoring?.process_steps || []}
                      onClose={() => setModal(null)} onChanged={bump} />
         )}

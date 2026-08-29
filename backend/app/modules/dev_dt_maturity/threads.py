@@ -50,7 +50,7 @@ def ensure_defaults():
             elif not sd.data_kinds and seg.get('data'):
                 sd.data_kinds = list(seg['data'])          # 옛 줄에 기본값만 채운다
                 made += 1
-    for name in D.INFORMAL_ITEMS:
+    for name in [x['label'] for x in D.vocab('informal_items')]:
         if not ThreadSystem.query.filter_by(name=name).first():
             db.session.add(ThreadSystem(name=name, kind='informal', link_means='none', status='active', note='비시스템 매개 — 코드 기본'))
             made += 1

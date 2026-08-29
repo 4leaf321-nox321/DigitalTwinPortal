@@ -163,7 +163,7 @@ const BestCell = ({ idx, axis, dense }) => {
 };
 
 // 읽기와 그리기를 가른다 — 그리기(BoardBody)는 props 만 받아 시험·SSR 로 그릴 수 있다.
-const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey, review, sector = 'simulation', sectorDef, thread }) => {
+const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onPickDivision, refreshKey, review, sector = 'simulation', sectorDef, thread, modelKinds = [] }) => {
   
   const [board, setBoard] = useState(null);
   const [changes, setChanges] = useState([]);
@@ -208,12 +208,12 @@ const BoardView = ({ divisionId, axes, filters, onFiltersChange, onOpenPair, onP
   if (error) return <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>;
   if (!board) return <Empty>불러오는 중…</Empty>;
   return (
-    <BoardBody board={board} changes={changes} changeSets={changeSets} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review} sector={sector} sectorDef={sectorDef} thread={thread}
+    <BoardBody board={board} changes={changes} changeSets={changeSets} axes={axes} filters={filters} onPickDivision={onPickDivision} review={review} sector={sector} sectorDef={sectorDef} thread={thread} modelKinds={modelKinds}
                onFiltersChange={onFiltersChange} onOpenPair={onOpenPair} />
   );
 };
 
-export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review, sector = 'simulation', sectorDef, thread }) => {
+export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFiltersChange, onOpenPair, onPickDivision, review, sector = 'simulation', sectorDef, thread, modelKinds = [] }) => {
   const isThread = sector === 'digital_thread';
   const isSim = sector === 'simulation';
   const SUBJ = sectorDef?.subject_label || '시험 항목';       // 이름표는 부문이 정한다
@@ -244,7 +244,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
     <Wrap>
       <Bar>
         <ModeBtn $on={mode === 'scan'} onClick={() => setMode('scan')} title="축마다 대표 수치와 근거(앞선·취약 연계)">요약</ModeBtn>
-        <ModeBtn $on={mode === 'read'} onClick={() => setMode('read')} title="한 줄에 시뮬레이션 하나 — 켠 것들을 배지로">상세</ModeBtn>
+        <ModeBtn $on={mode === 'read'} onClick={() => setMode('read')} title={`한 줄에 ${AGENT} 하나 — 켠 것들을 배지로`}>상세</ModeBtn>
         <ModeBtn $on={mode === 'progress'} onClick={() => setMode('progress')} title="올해 어느 칸이 언제 올라갔나">변화</ModeBtn>
         <ModeBtn $on={mode === 'tiles'} onClick={() => setMode('tiles')} title={isThread ? '구간 하나가 네모 하나 — 스레드로 묶어 밭처럼 훑는다' : '연계 하나가 네모 하나 — 고른 축의 색으로 밭처럼 훑는다'}>모판</ModeBtn>
         {isThread && <ModeBtn $on={mode === 'sysgraph'} onClick={() => setMode('sysgraph')} title="시스템이 노드, 구간이 간선 — 간선 색은 스레드">시스템 연결도</ModeBtn>}
@@ -260,9 +260,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
             </Select>
             <Select value={filters.modelKind} onChange={e => set({ modelKind: e.target.value })}>
               <option value="">모델 종류 전체</option>
-              <option value="physics">물리 기반</option>
-              <option value="data">데이터 기반</option>
-              <option value="hybrid">하이브리드</option>
+              {modelKinds.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
             </Select>
           </>
         )}
@@ -304,7 +302,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
 
       {mode === 'sysgraph' && isThread ? (
         // 「시스템 연결도」 — 시스템이 노드, 구간이 간선, 간선 색 = 스레드(2026-08-29)
-        <ThreadSystemGraph divisionId={board.boards ? 'all' : board.division_id} thread={thread} onOpenPair={onOpenPair} />
+        <ThreadSystemGraph divisionId={board.boards ? 'all' : board.division_id} thread={thread} axes={axes} onOpenPair={onOpenPair} />
       ) : mode === 'tiles' ? (
         // 「모판」 — 연계가 네모, 고른 축이 색. 담당 부서로 묶는다.
         <TileBoard subjects={subjects} axes={axes} onOpenPair={onOpenPair} allMode={!!board.boards} sector={sector} changes={changes} />

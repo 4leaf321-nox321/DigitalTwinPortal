@@ -8,7 +8,7 @@ import SystemMap from './SystemMap';
 //   ThreadDivisionPanels — 사업부 요약의 아래: 스레드 줄 그림(단계를 가로로, 구간을 연결 방식 색으로) · 조직 연계표 · 시스템 허브도
 // 축 판(정확도 자리의 연결 방식 …)은 시뮬레이션 부문과 같은 부품이 그리고, 여기는 「줄」 단위만 더한다.
 
-const LINK_COLORS = ['#fca5a5', '#fdba74', '#93c5fd', '#3b82f6', '#1d4ed8', '#1e3a8a'];   // 문서·구두 → 폐루프
+const LINK_COLORS = ['#fca5a5', '#fdba74', '#93c5fd', '#3b82f6', '#1d4ed8', '#1e3a8a'];   // 문서·구두 → 폐루프 (색만 — 말은 서버가 준다)
 const linkColor = (i) => (i == null ? '#e2e8f0' : LINK_COLORS[Math.min(i, LINK_COLORS.length - 1)]);
 const dark = (i) => i != null && i >= 3;
 

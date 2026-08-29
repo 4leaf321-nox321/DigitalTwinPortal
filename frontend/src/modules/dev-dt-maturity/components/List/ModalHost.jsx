@@ -11,7 +11,7 @@ import ImportModal from './ImportModal';
 // 가져오기는 사업부 하나가 있어야 한다(틀이 사업부 것이다) — 전체면 창 안에서 고른다.
 
 const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason, modelKinds, initialId = null,
-                     sector = 'simulation', processSteps = [], onClose, onChanged }) => {
+                     sector = 'simulation', sectorDef = null, accuracyRules = [], processSteps = [], onClose, onChanged }) => {
   const allMode = divisionId === 'all';
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -80,7 +80,7 @@ const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason,
   }
   return (
     <ItemManagerModal
-      kind={kind} sector={sector} processSteps={processSteps} divisionId={divisionId} allMode={allMode} divisions={divisions}
+      kind={kind} sector={sector} sectorDef={sectorDef} accuracyRules={accuracyRules} processSteps={processSteps} divisionId={divisionId} allMode={allMode} divisions={divisions}
       items={kind === 'subject' ? subjects : agents}
       pairCount={kind === 'subject' ? pairCount.bySubject : pairCount.byAgent}
       canEdit={!denyReason} denyReason={denyReason} modelKinds={modelKinds}

@@ -87,7 +87,7 @@ def definitions(actor):
                     for s in D.SECTORS],
         'axes': {k: D.get_axes(k) for k in D.SECTOR_KEYS},
         'model_kinds': D.vocab('model_kinds'),
-        'accuracy_rules': sorted(D.ACCURACY_RULES),
+        'accuracy_rules': D.vocab('accuracy_rules'),   # key 만이 아니라 문구까지 — 화면이 그대로 쓴다
         'import_columns': D.IMPORT_COLUMNS,
         'stale_days': D.get_stale_days(),
         'review': D.review_definitions(),
@@ -405,9 +405,13 @@ def put_settings(actor):
                 row = ModuleSettings(module_name=D.MODULE_KEY, settings_key=key,
                                      description=f'성숙도 설정 {key}')
                 db.session.add(row)
-            row.settings_data = D.clean_vocab_payload(p[key]) if key == 'vocab' else p[key]
             if key == 'vocab':
+                row.settings_data = D.clean_vocab_payload(p[key])
                 D.forget_vocab_cache()   # 같은 요청 안에서 옛 값을 되돌려 주지 않게
+            elif key == 'ladders':
+                row.settings_data = D.clean_ladders_payload(p[key])
+            else:
+                row.settings_data = p[key]
         db.session.commit()
         return success_response({k: D._setting(k) for k in D.SETTINGS_KEYS})
     except Exception:
@@ -685,7 +689,7 @@ def bulk_input(actor):
 @read_required
 def get_vocabs(actor):
     """기준 정보 — 화면의 선택지들과 지금 값. 설정 화면이 이걸로 표를 그린다(2026-08-30)."""
-    return success_response(D.vocab_all())
+    return success_response(D.vocab_all() + D.ladder_all())
 
 
 @bp.route('/bulk/kinds', methods=['GET'])

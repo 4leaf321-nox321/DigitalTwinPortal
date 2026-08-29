@@ -22,7 +22,7 @@ const Chip = styled.button`
 const Dot = styled.span`width: 0.55rem; height: 0.55rem; border-radius: 999px; background: ${p => (p.$on ? 'white' : p.$c)};`;
 const Muted = styled.div`padding: 1rem; color: #94a3b8; font-size: 0.8125rem;`;
 
-const ThreadSystemGraph = ({ divisionId, thread, onOpenPair }) => {
+const ThreadSystemGraph = ({ divisionId, thread, axes = [], onOpenPair }) => {
   const [segments, setSegments] = useState(null);
   const [systems, setSystems] = useState([]);
   const [threads, setThreads] = useState([]);
@@ -59,6 +59,7 @@ const ThreadSystemGraph = ({ divisionId, thread, onOpenPair }) => {
                          onOpenPair={onOpenPair} onPickSystem={(id) => setPick(id)} />
       {pick != null && (
         <SystemDetailModal
+          thread={thread} linkRungs={(axes.find(a => a.key === 'link_mode') || {}).rungs || []}
           system={(() => {
             const s = systems.find(x => x.id === pick);
             if (!s) return null;

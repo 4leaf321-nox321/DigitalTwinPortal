@@ -43,16 +43,12 @@ const Table = styled.table`width: 100%; border-collapse: collapse; font-size: 0.
 const RowBtn = styled.button`border: none; background: transparent; font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; cursor: pointer; padding: 0; text-align: left; &:hover { color: #1d4ed8; text-decoration: underline; }`;
 const Muted = styled.div`font-size: 0.8125rem; color: #94a3b8;`;
 
-const LINK_RUNGS = [
-  { key: 'manual', label: '사람이 옮김', color: '#fca5a5' },
-  { key: 'auto_transfer', label: '자동 전달', color: '#93c5fd' },
-  { key: 'integrated', label: '시스템 연동', color: '#3b82f6' },
-  { key: 'closed_loop', label: '폐루프', color: '#1e3a8a' },
-];
-const STATUS = { active: ['운영', '#dcfce7', '#166534'], adopting: ['도입 중', '#dbeafe', '#1e40af'], retiring: ['폐지 예정', '#fef3c7', '#92400e'] };
-const MEANS = { api: 'API 있음', file: '파일 배치', none: '연계 수단 없음', unknown: '연계 수단 미확인' };
-const ACTIONS = { integrate: '연동', adopt: '도입', harmonize: '정합화', automate: '자동화', retire: '폐지' };
-const CASE_STATUS = { planned: '계획', doing: '진행 중', done: '완료' };
+// ⚠️ 말은 **서버가 준다** — 연계 수단·상태·연계 개발은 기준 정보에서, 「연결」 칸은
+//    사다리 문구에서 고친다. 여기에 표를 굳혀 두면 고쳐도 이 창만 옛말이 남는다.
+//    색과 칸 수는 화면의 것이라 여기 남긴다(칸의 차례가 곧 서열이다).
+const RUNG_COLORS = ['#fca5a5', '#93c5fd', '#3b82f6', '#1e3a8a'];
+const STATUS_COLORS = { active: ['#dcfce7', '#166534'], adopting: ['#dbeafe', '#1e40af'], retiring: ['#fef3c7', '#92400e'] };
+const labelsOf = (rows) => Object.fromEntries((rows || []).map(r => [r.key, r.label]));
 
 const roleOf = (seg, id) => [
   seg.from_system_id === id && '출발', seg.via_system_id === id && '매개', seg.to_system_id === id && '도착',
@@ -60,7 +56,15 @@ const roleOf = (seg, id) => [
 
 const linkIdx = (seg) => seg.pair?.assessments?.link_mode?.rung_index ?? null;
 
-const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, onOpenPair, onClose }) => {
+const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, thread, linkRungs = [], onOpenPair, onClose }) => {
+  const LINK_RUNGS = useMemo(() => (linkRungs.length ? linkRungs
+    : [{ key: 'manual', label: '사람이 옮김' }, { key: 'auto_transfer', label: '자동 전달' },
+       { key: 'integrated', label: '시스템 연동' }, { key: 'closed_loop', label: '폐루프' }])
+    .map((r, i) => ({ ...r, color: RUNG_COLORS[i] || RUNG_COLORS[RUNG_COLORS.length - 1] })), [linkRungs]);
+  const MEANS = labelsOf(thread?.link_means);
+  const STATUS_LABEL = labelsOf(thread?.system_status);
+  const ACTIONS = labelsOf(thread?.case_actions);
+  const CASE_STATUS = labelsOf(thread?.case_status);
   const [cases, setCases] = useState(null);
   useEffect(() => {
     if (!system) return;
@@ -77,7 +81,7 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
       autoPct: idx.length ? Math.round((100 * idx.filter(v => v >= 1).length) / idx.length) : null,
       counts, assessed: idx.length, unassessed: mine.length - idx.length,
     };
-  }, [mine]);
+  }, [mine, LINK_RUNGS]);
   // 이웃 — 같은 구간 안에서 이 시스템과 맞닿은 시스템들
   const neighbors = useMemo(() => {
     const byId = Object.fromEntries(systems.map(s => [s.id, s]));
@@ -96,7 +100,8 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
   }, [mine, systems, system]);
   const myCases = useMemo(() => (cases || []).filter(c => c.system_id === system?.id), [cases, system]);
   if (!system) return null;
-  const [statusLabel, statusBg, statusFg] = STATUS[system.status] || [system.status, '#f1f5f9', '#475569'];
+  const statusLabel = STATUS_LABEL[system.status] || system.status;
+  const [statusBg, statusFg] = STATUS_COLORS[system.status] || ['#f1f5f9', '#475569'];
   const total = stat.assessed + stat.unassessed;
   return (
     <Backdrop onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -173,7 +178,7 @@ const SystemDetailModal = ({ system, segments = [], systems = [], divisionId, on
                         <td>{s.from_org_name || '—'} → {s.to_org_name || '—'}</td>
                         <td>{i == null
                           ? <Tag>미평가</Tag>
-                          : <Tag $bg={LINK_RUNGS[i].color} $fg={i >= 2 ? 'white' : '#1e293b'}>{LINK_RUNGS[i].label}</Tag>}</td>
+                          : <Tag $bg={LINK_RUNGS[i]?.color} $fg={i >= 2 ? 'white' : '#1e293b'}>{LINK_RUNGS[i]?.label}</Tag>}</td>
                       </tr>
                     );
                   })}

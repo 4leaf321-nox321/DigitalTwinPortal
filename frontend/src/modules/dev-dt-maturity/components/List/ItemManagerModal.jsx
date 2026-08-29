@@ -152,15 +152,14 @@ const DivisionField = ({ d, set, canEdit, divisions, pairs }) => (
   </Field>
 );
 
-const KINDS = {
-  subject: { title: '시험 항목 관리', placeholder: '새 시험 항목 이름 — Enter', pick: '왼쪽에서 시험 항목을 고르세요.', unit: '시험' },
-  agent: { title: '시뮬레이션 관리', placeholder: '새 시뮬레이션 이름 — Enter', pick: '왼쪽에서 시뮬레이션을 고르세요.', unit: '시뮬레이션' },
+// 창의 이름은 **부문이 정한다** — 「시험 항목」·「시뮬레이션」은 시뮬레이션 부문의 말이고,
+// 모니터링에서는 「공정」·「수집 수단」이다. 부문이 못 알려 주면 시뮬레이션의 말로 떨어진다.
+const metaOf = (kind, sectorDef) => {
+  const name = kind === 'subject'
+    ? (sectorDef?.subject_label || '시험 항목')
+    : (sectorDef?.agent_label || '시뮬레이션');
+  return { title: `${name} 관리`, placeholder: `새 ${name} 이름 — Enter`, pick: `왼쪽에서 ${name}을 고르세요.`, unit: name };
 };
-const RULES = [
-  { key: 'auto', label: '자동 — 하나면 그 값, 여럿이면 평균' },
-  { key: 'mean', label: '평균 — 값 있는 시뮬레이션의 평균' },
-  { key: 'single', label: '단일 — 대표 시뮬레이션 하나 (여럿이면 값 없음)' },
-];
 const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 
 const toDraft = (kind, item) => (kind === 'subject'
@@ -184,9 +183,10 @@ const emptyBulk = (kind) => (kind === 'subject'
 const ItemManagerModal = ({
   kind, divisionId, allMode = false, divisions = [], items, pairCount, canEdit, denyReason,
   modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalogs = {}, departments = {}, initialId = null, onClose, onChanged,
-  sector = 'simulation', processSteps = [],
+  sector = 'simulation', processSteps = [], sectorDef = null, accuracyRules = [],
 }) => {
-  const meta = KINDS[kind];
+  const meta = metaOf(kind, sectorDef);
+  const RULES = accuracyRules.length ? accuracyRules : [{ key: 'auto', label: '자동' }];
   const [selected, setSelected] = useState([]);     // id 목록 (순서 = 고른 순서)
   const [anchor, setAnchor] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -479,7 +479,7 @@ const ItemManagerModal = ({
           <select value={d.accuracy_rule} disabled={!canEditCur} onChange={e => set({ accuracy_rule: e.target.value })}>
             {RULES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
-          <small>시뮬레이션이 여럿일 때 항목 정확도를 어떻게 낼지. 사업부 엑셀의 규칙과 맞춥니다.</small></Field>
+          <small>수단이 여럿일 때 항목 정확도를 어떻게 낼지. 사업부 엑셀의 규칙과 맞춥니다.</small></Field>
       </Pair>
       )}
       {!isMon && (
@@ -516,18 +516,20 @@ const ItemManagerModal = ({
       <Pair>
         <Field><span>종류</span>
           <input value={d.kind} disabled={!canEditCur} onChange={e => set({ kind: e.target.value })} placeholder="예: 구조, 열, 유동, 전자기" /></Field>
+        {isSim && (
         <Field><span>모델 종류</span>
           <select value={d.model_kind} disabled={!canEditCur} onChange={e => set({ model_kind: e.target.value })}>
             <option value="">— 안 정함 —</option>
             {modelKinds.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
-          <small>물리 기반 / 데이터 기반 / 하이브리드. 부문이 아니라 속성입니다.</small></Field>
+          <small>{modelKinds.map(m => m.label).join(' / ')}. 부문이 아니라 속성입니다.</small></Field>
+        )}
       </Pair>
       <Field><span>담당 부서</span>
         <SearchSelect options={departments[d.division_id] || []} value={d.department_id} disabled={!canEditCur}
                       onChange={(id) => set({ department_id: id == null ? '' : id })}
                       placeholder="부서 이름으로 찾기" hint="이 사업부에 그런 부서가 없습니다." />
-        <small>이 시뮬레이션을 맡는 부서 — 포탈의 부서 표에서 {divName(d.division_id)} 사업부의 활성 부서만 고릅니다.{(departments[d.division_id] || []).length === 0 ? ' 이 사업부에 등록된 부서가 없습니다 — 부서 표(대시보드 설정)에 먼저 넣으세요.' : ''}</small>
+        <small>이 {meta.unit}을 맡는 부서 — 포탈의 부서 표에서 {divName(d.division_id)} 사업부의 활성 부서만 고릅니다.{(departments[d.division_id] || []).length === 0 ? ' 이 사업부에 등록된 부서가 없습니다 — 부서 표(대시보드 설정)에 먼저 넣으세요.' : ''}</small>
       </Field>
       <Field><span>도구</span>
         <Chips>
@@ -547,8 +549,9 @@ const ItemManagerModal = ({
             </ChipAdd>
           )}
         </Chips>
-        <small>이 시뮬레이션에 쓰는 도구를 하나씩 — 예: LS-DYNA, HyperMesh. 모르는 이름은 「찾기」로 분야를 훑어 고르세요. 표준에 없는 사내 도구는 직접 적으면 됩니다.</small>
+        <small>이 {meta.unit}에 쓰는 도구를 하나씩 — 예: LS-DYNA, HyperMesh. 모르는 이름은 「찾기」로 분야를 훑어 고르세요. 표준에 없는 사내 도구는 직접 적으면 됩니다.</small>
       </Field>
+      {isSim && (
       <Field><span>불량 유형</span>
         <Chips>
           {d.defect_types.map(t => (
@@ -565,8 +568,9 @@ const ItemManagerModal = ({
             </ChipAdd>
           )}
         </Chips>
-        <small>이 시뮬레이션이 다루는 불량 유형을 하나씩 — 예: 크랙, 변색, 접점 마모. 다른 시뮬레이션이 적은 이름이 제안으로 뜹니다.</small>
+        <small>이 {meta.unit}이 다루는 불량 유형을 하나씩 — 예: 크랙, 변색, 접점 마모. 다른 {meta.unit}이 적은 이름이 제안으로 뜹니다.</small>
       </Field>
+      )}
       <Field><span>수행 디지털 트윈 과제</span>
         <Chips>
           {(d.project_uuids || []).map(u => {
@@ -599,7 +603,7 @@ const ItemManagerModal = ({
             <FindBtn type="button" onClick={() => setProjPicker(true)} title="과제 목록을 사업부·프로세스로 좁혀 고릅니다"><Search size={11} /> 상세</FindBtn>
           </ChipAdd>
         )}
-        <small>이 시뮬레이션을 키우는 디지털 트윈 과제 — 여기 드롭다운은 {divName(d.division_id)} 사업부의 최근 과제 둘만 보여 줍니다. 나머지는 「상세」에서 사업부·프로세스로 좁혀 고르세요.</small>
+        <small>이 {meta.unit}을 키우는 디지털 트윈 과제 — 여기 드롭다운은 {divName(d.division_id)} 사업부의 최근 과제 둘만 보여 줍니다. 나머지는 「상세」에서 사업부·프로세스로 좁혀 고르세요.</small>
       </Field>
       <Info>걸린 연계 <strong>{pairCount[current.id] || 0}</strong>개. 연계을 잇거나 끊는 것은 목록 탭에서.</Info>
     </>

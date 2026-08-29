@@ -231,7 +231,14 @@ SYSTEM_KINDS = [
     {'key': 'informal', 'label': '비시스템 매개'}, {'key': 'other', 'label': '기타'},
 ]
 SYSTEM_KIND_KEYS = [k['key'] for k in SYSTEM_KINDS]
-INFORMAL_ITEMS = ['메일', '엑셀·문서 전달', '파일서버·공유폴더', '메신저', '구두·회의']
+# 비시스템 매개 — 시스템을 안 거치고 자료가 오가는 길. 시스템 사전에 이 이름으로 줄이 선다.
+INFORMAL_ITEMS = [
+    {'key': 'mail', 'label': '메일'},
+    {'key': 'doc', 'label': '엑셀·문서 전달'},
+    {'key': 'fileserver', 'label': '파일서버·공유폴더'},
+    {'key': 'messenger', 'label': '메신저'},
+    {'key': 'verbal', 'label': '구두·회의'},
+]
 LINK_MEANS = [{'key': 'api', 'label': 'API 있음'}, {'key': 'file', 'label': '파일 배치'}, {'key': 'none', 'label': '없음'}, {'key': 'unknown', 'label': '미확인'}]
 LINK_MEANS_KEYS = [k['key'] for k in LINK_MEANS]
 SYSTEM_STATUS = [{'key': 'active', 'label': '운영'}, {'key': 'adopting', 'label': '도입 중'}, {'key': 'retiring', 'label': '폐지 예정'}]
@@ -304,7 +311,7 @@ THREAD_CASE_STATUS_KEYS = [s['key'] for s in THREAD_CASE_STATUS]
 
 
 def thread_definitions():
-    return {'stages': vocab('thread_stages'), 'system_kinds': vocab('system_kinds'), 'informal_items': INFORMAL_ITEMS,
+    return {'stages': vocab('thread_stages'), 'system_kinds': vocab('system_kinds'), 'informal_items': [x['label'] for x in vocab('informal_items')],
             'link_means': vocab('link_means'), 'system_status': vocab('system_status'), 'data_kinds': vocab('data_kinds'),
             'case_actions': vocab('case_actions'), 'case_status': vocab('case_status')}
 AXES['manufacturing_monitoring'] = [
@@ -449,6 +456,11 @@ VOCABS = [
     {'key': 'data_kinds', 'label': '데이터 종류', 'sector': 'digital_thread', 'hint': '구간으로 무엇이 흐르나.'},
     {'key': 'case_actions', 'label': '연계 개발 — 무엇을', 'sector': 'digital_thread', 'hint': '연동·도입·정합화·자동화·폐지.'},
     {'key': 'case_status', 'label': '연계 개발 — 상태', 'sector': 'digital_thread', 'hint': '계획·진행 중·완료.'},
+    {'key': 'informal_items', 'label': '비시스템 매개', 'sector': 'digital_thread',
+     'hint': '시스템을 거치지 않고 자료가 오가는 길 — 시스템 사전에 이 이름으로 줄이 섭니다. '
+             '더한 것은 다음에 화면을 열 때 생기고, 뺀 것은 이미 선 줄을 지우지 않습니다.'},
+    {'key': 'accuracy_rules', 'label': '항목 정확도 집계', 'sector': 'simulation', 'fixed': True,
+     'hint': '한 시험 항목에 수단이 여럿일 때 정확도를 어떻게 낼지. 셈이 key 로 갈려 **문구만** 고칩니다.'},
     {'key': 'process_steps', 'label': '공정 단계', 'sector': 'manufacturing_monitoring',
      'hint': '전기·전자 제조의 표준 공정. 라인 이름이 갈려도 공정끼리는 사업부를 넘어 비교됩니다.'},
 ]
@@ -471,6 +483,8 @@ def _vocab_defaults(name):
         'case_actions': THREAD_CASE_ACTIONS,
         'case_status': THREAD_CASE_STATUS,
         'process_steps': PROCESS_STEPS,
+        'informal_items': INFORMAL_ITEMS,
+        'accuracy_rules': ACCURACY_RULE_LABELS,
     }.get(name, [])
 
 
@@ -502,11 +516,20 @@ def forget_vocab_cache():
 
 
 def vocab(name):
-    """그 선택지의 지금 값 — 설정에 있으면 그것, 없으면 코드의 기본."""
+    """그 선택지의 지금 값 — 설정에 있으면 그것, 없으면 코드의 기본.
+
+    못 박힌(fixed) 사전은 **코드의 줄만** 남기고 문구만 덮는다 — 셈이나 이력이 key 로
+    묶여 있어, 설정에서 줄이 생기고 없어지면 셈이 조용히 어긋난다.
+    """
     conf = _vocab_conf()
     rows = conf.get(name) if isinstance(conf, dict) else None
     if not isinstance(rows, list) or not rows:
         return list(_vocab_defaults(name))
+    if (VOCAB_BY_KEY.get(name) or {}).get('fixed'):
+        words = {r['key']: r for r in rows if isinstance(r, dict) and r.get('key')}
+        return [{**d, **{k: str(v) for k, v in (words.get(d['key']) or {}).items()
+                         if k in ('label', 'description') and v}}
+                for d in _vocab_defaults(name)]
     out = []
     for r in rows:
         if not isinstance(r, dict) or not r.get('key') or not r.get('label'):
@@ -559,13 +582,72 @@ def clean_vocab_payload(raw):
     return out
 
 
+# ── 사다리 문구 — 평가할 때 고르는 칸(2026-08-30) ────────────────────────────
+#
+# ⚠️ 칸의 key 는 **평가와 이력이 묶여 있는 자리**다. 더하고 빼지 못하고 문구만 고친다
+#    (get_axes 가 key 가 맞는 칸만 덮는다). 칸을 더하는 것은 코드의 일이다.
+def ladder_all():
+    """부문 × 축마다 한 벌 — 설정 화면이 사다리 문구를 그린다."""
+    conf = _setting('ladders') or {}
+    out = []
+    for sector in SECTORS:
+        sk = sector['key']
+        if not AXES.get(sk):
+            continue
+        for axis in get_axes(sk):
+            saved = (conf.get(sk) or {}).get(axis['key']) if isinstance(conf, dict) else None
+            out.append({
+                'key': f"ladder:{sk}:{axis['key']}", 'store': 'ladders',
+                'sector': sk, 'sector_label': sector['label'], 'axis': axis['key'],
+                'label': f"사다리 · {axis['label']}", 'fixed': True, 'has_description': True,
+                'hint': axis.get('question') or '이 축에서 고르는 칸입니다.',
+                'items': [{'key': r['key'], 'label': r['label'], 'description': r.get('description') or ''}
+                          for r in axis['rungs']],
+                'is_custom': bool(saved),
+            })
+    return out
+
+
+def clean_ladders_payload(raw):
+    """들어온 사다리 문구를 다듬는다 — **아는 부문·축·칸만**, 문구만."""
+    if not isinstance(raw, dict):
+        raise ValueError('사다리 문구의 꼴이 아닙니다.')
+    out = {}
+    for sk, axes in raw.items():
+        if sk not in AXES or not isinstance(axes, dict):
+            continue
+        keep = {}
+        for ak, rows in axes.items():
+            axis = next((a for a in AXES[sk] if a['key'] == ak), None)
+            if axis is None or not isinstance(rows, list):
+                continue
+            known = {r['key'] for r in axis['rungs']}
+            items = []
+            for r in rows:
+                if not isinstance(r, dict) or r.get('key') not in known:
+                    continue
+                item = {'key': r['key']}
+                if str(r.get('label') or '').strip():
+                    item['label'] = str(r['label']).strip()[:100]
+                if str(r.get('description') or '').strip():
+                    item['description'] = str(r['description']).strip()[:400]
+                if len(item) > 1:
+                    items.append(item)
+            if items:
+                keep[ak] = items
+        if keep:
+            out[sk] = keep
+    return out
+
+
 def vocab_all():
     """설정 화면이 그리는 것 — 정의와 지금 값, 그리고 기본값과 다른지."""
     labels = {s['key']: s['label'] for s in SECTORS}
     out = []
     for v in VOCABS:
         items = vocab(v['key'])
-        out.append({**v, 'sector_label': labels.get(v.get('sector'), '공통'),
+        out.append({**v, 'store': 'vocab', 'sector_label': labels.get(v.get('sector'), '공통'),
+                    'fixed': bool(v.get('fixed')), 'has_description': False,
                     'items': items, 'is_custom': items != list(_vocab_defaults(v['key']))})
     return out
 
@@ -675,6 +757,12 @@ DEFAULT_ACCURACY_BOUNDARY = 'gte'
 
 # 항목 정확도의 집계 규칙 — 시험 항목마다 저장한다(PLAN 4절).
 ACCURACY_RULES = {'auto', 'single', 'mean'}
+# ⚠️ key 로 셈이 갈린다(services._item_accuracy) — 더하고 빼지 못한다. 문구만 고친다.
+ACCURACY_RULE_LABELS = [
+    {'key': 'auto', 'label': '자동 — 하나면 그 값, 여럿이면 평균'},
+    {'key': 'mean', 'label': '평균 — 값 있는 수단의 평균'},
+    {'key': 'single', 'label': '단일 — 대표 수단 하나 (여럿이면 값 없음)'},
+]
 
 
 def rung_for_value(value, thresholds=None, boundary=DEFAULT_ACCURACY_BOUNDARY):
