@@ -110,11 +110,6 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   const tab = ['list', 'reviews', 'cases'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
   const sinceIso = params.get('since') || null;      // 모판의 기준 시점 — 창에서 바뀐 축을 짚어 준다
-  // 설정에서 감춘 부문을 보고 있으면 시뮬레이션으로 되돌린다 — 토글에 없는 화면에 갇히지 않게
-  useEffect(() => {
-    const cur = (defs?.sectors || []).find(s => s.key === sector);
-    if (cur?.hidden) patch({ sector: null, pair: null, tab: null });
-  }, [defs, sector]);   // eslint-disable-line react-hooks/exhaustive-deps
   const filters = useMemo(() => filtersFromParams(k => params.get(k)), [params]);
 
   const patch = useCallback((changes) => {
@@ -139,6 +134,12 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     const ok = (defs?.sectors || []).some(s => s.key === raw && s.active);
     return ok ? raw : 'simulation';
   }, [params, defs]);
+  // 설정에서 감춘 부문을 보고 있으면 시뮬레이션으로 되돌린다 — 토글에 없는 화면에 갇히지 않게.
+  // ⚠️ sector·patch 가 선언된 **뒤에** 와야 한다 — 위에 두면 초기화 전 참조로 화면이 죽는다.
+  useEffect(() => {
+    const cur = (defs?.sectors || []).find(s => s.key === sector);
+    if (cur?.hidden) patch({ sector: null, pair: null, tab: null });
+  }, [defs, sector]);   // eslint-disable-line react-hooks/exhaustive-deps
   const isThread = sector === 'digital_thread';
   const axes = defs?.axes?.[sector] || [];
   const bump = () => setRefreshKey(k => k + 1);
