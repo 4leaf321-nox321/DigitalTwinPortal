@@ -144,8 +144,10 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
     try {
       // 로드맵과의 어긋남은 「가져오기」 창에서만 센다 — 목록 밑의 줄은 뺐다(2026-08-28).
       const [s, a, b] = await Promise.all([
-        maturityApi.listSubjects(divisionId), maturityApi.listAgents(divisionId),
-        maturityApi.getBoard(divisionId),
+        // ⚠️ 부문을 반드시 실어 보낸다 — 안 보내면 서버가 시뮬레이션으로 답해
+        //    모니터링 화면에 시험 × 시뮬레이션이 나온다(2026-08-30).
+        maturityApi.listSubjects(divisionId, sector), maturityApi.listAgents(divisionId, sector),
+        maturityApi.getBoard(divisionId, sector),
       ]);
       setSubjects(s.data); setAgents(a.data);
       setPairs(allMode
@@ -154,7 +156,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
       setError(null);
     } catch (e) { setError(e.message); }
   };
-  useEffect(() => { if (divisionId) load(); }, [divisionId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (divisionId) load(); }, [divisionId, sector, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (fn) => { try { await fn(); load(); if (onChanged) onChanged(); } catch (e) { setError(e.message); } };
 

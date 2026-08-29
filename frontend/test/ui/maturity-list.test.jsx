@@ -42,6 +42,8 @@ export default async function run() {
     await settle(60);
     const mheads = [...document.querySelectorAll('thead th')].map(x => x.textContent.trim());
     say(mheads[0] === '공정' && mheads[1] === '수집 수단', `①-5 모니터링 열 이름: ${mheads}`);
+    const asked = calls.filter(c => (c.url || '').includes('sector=manufacturing_monitoring'));
+    say(asked.length >= 3, `①-5 목록·판을 부문으로 부름(안 그러면 시뮬레이션이 나온다): ${asked.length}건`);
     say(html().includes('공정 × 수집 수단'), '①-5 표 머리도 부문의 말로');
     const badge = [...document.querySelectorAll('td button')].find(x => x.textContent === '낙하 해석 자동화');
     say(!!badge && (badge.getAttribute('title') || '').includes('MX-1'), '①-2 과제는 배지로 — 코드·연도는 마우스를 올렸을 때');
