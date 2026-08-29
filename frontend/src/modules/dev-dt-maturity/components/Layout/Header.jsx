@@ -10,13 +10,15 @@ const Buttons = styled.div`display: flex; gap: 0.5rem; align-items: center;`;
 // 「데이터」 — 엑셀로 주고받는 둘(추출·일괄 입력)을 한 단추 아래 모은다(2026-08-30).
 const DataMenu = styled.div`position: relative; display: inline-flex;`;
 const DataList = styled.div`
-  position: absolute; right: 0; top: calc(100% + 0.35rem); z-index: 50; min-width: 17rem;
+  /* 설명 줄이 감기지 않을 만큼 넓게 — 줄바꿈되면 두 항목의 높이가 달라져 목록으로 안 읽힌다. */
+  position: absolute; right: 0; top: calc(100% + 0.35rem); z-index: 50; width: max-content; min-width: 26rem; max-width: 92vw;
   background: white; border: 1px solid #e2e8f0; border-radius: 0.5rem; box-shadow: 0 10px 30px rgba(15,23,42,0.16); padding: 0.25rem;
   button {
-    display: flex; align-items: center; gap: 0.45rem; width: 100%; text-align: left; border: none; background: transparent;
-    font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; padding: 0.45rem 0.55rem; border-radius: 0.375rem; cursor: pointer;
+    display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left; border: none; background: transparent;
+    font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; padding: 0.5rem 0.6rem; border-radius: 0.375rem; cursor: pointer;
+    white-space: nowrap;
     &:hover { background: #eff6ff; color: #1d4ed8; }
-    small { display: block; font-weight: 400; font-size: 0.6875rem; color: #94a3b8; margin-left: auto; }
+    small { font-weight: 400; font-size: 0.6875rem; color: #94a3b8; margin-left: auto; padding-left: 1rem; white-space: nowrap; }
   }
 `;
 
