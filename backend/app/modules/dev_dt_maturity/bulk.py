@@ -45,7 +45,7 @@ def kinds_for(sector, division_id=None):
                     'columns': ['스레드', '구간', '출발 조직', '출발 시스템', '매개 시스템', '도착 조직', '도착 시스템', '데이터 종류'],
                     'required': ['스레드', '구간'],
                     'hint': '조직·시스템은 **이름으로 찾습니다** — 없으면 그 줄이 오류입니다. 시스템·조직을 먼저 올리세요.'})
-        return out
+        return _with_choices(out, sector, division_id)      # ⚠️ 여기서도 선택지를 붙인다 — 빼먹으면 드롭다운이 안 뜬다
     out.append({'key': 'subject', 'label': subject_label,
                 'columns': (['사업부', subject_label, '라인·사업장', '공정', '세부'] if sector == 'manufacturing_monitoring'
                             else ['사업부', subject_label, '세부', '제품군']),
@@ -59,9 +59,13 @@ def kinds_for(sector, division_id=None):
         out.append({'key': 'pair', 'label': '연계',
                     'columns': ['사업부', subject_label, agent_label], 'required': [subject_label, agent_label],
                     'hint': '이름으로 찾아 잇습니다 — 없는 이름이면 그 줄이 오류입니다. 대상·수단을 먼저 올리세요.'})
-    for k in out:
+    return _with_choices(out, sector, division_id)
+
+
+def _with_choices(kinds, sector, division_id):
+    for k in kinds:
         k['choices'] = _choices(sector, k['key'], division_id)
-    return out
+    return kinds
 
 
 def _labels(items):
@@ -92,6 +96,8 @@ def _choices(sector, kind, division_id):
         out['매개 시스템'] = systems
         out['도착 시스템'] = systems
         out['데이터 종류'] = _labels(D.DATA_KINDS)
+    elif kind == 'org':
+        return {}                    # 조직은 이름 한 칸뿐 — 고를 것이 없다
     else:
         from app.modules.digital_twin_dashboard.models import Division
         hidden = D.get_hidden_divisions()

@@ -715,8 +715,16 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
     assert other.status_code == 200
 
     # 일괄 입력 — 추출과 같은 머리글의 표를 붙여넣어 한 번에 세운다
-    kinds = client.get(f'{BASE}/bulk/kinds?sector=digital_thread', headers=auth(mx_user)).get_json()['data']
+    kinds = client.get(f'{BASE}/bulk/kinds?sector=digital_thread&division_id={mx}', headers=auth(mx_user)).get_json()['data']
     assert [k['key'] for k in kinds] == ['system', 'org', 'segment']
+    # 열마다 고를 수 있는 값을 함께 준다 — 화면이 드롭다운을 그린다(부문마다 빠뜨리기 쉬운 자리)
+    sys_choices = next(k for k in kinds if k['key'] == 'system')['choices']
+    assert '종류' in sys_choices and 'PLM' in sys_choices['종류']
+    assert '연계 수단' in sys_choices and '상태' in sys_choices
+    seg_choices = next(k for k in kinds if k['key'] == 'segment')['choices']
+    assert seg_choices['스레드'] and seg_choices['데이터 종류']
+    sim = client.get(f'{BASE}/bulk/kinds?sector=simulation&division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert next(k for k in sim if k['key'] == 'agent')['choices']['모델 종류']
     table = _table(('시스템', '종류', '연계 수단'),
                    ('일괄 PLM', 'PLM', 'API 있음'),
                    ('일괄 MES', 'MES', '파일 배치'),
