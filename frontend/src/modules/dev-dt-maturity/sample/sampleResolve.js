@@ -19,7 +19,9 @@ export const resolveSample = (path, method, store) => {
     const same = Object.keys(want).filter(q => have[q] === want[q]).length;
     const diff = Object.keys(want).filter(q => have[q] !== undefined && have[q] !== want[q]).length;
     const sameDivision = !('division_id' in want) || have.division_id === want.division_id;
-    const sameSector = !('sector' in want) || !('sector' in have) || have.sector === want.sector;
+    // ⚠️ 부문을 물었으면 **부문이 적힌 키**로만 간다. 부문 없는 옛 키(시뮬레이션 자료)로 넘어가면
+    //    스레드·모니터링 화면에 시뮬레이션이 나온다(2026-08-30에 추출에서 드러났다).
+    const sameSector = !('sector' in want) || have.sector === want.sector;
     return { k, same, diff, sameDivision, sameSector };
   }).filter(x => x.sameDivision && x.sameSector && x.diff <= 1);
   scored.sort((a, b) => b.same - a.same || a.diff - b.diff);

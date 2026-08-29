@@ -50,17 +50,19 @@ export const exportMaturity = async ({ divisionId, divisionName, sector, sectorD
   );
   const changes = changeLists.flat();
 
-  const [subs, ags] = await Promise.all([
-    maturityApi.listSubjects(divisionId, sector).then(r => (Array.isArray(r.data) ? r.data : [])).catch(() => []),
-    maturityApi.listAgents(divisionId, sector).then(r => (Array.isArray(r.data) ? r.data : [])).catch(() => []),
-  ]);
+  // 대상은 **판에서** 짠다 — 판에는 평가가 없는 대상도 들어 있고, 부문 꾸밈(구간의 스레드·조직·
+  // 시스템)이 이미 붙어 있다. 목록 API 를 또 부르면 꾸밈이 없는 맨 줄이 와서 열이 빈다.
+  const subs = boards.flatMap(b => (b.subjects || []).map(s => ({ ...s, division_name: b.division_name })));
+  // 수단이 없는 부문(디지털 스레드)은 부르지 않는다 — 부르면 그 부문에 없는 것을 묻는 셈이다.
+  const ags = sectorDef?.has_agent === false ? []
+    : await maturityApi.listAgents(divisionId, sector).then(r => (Array.isArray(r.data) ? r.data : [])).catch(() => []);
 
   const subjectLabel = sectorDef?.subject_label || '대상';
   const agentLabel = sectorDef?.agent_label || '수단';
   const wb = XLSX.utils.book_new();
   addSheet(wb, '평가', assessmentSheet(boards, axes, sector, agentLabel, subjectLabel));
   addSheet(wb, subjectLabel, subjectSheet(subs, sector, subjectLabel));
-  if (sector !== 'digital_thread') addSheet(wb, agentLabel, agentSheet(ags, sector, agentLabel));
+  if (sectorDef?.has_agent !== false) addSheet(wb, agentLabel, agentSheet(ags, sector, agentLabel));
   addSheet(wb, '이력', changeSheet(changes, axes));
 
   if (sector === 'simulation') {

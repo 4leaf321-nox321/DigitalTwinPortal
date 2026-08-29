@@ -35,3 +35,13 @@ test('부문이 다른 키로는 넘어가지 않는다 — 스레드 구간이 
   // 부문을 안 물으면 예전처럼 고른다
   assert.deepEqual(resolveSample('/board?division_id=17', 'GET', store).data, { subjects: ['시뮬'] });
 });
+
+test('부문을 물었으면 부문 없는 옛 키로 넘어가지 않는다 — 추출이 시뮬레이션을 담던 일', () => {
+  const store = {
+    '/subjects?division_id=17': ['시뮬레이션 대상'],                       // 부문이 안 적힌 옛 키
+    '/subjects?division_id=17&sector=simulation': ['시뮬레이션 대상'],
+  };
+  assert.deepEqual(resolveSample('/subjects?division_id=17&sector=digital_thread', 'GET', store).data, []);
+  assert.deepEqual(resolveSample('/subjects?division_id=17&sector=simulation', 'GET', store).data, ['시뮬레이션 대상']);
+  assert.deepEqual(resolveSample('/subjects?division_id=17', 'GET', store).data, ['시뮬레이션 대상']);   // 안 물으면 그대로
+});
