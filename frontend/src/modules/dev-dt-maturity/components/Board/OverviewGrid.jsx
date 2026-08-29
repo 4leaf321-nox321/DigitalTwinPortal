@@ -202,10 +202,12 @@ const OverviewGrid = ({ boards, axes, review, onPickDivision, sector = 'simulati
       </Head>
       <Body>
       <Table>
+        {/* ⚠️ colgroup 안에는 col 말고 아무것도 두지 않는다 — 같은 줄에 주석을 붙이면
+            그 사이 공백이 텍스트 노드로 남아 React 가 경고한다. 「전체」도 사업부와 똑같이 나눈다. */}
         <colgroup>
           <col style={{ width: '11rem' }} />
           {boards.map(b => <col key={b.division_id} />)}
-          <col />   {/* 「전체」도 사업부와 똑같이 나눈다 */}
+          <col />
         </colgroup>
         <thead>
           <tr>
