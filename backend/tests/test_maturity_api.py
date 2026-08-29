@@ -230,7 +230,7 @@ def test_설정은_사무국만_바꾼다(client, auth, world, mx_user, office):
     res = client.get(f'{BASE}/definitions', headers=auth(mx_user))
     d = res.get_json()['data']
     assert d['stale_days'] == 180
-    assert [s['key'] for s in d['sectors'] if s['active']] == ['simulation', 'digital_thread', 'manufacturing_monitoring']
+    assert [s['key'] for s in d['sectors'] if s['active']] == ['simulation', 'manufacturing_monitoring', 'digital_thread']
     assert all(s['hidden'] is False for s in d['sectors'])          # 기본은 아무 부문도 안 감춘다
     assert d['my_division_id'] == world['mx'].id
 

@@ -304,12 +304,12 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
             <Select value={link.agent_id} disabled={!link.subject_id}
                     onChange={e => setLink(l => ({ ...l, agent_id: e.target.value }))}>
               <option value="">{AGENT}</option>
-              {/* 이미 이어진 것도 **남겨 두되 고를 수 없게** 한다(2026-08-30) — 목록에서 사라지면
+              {/* 이미 연계된 것도 **남겨 두되 고를 수 없게** 한다(2026-08-30) — 목록에서 사라지면
                   왜 없는지 알 길이 없어 「공정마다 고를 수 있는 수단이 다르다」로 잘못 읽힌다.
                   규칙은 하나뿐이다: 같은 짝을 두 번 잇지 않는다(평가가 두 벌 생긴다). */}
               {linkAgents.map(a => (
                 <option key={a.id} value={a.id} disabled={linkedAgents.has(a.id)}>
-                  {a.name}{linkedAgents.has(a.id) ? ' — 이미 이어짐' : ''}
+                  {a.name}{linkedAgents.has(a.id) ? ' — 연계 완료' : ''}
                 </option>
               ))}
             </Select>

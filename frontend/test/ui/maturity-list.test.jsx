@@ -60,7 +60,7 @@ export default async function run() {
     // ①-6 이미 이어진 수단은 **남되 못 고른다** — 사라지면 「공정마다 고를 수 있는 게 다르다」로 잘못 읽힌다
     const opts = [...sels[1].querySelectorAll('option')];
     const done5 = opts.find(o => o.value === '5');
-    say(!!done5 && done5.disabled && done5.textContent.includes('이미 이어짐'), `①-6 이어진 수단은 「이미 이어짐」으로 잠김: ${opts.map(o => o.textContent.trim())}`);
+    say(!!done5 && done5.disabled && done5.textContent.includes('연계 완료'), `①-6 이어진 수단은 「연계 완료」로 잠김: ${opts.map(o => o.textContent.trim())}`);
     say(opts.find(o => o.value === '6') && !opts.find(o => o.value === '6').disabled, '①-6 안 이어진 수단은 고를 수 있음');
     await select(sels[1], '6'); await settle();
     await click(byText('button', '잇기')); await settle(60);

@@ -29,18 +29,23 @@ MODULE_KEY = 'dev_dt_maturity'
 SECTORS = [
     {'key': 'simulation', 'label': '시뮬레이션', 'has_agent': True,
      'subject_label': '시험 항목', 'agent_label': '시뮬레이션', 'phase': 1},
-    # ⚠️ 아래 셋은 자리만 잡아 둔다. 사다리가 없으면 화면에 안 뜬다(active=False).
-    {'key': 'verification_automation', 'label': '검증 자동화', 'has_agent': True,
-     'subject_label': '검증 대상 로직', 'agent_label': '자동 검증 환경', 'phase': 2},
+    # ⚠️ 아래 둘은 자리만 잡아 둔다. 사다리가 없으면 화면에 안 뜬다(active=False).
+    #    검토안은 PLAN-automation.md — 대상·수단·축까지 적혀 있고 담당 확인만 남았다.
     {'key': 'design_automation', 'label': '설계 자동화', 'has_agent': True,
-     'subject_label': '설계 업무', 'agent_label': '자동화 도구', 'phase': 2},
-    {'key': 'digital_thread', 'label': '디지털 스레드', 'has_agent': False,
-     'subject_label': '연계 구간', 'agent_label': None, 'phase': 3},
+     'subject_label': '설계 업무', 'agent_label': '자동화 수단', 'phase': 2},
+    {'key': 'verification_automation', 'label': '검증 자동화', 'has_agent': True,
+     'subject_label': '검증 항목', 'agent_label': '검증 수단', 'phase': 2},
     # 제조 모니터링(2026-08-29, PLAN-monitoring.md) — 대상은 **라인 × 공정 단계**다.
     # 설비 개체가 아니다: 사업부마다 설비가 수백이라 목록이 폭발하고 교체 때 이력이 사라진다.
     # 같은 공정의 설비 사이 차이는 근거의 비율(「상태 8/12대」)로 받는다.
     {'key': 'manufacturing_monitoring', 'label': '모니터링', 'has_agent': True,
      'subject_label': '공정', 'agent_label': '수집 수단', 'phase': 4},
+    # 공장 최적화(시뮬레이션) — 라인·물류의 흐름을 모델로 돌려 배치·재고·택트를 고르는 자리.
+    # 자리만 잡아 둔다(2026-08-30). 대상·수단·축은 제조 담당 확인 뒤에.
+    {'key': 'factory_optimization', 'label': '공장 최적화', 'has_agent': True,
+     'subject_label': '최적화 대상', 'agent_label': '공장 시뮬레이션 모델', 'phase': 4},
+    {'key': 'digital_thread', 'label': '디지털 스레드', 'has_agent': False,
+     'subject_label': '연계 구간', 'agent_label': None, 'phase': 3},
 ]
 SECTOR_KEYS = [s['key'] for s in SECTORS]
 SECTOR_BY_KEY = {s['key']: s for s in SECTORS}

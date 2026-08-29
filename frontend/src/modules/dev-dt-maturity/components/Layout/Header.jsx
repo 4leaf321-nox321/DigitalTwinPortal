@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio, Factory } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -36,8 +36,9 @@ const SECTORS = [
   { key: 'simulation', label: '시뮬레이션', icon: Activity, open: true },
   { key: 'design_automation', label: '설계 자동화', icon: PenTool, open: false },
   { key: 'verification_automation', label: '검증 자동화', icon: CheckSquare, open: false },
-  { key: 'digital_thread', label: '디지털 스레드', icon: Link2, open: false },
   { key: 'manufacturing_monitoring', label: '모니터링', icon: Radio, open: false },
+  { key: 'factory_optimization', label: '공장 최적화', hint: '공장 최적화(시뮬레이션)', icon: Factory, open: false },
+  { key: 'digital_thread', label: '디지털 스레드', icon: Link2, open: false },
 ];
 
 // 관리 단추의 이름은 **부문이 정한다**(sectorDef.subject_label · agent_label) —
@@ -92,7 +93,7 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
             return (
               <SectorBtn key={x.key} type="button" $on={x.key === sector} disabled={!open} aria-pressed={x.key === sector}
                          onClick={() => open && onSector && onSector(x.key)}
-                         title={open ? `${x.label} 부문` : `${x.label} 부문 — 준비 중`}>
+                         title={open ? `${x.label} 부문` : `${x.hint || x.label} 부문 — 준비 중`}>
                 <x.icon size={15} strokeWidth={2} /> {x.label}
               </SectorBtn>
             );
