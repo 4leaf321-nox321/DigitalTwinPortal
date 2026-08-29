@@ -134,14 +134,23 @@ export default async function run() {
     calls.length = 0;
     await click(byText('button', '기준 정보')); await settle();
     const name = (dict, i) => document.querySelector(`input[aria-label="${dict} ${i}번 이름"]`);
-    await click(byText('button', '시스템 종류')); await settle();
-    say(!!name('시스템 종류', 1) && !!name('시스템 종류', 2), '⑧ 첫 사전의 항목이 고칠 수 있는 칸으로 보임');
     say(html().includes('key 는 자료에 박히는 값'), '⑧ key 는 안 바뀐다고 알림');
     say(!document.querySelector('input[aria-label="원인 분석 문턱"]'), '⑧ 기준 정보 화면에도 정확도 판이 없음');
-    const groupHead = (t) => [...document.querySelectorAll('div')].some(d => d.textContent.trim() === t);
-    say(groupHead('시뮬레이션') && groupHead('디지털 스레드'), '⑧ 사전이 어느 화면의 것인지 갈래로 묶임');
-    say(html().includes('디지털 스레드 화면'), '⑧ 고른 사전 위에 어느 화면의 것인지 붙음');
+    // ⑧ 갈래는 **위의 탭**으로 나뉜다 — 옆줄에 죽 세우면 찾기 힘들다
+    const tabs = () => [...document.querySelectorAll('[role="tab"]')].map(t => t.textContent.trim());
+    say(tabs().some(t => t.startsWith('시뮬레이션')) && tabs().some(t => t.startsWith('디지털 스레드')),
+        `⑧ 갈래가 위의 탭으로: ${tabs()}`);
+    const listed = () => [...document.querySelectorAll('[aria-label="설정"] button')].map(b2 => b2.textContent.trim());
+    say(listed().some(t => t.startsWith('모델 종류')) && !listed().some(t => t.startsWith('시스템 종류')),
+        '⑧ 옆줄에는 고른 갈래의 것만');
+    await click([...document.querySelectorAll('[role="tab"]')].find(t => t.textContent.startsWith('디지털 스레드'))); await settle();
+    say(listed().some(t => t.startsWith('시스템 종류')) && !listed().some(t => t.startsWith('모델 종류')),
+        '⑧ 탭을 옮기면 그 갈래의 것으로 바뀜');
+    say(html().includes('디지털 스레드 화면'), '⑧ 탭을 옮기면 그 갈래의 첫 줄이 골라짐');
+    say(!!name('시스템 종류', 1) && !!name('시스템 종류', 2), '⑧ 항목이 고칠 수 있는 칸으로 보임');
+    const goTab = (t) => click([...document.querySelectorAll('[role="tab"]')].find(x => x.textContent.startsWith(t)));
     // ⑧-2 척도 문구 — 평가할 때 고르는 칸. 문구만 고치고 칸은 못 늘린다.
+    await goTab('시뮬레이션'); await settle();
     await click(byText('button', '척도 · 자동화')); await settle();
     say(!byText('button', '항목 더하기') && html().includes('문구만 고칩니다'), '⑧-2 못 박힌 목록은 더하기·빼기가 없음');
     say(!!document.querySelector('textarea[aria-label="척도 · 자동화 1번 설명"]'), '⑧-2 설명도 함께 고침');
@@ -165,6 +174,7 @@ export default async function run() {
     say(putA?.body?.ladders?.simulation?.automation?.base?.[0]?.label === '형상만', '⑧-3 바탕도 함께 감');
     // ⑧-4 부문의 말 — 화면 전체의 이름표
     calls.length = 0;
+    await goTab('공통'); await settle();
     await click(byText('button', '부문의 말')); await settle();
     say(!byText('button', '항목 더하기'), '⑧-4 부문의 말도 줄은 못 늘림');
     await type(document.querySelector('input[aria-label="부문의 말 1번 이름"]'), '검증 항목');
@@ -173,6 +183,7 @@ export default async function run() {
     say(putW?.body?.sector_words?.simulation?.subject_label === '검증 항목',
         `⑧-4 부문·자리로 갈라 보냄: ${JSON.stringify(putW?.body?.sector_words)}`);
     calls.length = 0;
+    await goTab('디지털 스레드'); await settle();
     await click(byText('button', '시스템 종류')); await settle();
     say(byText('button', '저장').disabled, '⑧ 안 바꾸면 저장 잠김');
     await type(name('시스템 종류', 1), '제품 수명주기 관리');

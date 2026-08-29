@@ -51,6 +51,16 @@ const Where = styled.span`
   font-size: 0.6875rem; font-weight: 600; color: #475569; background: #eef2f7; border-radius: 0.25rem; padding: 0.1rem 0.35rem; white-space: nowrap;
 `;
 const VocabHead = styled.div`display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 700; color: #1e293b;`;
+const VocabTabs = styled.div`
+  display: flex; gap: 0.15rem; border-bottom: 1px solid #e2e8f0; width: 100%; overflow-x: auto; flex: none;
+`;
+const VocabTab = styled.button`
+  border: none; background: transparent; font-family: inherit; font-size: 0.8125rem; cursor: pointer; white-space: nowrap;
+  padding: 0.45rem 0.8rem; margin-bottom: -1px; border-bottom: 2px solid ${p => (p.$on ? '#1d4ed8' : 'transparent')};
+  color: ${p => (p.$on ? '#1d4ed8' : '#64748b')}; font-weight: ${p => (p.$on ? 700 : 500)};
+  &:hover { color: #1d4ed8; }
+  em { font-style: normal; color: #94a3b8; font-size: 0.6875rem; margin-left: 0.3rem; }
+`;
 const VocabWrap = styled.div`display: flex; gap: 0.9rem; flex: 1; min-height: 0;`;
 const VocabList = styled.div`width: 13rem; flex: none; overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: #f8fafc;`;
 const VocabBody = styled.div`flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start;`;
@@ -77,7 +87,6 @@ const DIVS = '__divisions__';
 const STALE = '__stale__';   // 재평가 기간(일) — 이 날이 지난 평가는 「재평가 필요」
 const SECS = '__sectors__';  // 부문 표시 — 체크한 부문은 헤더 토글에서 사라진다(2026-08-29)
 const VOCAB = '__vocab__';   // 기준 정보 — 화면의 선택지를 여기서 고친다(2026-08-30)
-const Sep = styled.div`font-size: 0.6875rem; font-weight: 700; color: #94a3b8; padding: 0.6rem 0.9rem 0.2rem; border-top: 1px solid #e2e8f0; margin-top: 0.3rem;`;
 const DivList = styled.div`
   display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8125rem; color: #1e293b;
   label { display: flex; align-items: center; gap: 0.5rem; } small { color: #94a3b8; }
@@ -125,6 +134,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   const [vocabDraft, setVocabDraft] = useState({});   // {사전키: [{key,label}…]} — 손댄 것만
   const [wordDraft, setWordDraft] = useState({});     // 축의 글 칸 {'사전키:자리': 값} — 손댄 것만
   const [vocabPick, setVocabPick] = useState(null);
+  const [vocabTab, setVocabTab] = useState(null);     // 기준 정보의 갈래(부문) — 위의 탭
   const [accKey, setAccKey] = useState('*');                       // 정확도 — 보던 사업부('*' = 전사 기본)
   const [hiddenSectors, setHiddenSectors] = useState([]);          // 감춘 부문(2026-08-29)
   const [hiddenSectorsSaved, setHiddenSectorsSaved] = useState([]);           // 초안
@@ -229,6 +239,15 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
     g.items.push(v);
     return acc;
   }, []);
+  // 고른 것이 어느 갈래인지 — 탭을 안 고른 채로 열렸으면 그 갈래를 편다
+  const pickedGroup = (vocabs || []).find(v => v.key === vocabPick)?.sector_label || null;
+  const tab = vocabTab || pickedGroup || vocabGroups[0]?.at || null;
+  const tabItems = vocabGroups.find(g => g.at === tab)?.items || [];
+  const goTab = (at) => {
+    setVocabTab(at);
+    const first = vocabGroups.find(g => g.at === at)?.items?.[0];
+    if (first && !(vocabGroups.find(g => g.at === at)?.items || []).some(v => v.key === vocabPick)) setVocabPick(first.key);
+  };
   const own = (k) => !!rowOf(conf, k);
   const ownCount = divisions.filter(d => own(String(d.id))).length;   // 따로 정한 사업부 수
   const set = (patch) => { setSaved(false); setDraft(d => ({ ...(d || base), ...patch })); };
@@ -272,18 +291,21 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                   저장은 고른 사전만이 아니라 <strong>기준 정보 전체</strong>를 함께 보냅니다.
                 </Hint>
                 {vocabs == null ? <Hint>불러오는 중…</Hint> : (
+                  <>
+                  <VocabTabs role="tablist" aria-label="기준 정보 갈래">
+                    {vocabGroups.map(g => (
+                      <VocabTab key={g.at} type="button" role="tab" aria-selected={tab === g.at} $on={tab === g.at} onClick={() => goTab(g.at)}>
+                        {g.at}<em>{g.items.length}</em>
+                      </VocabTab>
+                    ))}
+                  </VocabTabs>
                   <VocabWrap>
                     <VocabList>
-                      {vocabGroups.map(g => (
-                        <React.Fragment key={g.at}>
-                          <Sep>{g.at}</Sep>
-                          {g.items.map(v => (
-                            <Item key={v.key} type="button" $on={vocabPick === v.key} onClick={() => setVocabPick(v.key)}>
-                              <span>{v.label}</span>
-                              <Tag $own={v.is_custom || !!vocabDraft[v.key]}>{vocabItems(v.key).length}</Tag>
-                            </Item>
-                          ))}
-                        </React.Fragment>
+                      {tabItems.map(v => (
+                        <Item key={v.key} type="button" $on={vocabPick === v.key} onClick={() => setVocabPick(v.key)}>
+                          <span>{v.label}</span>
+                          <Tag $own={v.is_custom || !!vocabDraft[v.key]}>{vocabItems(v.key).length}</Tag>
+                        </Item>
                       ))}
                     </VocabList>
                     <VocabBody>
@@ -381,6 +403,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                       })()}
                     </VocabBody>
                   </VocabWrap>
+                  </>
                 )}
               </>
             )}
