@@ -521,6 +521,9 @@ const ItemManagerModal = ({
           <select value={d.model_kind} disabled={!canEditCur} onChange={e => set({ model_kind: e.target.value })}>
             <option value="">— 안 정함 —</option>
             {modelKinds.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+            {/* 기준 정보에서 빠진 값이 이미 적혀 있으면 그대로 보여 준다 — 숨기면 모르는 채로 덮어쓴다 */}
+            {d.model_kind && !modelKinds.some(m => m.key === d.model_kind)
+              && <option value={d.model_kind}>{d.model_kind} — 없는 종류</option>}
           </select>
           <small>{modelKinds.map(m => m.label).join(' / ')}. 부문이 아니라 속성입니다.</small></Field>
         )}

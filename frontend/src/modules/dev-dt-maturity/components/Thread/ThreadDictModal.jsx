@@ -38,6 +38,15 @@ const Tabs = styled.div`display: flex; gap: 0.25rem;`;
 const Tab = styled.button`padding: 0.3rem 0.8rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#e2e8f0')}; border-radius: 999px; background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')}; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;`;
 const SegRow = styled.div`display: grid; grid-template-columns: minmax(0, 1fr) 7rem 1rem 7rem 1.6rem; & + & { margin-top: 0.15rem; } gap: 0.3rem; align-items: center; font-size: 0.8125rem; input, select { padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; min-width: 0; }`;
 
+/** 목록 + 「이미 적혀 있는데 목록엔 없는 값」. 안 보이면 사람이 모르는 채로 덮어쓴다(2026-08-30). */
+const withStray = (rows, current, what) => {
+  const list = rows || [];
+  const many = Array.isArray(current) ? current : [current];
+  const stray = many.filter(v => v && !list.some(x => x.key === v))
+    .map(v => ({ key: v, label: `${v} — 없는 ${what}`, stray: true }));
+  return [...list, ...stray];
+};
+
 const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions = [], thread, axes = [], canCurate = false, denyReason, onClose, onChanged }) => {
   const [kind, setKind] = useState(initialKind);
   const [division, setDivision] = useState(divisionId === 'all' ? (divisions[0]?.id ?? null) : divisionId);
@@ -186,20 +195,20 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
                 <Field><span>이름</span><input value={draft.name || ''} onChange={e => set({ name: e.target.value })} disabled={!canEditKind || draft.kind === 'informal'} aria-label="시스템 이름" /></Field>
                 <Field><span>종류</span>
                   <select value={draft.kind || 'other'} onChange={e => set({ kind: e.target.value })} disabled={!canEditKind || draft.kind === 'informal'} aria-label="시스템 종류">
-                    {kinds.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                    {withStray(kinds, draft.kind, '종류').map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
                   </select>
                 </Field>
                 <Field><span>주관 조직</span><input value={draft.owner_org || ''} onChange={e => set({ owner_org: e.target.value })} disabled={!canEditKind} placeholder="예: IT 기획, PLM 운영팀" /></Field>
                 <Field><span>생애 단계</span>
-                  <Chips>{stages.map(s => <Chip key={s.key} type="button" $on={(draft.stages || []).includes(s.key)} disabled={!canEditKind}
+                  <Chips>{withStray(stages, draft.stages, '단계').map(s => <Chip key={s.key} type="button" $on={(draft.stages || []).includes(s.key)} disabled={!canEditKind}
                     onClick={() => set({ stages: (draft.stages || []).includes(s.key) ? draft.stages.filter(x => x !== s.key) : [...(draft.stages || []), s.key] })}>{s.label}</Chip>)}</Chips>
                 </Field>
                 <Field><span>연계 수단</span>
-                  <Chips>{(thread?.link_means || []).map(m => <Chip key={m.key} type="button" $on={draft.link_means === m.key} disabled={!canEditKind || draft.kind === 'informal'} onClick={() => set({ link_means: m.key })}>{m.label}</Chip>)}</Chips>
+                  <Chips>{withStray(thread?.link_means, draft.link_means, '수단').map(m => <Chip key={m.key} type="button" $on={draft.link_means === m.key} disabled={!canEditKind || draft.kind === 'informal'} onClick={() => set({ link_means: m.key })}>{m.label}</Chip>)}</Chips>
                   <small>API 가 있으면 어떤 구간이든 연동 후보. 「미확인」이면 허브도에 미확인으로 셉니다.</small>
                 </Field>
                 <Field><span>상태</span>
-                  <Chips>{(thread?.system_status || []).map(m => <Chip key={m.key} type="button" $on={draft.status === m.key} disabled={!canEditKind} onClick={() => set({ status: m.key })}>{m.label}</Chip>)}</Chips>
+                  <Chips>{withStray(thread?.system_status, draft.status, '상태').map(m => <Chip key={m.key} type="button" $on={draft.status === m.key} disabled={!canEditKind} onClick={() => set({ status: m.key })}>{m.label}</Chip>)}</Chips>
                 </Field>
                 <Field><span>메모</span><input value={draft.note || ''} onChange={e => set({ note: e.target.value })} disabled={!canEditKind} /></Field>
                 {canCurate && draft.kind !== 'informal' && (

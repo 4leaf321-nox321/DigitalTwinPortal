@@ -956,3 +956,74 @@ def test_축의_문구와_부문의_말도_기준_정보에서_고친다(client,
     kinds = client.get(f'{BASE}/bulk/kinds?sector=simulation&division_id={world["mx"].id}',
                        headers=auth(mx_user)).get_json()['data']
     assert next(k for k in kinds if k['key'] == 'subject')['label'] == '검증 항목'
+
+
+def test_기준_정보에서_빼도_자료는_지키고_점검에서_옮긴다(client, auth, world, mx_user, office):
+    """빼는 것은 목록에서 빼는 것이지 자료를 지우는 것이 아니다.
+
+    ⚠️ 예전에는 두 가지로 굴었다 — 생애 단계는 **말없이 걸러졌고**(자료가 조용히 줄었다),
+       종류·수단·상태는 저장이 통째로 막혀 그 줄을 아예 못 고쳤다. 둘 다 고쳤다.
+    """
+    mx = world['mx'].id
+    client.get(f'{BASE}/threads', headers=auth(mx_user))          # 사전 초안
+    sysrow = client.post(f'{BASE}/systems', json={'name': '옛 시스템', 'kind': 'plm', 'link_means': 'api',
+                                                 'status': 'active', 'stages': ['planning', 'development']},
+                         headers=auth(mx_user)).get_json()['data']
+
+    # 기준 정보에서 plm 과 planning 을 뺀다
+    kinds = [k for k in D.vocab('system_kinds') if k['key'] != 'plm']
+    stages = [x for x in D.vocab('thread_stages') if x['key'] != 'planning']
+    assert client.put(f'{BASE}/settings', json={'vocab': {'system_kinds': kinds, 'thread_stages': stages}},
+                      headers=auth(office)).status_code == 200
+
+    # ① 자료는 그대로다
+    got = next(x for x in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']
+               if x['id'] == sysrow['id'])
+    assert got['kind'] == 'plm' and 'planning' in got['stages']
+
+    # ② 다른 칸을 고쳐도 저장이 막히지 않는다 — 없는 값을 그대로 되보내도 통과
+    res = client.put(f'{BASE}/systems/{sysrow["id"]}',
+                     json={'owner_org': 'PLM 운영팀', 'kind': 'plm', 'link_means': 'api',
+                           'status': 'active', 'stages': ['planning', 'development']}, headers=auth(office))
+    assert res.status_code == 200, res.get_json()
+    kept = res.get_json()['data']
+    assert kept['kind'] == 'plm' and kept['stages'] == ['planning', 'development']   # 말없이 줄지 않는다
+    # 새로 없는 값을 넣는 것은 여전히 막는다
+    assert client.put(f'{BASE}/systems/{sysrow["id"]}', json={'kind': 'nope'}, headers=auth(office)).status_code == 400
+
+    # ③ 점검 — 어긋난 값을 세어 준다
+    scan = client.get(f'{BASE}/vocabs/mismatches', headers=auth(mx_user)).get_json()['data']
+    by = {m['vocab']: m for m in scan}
+    plm = next(b for b in by['system_kinds']['bad'] if b['value'] == 'plm')
+    assert plm['count'] >= 1 and '시스템 사전 — 종류' in plm['where']
+    planning = next(b for b in by['thread_stages']['bad'] if b['value'] == 'planning')
+    assert planning['count'] >= 1                                   # 시스템의 생애 단계 + 구간의 출발 단계
+    assert {'시스템 사전 — 생애 단계', '스레드 구간 — 출발 단계'} <= set(planning['where'])
+    assert by['system_kinds']['can_clear'] is False                 # 종류는 비울 수 없다
+
+    # ④ 지금 있는 값으로 한꺼번에 옮긴다 — 사무국만
+    assert client.post(f'{BASE}/vocabs/remap', json={'vocab': 'system_kinds', 'moves': [{'from': 'plm', 'to': 'mes'}]},
+                       headers=auth(mx_user)).status_code == 403
+    assert client.post(f'{BASE}/vocabs/remap', json={'vocab': 'system_kinds', 'moves': [{'from': 'plm', 'to': '없음'}]},
+                       headers=auth(office)).status_code == 400     # 지금 목록에 없는 값으로는 못 옮긴다
+    assert client.post(f'{BASE}/vocabs/remap', json={'vocab': 'system_kinds', 'moves': [{'from': 'plm', 'to': ''}]},
+                       headers=auth(office)).status_code == 400     # 비울 수 없는 칸
+    out = client.post(f'{BASE}/vocabs/remap', json={'vocab': 'system_kinds', 'moves': [{'from': 'plm', 'to': 'mes'}]},
+                      headers=auth(office)).get_json()['data']
+    assert out['rows'] >= 1
+    moved = next(x for x in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']
+                 if x['id'] == sysrow['id'])
+    assert moved['kind'] == 'mes'
+
+    # ⑤ 여럿인 칸(생애 단계)도 옮긴다 — 겹치면 하나로 모은다
+    client.post(f'{BASE}/vocabs/remap', json={'vocab': 'thread_stages', 'moves': [{'from': 'planning', 'to': 'development'}]},
+                headers=auth(office))
+    after = next(x for x in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']
+                 if x['id'] == sysrow['id'])
+    assert after['stages'] == ['development']
+
+    # ⑥ 다 옮기고 나면 그 사전은 깨끗하다
+    scan2 = {m['vocab']: m for m in client.get(f'{BASE}/vocabs/mismatches', headers=auth(mx_user)).get_json()['data']}
+    assert not [b for b in scan2['system_kinds']['bad'] if b['value'] == 'plm']
+    assert not [b for b in scan2['thread_stages']['bad'] if b['value'] == 'planning']
+    _ = mx

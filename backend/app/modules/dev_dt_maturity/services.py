@@ -174,7 +174,7 @@ def update_agent(row, payload):
         row.kind = (payload.get('kind') or '')[:100] or None
     if 'model_kind' in payload:
         mk = payload.get('model_kind') or None
-        if mk and mk not in D.vocab_keys('model_kinds'):
+        if mk and mk not in D.vocab_keys('model_kinds') and mk != row.model_kind:
             raise Refused('모델 종류는 물리 기반 · 데이터 기반 · 하이브리드 중 하나입니다.')
         row.model_kind = mk
     if 'project_uuid' in payload:

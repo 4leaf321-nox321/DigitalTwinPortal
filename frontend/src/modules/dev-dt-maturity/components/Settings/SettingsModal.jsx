@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Check, AlertTriangle, Settings as Cog, Plus, Trash2 } from 'lucide-react';
+import { X, Check, AlertTriangle, Settings as Cog, Plus, Trash2, ShieldCheck, RefreshCw } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 
 // 설정 — 정확도 문턱과 경계(2026-08-28). 사무국·관리자만 연다(헤더 단추가 그렇게 나온다).
@@ -81,12 +81,23 @@ const Words = styled.div`
   label { font-size: 0.75rem; color: #64748b; font-weight: 600; }
   input { padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; }
 `;
+const Bad = styled.table`
+  width: 100%; border-collapse: collapse; font-size: 0.8125rem;
+  th { text-align: left; font-weight: 600; color: #64748b; font-size: 0.75rem; padding: 0.3rem 0.4rem; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 0.35rem 0.4rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  td code { font-size: 0.75rem; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 0.1rem 0.35rem; border-radius: 0.25rem; }
+  td small { color: #94a3b8; }
+  select { width: 100%; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; }
+`;
+const Foot2 = styled.div`display: flex; gap: 0.5rem; padding-top: 0.3rem;`;
+const Ok = styled.div`font-size: 0.8125rem; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 0.375rem; padding: 0.6rem 0.75rem; display: flex; gap: 0.4rem; align-items: center;`;
 const Fixed = styled.div`font-size: 0.75rem; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.375rem; padding: 0.4rem 0.6rem;`;
 
 const DIVS = '__divisions__';
 const STALE = '__stale__';   // 재평가 기간(일) — 이 날이 지난 평가는 「재평가 필요」
 const SECS = '__sectors__';  // 부문 표시 — 체크한 부문은 헤더 토글에서 사라진다(2026-08-29)
 const VOCAB = '__vocab__';   // 기준 정보 — 화면의 선택지를 여기서 고친다(2026-08-30)
+const CHECK = '__check__';   // 기준 정보 안의 「점검」 탭 — 어긋난 값 정리(2026-08-30)
 const DivList = styled.div`
   display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8125rem; color: #1e293b;
   label { display: flex; align-items: center; gap: 0.5rem; } small { color: #94a3b8; }
@@ -135,6 +146,9 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   const [wordDraft, setWordDraft] = useState({});     // 축의 글 칸 {'사전키:자리': 값} — 손댄 것만
   const [vocabPick, setVocabPick] = useState(null);
   const [vocabTab, setVocabTab] = useState(null);     // 기준 정보의 갈래(부문) — 위의 탭
+  const [mismatch, setMismatch] = useState(null);     // 점검 결과 [{vocab,label,bad,options}]
+  const [moveTo, setMoveTo] = useState({});           // {'사전:옛값': 새값} — 사람이 고른 것
+  const [fixing, setFixing] = useState(false);
   const [accKey, setAccKey] = useState('*');                       // 정확도 — 보던 사업부('*' = 전사 기본)
   const [hiddenSectors, setHiddenSectors] = useState([]);          // 감춘 부문(2026-08-29)
   const [hiddenSectorsSaved, setHiddenSectorsSaved] = useState([]);           // 초안
@@ -153,6 +167,8 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
       setHiddenSectors(hs); setHiddenSectorsSaved(hs);
     }).catch(e => setError(e.message));
     maturityApi.getDivisions(true).then(r => setAllDivisions(r.data || [])).catch(() => setAllDivisions([]));
+    maturityApi.getVocabMismatches().then(r => setMismatch(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setMismatch([]));
     maturityApi.getVocabs().then(r => {
       const list = Array.isArray(r.data) ? r.data : [];
       setVocabs(list); setVocabPick(list[0]?.key || null);
@@ -243,6 +259,32 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   const pickedGroup = (vocabs || []).find(v => v.key === vocabPick)?.sector_label || null;
   const tab = vocabTab || pickedGroup || vocabGroups[0]?.at || null;
   const tabItems = vocabGroups.find(g => g.at === tab)?.items || [];
+  const badCount = (mismatch || []).reduce((n, m) => n + m.bad.length, 0);
+  const rescan = () => maturityApi.getVocabMismatches()
+    .then(r => { setMismatch(Array.isArray(r.data) ? r.data : []); setMoveTo({}); })
+    .catch(e => setError(e.message));
+  // 무엇으로 옮길지 고른 것만 보낸다 — '' 는 「그대로 두기」, '__clear__' 는 「비우기」
+  const remapJobs = () => (mismatch || []).map(m => ({
+    vocab: m.vocab,
+    moves: m.bad
+      .map(b => ({ from: b.value, pick: moveTo[`${m.vocab}:${b.value}`] }))
+      .filter(x => x.pick)
+      .map(x => ({ from: x.from, to: x.pick === '__clear__' ? '' : x.pick })),
+  })).filter(j => j.moves.length);
+  const pickedMoves = remapJobs().reduce((a, j) => a + j.moves.length, 0);
+  /** 고른 것들을 사전마다 묶어 한 번에 옮긴다. 되돌릴 수 없어 한 번 묻는다. */
+  const runRemap = async () => {
+    const jobs = remapJobs();
+    const n = pickedMoves;
+    if (!n || !window.confirm(`${n}가지 값을 자료에서 바꿉니다. 되돌릴 수 없습니다. 계속할까요?`)) return;
+    setFixing(true); setError(null);
+    try {
+      for (const j of jobs) await maturityApi.remapVocab(j.vocab, j.moves);
+      await rescan();
+      if (onChanged) onChanged();
+    } catch (e) { setError(e.message); }
+    finally { setFixing(false); }
+  };
   const goTab = (at) => {
     setVocabTab(at);
     const first = vocabGroups.find(g => g.at === at)?.items?.[0];
@@ -298,7 +340,56 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                         {g.at}<em>{g.items.length}</em>
                       </VocabTab>
                     ))}
+                    <VocabTab type="button" role="tab" aria-selected={tab === CHECK} $on={tab === CHECK} onClick={() => setVocabTab(CHECK)}>
+                      점검{mismatch && <em>{badCount || '0'}</em>}
+                    </VocabTab>
                   </VocabTabs>
+                  {tab === CHECK ? (
+                    <VocabBody>
+                      <Hint>
+                        기준 정보에서 항목을 빼도 <strong>자료는 지우지 않습니다</strong> — 그 자료는 없는 값을 가리킨 채 남고
+                        화면에는 key 로 보입니다. 여기서 그런 줄을 세어 주고, <strong>지금 있는 값으로 한꺼번에 옮깁니다.</strong>
+                        무엇으로 옮길지는 사람이 고릅니다 — 되돌릴 수 없습니다.
+                      </Hint>
+                      {mismatch == null ? <Hint>훑는 중…</Hint> : badCount === 0 ? (
+                        <Ok><ShieldCheck size={15} /> 어긋난 값이 없습니다 — 자료가 가리키는 값이 모두 지금 목록에 있습니다.</Ok>
+                      ) : (
+                        <>
+                          {mismatch.filter(m => m.bad.length).map(m => (
+                            <React.Fragment key={m.vocab}>
+                              <VocabHead>{m.label}<Where>{m.sector_label}</Where></VocabHead>
+                              <Bad>
+                                <thead><tr><th style={{ width: '11rem' }}>자료에 적힌 값</th><th style={{ width: '5rem' }}>줄 수</th><th>어디에</th><th style={{ width: '13rem' }}>무엇으로</th></tr></thead>
+                                <tbody>
+                                  {m.bad.map(b => (
+                                    <tr key={b.value}>
+                                      <td><code>{b.value}</code></td>
+                                      <td>{b.count}줄</td>
+                                      <td><small>{[...new Set(b.where)].join(' · ')}{b.free ? ' — 직접 적어도 되는 칸입니다' : ''}</small></td>
+                                      <td>
+                                        <select value={moveTo[`${m.vocab}:${b.value}`] ?? ''} aria-label={`${b.value} 를 무엇으로`}
+                                                onChange={e => setMoveTo(t => ({ ...t, [`${m.vocab}:${b.value}`]: e.target.value }))}>
+                                          <option value="">— 그대로 두기 —</option>
+                                          {m.options.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                          {m.can_clear && <option value="__clear__">— 비우기 —</option>}
+                                        </select>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </Bad>
+                            </React.Fragment>
+                          ))}
+                          <Foot2>
+                            <Button type="button" onClick={rescan} disabled={fixing}><RefreshCw size={13} /> 다시 훑기</Button>
+                            <Button type="button" $primary onClick={runRemap} disabled={fixing || !pickedMoves}>
+                              <Check size={14} /> 고른 것 바꾸기{pickedMoves ? ` (${pickedMoves})` : ''}
+                            </Button>
+                          </Foot2>
+                        </>
+                      )}
+                    </VocabBody>
+                  ) : (
                   <VocabWrap>
                     <VocabList>
                       {tabItems.map(v => (
@@ -403,6 +494,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                       })()}
                     </VocabBody>
                   </VocabWrap>
+                  )}
                   </>
                 )}
               </>
@@ -492,7 +584,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
           {onAcc && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
           <span style={{ flex: 1, fontSize: '0.75rem', color: '#16a34a' }}>{saved ? '저장됨' : ''}</span>
           <Button type="button" onClick={onClose}>닫기</Button>
-          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : onSecs ? !sectorsChanged : onVocab ? !vocabChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
+          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : onSecs ? !sectorsChanged : onVocab ? (tab === CHECK || !vocabChanged) : !valid)} onClick={save}><Check size={14} /> 저장</Button>
         </Foot>
       </Box>
     </Backdrop>

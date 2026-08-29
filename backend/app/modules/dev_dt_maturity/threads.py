@@ -186,23 +186,32 @@ def create_system(payload, division_id=None):
     return row
 
 
+def _kept(row, field, value, known, what):
+    """새 값만 검사한다 — **지금 적힌 값과 같으면 통과**(2026-08-30).
+
+    기준 정보에서 뺀 값을 쓰던 줄도 다른 칸은 고칠 수 있어야 한다. 어긋난 값은
+    설정의 「기준 정보 — 점검」에서 지금 있는 값으로 옮긴다.
+    """
+    if value in known or value == getattr(row, field, None):
+        return value
+    raise Refused(what)
+
+
 def _fill_system(row, payload):
     if 'kind' in payload:
-        if payload['kind'] not in D.vocab_keys('system_kinds'):
-            raise Refused('없는 시스템 종류입니다.')
-        row.kind = payload['kind']
+        row.kind = _kept(row, 'kind', payload['kind'], D.vocab_keys('system_kinds'), '없는 시스템 종류입니다.')
     if 'owner_org' in payload:
         row.owner_org = (payload.get('owner_org') or '').strip()[:200] or None
     if 'stages' in payload:
-        row.stages = [s for s in _clean_list(payload.get('stages')) if s in stage_order()]
+        # ⚠️ 모르는 단계를 걸러 내지 않는다 — 걸러 내면 자료가 말없이 줄어든다(2026-08-30).
+        #    **이미 이 줄에 적혀 있던 것만** 남겨 준다. 새 값은 여전히 아는 단계여야 한다.
+        keep = set(stage_order()) | set(row.stages or [])
+        row.stages = [s for s in _clean_list(payload.get('stages')) if s in keep]
     if 'link_means' in payload:
-        if payload['link_means'] not in D.vocab_keys('link_means'):
-            raise Refused('연계 수단은 api · file · none · unknown 중 하나입니다.')
-        row.link_means = payload['link_means']
+        row.link_means = _kept(row, 'link_means', payload['link_means'], D.vocab_keys('link_means'),
+                               '없는 연계 수단입니다.')
     if 'status' in payload:
-        if payload['status'] not in D.vocab_keys('system_status'):
-            raise Refused('상태는 active · adopting · retiring 중 하나입니다.')
-        row.status = payload['status']
+        row.status = _kept(row, 'status', payload['status'], D.vocab_keys('system_status'), '없는 상태입니다.')
     if 'note' in payload:
         row.note = (payload.get('note') or '').strip() or None
     if row.kind == 'informal':
@@ -619,12 +628,12 @@ def _fill_case(row, payload, division_id):
         row.month = _case_month(payload.get('month') or row.month)
     if 'action' in payload or row.action is None:
         action = payload.get('action') or row.action
-        if action not in D.vocab_keys('case_actions'):
+        if action not in D.vocab_keys('case_actions') and action != row.action:
             raise Refused('「무엇을」을 고르세요 — 연동 · 도입 · 정합화 · 자동화 · 폐지 · 기타.')
         row.action = action
     if 'status' in payload:
         st = payload.get('status') or 'done'
-        if st not in D.vocab_keys('case_status'):
+        if st not in D.vocab_keys('case_status') and st != row.status:
             raise Refused('상태는 계획 · 진행 중 · 완료 중 하나입니다.')
         row.status = st
     if 'segment_id' in payload:

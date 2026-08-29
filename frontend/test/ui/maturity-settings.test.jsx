@@ -6,7 +6,7 @@
 //   ④ 「전사 기본 따르기」로 사업부 줄이 빠진 채 저장된다
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
-import { render, click, type, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import { render, click, type, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import SettingsModal from '../../src/modules/dev-dt-maturity/components/Settings/SettingsModal';
 import Header from '../../src/modules/dev-dt-maturity/components/Layout/Header';
 
@@ -39,7 +39,17 @@ export default async function run() {
       items: [{ key: 'simulation:subject_label', label: '시험 항목', description: '시뮬레이션 — 대상' },
               { key: 'simulation:agent_label', label: '시뮬레이션', description: '시뮬레이션 — 수단' }] },
   ];
+  // 점검 — 자료가 가리키는데 목록에 없는 값
+  let mismatch = [
+    { vocab: 'system_kinds', label: '시스템 종류', sector_label: '디지털 스레드', can_clear: false,
+      options: [{ key: 'plm', label: 'PLM' }, { key: 'mes', label: 'MES' }],
+      bad: [{ value: 'erp', count: 3, where: ['시스템 사전 — 종류'], free: false }] },
+    { vocab: 'thread_stages', label: '생애 단계', sector_label: '디지털 스레드', can_clear: false,
+      options: [{ key: 'plan', label: '기획' }], bad: [] },
+  ];
   const calls = fakeFetch(({ url, method, body }) => {
+    if (url.endsWith('/vocabs/mismatches')) return mismatch;
+    if (url.endsWith('/vocabs/remap')) { mismatch = mismatch.map(m => (m.vocab === body.vocab ? { ...m, bad: [] } : m)); return { rows: 3 }; }
     if (url.endsWith('/vocabs')) return vocabs;
     if (url.endsWith('/settings') && method === 'PUT') {
       if (body.vocab) vocabs = vocabs.map(v => ({ ...v, items: body.vocab[v.key] || v.items, is_custom: true }));
@@ -172,6 +182,21 @@ export default async function run() {
     const putA = calls.find(x => x.method === 'PUT' && x.body?.ladders?.simulation?.automation?.question);
     say(putA?.body?.ladders?.simulation?.automation?.question === '어느 단계가 저절로 도는가', '⑧-3 묻는 것이 함께 감');
     say(putA?.body?.ladders?.simulation?.automation?.base?.[0]?.label === '형상만', '⑧-3 바탕도 함께 감');
+    // ⑧-5 점검 — 빼도 자료는 남으므로, 어긋난 값을 세어 주고 지금 있는 값으로 옮긴다
+    calls.length = 0;
+    await click([...document.querySelectorAll('[role="tab"]')].find(t => t.textContent.startsWith('점검'))); await settle();
+    say(html().includes('erp') && html().includes('3줄'), '⑧-5 어긋난 값과 줄 수가 보임');
+    say(html().includes('시스템 사전 — 종류'), '⑧-5 어디에 있는지도');
+    const pickTo = document.querySelector('select[aria-label="erp 를 무엇으로"]');
+    say(!!pickTo && byText('button', '고른 것 바꾸기').disabled, '⑧-5 안 고르면 바꾸기 잠김');
+    await select(pickTo, 'mes'); await settle();
+    say(!byText('button', '고른 것 바꾸기').disabled, '⑧-5 고르면 풀림');
+    await click(byText('button', '고른 것 바꾸기')); await settle();
+    const putR = calls.find(x => x.url.endsWith('/vocabs/remap'));
+    say(JSON.stringify(putR?.body) === JSON.stringify({ vocab: 'system_kinds', moves: [{ from: 'erp', to: 'mes' }] }),
+        `⑧-5 옮길 것만 보냄: ${JSON.stringify(putR?.body)}`);
+    say(html().includes('어긋난 값이 없습니다'), '⑧-5 옮기고 나면 다시 훑어 깨끗해짐');
+
     // ⑧-4 부문의 말 — 화면 전체의 이름표
     calls.length = 0;
     await goTab('공통'); await settle();

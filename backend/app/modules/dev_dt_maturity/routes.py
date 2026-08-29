@@ -694,6 +694,31 @@ def get_vocabs(actor):
     return success_response(D.vocab_all() + [D.sector_words_all()] + D.ladder_all())
 
 
+from . import integrity as IG          # noqa: E402
+
+
+@bp.route('/vocabs/mismatches', methods=['GET'])
+@read_required
+def get_vocab_mismatches(actor):
+    """기준 정보 점검 — 자료가 가리키는데 지금 목록에 없는 값(2026-08-30)."""
+    return success_response(IG.scan())
+
+
+@bp.route('/vocabs/remap', methods=['POST'])
+@read_required
+def post_vocab_remap(actor):
+    """어긋난 값을 지금 있는 값으로 한꺼번에 옮긴다. 되돌릴 수 없어 사무국만."""
+    if not P.can_curate(actor):
+        return error_response('기준 정보 정리는 사무국·관리자만 합니다.', status_code=403)
+    p = request.get_json(silent=True) or {}
+    try:
+        out = IG.remap(p.get('vocab'), p.get('moves') or [], actor)
+    except IG.Refused as e:
+        return error_response(str(e), status_code=400)
+    db.session.commit()
+    return success_response(out)
+
+
 @bp.route('/bulk/kinds', methods=['GET'])
 @read_required
 def bulk_kinds(actor):
