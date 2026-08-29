@@ -16,7 +16,7 @@ import { UNITS, signupSeries } from '../utils/signupStats';
  * 선은 그때까지의 누계 — 「이번 달에 몇 명 늘었나」와 「지금 몇 명인가」를 한 그림에서 읽는다.
  */
 
-const Wrap = styled.div`display: flex; flex-direction: column; gap: 1rem;`;
+const Wrap = styled.div`display: flex; flex-direction: column; gap: 0.9rem; min-height: 0;`;
 const Bar2 = styled.div`display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;`;
 const Chip = styled.button`
   padding: 0.35rem 0.9rem; border-radius: 999px; font-family: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer;
@@ -27,11 +27,18 @@ const Stats = styled.div`display: grid; grid-template-columns: repeat(4, minmax(
   @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
 const Stat = styled.div`
-  border: 1px solid #e5e7eb; border-radius: 0.75rem; padding: 0.9rem 1rem; background: #f9fafb;
-  b { display: block; font-size: 1.75rem; color: #111827; line-height: 1.15; }
+  border: 1px solid #e5e7eb; border-radius: 0.75rem; padding: 0.7rem 0.9rem; background: #f9fafb;
+  b { display: block; font-size: 1.6rem; color: #111827; line-height: 1.15; }
   span { font-size: 0.8125rem; color: #6b7280; }
 `;
-const ChartBox = styled.div`height: 22rem;`;
+/*
+  그림이 화면을 채운다 — 22rem 으로 못 박아 두면 큰 화면에서 세로로 눌린다(2026-08-30).
+
+  위에 붙박이로 쌓인 것들(헤더·탭 막대·바깥 여백·카드 여백·카드 머리·눈금 칩·수치 넷)이
+  대략 34rem 이다. 남는 높이를 그림이 갖되, 작은 화면에서 찌그러지지 않게 20rem 은 지키고
+  아주 큰 화면에서도 55rem 을 넘지 않게 한다 — 그 이상은 막대가 길어질 뿐 읽히지 않는다.
+*/
+const ChartBox = styled.div`height: clamp(20rem, calc(100vh - 34rem), 55rem);`;
 const Muted = styled.div`color: #9ca3af; font-size: 0.9375rem; padding: 2rem 0; text-align: center;`;
 const Note = styled.p`margin: 0; color: #6b7280; font-size: 0.8125rem;`;
 
