@@ -40,6 +40,14 @@ export const select = async (sel, value) => {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
   await act(async () => { setter.call(sel, value); sel.dispatchEvent(new Event('change', { bubbles: true })); await sleep(5); });
 };
+/** 붙여넣기 — 클립보드 글을 그 요소에 떨어뜨린다(엑셀에서 복사한 표를 흉내). */
+export const paste = async (el, text) => {
+  if (!el) throw new Error('붙여넣을 곳이 없습니다');
+  const ev = new window.Event('paste', { bubbles: true, cancelable: true });
+  ev.clipboardData = { getData: () => text };
+  await act(async () => { el.dispatchEvent(ev); await sleep(5); });
+};
+
 export const settle = async (ms = 30) => { await act(async () => { await sleep(ms); }); };
 
 export const byText = (tag, text) =>

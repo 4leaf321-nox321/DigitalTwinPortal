@@ -4,7 +4,7 @@
 //   ② 시험·시뮬레이션을 고르고 「잇기」 → POST /pairs, 모달 닫힘
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
-import { render, click, select, type, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
+import { render, click, select, type, paste, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
 import ListView from '../../src/modules/dev-dt-maturity/components/List/ListView';
 import BulkInputModal from '../../src/modules/dev-dt-maturity/components/List/BulkInputModal';
 
@@ -16,7 +16,8 @@ export default async function run() {
   const calls = fakeFetch(({ url, method, body }) => {
     if (url.includes('/pairs') && method === 'POST') return { id: 77 };
     if (url.includes('/bulk/kinds')) return [
-      { key: 'subject', label: '시험 항목', columns: ['사업부', '시험 항목', '세부', '제품군'], required: ['시험 항목'], hint: '제품군은 · 로 나눠 적습니다.' },
+      { key: 'subject', label: '시험 항목', columns: ['사업부', '시험 항목', '세부', '제품군'], required: ['시험 항목'],
+        hint: '제품군은 · 로 나눠 적습니다.', choices: { 사업부: ['MX', 'VD'] } },
       { key: 'agent', label: '시뮬레이션', columns: ['사업부', '시뮬레이션', '종류'], required: ['시뮬레이션'], hint: '' },
     ];
     if ((url || '').endsWith('/bulk') && method === 'POST') return {
@@ -86,13 +87,23 @@ export default async function run() {
     await settle(60);
     say(!!byText('button', '시험 항목') && !!byText('button', '시뮬레이션'), '⑦ 부문의 종류가 칩으로');
     say(html().includes('필요한 열'), '⑦ 어떤 열이 필요한지 알려 준다');
-    const area = document.querySelector('textarea[aria-label="붙여넣기"]');
-    say(!!area, '⑦ 붙여넣는 칸');
-    say(byText('button', '미리보기').disabled, '⑦ 붙여넣기 전에는 미리보기가 잠김');
-    await type(area, '사업부\t시험 항목\nMX\t낙하 시험'); await settle();
-    await click(byText('button', '미리보기')); await settle(60);
+    // 표 — 열마다 칸, 고를 수 있는 열은 드롭다운
+    const cells = document.querySelectorAll('[aria-label="일괄 입력 표"] tbody tr:first-child td');
+    say(cells.length === 5, `⑦ 열마다 칸이 선다(번호+4열): ${cells.length}`);
+    say(!!document.querySelector('select[aria-label="1행 사업부"]'), '⑦ 사업부처럼 정해진 값은 드롭다운');
+    say(!!document.querySelector('input[aria-label="1행 시험 항목"]'), '⑦ 이름은 그냥 적는 칸');
+    say(byText('button', '미리보기 (0줄)').disabled, '⑦ 비어 있으면 미리보기가 잠김');
+    // 엑셀에서 붙여넣기 — 목록에 있는 값은 골라지고, 없는 값은 빨갛게 남는다
+    const grid = document.querySelector('[aria-label="일괄 입력 표"]');
+    await paste(grid, ['사업부\t시험 항목', 'MX\t낙하 시험', '없는사업부\t굽힘 시험'].join('\n'));
+    await settle();
+    say(document.querySelector('select[aria-label="1행 사업부"]').value === 'MX', '⑦ 붙여넣은 값이 목록에 있으면 골라짐');
+    const bad = document.querySelector('select[aria-label="2행 사업부"]');
+    say(bad.value === '' && bad.textContent.includes('못 찾음: 없는사업부'), '⑦ 목록에 없으면 「못 찾음」으로 남음');
+    say(document.querySelector('input[aria-label="1행 시험 항목"]').value === '낙하 시험', '⑦ 이름 칸도 채워짐');
+    await click(byText('button', '미리보기 (2줄)')); await settle(60);
     const dry = calls.find(c => c.method === 'POST' && (c.url || '').endsWith('/bulk'));
-    say(!!dry && dry.body.dry_run === true && dry.body.kind === 'subject', `⑦ 미리보기는 dry_run 으로: ${JSON.stringify(dry?.body)}`);
+    say(!!dry && dry.body.dry_run === true && dry.body.text.split('\n').length === 3, `⑦ 미리보기는 머리글+2줄을 dry_run 으로: ${JSON.stringify(dry?.body?.text)}`);
     say(html().includes('아직 저장하지 않았습니다') && html().includes('시험 항목 이름이 없습니다.'),
         '⑦ 줄마다 어떻게 될지 — 오류 줄도 남는다');
     await click(byText('button', '1줄 넣기')); await settle(60);

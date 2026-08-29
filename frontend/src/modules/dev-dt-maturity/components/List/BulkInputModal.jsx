@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { X, Check, AlertTriangle, ClipboardPaste, Copy } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
+import { applyPaste, emptyGrid, isUnknown, toText, usedRows } from '../../utils/bulkGrid';
 
 /**
  * 일괄 입력 — 「추출」과 같은 머리글의 표를 붙여넣어 한 번에 세운다(2026-08-30).
@@ -9,7 +10,10 @@ import maturityApi from '../../services/maturityApi';
  * 처음 세팅할 때 시스템·조직·시험 항목·시뮬레이션을 화면에서 하나씩 만들면 몇 시간이 간다.
  * 엑셀로 쓰는 사람이 많으니 **추출한 판을 그대로 채워 돌려주는 길**을 연다.
  *
- * 흐름은 가져오기와 같다 — 머리글 복사 → 붙여넣기 → **미리보기(저장 없음)** → 넣기.
+ * 흐름 — 표에 적거나 **엑셀에서 붙여넣기**(Ctrl+V) → 미리보기(저장 없음) → 넣기.
+ * ⚠️ 고를 수 있는 값이 정해진 칸은 **드롭다운**이다. 빈 상자에 글자를 적게 하면 무엇을 쓸 수
+ *    있는지 알 수 없어 사람이 추측해서 적게 된다(2026-08-30 요청).
+ *    붙여넣은 값이 목록에 있으면 골라지고, 없으면 「못 찾음」으로 빨갛게 남는다.
  * ⚠️ 미리보기는 오류 줄도 그대로 남긴다. 빼면 몇 번째 줄이 틀렸는지 알 수 없다.
  * ⚠️ 평가는 여기서 안 받는다 — 근거가 필수이고 이력이 남는 자리라 표로 쓸어 넣으면 안 된다.
  */
@@ -26,9 +30,20 @@ const Chip = styled.button`
 `;
 const Hint = styled.p`margin: 0; font-size: 0.8125rem; color: #64748b; line-height: 1.6;`;
 const Cols = styled.code`display: block; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.4rem; padding: 0.45rem 0.6rem; font-size: 0.75rem; color: #334155; overflow-x: auto; white-space: nowrap;`;
-const Area = styled.textarea`
-  width: 100%; min-height: 9rem; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 0.8125rem;
-  border: 1px solid #cbd5e1; border-radius: 0.5rem; padding: 0.6rem; line-height: 1.5;
+// 적는 표 — 셀 하나가 열 하나. 고를 수 있는 칸은 select, 나머지는 input.
+const GridWrap = styled.div`border: 1px solid #cbd5e1; border-radius: 0.5rem; overflow: auto; max-height: 22rem;`;
+const Grid = styled.table`
+  border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.8125rem;
+  th { position: sticky; top: 0; z-index: 1; background: #f1f5f9; color: #334155; font-weight: 700; font-size: 0.75rem;
+       padding: 0.35rem 0.5rem; text-align: left; white-space: nowrap; border-bottom: 1px solid #cbd5e1; }
+  th.no, td.no { width: 2.4rem; text-align: right; color: #94a3b8; background: #f8fafc; font-weight: 400; }
+  td { padding: 0; border-bottom: 1px solid #eef2f7; border-right: 1px solid #f1f5f9; }
+  input, select {
+    width: 100%; border: none; background: transparent; font-family: inherit; font-size: 0.8125rem;
+    padding: 0.3rem 0.45rem; outline: none; color: #1e293b;
+    &:focus { background: #eff6ff; box-shadow: inset 0 0 0 2px #1d4ed8; border-radius: 2px; }
+  }
+  td.bad input, td.bad select { background: #fef2f2; color: #b91c1c; }
 `;
 const Table = styled.table`width: 100%; border-collapse: collapse; font-size: 0.8125rem;
   th { position: sticky; top: 0; background: #f8fafc; text-align: left; font-size: 0.6875rem; color: #64748b; padding: 0.3rem 0.5rem; border-bottom: 1px solid #e2e8f0; }
@@ -52,27 +67,43 @@ const STATUS = { new: '새로 만듦', exists: '이미 있음', error: '오류' 
 const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, denyReason, onClose, onChanged }) => {
   const [kinds, setKinds] = useState([]);
   const [kind, setKind] = useState(null);
-  const [text, setText] = useState('');
+  const [grid, setGrid] = useState([]);
+  const [at, setAt] = useState({ r: 0, c: 0 });      // 붙여넣기가 시작될 칸
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null);
 
   useEffect(() => {
-    maturityApi.bulkKinds(sector).then(r => {
+    maturityApi.bulkKinds(sector, divisionId).then(r => {
       const list = Array.isArray(r.data) ? r.data : [];
       setKinds(list); setKind(list[0]?.key || null);
     }).catch(e => setError(e.message));
-  }, [sector]);
-  useEffect(() => { setPreview(null); setDone(null); }, [kind, text]);
-
+  }, [sector, divisionId]);
   const spec = useMemo(() => kinds.find(k => k.key === kind), [kinds, kind]);
   const header = (spec?.columns || []).join('\t');
+  // 종류를 바꾸면 표를 새로 짠다 — 열이 달라지므로 앞의 값은 뜻이 없다.
+  useEffect(() => { if (spec) setGrid(emptyGrid(spec.columns)); setPreview(null); setDone(null); setAt({ r: 0, c: 0 }); }, [spec]);
+
+  const setCell = (r, c, v) => {
+    setPreview(null); setDone(null);
+    setGrid(g => g.map((row, i) => (i === r ? row.map((x, j) => (j === c ? v : x)) : row)));
+  };
+  const onPaste = (e) => {
+    const text = e.clipboardData?.getData('text/plain');
+    if (!text || !spec) return;
+    e.preventDefault();
+    setPreview(null); setDone(null);
+    setGrid(g => applyPaste(g, spec.columns, spec.choices || {}, text, at.r, at.c));
+  };
+  const rowCount = usedRows(grid).length;
 
   const run = async (dryRun) => {
     setBusy(true); setError(null);
     try {
-      const r = await maturityApi.bulkInput({ division_id: divisionId, sector, kind, text, dry_run: dryRun });
+      const r = await maturityApi.bulkInput({
+        division_id: divisionId, sector, kind, text: toText(grid, spec.columns), dry_run: dryRun,
+      });
       if (dryRun) { setPreview(r.data); setDone(null); } else {
         setDone(r.data); setPreview(r.data);
         if (onChanged) onChanged();
@@ -100,13 +131,50 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
               <Hint>
                 {spec.hint} 「추출」로 받은 판의 머리글을 그대로 쓰면 됩니다 — <strong>필요한 열: {spec.required.join(' · ')}</strong>
               </Hint>
-              <Cols>{header}</Cols>
               <Bar>
                 <Button type="button" onClick={() => navigator.clipboard?.writeText(header)}><Copy size={13} /> 머리글 복사</Button>
-                <Hint>엑셀에 붙여 채운 뒤, 머리글까지 함께 복사해 아래에 붙여넣으세요.</Hint>
+                <Button type="button" onClick={() => setGrid(g => [...g, spec.columns.map(() => '')])}>줄 더하기</Button>
+                <Button type="button" onClick={() => setGrid(emptyGrid(spec.columns))}>비우기</Button>
+                <Hint>엑셀에서 복사해 표 안에 <strong>Ctrl+V</strong> — 고를 수 있는 칸은 목록에 있으면 골라지고, 없으면 빨갛게 남습니다.</Hint>
               </Bar>
-              <Area value={text} onChange={e => setText(e.target.value)} spellCheck={false}
-                    placeholder={`${header}\n…엑셀에서 복사한 표를 여기에 붙여넣으세요`} aria-label="붙여넣기" />
+              <GridWrap onPaste={onPaste}>
+                <Grid aria-label="일괄 입력 표">
+                  <thead>
+                    <tr>
+                      <th className="no" />
+                      {spec.columns.map(c => (
+                        <th key={c}>{c}{spec.required.includes(c) ? ' *' : ''}{(spec.choices || {})[c] ? ' ▾' : ''}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grid.map((row, r) => (
+                      <tr key={r}>
+                        <td className="no">{r + 1}</td>
+                        {spec.columns.map((col, c) => {
+                          const options = (spec.choices || {})[col];
+                          const bad = isUnknown(row[c], options);
+                          return (
+                            <td key={col} className={bad ? 'bad' : undefined}
+                                title={bad ? `목록에 없는 값입니다 — ${row[c]}` : undefined}>
+                              {options ? (
+                                <select value={bad ? '' : (row[c] || '')} aria-label={`${r + 1}행 ${col}`}
+                                        onFocus={() => setAt({ r, c })} onChange={e => setCell(r, c, e.target.value)}>
+                                  <option value="">{bad ? `못 찾음: ${row[c]}` : '—'}</option>
+                                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              ) : (
+                                <input value={row[c] || ''} aria-label={`${r + 1}행 ${col}`} spellCheck={false}
+                                       onFocus={() => setAt({ r, c })} onChange={e => setCell(r, c, e.target.value)} />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </Grid>
+              </GridWrap>
             </>
           )}
           {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
@@ -136,7 +204,7 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
           )}
         </Body>
         <Foot>
-          <Button type="button" disabled={!canEdit || !text.trim() || busy} onClick={() => run(true)}>미리보기</Button>
+          <Button type="button" disabled={!canEdit || !rowCount || busy} onClick={() => run(true)}>미리보기 ({rowCount}줄)</Button>
           <Button type="button" $primary disabled={!canEdit || busy || !preview || okRows === 0 || !!done} onClick={() => run(false)}>
             <Check size={13} /> {done ? '넣었습니다' : `${okRows}줄 넣기`}
           </Button>

@@ -683,7 +683,9 @@ def bulk_input(actor):
 @read_required
 def bulk_kinds(actor):
     """그 부문에서 고를 수 있는 종류와 머리글 — 화면이 드롭다운과 안내를 그대로 그린다."""
-    return success_response(B.kinds_for(request.args.get('sector') or 'simulation'))
+    raw_div = request.args.get('division_id')
+    div = None if raw_div in (None, '', 'all') else int(raw_div)
+    return success_response(B.kinds_for(request.args.get('sector') or 'simulation', div))
 
 
 @bp.route('/projects', methods=['GET'])

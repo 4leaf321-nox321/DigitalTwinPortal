@@ -25,8 +25,13 @@ from .models import MaturityAgent, MaturityPair, MaturitySubject
 
 
 # 종류마다 — 머리글(추출과 같은 말), 필수 열, 만드는 법.
-def kinds_for(sector):
-    """그 부문에서 고를 수 있는 종류. 화면의 드롭다운이 이걸 그대로 쓴다."""
+def kinds_for(sector, division_id=None):
+    """그 부문에서 고를 수 있는 종류와 **열마다 고를 수 있는 값**.
+
+    화면은 이걸로 표를 그린다 — 값이 정해진 열은 드롭다운이 되고, 엑셀에서 붙여넣은 값이
+    그 목록에 있으면 골라지고 없으면 「못 찾음」으로 남는다. 무엇을 쓸 수 있는지 화면이
+    말해 주지 않으면 사람이 글자를 추측해서 적게 된다(2026-08-30).
+    """
     sec = D.SECTOR_BY_KEY.get(sector) or {}
     subject_label = sec.get('subject_label') or '대상'
     agent_label = sec.get('agent_label') or '수단'
@@ -54,11 +59,61 @@ def kinds_for(sector):
         out.append({'key': 'pair', 'label': '연계',
                     'columns': ['사업부', subject_label, agent_label], 'required': [subject_label, agent_label],
                     'hint': '이름으로 찾아 잇습니다 — 없는 이름이면 그 줄이 오류입니다. 대상·수단을 먼저 올리세요.'})
+    for k in out:
+        k['choices'] = _choices(sector, k['key'], division_id)
     return out
 
 
+def _labels(items):
+    return [x['label'] for x in items]
+
+
+def _choices(sector, kind, division_id):
+    """열 이름 → 고를 수 있는 값. 목록이 없는 열(이름·메모)은 안 넣는다 — 그건 그냥 적는 칸이다.
+
+    사업부·조직·시스템처럼 **자료에서 오는 목록**은 사업부를 골라야 채워진다.
+    """
+    from . import threads as T
+    out = {}
+    div = division_id if isinstance(division_id, int) else None
+    if kind == 'system':
+        out['종류'] = _labels(D.SYSTEM_KINDS)
+        out['생애 단계'] = _labels(D.THREAD_STAGES)          # 여럿 — 화면이 · 로 잇는다
+        out['연계 수단'] = _labels(D.LINK_MEANS)
+        out['상태'] = _labels(D.SYSTEM_STATUS)
+    elif kind == 'segment':
+        out['스레드'] = [t['name'] for t in T.list_threads()]
+        out['구간'] = [sd['name'] for t in T.list_threads() for sd in t['segments']]
+        systems = [x['name'] for x in T.list_systems()]
+        orgs = [o['name'] for o in T.list_orgs(div)] if div else []
+        out['출발 조직'] = orgs
+        out['도착 조직'] = orgs
+        out['출발 시스템'] = systems
+        out['매개 시스템'] = systems
+        out['도착 시스템'] = systems
+        out['데이터 종류'] = _labels(D.DATA_KINDS)
+    else:
+        from app.modules.digital_twin_dashboard.models import Division
+        hidden = D.get_hidden_divisions()
+        out['사업부'] = [d.name for d in Division.query.filter_by(is_active=True).order_by(Division.order, Division.id).all()
+                       if d.id not in hidden]
+        if kind == 'subject' and sector == 'manufacturing_monitoring':
+            out['공정'] = _labels(D.PROCESS_STEPS)
+        if kind == 'agent':
+            out['모델 종류'] = _labels(D.MODEL_KINDS)
+            if div:
+                out['담당 부서'] = [x['name'] for x in S.departments_of(div)]
+        if kind == 'pair' and div:
+            sec = D.SECTOR_BY_KEY[sector]
+            out[sec['subject_label']] = [r.name for r in MaturitySubject.query
+                                         .filter_by(division_id=div, sector=sector).order_by(MaturitySubject.order, MaturitySubject.id).all()]
+            out[sec['agent_label']] = [r.name for r in MaturityAgent.query
+                                       .filter_by(division_id=div, sector=sector).order_by(MaturityAgent.name).all()]
+    return {k: v for k, v in out.items() if v}
+
+
 def _spec(sector, kind):
-    for k in kinds_for(sector):
+    for k in kinds_for(sector):        # 넣을 때는 선택지가 필요 없다 — 이름만 맞으면 된다
         if k['key'] == kind:
             return k
     raise TableFormatError('이 부문에 없는 종류입니다.')
