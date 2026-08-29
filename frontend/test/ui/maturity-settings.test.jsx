@@ -18,8 +18,19 @@ const SECTORS = [{ key: 'simulation', label: '시뮬레이션', active: true, hi
 export default async function run() {
   const { say, done } = suite();
   let stored = { accuracy: {} };
+  // 기준 정보 — 서버가 주는 지금 값. 저장하면 서버가 그것을 되돌려 준다.
+  let vocabs = [
+    { key: 'system_kinds', label: '시스템 종류', hint: 'PLM·MES 처럼 시스템 사전의 갈래.', is_custom: false,
+      items: [{ key: 'plm', label: 'PLM' }, { key: 'mes', label: 'MES' }] },
+    { key: 'thread_stages', label: '생애 단계', hint: '차례가 뜻을 갖습니다.', is_custom: false,
+      items: [{ key: 'plan', label: '기획' }, { key: 'dev', label: '개발' }] },
+  ];
   const calls = fakeFetch(({ url, method, body }) => {
-    if (url.endsWith('/settings') && method === 'PUT') { stored = { ...stored, ...body }; return stored; }
+    if (url.endsWith('/vocabs')) return vocabs;
+    if (url.endsWith('/settings') && method === 'PUT') {
+      if (body.vocab) vocabs = vocabs.map(v => ({ ...v, items: body.vocab[v.key] || v.items, is_custom: true }));
+      stored = { ...stored, ...body }; return stored;
+    }
     if (url.endsWith('/settings')) return stored;
     if (url.includes('/divisions')) return [{ id: 17, name: 'MX', hidden: false }, { id: 18, name: 'VD', hidden: false }, { id: 99, name: 'SR', hidden: false }];
     return {};
@@ -94,6 +105,33 @@ export default async function run() {
     const put4 = calls.find(x => x.method === 'PUT');
     say(!!put4 && JSON.stringify(put4.body) === JSON.stringify({ stale_days: 240 }), `⑥ PUT stale_days: ${JSON.stringify(put4?.body)}`);
     say(html().includes('240일'), '⑥ 왼쪽에 「240일」');
+
+    // ⑧ 기준 정보 — 화면의 선택지를 고치고, 더하고, 뺀다
+    calls.length = 0;
+    await click(byText('button', '기준 정보')); await settle();
+    const name = (dict, i) => document.querySelector(`input[aria-label="${dict} ${i}번 이름"]`);
+    say(!!name('시스템 종류', 1) && !!name('시스템 종류', 2), '⑧ 첫 사전의 항목이 고칠 수 있는 칸으로 보임');
+    say(html().includes('key 는 자료에 박히는 값'), '⑧ key 는 안 바뀐다고 알림');
+    say(byText('button', '저장').disabled, '⑧ 안 바꾸면 저장 잠김');
+    await type(name('시스템 종류', 1), '제품 수명주기 관리');
+    say(!byText('button', '저장').disabled, '⑧ 이름을 고치면 저장 켜짐');
+    await click(byText('button', '항목 더하기')); await settle();
+    say(!!name('시스템 종류', 3), '⑧ 항목을 더하면 줄이 늘어남');
+    await type(name('시스템 종류', 3), '창고 관리');
+    await click(document.querySelector('button[aria-label="2번 빼기"]')); await settle();
+    say(!name('시스템 종류', 3), '⑧ 빼면 줄이 줄어듦');
+    await click(byText('button', '저장')); await settle();
+    const putV = calls.find(x => x.method === 'PUT');
+    const sk = putV?.body?.vocab?.system_kinds;
+    say(!!sk && sk.length === 2 && sk[0].key === 'plm' && sk[0].label === '제품 수명주기 관리',
+        `⑧ key 는 그대로 두고 이름만 바뀐 채 저장: ${JSON.stringify(sk)}`);
+    say(!!sk && sk[1].label === '창고 관리' && !sk.some(x => x.key === 'mes'), '⑧ 더한 것은 들어가고 뺀 것은 빠짐');
+    say(JSON.stringify(putV?.body?.vocab?.thread_stages) === JSON.stringify(vocabs[1].items),
+        '⑧ 손 안 댄 사전도 함께 보냄 — 서버가 통째로 받는다');
+    say(html().includes('제품 수명주기 관리'), '⑧ 저장 뒤 서버가 준 값이 보임');
+    // 다른 사전으로 옮겨도 그 사전의 것만 보인다
+    await click(byText('button', '생애 단계')); await settle();
+    say(!!name('생애 단계', 1) && !name('시스템 종류', 1), '⑧ 사전을 옮기면 그 사전의 항목만 보임');
     await unmount();
 
     // ⑦ 헤더 토글 — 감춘 부문은 아예 안 보인다

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Check, AlertTriangle, Settings as Cog } from 'lucide-react';
+import { X, Check, AlertTriangle, Settings as Cog, Plus, Trash2 } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 
 // 설정 — 정확도 문턱과 경계(2026-08-28). 사무국·관리자만 연다(헤더 단추가 그렇게 나온다).
@@ -13,7 +13,7 @@ const Backdrop = styled.div`
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 60;
 `;
 const Box = styled.div`
-  width: min(56rem, 94vw); max-height: 88vh; display: flex; flex-direction: column; background: white; border-radius: 0.75rem;
+  width: 80vw; height: 80vh; display: flex; flex-direction: column; background: white; border-radius: 0.75rem;
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3); overflow: hidden;
 `;
 const Head = styled.div`display: flex; align-items: center; gap: 0.5rem; padding: 0.9rem 1.1rem; border-bottom: 1px solid #e2e8f0;`;
@@ -41,9 +41,25 @@ const Button = styled.button`
 `;
 const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.8125rem; color: ${p => (p.$bad ? '#991b1b' : '#92400e')};`;
 
+const VocabWrap = styled.div`display: flex; gap: 0.9rem; flex: 1; min-height: 0;`;
+const VocabList = styled.div`width: 13rem; flex: none; overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: #f8fafc;`;
+const VocabBody = styled.div`flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start;`;
+const VocabTable = styled.table`
+  width: 100%; border-collapse: collapse; font-size: 0.8125rem;
+  th { text-align: left; font-weight: 600; color: #64748b; font-size: 0.75rem; padding: 0.3rem 0.4rem; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 0.25rem 0.4rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  td.no { color: #94a3b8; font-size: 0.75rem; }
+  td code { font-size: 0.75rem; color: #64748b; background: #f1f5f9; padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
+  td input { width: 100%; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; }
+  td.act { white-space: nowrap; text-align: right; }
+  td.act button { border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 0.3rem; cursor: pointer; padding: 0.15rem 0.35rem; margin-left: 0.2rem; line-height: 1; }
+  td.act button:disabled { opacity: 0.35; cursor: not-allowed; }
+`;
+
 const DIVS = '__divisions__';
 const STALE = '__stale__';   // 재평가 기간(일) — 이 날이 지난 평가는 「재평가 필요」
 const SECS = '__sectors__';  // 부문 표시 — 체크한 부문은 헤더 토글에서 사라진다(2026-08-29)
+const VOCAB = '__vocab__';   // 기준 정보 — 화면의 선택지를 여기서 고친다(2026-08-30)
 const Sep = styled.div`font-size: 0.6875rem; font-weight: 700; color: #94a3b8; padding: 0.6rem 0.9rem 0.2rem; border-top: 1px solid #e2e8f0; margin-top: 0.3rem;`;
 const DivList = styled.div`
   display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8125rem; color: #1e293b;
@@ -87,6 +103,10 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   // 사업부 표시 — SR·GTR·CS 처럼 사업부가 아닌 조직을 이 화면에서 뺀다. 전체 목록은 ?all=1 로 받는다.
   const [allDivisions, setAllDivisions] = useState(null);
   const [hidden, setHidden] = useState([]);
+  // 기준 정보 — 화면의 선택지. 서버가 준 지금 값과, 고치는 중인 것을 따로 든다(2026-08-30)
+  const [vocabs, setVocabs] = useState(null);         // [{key,label,hint,items,is_custom}]
+  const [vocabDraft, setVocabDraft] = useState({});   // {사전키: [{key,label}…]} — 손댄 것만
+  const [vocabPick, setVocabPick] = useState(null);
   const [hiddenSectors, setHiddenSectors] = useState([]);          // 감춘 부문(2026-08-29)
   const [hiddenSectorsSaved, setHiddenSectorsSaved] = useState([]);           // 초안
   const [hiddenSaved, setHiddenSaved] = useState([]); // 서버 값
@@ -104,9 +124,17 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
       setHiddenSectors(hs); setHiddenSectorsSaved(hs);
     }).catch(e => setError(e.message));
     maturityApi.getDivisions(true).then(r => setAllDivisions(r.data || [])).catch(() => setAllDivisions([]));
+    maturityApi.getVocabs().then(r => {
+      const list = Array.isArray(r.data) ? r.data : [];
+      setVocabs(list); setVocabPick(list[0]?.key || null);
+    }).catch(() => setVocabs([]));
   }, []);
   const hiddenChanged = JSON.stringify([...hidden].sort()) !== JSON.stringify([...hiddenSaved].sort());
   const sectorsChanged = JSON.stringify([...hiddenSectors].sort()) !== JSON.stringify([...hiddenSectorsSaved].sort());
+  const vocabChanged = Object.keys(vocabDraft).length > 0;
+  // 그 사전의 지금 값 — 손댔으면 손댄 것, 아니면 서버가 준 것
+  const vocabItems = (k) => vocabDraft[k] || (vocabs || []).find(v => v.key === k)?.items || [];
+  const setVocabItems = (k, items) => { setSaved(false); setVocabDraft(d => ({ ...d, [k]: items })); };
   const staleValid = Number.isInteger(Number(staleDays)) && Number(staleDays) >= 1 && Number(staleDays) <= 3650;
   const staleChanged = staleValid && Number(staleDays) !== staleSaved;
   const toggleHidden = (id) => { setSaved(false); setHidden(h => (h.includes(id) ? h.filter(x => x !== id) : [...h, id])); };
@@ -127,11 +155,17 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
       const payload = key === DIVS ? { hidden_divisions: hidden }
         : key === STALE ? { stale_days: Number(staleDays) }
         : key === SECS ? { hidden_sectors: hiddenSectors }
+        : key === VOCAB ? { vocab: Object.fromEntries((vocabs || []).map(v => [v.key, vocabItems(v.key)])) }
         : { accuracy: next };
       const r = await maturityApi.putSettings(payload);
       if (key === DIVS) { const h = (r.data?.hidden_divisions || hidden).map(Number); setHidden(h); setHiddenSaved(h); }
       else if (key === STALE) { const sd = r.data?.stale_days ?? Number(staleDays); setStaleDays(String(sd)); setStaleSaved(sd); }
       else if (key === SECS) { const hs = r.data?.hidden_sectors || hiddenSectors; setHiddenSectors(hs); setHiddenSectorsSaved(hs); }
+      else if (key === VOCAB) {
+        // 서버가 다듬은 뒤의 값을 다시 받는다 — 빈 이름처럼 버려진 줄이 화면에 남지 않게
+        const fresh = await maturityApi.getVocabs().then(x => (Array.isArray(x.data) ? x.data : [])).catch(() => vocabs);
+        setVocabs(fresh); setVocabDraft({});
+      }
       else setConf(r.data?.accuracy || next);
       setSaved(true);
       if (onChanged) onChanged();
@@ -143,13 +177,14 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   const onDivs = key === DIVS;
   const onStale = key === STALE;
   const onSecs = key === SECS;
+  const onVocab = key === VOCAB;
   const own = (k) => !!rowOf(conf, k);
   const set = (patch) => { setSaved(false); setDraft(d => ({ ...(d || base), ...patch })); };
 
   return (
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="설정">
-        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — {onDivs ? '사업부 표시' : onStale ? '재평가 기간' : onSecs ? '부문 표시' : '정확도 문턱과 경계'}</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
+        <Head><Cog size={16} color="#1d4ed8" /><Title>설정 — {onDivs ? '사업부 표시' : onStale ? '재평가 기간' : onSecs ? '부문 표시' : onVocab ? '기준 정보' : '정확도 문턱과 경계'}</Title><IconBtn onClick={onClose} title="닫기"><X size={16} /></IconBtn></Head>
         <Body>
           <Left>
             <Item type="button" $on={onDivs} onClick={() => { setKey(DIVS); setSaved(false); }}>
@@ -159,6 +194,10 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
             <Item type="button" $on={onSecs} onClick={() => { setKey(SECS); setSaved(false); }}>
               <span>부문 표시</span>
               <Tag $own={hiddenSectors.length > 0}>{hiddenSectors.length ? `${hiddenSectors.length}개 뺌` : '전부'}</Tag>
+            </Item>
+            <Item type="button" $on={onVocab} onClick={() => { setKey(VOCAB); setSaved(false); }}>
+              <span>기준 정보</span>
+              <Tag $own={(vocabs || []).some(v => v.is_custom)}>{vocabs ? `${vocabs.length}가지` : '…'}</Tag>
             </Item>
             <Item type="button" $on={onStale} onClick={() => { setKey(STALE); setSaved(false); }}>
               <span>재평가 기간</span>
@@ -174,6 +213,75 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
           </Left>
           <Right>
             {!conf && !error && <Hint>불러오는 중…</Hint>}
+            {conf && onVocab && (
+              <>
+                <Hint>
+                  시뮬레이션·모니터링·디지털 스레드 화면에서 <strong>고르는 값들</strong>입니다. 코드의 값이 처음 기준치이고,
+                  여기서 고치면 그것이 이깁니다. 이름을 고치거나 항목을 더하고 뺄 수 있습니다.
+                  다만 <strong>key 는 자료에 박히는 값이라 바뀌지 않습니다</strong> — 이미 그 값을 쓰는 자료는 그대로 남고,
+                  뺀 값은 화면에 key 로 보입니다. 저장은 고른 사전만이 아니라 <strong>기준 정보 전체</strong>를 함께 보냅니다.
+                </Hint>
+                {vocabs == null ? <Hint>불러오는 중…</Hint> : (
+                  <VocabWrap>
+                    <VocabList>
+                      {vocabs.map(v => (
+                        <Item key={v.key} type="button" $on={vocabPick === v.key} onClick={() => setVocabPick(v.key)}>
+                          <span>{v.label}</span>
+                          <Tag $own={v.is_custom || !!vocabDraft[v.key]}>{vocabItems(v.key).length}</Tag>
+                        </Item>
+                      ))}
+                    </VocabList>
+                    <VocabBody>
+                      {(() => {
+                        const v = vocabs.find(x => x.key === vocabPick);
+                        if (!v) return <Hint>왼쪽에서 하나 고르세요.</Hint>;
+                        const items = vocabItems(v.key);
+                        const put = (i, next) => setVocabItems(v.key, items.map((x, j) => (j === i ? { ...x, ...next } : x)));
+                        const move = (i, d) => {
+                          const j = i + d;
+                          if (j < 0 || j >= items.length) return;
+                          const next = [...items];
+                          [next[i], next[j]] = [next[j], next[i]];
+                          setVocabItems(v.key, next);
+                        };
+                        return (
+                          <>
+                            <Hint>{v.hint}</Hint>
+                            <VocabTable>
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '2rem' }} />
+                                  <th>이름</th>
+                                  <th style={{ width: '12rem' }}>key (안 바뀜)</th>
+                                  <th style={{ width: '7rem' }} />
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {items.map((it, i) => (
+                                  <tr key={it.key}>
+                                    <td className="no">{i + 1}</td>
+                                    <td><input value={it.label} aria-label={`${v.label} ${i + 1}번 이름`} onChange={e => put(i, { label: e.target.value })} /></td>
+                                    <td><code>{it.key}</code></td>
+                                    <td className="act">
+                                      <button type="button" title="위로" aria-label={`${i + 1}번 위로`} onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
+                                      <button type="button" title="아래로" aria-label={`${i + 1}번 아래로`} onClick={() => move(i, 1)} disabled={i === items.length - 1}>↓</button>
+                                      <button type="button" title="빼기" aria-label={`${i + 1}번 빼기`} onClick={() => setVocabItems(v.key, items.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </VocabTable>
+                            <Button type="button" onClick={() => setVocabItems(v.key, [...items, { key: `custom_${Date.now().toString(36)}`, label: '새 항목' }])}>
+                              <Plus size={13} /> 항목 더하기
+                            </Button>
+                          </>
+                        );
+                      })()}
+                    </VocabBody>
+                  </VocabWrap>
+                )}
+              </>
+            )}
             {conf && onSecs && (
               <>
                 <Hint>체크한 부문은 **헤더의 부문 토글에서 사라집니다.** 아직 안 쓰는 부문을 빼 두세요 — 자료는 지워지지 않고, 다시 켜면 그대로 보입니다. 보고 있던 부문을 감추면 시뮬레이션으로 돌아갑니다.</Hint>
@@ -251,7 +359,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
           {!onDivs && !onStale && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
           <span style={{ flex: 1, fontSize: '0.75rem', color: '#16a34a' }}>{saved ? '저장됨' : ''}</span>
           <Button type="button" onClick={onClose}>닫기</Button>
-          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : onSecs ? !sectorsChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
+          <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : onSecs ? !sectorsChanged : onVocab ? !vocabChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>
         </Foot>
       </Box>
     </Backdrop>

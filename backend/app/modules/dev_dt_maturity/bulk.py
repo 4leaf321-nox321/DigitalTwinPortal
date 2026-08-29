@@ -81,10 +81,10 @@ def _choices(sector, kind, division_id):
     out = {}
     div = division_id if isinstance(division_id, int) else None
     if kind == 'system':
-        out['종류'] = _labels(D.SYSTEM_KINDS)
-        out['생애 단계'] = _labels(D.THREAD_STAGES)          # 여럿 — 화면이 · 로 잇는다
-        out['연계 수단'] = _labels(D.LINK_MEANS)
-        out['상태'] = _labels(D.SYSTEM_STATUS)
+        out['종류'] = _labels(D.vocab('system_kinds'))
+        out['생애 단계'] = _labels(D.vocab('thread_stages'))          # 여럿 — 화면이 · 로 잇는다
+        out['연계 수단'] = _labels(D.vocab('link_means'))
+        out['상태'] = _labels(D.vocab('system_status'))
     elif kind == 'segment':
         out['스레드'] = [t['name'] for t in T.list_threads()]
         out['구간'] = [sd['name'] for t in T.list_threads() for sd in t['segments']]
@@ -95,7 +95,7 @@ def _choices(sector, kind, division_id):
         out['출발 시스템'] = systems
         out['매개 시스템'] = systems
         out['도착 시스템'] = systems
-        out['데이터 종류'] = _labels(D.DATA_KINDS)
+        out['데이터 종류'] = _labels(D.vocab('data_kinds'))
     elif kind == 'org':
         return {}                    # 조직은 이름 한 칸뿐 — 고를 것이 없다
     else:
@@ -104,9 +104,9 @@ def _choices(sector, kind, division_id):
         out['사업부'] = [d.name for d in Division.query.filter_by(is_active=True).order_by(Division.order, Division.id).all()
                        if d.id not in hidden]
         if kind == 'subject' and sector == 'manufacturing_monitoring':
-            out['공정'] = _labels(D.PROCESS_STEPS)
+            out['공정'] = _labels(D.vocab('process_steps'))
         if kind == 'agent':
-            out['모델 종류'] = _labels(D.MODEL_KINDS)
+            out['모델 종류'] = _labels(D.vocab('model_kinds'))
             if div:
                 out['담당 부서'] = [x['name'] for x in S.departments_of(div)]
         if kind == 'pair' and div:
@@ -209,11 +209,11 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
         if row:
             return 'exists', name
         T.create_system({
-            'name': name, 'kind': _label_key(D.SYSTEM_KINDS, cell(cells, '종류'), '시스템 종류') or 'other',
+            'name': name, 'kind': _label_key(D.vocab('system_kinds'), cell(cells, '종류'), '시스템 종류') or 'other',
             'owner_org': cell(cells, '주관 조직') or None,
-            'stages': [_label_key(D.THREAD_STAGES, s, '생애 단계') for s in _split(cell(cells, '생애 단계'))],
-            'link_means': _label_key(D.LINK_MEANS, cell(cells, '연계 수단'), '연계 수단') or 'unknown',
-            'status': _label_key(D.SYSTEM_STATUS, cell(cells, '상태'), '상태') or 'active',
+            'stages': [_label_key(D.vocab('thread_stages'), s, '생애 단계') for s in _split(cell(cells, '생애 단계'))],
+            'link_means': _label_key(D.vocab('link_means'), cell(cells, '연계 수단'), '연계 수단') or 'unknown',
+            'status': _label_key(D.vocab('system_status'), cell(cells, '상태'), '상태') or 'active',
             'note': cell(cells, '메모') or None,
         }, division_id if isinstance(division_id, int) else None)
         return 'new', name
@@ -242,7 +242,7 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
             return 'exists', name
         S.create_subject(div, sector, name, cell(cells, '세부'), _split(cell(cells, '제품군')),
                          'auto', None, cell(cells, '라인·사업장'),
-                         _label_key(D.PROCESS_STEPS, cell(cells, '공정'), '공정') if cell(cells, '공정') else None)
+                         _label_key(D.vocab('process_steps'), cell(cells, '공정'), '공정') if cell(cells, '공정') else None)
         return 'new', name
 
     if kind == 'agent':
@@ -256,7 +256,7 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
         if dept and dept_id is None:
             raise TableFormatError(f'담당 부서 「{dept}」 을(를) 이 사업부에서 못 찾았습니다.')
         S.create_agent(div, sector, name, cell(cells, '종류') or cell(cells, '수단 종류'),
-                       _label_key(D.MODEL_KINDS, cell(cells, '모델 종류'), '모델 종류') if cell(cells, '모델 종류') else None,
+                       _label_key(D.vocab('model_kinds'), cell(cells, '모델 종류'), '모델 종류') if cell(cells, '모델 종류') else None,
                        None, _split(cell(cells, '사용 툴')), dept_id, _split(cell(cells, '불량 유형')))
         return 'new', name
 

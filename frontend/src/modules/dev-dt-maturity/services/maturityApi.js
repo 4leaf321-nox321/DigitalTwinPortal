@@ -114,6 +114,7 @@ export const maturityApi = {
   deleteSegmentDef: (id) => request(`/threads/segment-defs/${id}`, { method: 'DELETE' }),
   listProjects: (divisionId) => request(`/projects?division_id=${divisionId}`),   // 수행 디지털 트윈 과제 고르기의 재료
   // 일괄 입력 — 「추출」과 같은 머리글의 표를 붙여넣어 한 번에 세운다(2026-08-30)
+  getVocabs: () => request('/vocabs'),          // 기준 정보 — 화면의 선택지들
   bulkKinds: (sector, divisionId) => request(`/bulk/kinds?sector=${sector}&division_id=${divisionId ?? 'all'}`),
   bulkInput: (payload) => request('/bulk', json('POST', payload)),
   listSystems: () => request('/systems'),

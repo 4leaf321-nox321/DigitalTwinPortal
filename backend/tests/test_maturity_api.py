@@ -807,3 +807,56 @@ def test_연계_개발_기록은_건으로_쌓고_올라간_칸을_센다(client
     res = client.put(f'{BASE}/thread-cases/{c1["id"]}', json={'status': 'doing', 'link_to': 'closed_loop'}, headers=auth(mx_user))
     assert res.status_code == 200 and res.get_json()['data']['lift'] == 3
     assert client.delete(f'{BASE}/thread-cases/{c1["id"]}', headers=auth(mx_user)).status_code == 200
+
+
+def test_기준_정보는_설정에서_고치고_고친_말이_모든_문으로_나간다(client, auth, world, mx_user, office):
+    """선택지를 코드에 박아 두면 말을 바꿀 때마다 배포해야 한다. 설정이 코드를 이긴다.
+
+    ⚠️ key 는 자료에 박히는 값이라 안 바뀐다 — 지운 값을 쓰던 자료는 그대로 남는다.
+    """
+    mx = world['mx'].id
+    vocabs = client.get(f'{BASE}/vocabs', headers=auth(mx_user)).get_json()['data']
+    by = {v['key']: v for v in vocabs}
+    assert '시스템 종류' in {v['label'] for v in vocabs}
+    assert all(v['is_custom'] is False for v in vocabs)          # 처음엔 코드의 값 그대로
+
+    # 사무국만 고친다
+    kinds = by['system_kinds']['items']
+    assert client.put(f'{BASE}/settings', json={'vocab': {'system_kinds': kinds}},
+                      headers=auth(mx_user)).status_code == 403
+
+    # 말을 고치고, 하나 더하고, 하나 뺀다
+    edited = [{**kinds[0], 'label': '제품 수명주기 관리'}] + kinds[2:] + [{'key': 'wms', 'label': '창고 관리'}]
+    res = client.put(f'{BASE}/settings', json={'vocab': {'system_kinds': edited}}, headers=auth(office))
+    assert res.status_code == 200
+    now = {v['key']: v for v in client.get(f'{BASE}/vocabs', headers=auth(mx_user)).get_json()['data']}
+    assert now['system_kinds']['is_custom'] is True
+    labels = [x['label'] for x in now['system_kinds']['items']]
+    assert labels[0] == '제품 수명주기 관리' and '창고 관리' in labels
+    assert len(labels) == len(kinds)                              # 하나 빼고 하나 더했다
+    assert now['thread_stages']['is_custom'] is False             # 손 안 댄 사전은 그대로
+
+    # 나가는 문마다 같은 말 — 정의, 일괄 입력의 선택지, 그리고 저장 검사
+    defs = client.get(f'{BASE}/definitions', headers=auth(mx_user)).get_json()['data']
+    assert '제품 수명주기 관리' in [x['label'] for x in defs['thread']['system_kinds']]
+    kinds_api = client.get(f'{BASE}/bulk/kinds?sector=digital_thread&division_id={mx}',
+                           headers=auth(mx_user)).get_json()['data']
+    assert '제품 수명주기 관리' in next(k for k in kinds_api if k['key'] == 'system')['choices']['종류']
+    assert client.post(f'{BASE}/systems', json={'name': '창고', 'kind': 'wms'},
+                       headers=auth(mx_user)).status_code == 201          # 새로 더한 값도 받는다
+    assert client.post(f'{BASE}/systems', json={'name': '없는 종류', 'kind': 'nope'},
+                       headers=auth(mx_user)).status_code == 400
+
+    # 빈 이름·겹친 key·모르는 사전은 버린다. 다 버려지면 코드의 기본으로 돌아간다.
+    client.put(f'{BASE}/settings', json={'vocab': {
+        'system_kinds': [{'key': 'plm', 'label': 'PLM'}, {'key': 'plm', 'label': '겹침'},
+                         {'key': 'x', 'label': '  '}, '줄이 아님'],
+        'nope': [{'key': 'a', 'label': 'A'}],
+        'thread_stages': [],
+    }}, headers=auth(office))
+    after = {v['key']: v for v in client.get(f'{BASE}/vocabs', headers=auth(mx_user)).get_json()['data']}
+    assert [x['key'] for x in after['system_kinds']['items']] == ['plm']
+    assert after['thread_stages']['is_custom'] is False           # 빈 목록은 화면을 못 쓰게 만든다 — 되돌린다
+    assert 'nope' not in {v['key'] for v in after.values()}
+    # 지운 값을 쓰던 자료는 남는다 — 없는 말로 조용히 바뀌지 않는다
+    assert 'wms' in {s['kind'] for s in client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data']}

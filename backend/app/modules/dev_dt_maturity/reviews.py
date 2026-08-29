@@ -48,7 +48,7 @@ def _month(value):
 
 
 def _choice(field, value, required=False):
-    keys = [o['key'] for o in D.REVIEW_FIELDS[field]['options']]
+    keys = [o['key'] for o in D.vocab(f'review_{field}')]
     v = (value or '').strip() if isinstance(value, str) else value
     if not v:
         if required:
@@ -56,7 +56,7 @@ def _choice(field, value, required=False):
         return None
     if v not in keys:
         # 라벨로 와도 받는다(엑셀)
-        by_label = {norm(o['label']): o['key'] for o in D.REVIEW_FIELDS[field]['options']}
+        by_label = {norm(o['label']): o['key'] for o in D.vocab(f'review_{field}')}
         v = by_label.get(norm(v))
         if v is None:
             raise Refused(f'「{D.REVIEW_FIELDS[field]["label"]}」에 없는 값입니다.')
@@ -81,7 +81,7 @@ def _agent(division_id, agent_id, agent_name):
 def _fill(row, payload, division_id):
     if 'kind' in payload or row.kind is None:
         kind = (payload.get('kind') or row.kind or '').strip()
-        if kind not in D.REVIEW_KIND_KEYS:
+        if kind not in D.vocab_keys('review_kind'):
             raise Refused('종류는 설계 스펙 검토 · 원인 분석 중 하나입니다.')
         row.kind = kind
     if 'month' in payload or row.month is None:
@@ -163,7 +163,7 @@ def stats(division_id, year, promote_min=None):
     promote_min = promote_min or D.get_review_promote_min()
     rows = list_cases(division_id, year)
     out = {'division_id': int(division_id), 'year': int(year), 'kinds': {}}
-    for kind in D.REVIEW_KIND_KEYS:
+    for kind in D.vocab_keys('review_kind'):
         rs = [r for r in rows if r.kind == kind]
         leads = [r.lead_days for r in rs if r.lead_days is not None]
         pairs = Counter((r.agent_name or f'#{r.agent_id}', r.item or '') for r in rs if (r.agent_id or r.agent_name) and r.item)
@@ -217,8 +217,8 @@ def parse(text, division_id):
     if not rows:
         raise TableFormatError('표가 비어 있습니다.')
     mapping = _cols_map(rows[0][1])
-    kind_by_label = {norm(k['label']): k['key'] for k in D.REVIEW_KINDS}
-    kind_by_label.update({norm(k['key']): k['key'] for k in D.REVIEW_KINDS})
+    kind_by_label = {norm(k['label']): k['key'] for k in D.vocab('review_kind')}
+    kind_by_label.update({norm(k['key']): k['key'] for k in D.vocab('review_kind')})
     items, problems = [], []
     for line, cells in rows[1:]:
         get = lambda k: (cells[mapping[k]] if k in mapping and mapping[k] < len(cells) else '')   # noqa: E731

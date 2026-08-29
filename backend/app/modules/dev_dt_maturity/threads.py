@@ -19,7 +19,9 @@ from .models import (
 from .services import Refused, _clean_list, create_pair, create_subject, pair_dict
 
 SECTOR = 'digital_thread'
-STAGE_ORDER = {s['key']: i for i, s in enumerate(D.THREAD_STAGES)}
+# ⚠️ 단계의 **차례**가 뜻을 갖는다(도달 단계·폐루프). 기준 정보에서 차례를 바꾸면 그대로 따른다.
+def stage_order():
+    return {s['key']: i for i, s in enumerate(D.vocab('thread_stages'))}
 LINK_AXIS = 'link_mode'
 AUTO_FROM = 'auto_transfer'      # 이 칸 이상이면 「이어진」 구간
 CAPTURE_FROM = 'direct'          # 이 칸 이상이면 「확보된」 구간 — 취합 없이 바로 생기는 데이터
@@ -60,7 +62,7 @@ def ensure_defaults():
 # ── 사전 CRUD ───────────────────────────────────────────────────────────────
 
 def _stage_or_refuse(key):
-    if key not in STAGE_ORDER:
+    if key not in stage_order():
         raise Refused('없는 생애 단계입니다.')
     return key
 
@@ -175,7 +177,7 @@ def create_system(payload, division_id=None):
     if ThreadSystem.query.filter_by(name=name).first():
         raise Refused('같은 이름의 시스템이 이미 있습니다 — 그것을 고르세요.')
     kind = payload.get('kind') or 'other'
-    if kind not in D.SYSTEM_KIND_KEYS:
+    if kind not in D.vocab_keys('system_kinds'):
         raise Refused('없는 시스템 종류입니다.')
     row = ThreadSystem(name=name, kind=kind, created_division_id=division_id)
     _fill_system(row, payload)
@@ -186,19 +188,19 @@ def create_system(payload, division_id=None):
 
 def _fill_system(row, payload):
     if 'kind' in payload:
-        if payload['kind'] not in D.SYSTEM_KIND_KEYS:
+        if payload['kind'] not in D.vocab_keys('system_kinds'):
             raise Refused('없는 시스템 종류입니다.')
         row.kind = payload['kind']
     if 'owner_org' in payload:
         row.owner_org = (payload.get('owner_org') or '').strip()[:200] or None
     if 'stages' in payload:
-        row.stages = [s for s in _clean_list(payload.get('stages')) if s in STAGE_ORDER]
+        row.stages = [s for s in _clean_list(payload.get('stages')) if s in stage_order()]
     if 'link_means' in payload:
-        if payload['link_means'] not in D.LINK_MEANS_KEYS:
+        if payload['link_means'] not in D.vocab_keys('link_means'):
             raise Refused('연계 수단은 api · file · none · unknown 중 하나입니다.')
         row.link_means = payload['link_means']
     if 'status' in payload:
-        if payload['status'] not in D.SYSTEM_STATUS_KEYS:
+        if payload['status'] not in D.vocab_keys('system_status'):
             raise Refused('상태는 active · adopting · retiring 중 하나입니다.')
         row.status = payload['status']
     if 'note' in payload:
@@ -265,7 +267,7 @@ def create_org(payload, division_id=None):
     if dup:
         return dup                                   # 같은 사업부의 같은 이름이면 그것을 쓴다 — 조용히
     role = payload.get('role') or None
-    if role and role not in STAGE_ORDER:
+    if role and role not in stage_order():
         raise Refused('없는 생애 단계 역할입니다.')
     row = ThreadOrg(name=name, role=role, division_id=division_id, source_kind=source_kind, source_id=source_id,
                     note=(payload.get('note') or '').strip() or None)
@@ -282,7 +284,7 @@ def update_org(row, payload):
         row.name = name
     if 'role' in payload:
         role = payload.get('role') or None
-        if role and role not in STAGE_ORDER:
+        if role and role not in stage_order():
             raise Refused('없는 생애 단계 역할입니다.')
         row.role = role
     if 'note' in payload:
@@ -401,7 +403,7 @@ def segment_dict(seg, systems=None, orgs=None, with_pair=True):
         d[f'{f}_name'] = name(systems, getattr(seg, f'{f}_id'))
     d['via_informal'] = bool(seg.via_system_id and seg.via_system_id in systems and systems[seg.via_system_id].kind == 'informal')
     d['data_kinds'] = list(seg.data_kinds or [])
-    d['data_kind_labels'] = [D.DATA_KIND_LABELS.get(k, k) for k in d['data_kinds']]
+    d['data_kind_labels'] = [D.vocab_labels('data_kinds').get(k, k) for k in d['data_kinds']]
     for f in ('from_org', 'to_org'):
         d[f'{f}_name'] = name(orgs, getattr(seg, f'{f}_id'))
     d['division_name'] = _division_names().get(seg.division_id)
@@ -503,14 +505,15 @@ def thread_stats(division_id):
         used = [s for s in rows if (_axis_idx(s, 'usage') or -1) >= use_idx]
         use_assessed = [s for s in rows if _axis_idx(s, 'usage') is not None]
         unknown = sum(_unknown_count(s) for s in rows)
-        closed = any(STAGE_ORDER.get((s.get('segment_def') or {}).get('to_stage'), 99) < STAGE_ORDER.get((s.get('segment_def') or {}).get('from_stage'), -1)
+        order = stage_order()
+        closed = any(order.get((s.get('segment_def') or {}).get('to_stage'), 99) < order.get((s.get('segment_def') or {}).get('from_stage'), -1)
                      for s in linked)
         informal = sum(1 for s in rows if s.get('via_informal'))
         out.append({
             'thread_id': t['id'], 'thread_key': t['key'], 'thread_name': t['name'],
             'def_count': len(defs), 'segment_count': len(rows), 'assessed': len(assessed),
             'continuity': round(100 * len(linked) / len(assessed)) if assessed else None,
-            'reach_stage': reach, 'reach_label': D.STAGE_LABELS.get(reach) if reach else None,
+            'reach_stage': reach, 'reach_label': D.vocab_labels('thread_stages').get(reach) if reach else None,
             'weakest': {'id': weakest['id'], 'name': weakest['name'], 'link_index': _link_idx(weakest),
                         'link_label': axis['rungs'][_link_idx(weakest)]['label']} if weakest else None,
             'closed_loop': closed,
@@ -616,12 +619,12 @@ def _fill_case(row, payload, division_id):
         row.month = _case_month(payload.get('month') or row.month)
     if 'action' in payload or row.action is None:
         action = payload.get('action') or row.action
-        if action not in D.THREAD_CASE_ACTION_KEYS:
+        if action not in D.vocab_keys('case_actions'):
             raise Refused('「무엇을」을 고르세요 — 연동 · 도입 · 정합화 · 자동화 · 폐지 · 기타.')
         row.action = action
     if 'status' in payload:
         st = payload.get('status') or 'done'
-        if st not in D.THREAD_CASE_STATUS_KEYS:
+        if st not in D.vocab_keys('case_status'):
             raise Refused('상태는 계획 · 진행 중 · 완료 중 하나입니다.')
         row.status = st
     if 'segment_id' in payload:

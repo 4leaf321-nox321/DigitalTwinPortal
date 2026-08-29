@@ -49,8 +49,8 @@ class MaturitySubject(BaseModel):
     def to_dict(self):
         d = super().to_dict()
         d['product_families'] = list(self.product_families or [])
-        from .definitions import PROCESS_STEP_LABELS
-        d['process_label'] = PROCESS_STEP_LABELS.get(self.process, self.process)
+        from .definitions import vocab_labels
+        d['process_label'] = vocab_labels('process_steps').get(self.process, self.process)
         return d
 
 

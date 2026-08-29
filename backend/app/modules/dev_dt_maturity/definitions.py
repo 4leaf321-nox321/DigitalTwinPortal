@@ -304,9 +304,9 @@ THREAD_CASE_STATUS_KEYS = [s['key'] for s in THREAD_CASE_STATUS]
 
 
 def thread_definitions():
-    return {'stages': THREAD_STAGES, 'system_kinds': SYSTEM_KINDS, 'informal_items': INFORMAL_ITEMS,
-            'link_means': LINK_MEANS, 'system_status': SYSTEM_STATUS, 'data_kinds': DATA_KINDS,
-            'case_actions': THREAD_CASE_ACTIONS, 'case_status': THREAD_CASE_STATUS}
+    return {'stages': vocab('thread_stages'), 'system_kinds': vocab('system_kinds'), 'informal_items': INFORMAL_ITEMS,
+            'link_means': vocab('link_means'), 'system_status': vocab('system_status'), 'data_kinds': vocab('data_kinds'),
+            'case_actions': vocab('case_actions'), 'case_status': vocab('case_status')}
 AXES['manufacturing_monitoring'] = [
     # 전기·전자 제조 기준(PLAN-monitoring.md). 설비가 대개 스스로 자료를 내놓는 편이라
     # 갈림은 「수집」보다 **판단·대응**에서 난다 — 그래서 그 둘을 따로 둔다.
@@ -420,10 +420,152 @@ PROCESS_STEP_LABELS = {p['key']: p['label'] for p in PROCESS_STEPS}
 
 
 def monitoring_definitions():
-    return {'process_steps': PROCESS_STEPS}
+    return {'process_steps': vocab('process_steps')}
 
 
 AXIS_KINDS = {'rung', 'value', 'set', 'matrix'}   # matrix: 바탕 토글 + 불량 유형 × 열 표(모델링 수준)
+
+
+# ── 기준 정보 — 화면의 선택지(2026-08-30) ───────────────────────────────────
+#
+# 코드의 값이 **기본**이고, 설정(`vocab` 키)에 적힌 것이 있으면 그것이 이긴다.
+# 사무국이 설정에서 말을 고치거나 항목을 더하고 뺄 수 있다.
+#
+# ⚠️ key 는 자료에 박히는 값이라 **한 번 만들면 안 바꾼다.** 화면은 label 만 고치게 한다.
+#    지운 값을 이미 쓰고 있는 자료는 그대로 남고, 화면에는 key 가 그대로 보인다
+#    (없는 말로 조용히 바뀌지 않게).
+VOCABS = [
+    {'key': 'model_kinds', 'label': '모델 종류', 'sector': 'simulation',
+     'hint': '시뮬레이션이 무엇에 기대어 도는가 — 수단의 속성입니다.'},
+    {'key': 'review_timing', 'label': '해석 활용 — 시점', 'sector': 'simulation', 'hint': '해석 활용 기록의 「시점」 칸.'},
+    {'key': 'review_decision', 'label': '해석 활용 — 결정 반영', 'sector': 'simulation', 'hint': '해석 활용 기록의 「결정 반영」 칸.'},
+    {'key': 'review_basis', 'label': '해석 활용 — 판정 근거', 'sector': 'simulation', 'hint': '해석 활용 기록의 「판정 근거」 칸.'},
+    {'key': 'review_kind', 'label': '해석 활용 — 종류', 'sector': 'simulation', 'hint': '설계 스펙 검토·원인 분석처럼 무엇을 위한 해석인가.'},
+    {'key': 'system_kinds', 'label': '시스템 종류', 'sector': 'digital_thread', 'hint': 'PLM·MES 처럼 시스템 사전의 갈래.'},
+    {'key': 'thread_stages', 'label': '생애 단계', 'sector': 'digital_thread',
+     'hint': '기획→개발→…→경영. **차례가 뜻을 갖습니다** — 위에서 아래로 흐르고, 거슬러 가면 폐루프로 셉니다.'},
+    {'key': 'link_means', 'label': '연계 수단', 'sector': 'digital_thread', 'hint': '시스템이 무엇으로 이어질 수 있나(API·파일…).'},
+    {'key': 'system_status', 'label': '시스템 상태', 'sector': 'digital_thread', 'hint': '운영·도입 중·폐지 예정.'},
+    {'key': 'data_kinds', 'label': '데이터 종류', 'sector': 'digital_thread', 'hint': '구간으로 무엇이 흐르나.'},
+    {'key': 'case_actions', 'label': '연계 개발 — 무엇을', 'sector': 'digital_thread', 'hint': '연동·도입·정합화·자동화·폐지.'},
+    {'key': 'case_status', 'label': '연계 개발 — 상태', 'sector': 'digital_thread', 'hint': '계획·진행 중·완료.'},
+    {'key': 'process_steps', 'label': '공정 단계', 'sector': 'manufacturing_monitoring',
+     'hint': '전기·전자 제조의 표준 공정. 라인 이름이 갈려도 공정끼리는 사업부를 넘어 비교됩니다.'},
+]
+VOCAB_BY_KEY = {v['key']: v for v in VOCABS}
+
+
+def _vocab_defaults(name):
+    """코드의 기본값. 이 표가 곧 「처음 기준치」다."""
+    return {
+        'model_kinds': MODEL_KINDS,
+        'review_timing': REVIEW_FIELDS['timing']['options'],
+        'review_decision': REVIEW_FIELDS['decision']['options'],
+        'review_basis': REVIEW_FIELDS['basis']['options'],
+        'review_kind': REVIEW_KINDS,
+        'system_kinds': SYSTEM_KINDS,
+        'thread_stages': THREAD_STAGES,
+        'link_means': LINK_MEANS,
+        'system_status': SYSTEM_STATUS,
+        'data_kinds': DATA_KINDS,
+        'case_actions': THREAD_CASE_ACTIONS,
+        'case_status': THREAD_CASE_STATUS,
+        'process_steps': PROCESS_STEPS,
+    }.get(name, [])
+
+
+def _vocab_conf():
+    """설정의 `vocab` 을 **한 요청 안에서 한 번만** 읽는다.
+
+    ⚠️ segment_dict 처럼 줄마다 부르는 자리가 있어, 그때마다 질의하면 표 하나에 수백 번 간다.
+       요청이 끝나면 g 가 사라지므로 설정을 고친 다음 요청은 새 값을 본다.
+    """
+    try:
+        from flask import g, has_app_context
+        if not has_app_context():
+            return _setting('vocab') or {}
+        if not hasattr(g, '_dtm_vocab'):
+            g._dtm_vocab = _setting('vocab') or {}
+        return g._dtm_vocab
+    except (ImportError, RuntimeError):
+        return _setting('vocab') or {}
+
+
+def forget_vocab_cache():
+    """설정을 고친 뒤 같은 요청 안에서 옛 값을 보지 않도록 지운다."""
+    try:
+        from flask import g, has_app_context
+        if has_app_context() and hasattr(g, '_dtm_vocab'):
+            del g._dtm_vocab
+    except (ImportError, RuntimeError):
+        pass
+
+
+def vocab(name):
+    """그 선택지의 지금 값 — 설정에 있으면 그것, 없으면 코드의 기본."""
+    conf = _vocab_conf()
+    rows = conf.get(name) if isinstance(conf, dict) else None
+    if not isinstance(rows, list) or not rows:
+        return list(_vocab_defaults(name))
+    out = []
+    for r in rows:
+        if not isinstance(r, dict) or not r.get('key') or not r.get('label'):
+            continue
+        item = {'key': str(r['key']), 'label': str(r['label'])}
+        for extra in ('description', 'short', 'group'):
+            if r.get(extra):
+                item[extra] = str(r[extra])
+        out.append(item)
+    return out or list(_vocab_defaults(name))
+
+
+def vocab_keys(name):
+    return {x['key'] for x in vocab(name)}
+
+
+def vocab_labels(name):
+    return {x['key']: x['label'] for x in vocab(name)}
+
+
+def clean_vocab_payload(raw):
+    """설정으로 들어오는 기준 정보를 다듬는다 — 아는 사전만, key 는 겹치지 않게, 빈 줄은 뺀다.
+
+    ⚠️ key 는 자료에 박히는 값이다. 화면이 새 항목의 key 를 지어 보내면 그대로 쓰되,
+       빈 것·겹친 것은 막는다. 하나도 안 남으면 그 사전은 **기본으로 되돌린다**(빈 선택지는
+       화면을 못 쓰게 만든다).
+    """
+    if not isinstance(raw, dict):
+        raise ValueError('기준 정보의 꼴이 아닙니다.')
+    out = {}
+    for name, rows in raw.items():
+        if name not in VOCAB_BY_KEY or not isinstance(rows, list):
+            continue
+        items, seen = [], set()
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            key = str(r.get('key') or '').strip()
+            label = str(r.get('label') or '').strip()
+            if not key or not label or key in seen:
+                continue
+            seen.add(key)
+            item = {'key': key[:60], 'label': label[:100]}
+            for extra in ('description', 'short', 'group'):
+                if r.get(extra):
+                    item[extra] = str(r[extra])[:200]
+            items.append(item)
+        if items:
+            out[name] = items
+    return out
+
+
+def vocab_all():
+    """설정 화면이 그리는 것 — 정의와 지금 값, 그리고 기본값과 다른지."""
+    out = []
+    for v in VOCABS:
+        items = vocab(v['key'])
+        out.append({**v, 'items': items, 'is_custom': items != list(_vocab_defaults(v['key']))})
+    return out
 
 
 def sector_is_active(sector_key):
@@ -610,8 +752,9 @@ IMPORT_COLUMNS = [
 #   stale_days     int
 #   hidden_divisions [division_id…]   이 화면에서 뺄 조직 — SR·GTR·CS 처럼 사업부가 아닌 것(2026-08-28)
 #   hidden_sectors   [sector_key…]    이 화면에서 뺄 부문 — 아직 안 쓰는 부문을 토글에서 감춘다(2026-08-29)
+#   vocab            {이름: [{key,label}…]}  기준 정보 — 화면의 선택지. 코드의 값이 기본, 여기 있으면 이긴다(2026-08-30)
 SETTINGS_KEYS = ('ladders', 'accuracy', 'phenomena', 'stale_days', 'hidden_divisions', 'review_promote_min',
-                 'hidden_sectors')
+                 'hidden_sectors', 'vocab')
 
 
 def _setting(key):
@@ -747,5 +890,7 @@ def get_review_promote_min():
 
 
 def review_definitions():
-    return {'kinds': REVIEW_KINDS, 'fields': REVIEW_FIELDS, 'columns': REVIEW_COLUMNS,
+    # 선택지는 기준 정보를 지나서 나간다 — 설정에서 고친 말이 화면에 그대로 보이도록.
+    fields = {name: {**f, 'options': vocab(f'review_{name}')} for name, f in REVIEW_FIELDS.items()}
+    return {'kinds': vocab('review_kind'), 'fields': fields, 'columns': REVIEW_COLUMNS,
             'promote_min': get_review_promote_min()}

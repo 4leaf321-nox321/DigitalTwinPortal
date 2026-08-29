@@ -147,7 +147,7 @@ def create_agent(division_id, sector, name, kind=None, model_kind=None, project_
     name = (name or '').strip()
     if not name:
         raise Refused('수단 이름이 필요합니다.')
-    if model_kind and model_kind not in D.MODEL_KIND_KEYS:
+    if model_kind and model_kind not in D.vocab_keys('model_kinds'):
         raise Refused('모델 종류는 물리 기반 · 데이터 기반 · 하이브리드 중 하나입니다.')
     row = MaturityAgent(
         division_id=int(division_id), sector=sector, name=name[:300],
@@ -174,7 +174,7 @@ def update_agent(row, payload):
         row.kind = (payload.get('kind') or '')[:100] or None
     if 'model_kind' in payload:
         mk = payload.get('model_kind') or None
-        if mk and mk not in D.MODEL_KIND_KEYS:
+        if mk and mk not in D.vocab_keys('model_kinds'):
             raise Refused('모델 종류는 물리 기반 · 데이터 기반 · 하이브리드 중 하나입니다.')
         row.model_kind = mk
     if 'project_uuid' in payload:

@@ -39,8 +39,11 @@ def norm(s):
     return re.sub(r'\s+', ' ', (s or '').strip()).lower()
 
 
-_MODEL_KIND_BY_LABEL = {m['label']: m['key'] for m in D.MODEL_KINDS}
-_MODEL_KIND_BY_LABEL.update({m['key']: m['key'] for m in D.MODEL_KINDS})
+def _model_kind_by_label():
+    """기준 정보에서 고칠 수 있으므로 **부를 때마다** 짠다(불러올 때 한 번이 아니라)."""
+    by = {m['label']: m['key'] for m in D.vocab('model_kinds')}
+    by.update({m['key']: m['key'] for m in D.vocab('model_kinds')})
+    return by
 
 _UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
 
@@ -169,7 +172,8 @@ def parse_table(text, division_id):
             errors.append('시뮬레이션이 비었습니다. 로드맵의 과제를 시뮬레이션 단위로 쪼개 적으세요.')
         mk = get('model_kind')
         if mk:
-            r['model_kind'] = _MODEL_KIND_BY_LABEL.get(mk.strip()) or _MODEL_KIND_BY_LABEL.get(norm(mk))
+            by = _model_kind_by_label()
+            r['model_kind'] = by.get(mk.strip()) or by.get(norm(mk))
             if r['model_kind'] is None:
                 errors.append('모델 종류는 물리 기반 · 데이터 기반 · 하이브리드 중 하나입니다.')
         acc = get('accuracy').replace('%', '')

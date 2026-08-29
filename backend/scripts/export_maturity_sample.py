@@ -44,7 +44,7 @@ def main():
         out['/definitions'] = {
             'sectors': [{**s, 'active': D.sector_is_active(s['key'])} for s in D.SECTORS],
             'axes': {k: D.get_axes(k) for k in D.SECTOR_KEYS},
-            'model_kinds': D.MODEL_KINDS, 'accuracy_rules': sorted(D.ACCURACY_RULES),
+            'model_kinds': D.vocab('model_kinds'), 'accuracy_rules': sorted(D.ACCURACY_RULES),
             'import_columns': D.IMPORT_COLUMNS, 'stale_days': D.get_stale_days(),
             'review': D.review_definitions(), 'thread': D.thread_definitions(), 'can_curate': True, 'my_division_id': None,
         }
@@ -52,6 +52,7 @@ def main():
         out['/divisions'] = rows
         out['/divisions?all=1'] = rows
         out['/settings'] = {k: D._setting(k) for k in D.SETTINGS_KEYS}
+        out['/vocabs'] = D.vocab_all()          # 기준 정보 — 설정 화면이 그린다
         out['/tool-names'] = S.tool_names() if hasattr(S, 'tool_names') else []
         out['/tool-catalog'] = S.tool_catalog() if hasattr(S, 'tool_catalog') else []
 
