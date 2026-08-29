@@ -108,7 +108,14 @@ export default async function run() {
     await type(fromIn, '2026-03'); await type(document.querySelector('input[aria-label="끝 연-월"]'), '2026-05'); await settle();
     say(html().includes('3달'), '⑤ 두 연-월 사이(3달)로 그린다');
     await click(document.querySelector('section[aria-label="자동화"] button[aria-pressed]')); await settle();
-    say(!!document.querySelector('[aria-label="자동화 연계 고르기"]') && html().includes('자동화 — 연계마다 선 하나'), '⑤ 「상세」를 누르면 오른쪽 판에 그 축의 연계마다 선 + 고르기 목록');
+    // ⑤ 칸 축(자동화)은 선이 아니라 히트맵 — 값이 정수 몇 개뿐이라 선은 겹쳐 못 읽는다
+    say(!!document.querySelector('[aria-label="자동화 범례"]') && html().includes('자동화 — 연계마다 한 줄 · 색이 칸'),
+        '⑤ 칸 축의 「상세」는 히트맵 — 연계마다 한 줄, 색이 칸');
+    say(!!document.querySelector('[aria-label="달마다 칸 분포"]'), '⑤ 위에 분포 띠');
+    const side = document.querySelector('[aria-label="상세"]');
+    const heads = [...side.querySelectorAll('thead th')].map(x => x.textContent.trim());
+    say(heads[0].startsWith('연계') && heads.length === 4, `⑤ 가로가 달, 세로가 연계인 표: ${heads}`);
+    say(side.innerHTML.includes('이력이 있는 연계가 없습니다'), '⑤ 그 기간에 이력이 없으면 그렇게 말한다');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

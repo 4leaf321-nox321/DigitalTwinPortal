@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { LineChart, Line, BarChart, Bar as RBar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import maturityApi from '../../services/maturityApi';
-import { monthlySeries, monthKeys, monthRange, pairSeries, headlineIndex } from '../../utils/board';
+import { monthlySeries, monthKeys, monthRange, pairSeries, headlineIndex, colorFor } from '../../utils/board';
 
 // 「변화」 — 축마다 선 그래프 하나(2026-08-28). 표는 없다.
 // 이력을 달마다 되감아 「그 달 말의 상태」를 복원하고 요약과 같은 셈으로 대표 수치를 낸다 —
@@ -42,6 +42,30 @@ const Picker = styled.div`
 const PickBar = styled.div`display: flex; gap: 0.3rem; flex-wrap: wrap; font-size: 0.6875rem; color: #64748b; position: sticky; top: 0; background: #f8fbff; padding-bottom: 0.2rem; button { border: none; background: transparent; color: #1d4ed8; cursor: pointer; font-family: inherit; font-size: 0.6875rem; padding: 0; }`;
 const Now = styled.div`font-size: 1.35rem; font-weight: 700; color: #1e293b; line-height: 1.1; margin: 0.2rem 0 0.3rem; small { font-size: 0.75rem; color: #64748b; font-weight: 500; margin-left: 0.3rem; }`;
 const ChartBox = styled.div`flex: 1; min-height: 7rem;`;
+// 칸 축의 상세 — 가로가 달, 세로가 연계, 칸 색이 그 달의 단계(2026-08-30).
+// 값이 정수 몇 개뿐인 축(자동화·적용 범위…)은 선으로 그리면 같은 높이에 수십 줄이 겹쳐
+// 한 줄처럼 보인다. 히트맵은 **겹칠 수가 없고**, 언제 올라갔는지가 색 경계로 드러난다.
+const HeatWrap = styled.div`flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.3rem;`;
+const HeatScroll = styled.div`flex: 1; min-height: 0; overflow: auto;`;
+const HeatTable = styled.table`
+  border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.6875rem;
+  th { position: sticky; top: 0; z-index: 1; background: #f8fbff; color: #94a3b8; font-weight: 600; padding: 0 0.15rem 0.2rem; white-space: nowrap; }
+  th:first-child { left: 0; z-index: 2; text-align: left; width: 11rem; max-width: 11rem; }
+  td { padding: 0; height: 1.15rem; }
+  td:first-child {
+    position: sticky; left: 0; background: #f8fbff; color: #334155; padding-right: 0.4rem; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 11rem;
+  }
+`;
+const Cell = styled.div`
+  height: 0.95rem; border-radius: 2px; margin: 0.05rem 0.05rem;
+  background: ${p => (p.$c || 'white')};
+  ${p => (p.$empty ? 'border: 1px dashed #cbd5e1;' : '')}
+`;
+// 위에 얇게 얹는 분포 띠 — 그 달에 몇 개가 어느 칸에 있었나. 전체 흐름을 먼저 읽는다.
+const DistRow = styled.div`display: flex; gap: 1px; height: 0.5rem;`;
+const DistCol = styled.div`flex: 1; display: flex; flex-direction: column-reverse; border-radius: 1px; overflow: hidden; background: #f1f5f9;`;
+const DistSeg = styled.div`height: ${p => p.$pct}%; background: ${p => p.$c};`;
 
 const PALETTE = ['#1d4ed8', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#4b5563', '#db2777'];
 
@@ -56,9 +80,17 @@ const pairMetricOf = (axis) => {
 
 const MANY = 12;   // 상세에서 처음에 켜 두는 선의 수 — 그 이상은 목록에서 골라 켠다
 
-/** 한 축의 상세 — 연계마다 선. 오른쪽 목록에서 켜고 끈다. */
+/** 한 축의 상세.
+ *
+ *   값 축(정확도·모델링 재현률) → **선 그래프.** 값이 흩어져 있어 선이 제일 잘 읽힌다.
+ *   칸 축(자동화·적용 범위·시험 대체…) → **히트맵.** 값이 정수 몇 개뿐이라 선은 겹쳐 못 읽는다.
+ *
+ * 색은 모판·요약과 같은 규칙(colorFor)이라 화면 사이에 문법이 통일된다.
+ */
 const PairDetail = ({ axis, series, months }) => {
   const m = pairMetricOf(axis);
+  const isValue = axis.kind === 'value' || axis.kind === 'matrix';
+  const levels = axis.kind === 'rung' ? axis.rungs.length : (axis.base || axis.rungs.slice(1)).length + 1;
   const lines = useMemo(() => series.flatMap(s => pairSeries(s.subjects, s.changes, axis, months)
     .map(l => ({ ...l, key: `${s.name}|${l.id}`, name: series.length > 1 ? `${s.name} · ${l.name}` : l.name }))), [series, axis, months]);
   const [on, setOn] = useState(() => new Set(lines.slice(0, MANY).map(l => l.key)));
@@ -68,6 +100,68 @@ const PairDetail = ({ axis, series, months }) => {
   const toggle = (k) => setOn(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const visible = lines.filter(l => !q || l.name.toLowerCase().includes(q.toLowerCase()));
   const color = (i) => PALETTE[i % PALETTE.length];
+  // 분포 띠 — 그 달에 몇 개가 어느 칸에 있었나(히트맵 위에 얇게)
+  const dist = useMemo(() => (isValue ? null : months.map((_, i) => {
+    const counts = Array.from({ length: levels }, () => 0);
+    let none = 0;
+    lines.forEach(l => { const v = l.points[i]; if (v == null) none += 1; else counts[Math.min(v, levels - 1)] += 1; });
+    return { counts, none, total: lines.length };
+  })), [lines, months, isValue, levels]);
+
+  if (!isValue) {
+    return (
+      <Split>
+        <HeatWrap>
+          <DistRow aria-label="달마다 칸 분포">
+            {dist.map((d, i) => (
+              <DistCol key={i} title={`${months[i]} — ${axis.rungs.map((r, j) => `${r.label} ${d.counts[j] || 0}`).join(' · ')}${d.none ? ` · 미평가 ${d.none}` : ''}`}>
+                {d.counts.map((n, j) => n > 0 && <DistSeg key={j} $c={colorFor(j, levels)} $pct={(n * 100) / Math.max(1, d.total)} />)}
+              </DistCol>
+            ))}
+          </DistRow>
+          <HeatScroll>
+            <HeatTable>
+              <thead>
+                <tr>
+                  <th>연계 {visible.length}</th>
+                  {months.map((mo, i) => <th key={mo}>{i % 3 === 0 ? mo.slice(2).replace('-', '/') : ''}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(l => (
+                  <tr key={l.key}>
+                    <td title={l.name}>{l.name}</td>
+                    {months.map((mo, i) => {
+                      const v = l.points[i];
+                      return (
+                        <td key={mo}>
+                          <Cell $c={v == null ? 'white' : colorFor(Math.min(v, levels - 1), levels)} $empty={v == null}
+                               title={`${l.name} · ${mo} — ${v == null ? '미평가' : m.fmt(v)}`} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {visible.length === 0 && <tr><td colSpan={months.length + 1} style={{ color: '#94a3b8', padding: '0.4rem 0' }}>이력이 있는 연계가 없습니다.</td></tr>}
+              </tbody>
+            </HeatTable>
+          </HeatScroll>
+        </HeatWrap>
+        <Picker aria-label={`${axis.label} 범례`}>
+          <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="연계 찾기" aria-label="연계 찾기" style={{ position: 'sticky', top: 0 }} />
+          <PickBar><span>색 = 칸</span></PickBar>
+          {axis.rungs.map((r, i) => (
+            <label key={r.key} title={r.description || r.label} style={{ cursor: 'default' }}>
+              <i style={{ background: colorFor(i, levels), width: '0.9rem', height: '0.6rem' }} />
+              {axis.kind === 'rung' ? r.label : `${i}/${levels - 1}${i === 0 ? ' (아무것도 안 켬)' : ''}`}
+            </label>
+          )).slice(0, levels)}
+          <label style={{ cursor: 'default' }}><i style={{ border: '1px dashed #cbd5e1', width: '0.9rem', height: '0.6rem' }} />미평가</label>
+        </Picker>
+      </Split>
+    );
+  }
+
   return (
     <Split>
       <ChartBox>
@@ -217,7 +311,9 @@ const ChartsView = ({ series, axes, review }) => {
         )}
       </Grid>
       <Side aria-label="상세">
-        <h4>상세<span>{detailAxis ? `${detailAxis.label} — 연계마다 선 하나` : '왼쪽 판의 「상세」를 누르세요'}</span></h4>
+        <h4>상세<span>{detailAxis
+          ? `${detailAxis.label} — ${detailAxis.kind === 'value' || detailAxis.kind === 'matrix' ? '연계마다 선 하나' : '연계마다 한 줄 · 색이 칸'}`
+          : '왼쪽 판의 「상세」를 누르세요'}</span></h4>
         {detailAxis && <PairDetail key={detailAxis.key} axis={detailAxis} series={series} months={months} />}
       </Side>
       </Body>
