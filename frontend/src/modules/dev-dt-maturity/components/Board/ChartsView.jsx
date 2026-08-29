@@ -184,7 +184,9 @@ const ChartsView = ({ series, axes, review }) => {
                     <YAxis domain={m.domain} tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={44} />
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6 }}
                              formatter={(v, name, item) => [v == null ? '—' : `${v}${m.unit === '%' ? '%' : m.unit}` + (item?.payload?.[`${name}_n`] ? ` · 변화 ${item.payload[`${name}_n`]}` : ''), name]} />
-                    {data.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+                    {/* ⚠️ itemSorter={null} — recharts 3 의 기본값은 'value' 라 **범례를 이름순으로 정렬한다**.
+                        사업부 차례는 대시보드 설정(Division.order)이 정본이므로 선을 그린 차례 그대로 둔다(2026-08-30). */}
+                    {data.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} itemSorter={null} />}
                     {data.map((d, i) => (
                       <Line key={d.name} type="monotone" dataKey={d.name} stroke={PALETTE[i % PALETTE.length]} strokeWidth={2}
                             dot={{ r: 2.5 }} activeDot={{ r: 4 }} connectNulls isAnimationActive={false} />
