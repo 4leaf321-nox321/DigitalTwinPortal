@@ -3,12 +3,14 @@ import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { CommonHeader } from '../shared/components/Header';
-import { User, Shield, Users, Search, ChevronLeft, ChevronRight, Key, Eye, EyeOff, Check, X, Building, Edit3, UserCog, Trash2, AlertTriangle, Download, Filter, Clock, RefreshCw, Monitor, Lock, Plug } from 'lucide-react';
+import { User, Shield, Users, Search, ChevronLeft, ChevronRight, Key, Eye, EyeOff, Check, X, Building, Edit3, UserCog, Trash2, AlertTriangle, Download, Filter, Clock, RefreshCw, Monitor, Lock, Plug, TrendingUp } from 'lucide-react';
 import { MODULE_NAMES, invalidateRolePermissionsCache } from '../components/ProtectedRoute';
 // MCP 연결(개인 액세스 토큰). "내 계정 정보" 옆 우측 카드다 — 역할 제한이 없어 누구나 자기 토큰을
 // 만들 수 있다. PAT 은 개인 것이고, MCP 로 자기 과제를 고치는 건 담당자가 할 일이라
 // 관리자 전용 자리에 두면 안 된다. 카드 제목은 여기서 그리고, 본문만 컴포넌트가 그린다.
 import McpTokenSection from '../modules/auth/components/McpTokenSection';
+// 가입자 현황 — 이미 받아 둔 사용자 목록의 created_at 하나로 그린다(2026-08-30).
+import SignupTrend from '../modules/auth/components/SignupTrend';
 import { todayLocalYmd } from '../shared/utils/localDate';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -1297,6 +1299,7 @@ const TABS = [
   { key: 'me', label: '내 정보', icon: User, adminOnly: false },
   { key: 'users', label: '사용자 권한 관리', icon: Users, adminOnly: true },
   { key: 'depts', label: '부서 정보 관리', icon: Building, adminOnly: true },
+  { key: 'signups', label: '가입자 현황', icon: TrendingUp, adminOnly: true },
   { key: 'logs', label: '접속 이력', icon: Clock, adminOnly: true },
 ];
 
@@ -2242,7 +2245,7 @@ const AccountManagementPage = () => {
       )}
 
       <ScrollArea>
-      {(currentTab === 'me' || currentTab === 'users') && (
+      {(currentTab === 'me' || currentTab === 'users' || currentTab === 'signups') && (
       <Content>
         {/* 내 정보 탭 — 내 계정 정보 | MCP 연결 을 반반으로 */}
         {currentTab === 'me' && (
@@ -2450,6 +2453,24 @@ const AccountManagementPage = () => {
           </Card>
         </RightPanel>
         </>
+        )}
+
+        {/* 가입자 현황 탭 — 주·월·연으로 묶어 신규(막대)와 누계(선)를 함께 본다 */}
+        {currentTab === 'signups' && isAdmin && (
+          <WidePanel>
+            <Card>
+              <CardHeader>
+                <IconWrapper color="linear-gradient(135deg, #0891b2 0%, #0e7490 100%)">
+                  <TrendingUp size={32} strokeWidth={2} />
+                </IconWrapper>
+                <HeaderText>
+                  <h1>가입자 현황</h1>
+                  <p>관리자 전용 - 플랫폼에 가입한 사람이 언제 늘었는지 봅니다 (총 {users.length}명)</p>
+                </HeaderText>
+              </CardHeader>
+              <SignupTrend users={users} loading={loading} />
+            </Card>
+          </WidePanel>
         )}
 
         {/* 사용자 권한 관리 탭 — 표가 넓어 WidePanel 로 전체 폭을 쓴다 */}
