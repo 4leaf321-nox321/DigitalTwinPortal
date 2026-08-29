@@ -40,7 +40,13 @@ const SECTORS = [
   { key: 'manufacturing_monitoring', label: '모니터링', icon: Radio, open: false },
 ];
 
+// 관리 단추의 이름은 **부문이 정한다**(sectorDef.subject_label · agent_label) —
+// 「시험 항목」·「시뮬레이션」은 시뮬레이션 부문의 말이라 모니터링에서는 「공정」·「수집 수단」이다.
+const subjectLabel = (sectors, key) => sectors.find(s => s.key === key)?.subject_label || '시험 항목';
+const agentLabel = (sectors, key) => sectors.find(s => s.key === key)?.agent_label || '시뮬레이션';
+
 const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector }) => (
+
   <CommonHeader
     logo={<Gauge size={24} strokeWidth={2} />}
     title="디지털 트윈 성숙도"
@@ -66,11 +72,11 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
           </>
         ) : (
           <>
-            <HeaderButton onClick={() => onOpen('subject')} title="시험 항목 추가·수정·삭제">
-              <FlaskConical size={16} /> 시험 항목 관리 {counts.subjects != null && <Count>{counts.subjects}</Count>}
+            <HeaderButton onClick={() => onOpen('subject')} title={`${subjectLabel(sectors, sector)} 추가·수정·삭제`}>
+              <FlaskConical size={16} /> {subjectLabel(sectors, sector)} 관리 {counts.subjects != null && <Count>{counts.subjects}</Count>}
             </HeaderButton>
-            <HeaderButton onClick={() => onOpen('agent')} title="시뮬레이션 추가·수정·삭제 (엑셀 행 단위)">
-              <Cpu size={16} /> 시뮬레이션 관리 {counts.agents != null && <Count>{counts.agents}</Count>}
+            <HeaderButton onClick={() => onOpen('agent')} title={`${agentLabel(sectors, sector)} 추가·수정·삭제`}>
+              <Cpu size={16} /> {agentLabel(sectors, sector)} 관리 {counts.agents != null && <Count>{counts.agents}</Count>}
             </HeaderButton>
             <HeaderButton $variant="primary" onClick={() => onOpen('import')} title="틀 내려받기 → 채워서 붙여넣기 → 미리보기 → 넣기">
               <Upload size={16} /> 가져오기

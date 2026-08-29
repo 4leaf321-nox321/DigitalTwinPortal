@@ -179,7 +179,8 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           {/* 탭을 옮기면 고른 연계은 푼다 — 목록에서 고른 채 성숙도로 가면 모달이 떠 있었다(2026-08-28) */}
           <Tab $on={tab === 'board'} onClick={() => patch({ tab: null, pair: null })}>성숙도</Tab>
           <Tab $on={tab === 'list'} onClick={() => patch({ tab: 'list', pair: null })}>목록</Tab>
-          {!isThread && <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">해석 활용 기록</Tab>}
+          {/* 해석 활용 기록은 **시뮬레이션 부문의 것**이다 — 시험과 짝이 없는 스팟성 해석을 건으로 쌓는 자리라 다른 부문에는 뜻이 없다 */}
+          {sector === 'simulation' && <Tab $on={tab === 'reviews'} onClick={() => patch({ tab: 'reviews', pair: null })} title="시험과 짝이 없는 스팟성 시뮬레이션 — 설계 스펙 검토·원인 분석을 건으로 쌓는다">해석 활용 기록</Tab>}
           {isThread && <Tab $on={tab === 'cases'} onClick={() => patch({ tab: 'cases', pair: null })} title="시스템 연동·도입·정합화·자동화·폐지 건을 쌓는다 — 끝나면 구간의 연결 방식이 몇 칸 올라갔나">연계 개발 기록</Tab>}
         </Tabs>
       </StickyBar>
@@ -199,7 +200,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           <ReviewLedger divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null} review={defs.review} refreshKey={refreshKey} />
         ) : (
           <ListView divisionId={divisionId} divisions={divisions} denyReason={division?.deny_reason || null}
-                    axes={axes} pairId={pairId}
+                    axes={axes} pairId={pairId} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)}
                     onOpenPair={(id) => patch({ pair: id })} onClosePair={() => patch({ pair: null })}
                     onEditSubject={(id) => setModal({ kind: 'subject', id })}
                     onEditAgent={(id) => setModal({ kind: 'agent', id })}

@@ -115,7 +115,12 @@ const Notice = styled.div`
   color: ${p => (p.$bad ? '#991b1b' : '#92400e')}; font-size: 0.8125rem; line-height: 1.5;
 `;
 
-const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, onOpenPair, onClosePair, onEditSubject, onEditAgent, onChanged, refreshKey }) => {
+const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, onOpenPair, onClosePair, onEditSubject, onEditAgent, onChanged, refreshKey,
+                    sector = 'simulation', sectorDef = null }) => {
+  // 이름표는 **부문이 정한다** — 「시험」·「시뮬레이션」은 시뮬레이션 부문의 말이다.
+  const SUBJ = sectorDef?.subject_label || '시험 항목';
+  const AGENT = sectorDef?.agent_label || '시뮬레이션';
+  const isSim = sector === 'simulation';
   const allMode = divisionId === 'all';
   const [subjects, setSubjects] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -184,11 +189,11 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
     <Wrap>
       <Left>
         <BoxHead>
-          <Link2 size={14} /> 시험 × 시뮬레이션 <Count>연계 {pairs.length}</Count>
+          <Link2 size={14} /> {SUBJ} × {AGENT} <Count>연계 {pairs.length}</Count>
           {(allMode ? touchable.length > 0 : !denyReason) && (
             <Button type="button" onClick={() => setLinkOpen(true)} style={{ marginLeft: '0.5rem', background: '#1d4ed8', borderColor: '#1d4ed8', color: 'white' }}><Plus size={13} /> 연계 추가</Button>
           )}
-          <Hint>시험 {subjects.length} · 시뮬레이션 {agents.length} — 줄을 누르면 오른쪽에 사다리가 열립니다</Hint>
+          <Hint>{SUBJ} {subjects.length} · {AGENT} {agents.length} — 줄을 누르면 오른쪽에 사다리가 열립니다</Hint>
         </BoxHead>
         {error && <Notice $bad><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         {projectError && (
@@ -200,12 +205,12 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
         <Scroll>
           <Table>
             <thead><tr>
-              <th style={{ width: '20%' }}>시험</th><th style={{ width: '20%' }}>시뮬레이션</th>
+              <th style={{ width: '20%' }}>{SUBJ}</th><th style={{ width: '20%' }}>{AGENT}</th>
               <th style={{ width: '16%' }}>사용 툴</th><th style={{ width: '11%' }}>담당 부서</th>
               <th style={{ width: '29%' }}>디지털 트윈 연결 과제</th><th style={{ width: '1.2rem' }} /><th style={{ width: '2.5rem' }} />
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><Muted colSpan={7}>아직 시험 항목이 없습니다. 헤더의 「시험 항목 관리」나 「가져오기」로 넣으세요.</Muted></tr>}
+              {rows.length === 0 && <tr><Muted colSpan={7}>아직 {SUBJ}이 없습니다. 헤더의 「{SUBJ} 관리」{isSim ? '나 「가져오기」' : ''}로 넣으세요.</Muted></tr>}
               {rows.map(({ subject: s, pairs: ps }, gi) => {
                 const groupRow = allMode && s.division_id !== lastDiv
                   ? <tr key={`g-${s.division_id}`}><GroupRow colSpan={7}>{divName(s.division_id)}</GroupRow></tr>
@@ -216,7 +221,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   <SubjectCell rowSpan={span} onClick={e => e.stopPropagation()}>
                     {s.name}
                     {onEditSubject && (
-                      <EditBtn type="button" title="시험 항목 관리에서 열기" aria-label={`${s.name} 편집`}
+                      <EditBtn type="button" title={`${SUBJ} 관리에서 열기`} aria-label={`${s.name} 편집`}
                                onClick={e => { e.stopPropagation(); onEditSubject(s.id); }}><Pencil size={11} /></EditBtn>
                     )}
                   </SubjectCell>
@@ -225,7 +230,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                   return (
                     <React.Fragment key={s.id}>
                       {groupRow}
-                      <GroupTr $band={gi % 2 === 1} $first>{cell}<Muted colSpan={5}>아직 이은 시뮬레이션이 없습니다.</Muted><td /></GroupTr>
+                      <GroupTr $band={gi % 2 === 1} $first>{cell}<Muted colSpan={5}>아직 이은 {AGENT}이 없습니다.</Muted><td /></GroupTr>
                     </React.Fragment>
                   );
                 }
@@ -240,7 +245,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
                           {p.agent?.name}
                           {p.unassessed.length > 0 && <Badge title={`아직 안 매긴 축: ${p.unassessed.length}`}>미평가 {p.unassessed.length}개</Badge>}
                           {onEditAgent && (
-                            <EditBtn type="button" title="시뮬레이션 관리에서 열기" aria-label={`${p.agent?.name} 편집`}
+                            <EditBtn type="button" title={`${AGENT} 관리에서 열기`} aria-label={`${p.agent?.name} 편집`}
                                      onClick={e => { e.stopPropagation(); onEditAgent(p.agent_id); }}><Pencil size={11} /></EditBtn>
                           )}
                         </SimCell>
@@ -279,7 +284,7 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
       {linkOpen && (allMode ? touchable.length > 0 : !denyReason) && (
         <Backdrop onClick={() => setLinkOpen(false)}>
           <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="연계 추가">
-          <BoxHead><Link2 size={14} /> 연계 추가 — 시험 × 시뮬레이션<span style={{ flex: 1 }} /><Icon type="button" onClick={() => setLinkOpen(false)} aria-label="닫기" title="닫기" style={{ color: '#64748b' }}><X size={16} /></Icon></BoxHead>
+          <BoxHead><Link2 size={14} /> 연계 추가 — {SUBJ} × {AGENT}<span style={{ flex: 1 }} /><Icon type="button" onClick={() => setLinkOpen(false)} aria-label="닫기" title="닫기" style={{ color: '#64748b' }}><X size={16} /></Icon></BoxHead>
           <Form onSubmit={e => { e.preventDefault(); if (!canLink || !link.subject_id || !link.agent_id) return;
             run(async () => { await maturityApi.createPair(Number(link.subject_id), Number(link.agent_id)); setLink(l => ({ ...l, subject_id: '', agent_id: '' })); setLinkOpen(false); }); }}>
             {allMode && (
@@ -290,13 +295,13 @@ const ListView = ({ divisionId, divisions = [], denyReason, axes = [], pairId, o
             )}
             <Select value={link.subject_id} disabled={allMode && !linkDivision}
                     onChange={e => setLink(l => ({ ...l, subject_id: e.target.value, agent_id: '' }))}>
-              <option value="">시험 항목</option>
+              <option value="">{SUBJ}</option>
               {linkSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
             <span>×</span>
             <Select value={link.agent_id} disabled={!link.subject_id}
                     onChange={e => setLink(l => ({ ...l, agent_id: e.target.value }))}>
-              <option value="">시뮬레이션</option>
+              <option value="">{AGENT}</option>
               {linkAgents.filter(a => !linkedAgents.has(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
             <Button type="submit" disabled={!canLink || !link.subject_id || !link.agent_id}><Link2 size={13} /> 잇기</Button>
