@@ -41,6 +41,16 @@ const Button = styled.button`
 `;
 const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.8125rem; color: ${p => (p.$bad ? '#991b1b' : '#92400e')};`;
 
+const Picks = styled.div`display: flex; flex-wrap: wrap; gap: 0.35rem;`;
+const Pick = styled.button`
+  display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; font-family: inherit; font-size: 0.8125rem; cursor: pointer;
+  border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#cbd5e1')}; background: ${p => (p.$on ? '#dbeafe' : 'white')}; color: #1e293b; border-radius: 999px;
+  small { color: ${p => (p.$on ? '#1d4ed8' : '#94a3b8')}; font-size: 0.6875rem; }
+`;
+const Where = styled.span`
+  font-size: 0.6875rem; font-weight: 600; color: #475569; background: #eef2f7; border-radius: 0.25rem; padding: 0.1rem 0.35rem; white-space: nowrap;
+`;
+const VocabHead = styled.div`display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 700; color: #1e293b;`;
 const VocabWrap = styled.div`display: flex; gap: 0.9rem; flex: 1; min-height: 0;`;
 const VocabList = styled.div`width: 13rem; flex: none; overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: #f8fafc;`;
 const VocabBody = styled.div`flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start;`;
@@ -107,6 +117,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   const [vocabs, setVocabs] = useState(null);         // [{key,label,hint,items,is_custom}]
   const [vocabDraft, setVocabDraft] = useState({});   // {사전키: [{key,label}…]} — 손댄 것만
   const [vocabPick, setVocabPick] = useState(null);
+  const [accKey, setAccKey] = useState('*');                       // 정확도 — 보던 사업부('*' = 전사 기본)
   const [hiddenSectors, setHiddenSectors] = useState([]);          // 감춘 부문(2026-08-29)
   const [hiddenSectorsSaved, setHiddenSectorsSaved] = useState([]);           // 초안
   const [hiddenSaved, setHiddenSaved] = useState([]); // 서버 값
@@ -178,7 +189,16 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
   const onStale = key === STALE;
   const onSecs = key === SECS;
   const onVocab = key === VOCAB;
+  const onAcc = !onDivs && !onStale && !onSecs && !onVocab;        // 나머지가 정확도 — key 가 곧 사업부 줄
+  // 기준 정보를 어느 화면의 것인지로 묶는다 — 사전 이름만 보면 어디 것인지 알기 어렵다
+  const vocabGroups = (vocabs || []).reduce((acc, v) => {
+    const at = v.sector_label || '공통';
+    const g = acc.find(x => x.at === at) || (acc.push({ at, items: [] }), acc[acc.length - 1]);
+    g.items.push(v);
+    return acc;
+  }, []);
   const own = (k) => !!rowOf(conf, k);
+  const ownCount = divisions.filter(d => own(String(d.id))).length;   // 따로 정한 사업부 수
   const set = (patch) => { setSaved(false); setDraft(d => ({ ...(d || base), ...patch })); };
 
   return (
@@ -203,13 +223,10 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
               <span>재평가 기간</span>
               <Tag $own={staleSaved != null && staleSaved !== 365}>{staleSaved != null ? `${staleSaved}일` : '…'}</Tag>
             </Item>
-            <Sep>정확도 문턱</Sep>
-            {rows.map(r => (
-              <Item key={r.key} type="button" $on={key === r.key} onClick={() => { setKey(r.key); setSaved(false); }}>
-                <span>{r.name}</span>
-                <Tag $own={own(r.key)}>{r.key === '*' ? (own('*') ? '설정됨' : '코드 기본') : (own(r.key) ? '따로' : '전사 따름')}</Tag>
-              </Item>
-            ))}
+            <Item type="button" $on={onAcc} onClick={() => { setKey(accKey); setSaved(false); }}>
+              <span>정확도 문턱</span>
+              <Tag $own={ownCount > 0}>{ownCount ? `${ownCount}곳 따로` : '전사 기본만'}</Tag>
+            </Item>
           </Left>
           <Right>
             {!conf && !error && <Hint>불러오는 중…</Hint>}
@@ -224,11 +241,16 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                 {vocabs == null ? <Hint>불러오는 중…</Hint> : (
                   <VocabWrap>
                     <VocabList>
-                      {vocabs.map(v => (
-                        <Item key={v.key} type="button" $on={vocabPick === v.key} onClick={() => setVocabPick(v.key)}>
-                          <span>{v.label}</span>
-                          <Tag $own={v.is_custom || !!vocabDraft[v.key]}>{vocabItems(v.key).length}</Tag>
-                        </Item>
+                      {vocabGroups.map(g => (
+                        <React.Fragment key={g.at}>
+                          <Sep>{g.at}</Sep>
+                          {g.items.map(v => (
+                            <Item key={v.key} type="button" $on={vocabPick === v.key} onClick={() => setVocabPick(v.key)}>
+                              <span>{v.label}</span>
+                              <Tag $own={v.is_custom || !!vocabDraft[v.key]}>{vocabItems(v.key).length}</Tag>
+                            </Item>
+                          ))}
+                        </React.Fragment>
                       ))}
                     </VocabList>
                     <VocabBody>
@@ -246,6 +268,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                         };
                         return (
                           <>
+                            <VocabHead>{v.label}<Where>{v.sector_label || '공통'} 화면</Where></VocabHead>
                             <Hint>{v.hint}</Hint>
                             <VocabTable>
                               <thead>
@@ -327,8 +350,16 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
                 {!staleValid && <Notice $bad><AlertTriangle size={14} /> <span>1 ~ 3650 사이의 정수(일)여야 합니다.</span></Notice>}
               </>
             )}
-            {conf && !onDivs && !onStale && (
+            {conf && onAcc && (
               <>
+                <Picks aria-label="문턱을 정할 곳">
+                  {rows.map(r => (
+                    <Pick key={r.key} type="button" $on={key === r.key} onClick={() => { setKey(r.key); setAccKey(r.key); setSaved(false); }}>
+                      {r.name}
+                      <small>{r.key === '*' ? (own('*') ? '설정됨' : '코드 기본') : (own(r.key) ? '따로' : '전사 따름')}</small>
+                    </Pick>
+                  ))}
+                </Picks>
                 <Hint>
                   {key === '*' ? '사업부에 따로 정한 값이 없을 때 쓰는 전사 기본입니다.'
                     : (draft ? '이 사업부만의 값입니다. 「전사 기본 따르기」를 누르면 지웁니다.' : '지금은 전사 기본을 따릅니다. 값을 고치면 이 사업부만의 값이 됩니다.')}
@@ -356,7 +387,7 @@ const SettingsModal = ({ divisions = [], sectors = [], accuracyRungs = [], onClo
           </Right>
         </Body>
         <Foot>
-          {!onDivs && !onStale && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
+          {onAcc && key !== '*' && draft && <Button type="button" onClick={() => { setDraft(null); setSaved(false); }}>전사 기본 따르기</Button>}
           <span style={{ flex: 1, fontSize: '0.75rem', color: '#16a34a' }}>{saved ? '저장됨' : ''}</span>
           <Button type="button" onClick={onClose}>닫기</Button>
           <Button type="button" $primary disabled={busy || !conf || (onDivs ? !hiddenChanged : onStale ? !staleChanged : onSecs ? !sectorsChanged : onVocab ? !vocabChanged : !valid)} onClick={save}><Check size={14} /> 저장</Button>

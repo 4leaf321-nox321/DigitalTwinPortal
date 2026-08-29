@@ -20,9 +20,11 @@ export default async function run() {
   let stored = { accuracy: {} };
   // 기준 정보 — 서버가 주는 지금 값. 저장하면 서버가 그것을 되돌려 준다.
   let vocabs = [
-    { key: 'system_kinds', label: '시스템 종류', hint: 'PLM·MES 처럼 시스템 사전의 갈래.', is_custom: false,
+    { key: 'model_kinds', label: '모델 종류', sector_label: '시뮬레이션', hint: '무엇에 기대어 도는가.', is_custom: false,
+      items: [{ key: 'fem', label: '유한요소' }] },
+    { key: 'system_kinds', label: '시스템 종류', sector_label: '디지털 스레드', hint: 'PLM·MES 처럼 시스템 사전의 갈래.', is_custom: false,
       items: [{ key: 'plm', label: 'PLM' }, { key: 'mes', label: 'MES' }] },
-    { key: 'thread_stages', label: '생애 단계', hint: '차례가 뜻을 갖습니다.', is_custom: false,
+    { key: 'thread_stages', label: '생애 단계', sector_label: '디지털 스레드', hint: '차례가 뜻을 갖습니다.', is_custom: false,
       items: [{ key: 'plan', label: '기획' }, { key: 'dev', label: '개발' }] },
   ];
   const calls = fakeFetch(({ url, method, body }) => {
@@ -43,6 +45,11 @@ export default async function run() {
     const c = () => document.querySelector('input[aria-label="현상 재현 문턱"]');
     say(calls.some(x => x.method === 'GET' && x.url.endsWith('/settings')), '① 열면 설정을 읽음');
     say(q()?.value === '70' && c()?.value === '90' && html().includes('코드 기본'), '① 전사 기본이 없으면 코드 기본(70 · 90)이 보임');
+    // ①-2 왼쪽은 「무엇을 정하나」만 — 사업부는 판 안의 칩이다
+    const leftRows = () => [...document.querySelectorAll('[aria-label="설정"] > div > div:first-child > button')].map(b => b.textContent.trim());
+    say(!!document.querySelector('[aria-label="문턱을 정할 곳"]'), '①-2 사업부는 정확도 판 안의 칩');
+    say(leftRows().some(t => t.startsWith('정확도 문턱')) && !leftRows().some(t => t.startsWith('MX')),
+        `①-2 왼쪽에 사업부 줄이 서 있지 않음: ${leftRows()}`);
 
     // ② 사업부 MX — 전사 따름 → 문턱을 고치면 따로
     await click(byText('button', 'MX'));
@@ -88,6 +95,7 @@ export default async function run() {
     say(byText('button', '저장').disabled, '⑤-2 안 바꾸면 저장 잠김');
     await click(mon); await settle();
     await click(byText('button', '저장')); await settle();
+    say(!document.querySelector('input[aria-label="원인 분석 문턱"]'), '⑤-2 부문 표시 화면에 정확도 판이 딸려 나오지 않음');
     const putSec = calls.find(x => x.method === 'PUT');
     say(!!putSec && JSON.stringify(putSec.body) === JSON.stringify({ hidden_sectors: ['manufacturing_monitoring'] }), `⑤-2 PUT hidden_sectors: ${JSON.stringify(putSec?.body)}`);
 
@@ -110,8 +118,13 @@ export default async function run() {
     calls.length = 0;
     await click(byText('button', '기준 정보')); await settle();
     const name = (dict, i) => document.querySelector(`input[aria-label="${dict} ${i}번 이름"]`);
+    await click(byText('button', '시스템 종류')); await settle();
     say(!!name('시스템 종류', 1) && !!name('시스템 종류', 2), '⑧ 첫 사전의 항목이 고칠 수 있는 칸으로 보임');
     say(html().includes('key 는 자료에 박히는 값'), '⑧ key 는 안 바뀐다고 알림');
+    say(!document.querySelector('input[aria-label="원인 분석 문턱"]'), '⑧ 기준 정보 화면에도 정확도 판이 없음');
+    const groupHead = (t) => [...document.querySelectorAll('div')].some(d => d.textContent.trim() === t);
+    say(groupHead('시뮬레이션') && groupHead('디지털 스레드'), '⑧ 사전이 어느 화면의 것인지 갈래로 묶임');
+    say(html().includes('디지털 스레드 화면'), '⑧ 고른 사전 위에 어느 화면의 것인지 붙음');
     say(byText('button', '저장').disabled, '⑧ 안 바꾸면 저장 잠김');
     await type(name('시스템 종류', 1), '제품 수명주기 관리');
     say(!byText('button', '저장').disabled, '⑧ 이름을 고치면 저장 켜짐');
@@ -126,7 +139,7 @@ export default async function run() {
     say(!!sk && sk.length === 2 && sk[0].key === 'plm' && sk[0].label === '제품 수명주기 관리',
         `⑧ key 는 그대로 두고 이름만 바뀐 채 저장: ${JSON.stringify(sk)}`);
     say(!!sk && sk[1].label === '창고 관리' && !sk.some(x => x.key === 'mes'), '⑧ 더한 것은 들어가고 뺀 것은 빠짐');
-    say(JSON.stringify(putV?.body?.vocab?.thread_stages) === JSON.stringify(vocabs[1].items),
+    say(JSON.stringify(putV?.body?.vocab?.thread_stages) === JSON.stringify(vocabs.find(v => v.key === 'thread_stages').items),
         '⑧ 손 안 댄 사전도 함께 보냄 — 서버가 통째로 받는다');
     say(html().includes('제품 수명주기 관리'), '⑧ 저장 뒤 서버가 준 값이 보임');
     // 다른 사전으로 옮겨도 그 사전의 것만 보인다

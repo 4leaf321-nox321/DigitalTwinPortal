@@ -561,10 +561,12 @@ def clean_vocab_payload(raw):
 
 def vocab_all():
     """설정 화면이 그리는 것 — 정의와 지금 값, 그리고 기본값과 다른지."""
+    labels = {s['key']: s['label'] for s in SECTORS}
     out = []
     for v in VOCABS:
         items = vocab(v['key'])
-        out.append({**v, 'items': items, 'is_custom': items != list(_vocab_defaults(v['key']))})
+        out.append({**v, 'sector_label': labels.get(v.get('sector'), '공통'),
+                    'items': items, 'is_custom': items != list(_vocab_defaults(v['key']))})
     return out
 
 
