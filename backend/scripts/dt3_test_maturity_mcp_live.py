@@ -4,12 +4,14 @@
 받는 꼴인지**는 못 잡는다. 그건 실제로 불러 봐야 안다. 이 시험은 `localhost:3003/mcp` 의
 JSON-RPC 로 진짜 도구를 부른다 — 운영에서 AI 가 겪는 것과 같은 경로다.
 
-  A  성숙도 도구 15개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
+  A  성숙도 도구 17개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
   B  뼈대 읽기 — 부문·축·칸이 오는가
   C  대상·수단을 만들고 잇는다  ★ 몸통이 맞는지는 여기서만 드러난다
   D  평가 — 근거 없으면 막히고, 있으면 칸이 올라간다
   E  값 축(정확도)은 값으로 넣고 칸은 서버가 정한다
   F  동시 수정 — 낡은 base_assessed_at 이면 409
+  M  **모델링 수준(matrix)** — 바탕은 flags, 불량 유형은 칸마다
+  N  **도달 시점** — 옛 자료를 그 달로. 위 칸에는 못 적는다
   G  일괄 입력 dry_run 은 저장하지 않는다
   I  **모니터링** — 공정 × 수집 수단, 라인·공정 단계까지
   J  **디지털 스레드** — 수단이 없다. 구간은 제 길로만 세워진다
@@ -142,7 +144,7 @@ def main():
         print('\nA. 도구 등록')
         names = m.tools()
         mat = sorted(n for n in names if n.startswith('maturity_'))
-        check('성숙도 도구 수', len(mat), 15)
+        check('성숙도 도구 수', len(mat), 17)
         check_true('대시보드 도구도 그대로', 'list_projects' in names)
         # 성숙도 도구 설명에 다른 모듈과 헷갈리지 말라는 안내가 있는가
         check_true('describe 가 대시보드와 다르다고 말한다', '대시보드' in names['maturity_describe'])
@@ -223,6 +225,48 @@ def main():
                                            'base_assessed_at': stamp})
         check('낡은 기준이면 409', stale.get('status'), 'conflict')
         check_true('성숙도 말로 안내한다', 'maturity_get_pair' in (stale.get('hint') or ''))
+
+        # ── M 모델링 수준 ──────────────────────────────────────────────────
+        print('\nM. 모델링 수준 — 두 손잡이')
+        check('modeling 은 matrix 축', by_axis['modeling']['kind'], 'matrix')
+        base_keys = [b['key'] for b in by_axis['modeling']['base']]
+        got_b = m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'modeling',
+                                           'note': '치수·재질이 실물과 같음(도면 대조)',
+                                           'flags': [base_keys[0]]})
+        mod = (got_b.get('assessments') or {}).get('modeling') or {}
+        check_true('바탕이 켜졌다', mod.get('rung'))
+
+        # 불량 유형은 **그 시뮬레이션의 목록**에 있어야 적을 수 있다
+        nope = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+                                              'name': '없는유형', 'col': 'test', 'month': '2026-03'})
+        check('시뮬레이션에 없는 불량 유형은 거절', nope.get('status'), 'error')
+        m.call('maturity_update_item', {'kind': 'agent', 'item_id': made['agent'],
+                                        'fields': {'defect_types': ['크랙']}})
+        cell = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+                                              'name': '크랙', 'col': 'test', 'month': '2026-03'})
+        ev = ((cell.get('assessments') or {}).get('modeling') or {}).get('evidence') or {}
+        check_true('불량 유형 칸이 켜졌다', (ev.get('defects') or {}).get('크랙', {}).get('test'))
+        bad_col = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+                                                 'name': '크랙', 'col': 'nope'})
+        check('col 은 test·market 뿐', bad_col.get('status'), 'error')
+        off = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+                                             'name': '크랙', 'col': 'test'})
+        ev2 = ((off.get('assessments') or {}).get('modeling') or {}).get('evidence') or {}
+        check('달을 비우면 칸이 꺼진다', (ev2.get('defects') or {}).get('크랙', {}).get('test'), None)
+
+        # ── N 도달 시점 ────────────────────────────────────────────────────
+        print('\nN. 도달 시점 — 옛 자료를 그 달로')
+        reach = m.call('maturity_reached', {'pair_id': made['pair'], 'axis': 'automation',
+                                            'rung': 'pre', 'month': '2025-03'})
+        hit = [c for c in (reach.get('changes') or []) if c.get('after') and 'pre' in str(c['after'])]
+        check_true('그 칸의 이력이 그 달로 옮겨졌다',
+                   any(str(c.get('created_at', '')).startswith('2025-03') for c in hit))
+        high = m.call('maturity_reached', {'pair_id': made['pair'], 'axis': 'automation',
+                                           'rung': 'pipeline', 'month': '2025-01'})
+        check('아직 안 올라온 칸에는 못 적는다', high.get('status'), 'error')
+        val = m.call('maturity_reached', {'pair_id': made['pair'], 'axis': 'accuracy',
+                                          'rung': 'correlated', 'month': '2025-01'})
+        check('값 축은 시점을 따로 안 적는다', val.get('status'), 'error')
 
         # ── G 일괄 입력 ────────────────────────────────────────────────────
         print('\nG. 일괄 입력 — dry_run 은 저장하지 않는다')

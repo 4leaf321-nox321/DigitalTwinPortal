@@ -233,7 +233,8 @@ def register(mcp, request_fn):
           value  → `value` 에 숫자(정확도는 %). **칸은 넣지 않는다** — 서버가 사업부
                    문턱으로 정한다. 칸을 직접 넣으면 거절된다.
           set    → **`flags`** 에 켤 항목 key 목록(`rung` 이 아니다 — 묶음이라 여럿을 켠다)
-          matrix → 화면에서 다루세요(불량 유형 × 열 표라 도구로 다루기에 나쁘다).
+          matrix → 두 손잡이다. **바탕**(형상 재현·거동 재현)은 여기 `flags` 로 켜고,
+                   **불량 유형 표**는 `maturity_set_defect` 로 칸마다 적는다.
 
         `evidence` 는 축이 요구하는 근거 자료다(예: 정확도의 compared_tests·error_pct,
         자동화의 hours_per_run). `maturity_describe` 의 축마다 `evidence` 에 이름이 있다.
@@ -258,6 +259,39 @@ def register(mcp, request_fn):
         if base_assessed_at:
             body["base_assessed_at"] = base_assessed_at
         return await _m(ctx, "PUT", f"/pairs/{pair_id}/assessments/{axis}", json_body=body)
+
+    @mcp.tool()
+    async def maturity_set_defect(ctx: Context, pair_id: int, axis: str, name: str,
+                                  col: str, month: str = "") -> dict:
+        """[성숙도] **모델링 수준의 불량 유형 표** 칸 하나 — 「그 불량을 재현하는가」.
+
+        `name` 은 그 시뮬레이션의 불량 유형(예: 크랙·변색). **시뮬레이션에 없는 유형은
+        못 적는다** — `maturity_update_item` 으로 `defect_types` 에 먼저 넣으세요.
+        `col` 은 `test`(신뢰성 시험 불량) 또는 `market`(시장 불량).
+        `month` 는 재현한 연-월(`2026-03`). **비우면 그 칸을 끈다.**
+
+        ⚠️ 여기만 근거를 안 받는다 — 칸 하나가 곧 사실이라(재현했나 아닌가) 이력에
+           무엇이 켜졌는지가 그대로 남는다. 축의 서열은 표가 얼마나 찼는지로 접힌다.
+        """
+        if col not in ("test", "market"):
+            return {"status": "error", "message": "col 은 test(시험 불량) · market(시장 불량) 중 하나입니다."}
+        return await _m(ctx, "PUT", f"/pairs/{pair_id}/defects/{axis}",
+                        json_body={"name": name, "col": col, "month": month or None})
+
+    @mcp.tool()
+    async def maturity_reached(ctx: Context, pair_id: int, axis: str, rung: str,
+                               month: str) -> dict:
+        """[성숙도] 그 칸에 **언제 올라왔는지**를 적는다 — 옛 자료를 넣을 때 쓴다.
+
+        `month` 는 연-월(`2025-03`). 이력의 날짜가 그 달로 옮겨지고, 그 칸을 만든 이력이
+        없으면 하나 만든다(근거는 「시점 적기」).
+
+        ⚠️ 이게 없으면 옛 자료가 **전부 오늘 날짜로** 쌓여 「변화」 화면이 뜻을 잃는다.
+        ⚠️ **지금 칸보다 위의 칸에는 못 적는다** — 아직 안 올라온 칸의 시점은 뜻이 없다.
+           정확도 같은 값 축도 안 된다(값을 저장할 때 `assessed_at` 으로 넣으세요).
+        """
+        return await _m(ctx, "PUT", f"/pairs/{pair_id}/reached/{axis}/{rung}",
+                        json_body={"month": month})
 
     @mcp.tool()
     async def maturity_bulk(ctx: Context, division_id: int, kind: str, text: str,

@@ -99,6 +99,8 @@ SAMPLE = {
     'maturity_assess': {'pair_id': 12, 'axis': 'automation', 'note': '근거', 'rung': 'pre'},
     'maturity_bulk': {'division_id': 17, 'kind': 'subject', 'text': 'a\tb'},
     'maturity_bulk_kinds': {'division_id': 17},
+    'maturity_set_defect': {'pair_id': 12, 'axis': 'modeling', 'name': '크랙', 'col': 'test'},
+    'maturity_reached': {'pair_id': 12, 'axis': 'automation', 'rung': 'pre', 'month': '2025-03'},
     'maturity_add_segment': {'division_id': 17, 'segment_def_id': 5},
     'maturity_threads': {},
     'maturity_thread_dicts': {'division_id': 17},
