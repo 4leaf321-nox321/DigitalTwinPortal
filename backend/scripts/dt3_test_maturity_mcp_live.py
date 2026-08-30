@@ -4,7 +4,7 @@
 받는 꼴인지**는 못 잡는다. 그건 실제로 불러 봐야 안다. 이 시험은 `localhost:3003/mcp` 의
 JSON-RPC 로 진짜 도구를 부른다 — 운영에서 AI 가 겪는 것과 같은 경로다.
 
-  A  성숙도 도구 17개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
+  A  성숙도 도구 25개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
   B  뼈대 읽기 — 부문·축·칸이 오는가
   C  대상·수단을 만들고 잇는다  ★ 몸통이 맞는지는 여기서만 드러난다
   D  평가 — 근거 없으면 막히고, 있으면 칸이 올라간다
@@ -17,6 +17,8 @@ JSON-RPC 로 진짜 도구를 부른다 — 운영에서 AI 가 겪는 것과 �
   J  **디지털 스레드** — 수단이 없다. 구간은 제 길로만 세워진다
   K  **섞이지 않는가** — 성숙도 도구에 모듈 표가 있고, 대시보드가 이쪽을 가리킨다
   L  **권한** — 일반 사용자는 남의 사업부를 못 고친다(화면과 같은 규칙)
+  R  **해석 활용 기록** — 쌓고, 세고, 정착 후보를 척도로 올린다  ★ 한 바퀴
+  S  **연계 개발 기록**과 스레드 사전 쓰기
   H  **뒷정리** — 만든 것을 전부 지운다
 
 ⚠️ 개발 DB 의 성숙도는 일부러 비워 둔 상태다(운영 첫 실행 모습을 보려고).
@@ -151,6 +153,7 @@ def main():
 
     m = Mcp(token)
     made = {'subject': None, 'agent': None, 'pair': None,
+            'promoted_subject': None, 'sys': None, 'org': None, 'case': None,
             'mon_subject': None, 'mon_agent': None, 'mon_pair': None,
             'seg_subject': None}
 
@@ -159,7 +162,7 @@ def main():
         print('\nA. 도구 등록')
         names = m.tools()
         mat = sorted(n for n in names if n.startswith('maturity_'))
-        check('성숙도 도구 수', len(mat), 17)
+        check('성숙도 도구 수', len(mat), 25)
         check_true('대시보드 도구도 그대로', 'list_projects' in names)
         # 성숙도 도구 설명에 다른 모듈과 헷갈리지 말라는 안내가 있는가
         check_true('describe 가 대시보드와 다르다고 말한다', '대시보드' in names['maturity_describe'])
@@ -177,6 +180,7 @@ def main():
         divs = m.call_list('maturity_list_divisions', {})
         mine = next((d for d in divs if not d.get('deny_reason')), None) or divs[0]
         did = mine['id']
+        made['_div'] = did
         print(f"  · 사업부: {mine['name']} (id={did})")
 
         # ── C 만들고 잇기 ───────────────────────────────────────────────────
@@ -394,6 +398,83 @@ def main():
         check_true('필드 길잡이도 가리킨다',
                    'maturity_describe' in (names.get('describe_fields') or ''))
 
+        # ── R 해석 활용 기록 — 쌓고, 세고, 올린다 ──────────────────────────
+        print('\nR. 해석 활용 기록 — 건을 쌓아 척도로 넘긴다')
+        kinds_r = {k['key']: k for k in defs['review']['kinds']}
+        check_true('기록의 종류가 온다', 'spec' in kinds_r)
+        promote_min = defs['review'].get('promote_min') or 3
+
+        for mth in ('2026-01', '2026-03', '2026-05'):
+            r = m.call('maturity_add_record', {'kind': 'review', 'division_id': did, 'fields': {
+                'month': mth, 'kind': 'spec', 'target': f'{MARK} A제품', 'item': f'{MARK} 힌지 강성',
+                'agent_id': made['agent'], 'timing': 'before_spec', 'decision': 'gate',
+                'basis': 'confirmed', 'lead_days': 4}})
+            if mth == '2026-01':
+                check_true('기록이 적힌다', isinstance(r, dict) and r.get('id'))
+
+        bad = m.call('maturity_add_record', {'kind': 'review', 'division_id': did, 'fields': {
+            'month': '2026-02', 'kind': 'spec', 'item': 'x', 'agent_id': made['agent'],
+            'timing': '없는시점'}})
+        check('고를 수 있는 값 밖은 거절', bad.get('status'), 'error')
+
+        rows = m.call_list('maturity_list_records', {'kind': 'review', 'division_id': did,
+                                                     'year': 2026})
+        check_true('내가 넣은 것이 목록에 있다',
+                   sum(1 for x in rows if MARK in (x.get('item') or '')) >= promote_min)
+
+        st = m.call('maturity_record_stats', {'kind': 'review', 'division_id': did, 'year': 2026})
+        spec = (st.get('kinds') or {}).get('spec') or {}
+        check_true('연간 셈이 온다', spec.get('count'))
+        cand = [p for p in (spec.get('promote') or []) if MARK in p['item']]
+        check_true(f'{promote_min}건 넘으면 정착 후보로 뜬다', cand)
+
+        # ★ 한 바퀴 — 후보를 상시 시험 항목으로 올리고, 그 연계를 척도로 매긴다
+        up = m.call('maturity_promote_review', {
+            'division_id': did, 'agent_name': cand[0]['agent_name'], 'item': cand[0]['item'],
+            'subject_name': f'{MARK} 힌지 강성 시험'})
+        check_true('상시 항목으로 올라간다', up.get('pair_id'))
+        made['promoted_subject'] = up.get('subject_id')
+        rated = m.call('maturity_assess', {'pair_id': up['pair_id'], 'axis': 'automation',
+                                           'note': '올린 뒤 바로 매긴다', 'flags': ['pre']})
+        check_true('올린 연계를 곧바로 매길 수 있다',
+                   ((rated.get('assessments') or {}).get('automation') or {}).get('rung'))
+        st2 = m.call('maturity_record_stats', {'kind': 'review', 'division_id': did, 'year': 2026})
+        left = [p for p in ((st2.get('kinds') or {}).get('spec') or {}).get('promote', [])
+                if MARK in p['item']]
+        check('올린 짝은 후보에서 빠진다', left, [])
+
+        # ── S 연계 개발 기록과 사전 쓰기 ───────────────────────────────────
+        print('\nS. 연계 개발 기록 · 스레드 사전 쓰기')
+        sysrow = m.call('maturity_add_system', {'name': f'{MARK} PLM', 'kind': 'plm',
+                                                'fields': {'link_means': 'api', 'status': 'active'}})
+        check_true('시스템이 사전에 선다', isinstance(sysrow, dict) and sysrow.get('id'))
+        made['sys'] = sysrow.get('id')
+        # 전사 하나인 사전이라 같은 이름은 **거절**한다 — 조용히 또 만들면 스레드가 갈라진다
+        again = m.call('maturity_add_system', {'name': f'{MARK} PLM', 'kind': 'plm'})
+        check('같은 이름은 거절한다(전사 하나)', again.get('httpStatus'), 400)
+        check_true('있는 것을 고르라고 말해 준다', '이미 있습니다' in (again.get('message') or ''))
+
+
+        org = m.call('maturity_add_org', {'division_id': did, 'name': f'{MARK} 협력사'})
+        check_true('조직이 사전에 선다', isinstance(org, dict) and org.get('id'))
+        made['org'] = org.get('id')
+        # 조직은 시스템과 반대다 — 같은 이름이면 조용히 있는 것을 준다
+        org_again = m.call('maturity_add_org', {'division_id': did, 'name': f'{MARK} 협력사'})
+        check('조직은 같은 이름이면 있는 것을 준다', org_again.get('id'), made['org'])
+
+        case = m.call('maturity_add_record', {'kind': 'thread_case', 'division_id': did, 'fields': {
+            'month': '2026-04', 'action': 'integrate', 'status': 'done',
+            'system_id': made['sys'], 'link_from': 'manual', 'link_to': 'integrated',
+            'note': f'{MARK} API 로 이었다'}})
+        check_true('연계 개발 건이 적힌다', isinstance(case, dict) and case.get('id'))
+        made['case'] = case.get('id')
+        moved = m.call('maturity_update_record', {'kind': 'thread_case', 'record_id': made['case'],
+                                                  'fields': {'status': 'doing'}})
+        check('건을 고칠 수 있다', moved.get('status_label') or moved.get('status'), 'doing')
+        cst = m.call('maturity_record_stats', {'kind': 'thread_case', 'division_id': did,
+                                               'year': 2026})
+        check_true('연계 개발 셈이 온다', (cst.get('by_status') or cst.get('count')) is not None)
+
         # ── L 권한 ─────────────────────────────────────────────────────────
         print('\nL. 권한 — 화면과 같은 규칙인가')
         if not plain_token:
@@ -433,7 +514,9 @@ def main():
         base = os.environ.get('DT_API_BASE', 'http://localhost:5174').rstrip('/')
         h = {'Authorization': f'Bearer {token}'}
         left = []
-        for kind, key in (('pairs', 'pair'), ('agents', 'agent'), ('subjects', 'subject'),
+        for kind, key in (('thread-cases', 'case'), ('orgs', 'org'), ('systems', 'sys'),
+                          ('subjects', 'promoted_subject'),
+                          ('pairs', 'pair'), ('agents', 'agent'), ('subjects', 'subject'),
                           ('pairs', 'mon_pair'), ('agents', 'mon_agent'), ('subjects', 'mon_subject'),
                           ('subjects', 'seg_subject')):
             rid = made.get(key)
@@ -443,6 +526,15 @@ def main():
             print(f'  · {kind}/{rid} → {r.status_code}')
             if not r.ok:
                 left.append(f'{kind}/{rid}')
+        # 해석 활용 기록은 표를 남기지 않는다 — 이름으로 찾아 지운다
+        try:
+            rows = requests.get(f'{base}/api/dev-dt-maturity/reviews?division_id={made.get("_div")}',
+                                headers=h, timeout=30).json().get('data') or []
+        except Exception:
+            rows = []
+        for r in rows:
+            if MARK in ((r.get('item') or '') + (r.get('target') or '')):
+                requests.delete(f'{base}/api/dev-dt-maturity/reviews/{r["id"]}', headers=h, timeout=30)
         check('남긴 것이 없다', left, [])
 
     print()

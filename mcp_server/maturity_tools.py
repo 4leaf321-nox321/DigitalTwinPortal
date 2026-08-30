@@ -312,6 +312,163 @@ def register(mcp, request_fn):
                         json_body={"division_id": division_id, "sector": sector,
                                    "kind": kind, "text": text, "dry_run": dry_run})
 
+
+    # ── 건 기록 — 척도가 상태라면 이쪽은 사건이다 ────────────────────────────
+    #
+    # ⚠️ 둘은 **서로 다른 것을 센다.** 척도는 「지금 어디까지 왔나」(연계마다 하나,
+    #    갱신됨)이고 기록은 「무엇을 했나」(건마다 한 줄, 쌓임)다. 기록을 척도처럼
+    #    고치려 하거나 그 반대로 하면 둘 다 뜻을 잃는다.
+
+    _REC = {"review": ("/reviews", "해석 활용 기록"),
+            "thread_case": ("/thread-cases", "연계 개발 기록")}
+
+    def _rec_path(kind):
+        row = _REC.get(kind)
+        return row[0] if row else None
+
+    @mcp.tool()
+    async def maturity_list_records(ctx: Context, kind: str, division_id: int,
+                                    year: int = 0, filter_by: str = "") -> list:
+        """[성숙도] **건 기록** 목록 — 척도가 아니라 「무엇을 했나」.
+
+        `kind`
+          `review`      해석 활용 기록 — 시험과 짝이 없는 스팟성 해석(설계 스펙 검토·원인 분석).
+                        `filter_by` 에 종류 key 를 주면 그것만.
+          `thread_case` 연계 개발 기록 — 연동·도입·정합화·자동화·폐지 건.
+                        `filter_by` 에 상태(planned·doing·done)를 주면 그것만.
+
+        `year` 를 비우면 그 사업부의 전부. `division_id` 는 `thread_case` 에 한해
+        `0` 이면 전사다(연계 개발은 전사로도 본다).
+        """
+        path = _rec_path(kind)
+        if not path:
+            return {"status": "error", "message": "kind 는 review(해석 활용) · thread_case(연계 개발) 중 하나입니다."}
+        params = {"division_id": "all" if (division_id == 0 and kind == "thread_case") else division_id}
+        if year:
+            params["year"] = year
+        if filter_by:
+            params["kind" if kind == "review" else "status"] = filter_by
+        return await _m(ctx, "GET", path, params=params)
+
+    @mcp.tool()
+    async def maturity_record_stats(ctx: Context, kind: str, division_id: int,
+                                    year: int = 0) -> dict:
+        """[성숙도] 건 기록의 **연간 셈** — 이게 이 기록들을 두는 이유다.
+
+        `review` — 종류마다 건수 · 「스펙 확정 전 이상」% · 「관문 이상」% · 「검증됨」% ·
+          리드타임 중앙값, 그리고 **정착 후보**(같은 시뮬레이션 × 항목이 여러 번 되풀이된 것).
+          정착 후보는 `maturity_promote_review` 로 상시 시험 항목으로 올린다.
+        `thread_case` — 상태별·무엇을별 건수와 올라간 칸 수.
+
+        `division_id` 를 `0` 으로 주면 전 사업부를 한 번에 준다.
+        `year` 를 비우면 올해.
+        """
+        path = _rec_path(kind)
+        if not path:
+            return {"status": "error", "message": "kind 는 review · thread_case 중 하나입니다."}
+        params = {"division_id": "all" if division_id == 0 else division_id}
+        if year:
+            params["year"] = year
+        return await _m(ctx, "GET", f"{path}/stats", params=params)
+
+    @mcp.tool()
+    async def maturity_add_record(ctx: Context, kind: str, division_id: int,
+                                  fields: dict) -> dict:
+        """[성숙도] 건 기록 한 줄을 **적는다.**
+
+        `review` 에 넣는 것 — month(`2026-03`) · kind(spec·cause) · target(제품·과제) ·
+          item(스펙 항목/불량 유형) · agent_id 또는 agent_name(쓴 시뮬레이션) ·
+          timing · decision · basis · lead_days(리드타임, 일) · note
+        `thread_case` 에 넣는 것 — month · action(무엇을) · status · thread_id ·
+          segment_id · system_id 또는 system_name · org_id · link_from · link_to · note
+
+        고를 수 있는 값(timing·decision·basis·action·status 등)은 `maturity_describe` 의
+        `review` · `thread` 에 있다. **거기 없는 값은 거절된다.**
+
+        ⚠️ 같은 건을 두 번 적어도 막지 않는다 — 기록은 사건이라 겹칠 수 있어서다.
+           넣기 전에 `maturity_list_records` 로 이미 있는지 보세요.
+        """
+        path = _rec_path(kind)
+        if not path:
+            return {"status": "error", "message": "kind 는 review · thread_case 중 하나입니다."}
+        return await _m(ctx, "POST", path, json_body={"division_id": division_id, **(fields or {})})
+
+    @mcp.tool()
+    async def maturity_update_record(ctx: Context, kind: str, record_id: int,
+                                     fields: dict) -> dict:
+        """[성숙도] 건 기록 한 줄을 **고친다.** `fields` 에 바꿀 것만 담는다."""
+        path = _rec_path(kind)
+        if not path:
+            return {"status": "error", "message": "kind 는 review · thread_case 중 하나입니다."}
+        return await _m(ctx, "PUT", f"{path}/{record_id}", json_body=fields or {})
+
+    @mcp.tool()
+    async def maturity_promote_review(ctx: Context, division_id: int, agent_name: str,
+                                      item: str, subject_name: str = "",
+                                      make_agent: bool = False) -> dict:
+        """[성숙도] **정착 후보를 상시 시험 항목으로 올린다** — 되풀이되는 해석은 척도로 관리한다.
+
+        `maturity_record_stats(kind='review')` 의 `promote` 에서 짝(`agent_name` × `item`)을
+        가져와 부른다. 시험 항목 × 시뮬레이션 연계가 서고, 그 뒤로는 `maturity_assess` 로 매긴다.
+
+        `subject_name` 으로 시험 항목 이름을 고칠 수 있다 — 기록의 「항목」은 스펙 항목·
+        불량 유형이라 시험 항목 이름과 결이 다를 수 있다.
+        시뮬레이션이 사전에 없으면 거절된다 — 만들려면 `make_agent=True`.
+
+        ⚠️ **평가는 만들지 않는다.** 연계만 세운다 — 근거는 사람이 적는다.
+        ⚠️ 올려도 그 기록들은 남는다(「올림」 표가 붙고 후보에서만 빠진다).
+        """
+        return await _m(ctx, "POST", "/reviews/promote",
+                        json_body={"division_id": division_id, "agent_name": agent_name,
+                                   "item": item, "subject_name": subject_name or None,
+                                   "make_agent": make_agent})
+
+    # ── 스레드 사전 쓰기 — 읽기만 되면 구간을 처음부터 못 세운다 ──────────────
+
+    @mcp.tool()
+    async def maturity_add_system(ctx: Context, name: str, kind: str,
+                                  fields: dict = None) -> dict:
+        """[성숙도] 시스템 사전에 하나 **더한다** — 구간의 출발·매개·도착에 쓸 것.
+
+        ⚠️ 시스템 사전은 **전사 하나**다(사업부별이 아니다). 그래서 **같은 이름이 이미
+           있으면 거절된다**(400) — 사업부마다 같은 PLM 을 따로 세우면 스레드가 갈라진다.
+           먼저 `maturity_thread_dicts` 로 찾아보고, 있으면 그 id 를 쓰세요.
+           표기가 다른 같은 시스템(Teamcenter/TC)을 둘 다 세웠다면 합치는 것은 사무국이
+           화면에서 한다 — 여기엔 합치기 도구를 두지 않았다(구간이 딸려 옮겨간다).
+
+        `kind` 는 `maturity_describe` 의 `thread.system_kinds` 에서 고른다.
+        `fields` — owner_org(주관 조직) · stages(생애 단계 목록) · link_means(API 있음·
+        파일 배치·없음·미확인) · status(운영·도입 중·폐지 예정) · note
+        """
+        body = {"name": name, "kind": kind, **(fields or {})}
+        return await _m(ctx, "POST", "/systems", json_body=body)
+
+    @mcp.tool()
+    async def maturity_update_system(ctx: Context, system_id: int, fields: dict) -> dict:
+        """[성숙도] 시스템 사전의 한 줄을 **고친다** — 연계 수단이 생겼거나 폐지 예정이 됐을 때.
+
+        ⚠️ 종류·이름을 고치는 것은 사무국만 된다(전사가 함께 쓰는 사전이라). 403 이 오면
+           그대로 사용자에게 전하세요.
+        """
+        return await _m(ctx, "PUT", f"/systems/{system_id}", json_body=fields or {})
+
+    @mcp.tool()
+    async def maturity_add_org(ctx: Context, division_id: int, name: str,
+                               role: str = "") -> dict:
+        """[성숙도] 조직 사전에 하나 **더한다** — 구간의 출발·도착 조직.
+
+        ⚠️ **포탈 부서는 저절로 들어온다.** 여기 쓰는 것은 부서 표에 없는 조직
+           (협력사·태스크포스 등)이다. 먼저 `maturity_thread_dicts` 로 보세요.
+           같은 사업부에 같은 이름이 있으면 **조용히 있는 것을 준다**(시스템과 다르다) —
+           그래서 두 번 불러도 늘지 않지만, 새로 만들었는지는 id 로 확인해야 한다.
+
+        `role` 은 그 조직이 주로 서 있는 생애 단계(`maturity_describe` 의 `thread.stages`).
+        """
+        body = {"division_id": division_id, "name": name}
+        if role:
+            body["role"] = role
+        return await _m(ctx, "POST", "/orgs", json_body=body)
+
     @mcp.tool()
     async def maturity_bulk_kinds(ctx: Context, division_id: int,
                                   sector: str = "simulation") -> list:
