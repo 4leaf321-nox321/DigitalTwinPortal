@@ -1494,6 +1494,17 @@ async def my_surveys(ctx: Context) -> list:
     return await _request(ctx, "GET", "/mine", prefix=SURVEY_PREFIX)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 디지털 트윈 **성숙도** — 다른 모듈이라 파일을 갈라 둔다(2026-08-30).
+#
+# 도구 이름이 전부 `maturity_` 로 시작해 대시보드 도구와 목록에서 갈린다. 백엔드
+# 접두사도 다르다(/api/dev-dt-maturity) — 여기서 대시보드를 부를 수 없고 그 반대도 같다.
+# ─────────────────────────────────────────────────────────────────────────────
+import maturity_tools          # noqa: E402
+
+maturity_tools.register(mcp, _request)
+
+
 if __name__ == "__main__":
     mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
     mcp.settings.port = int(os.environ.get("MCP_PORT", "3003"))
