@@ -14,7 +14,7 @@ from app.extensions import db
 
 from . import definitions as D
 from .models import (
-    MaturityAssessment, MaturityPair, MaturitySubject, ThreadCase, ThreadDef, ThreadOrg, ThreadSegment, ThreadSegmentDef, ThreadSystem,
+    MaturitySubject, ThreadCase, ThreadDef, ThreadOrg, ThreadSegment, ThreadSegmentDef, ThreadSystem,
 )
 from .services import Refused, _clean_list, create_pair, create_subject, pair_dict
 

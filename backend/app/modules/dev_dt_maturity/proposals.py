@@ -24,6 +24,8 @@
 """
 from datetime import datetime
 
+from sqlalchemy.orm import joinedload
+
 from app.extensions import db
 
 from . import definitions as D
@@ -31,7 +33,8 @@ from .models import MaturityPair
 from .services import Refused
 
 KINDS = ('assess', 'defect', 'reached')
-STATUS = ('pending', 'approved', 'rejected')
+# superseded — 같은 자리에 새 제안이 와서 밀려난 것. 지우지 않는다(무엇을 냈었는지 남는다).
+STATUS = ('pending', 'approved', 'rejected', 'superseded')
 
 
 class MaturityProposal(db.Model):
@@ -58,15 +61,16 @@ class MaturityProposal(db.Model):
 
     pair = db.relationship('MaturityPair')
 
-    def to_dict(self, with_now=True):
-        from .services import pair_dict
+    def to_dict(self, now=None):
+        """`now` 는 밖에서 **모아 읽어** 넣어 준다 — 줄마다 읽으면 N+1 이다(2026-08-30)."""
         d = {'id': self.id, 'pair_id': self.pair_id, 'division_id': self.division_id,
              'kind': self.kind, 'axis': self.axis, 'payload': self.payload or {},
              'note': self.note, 'source': self.source, 'status': self.status,
-             'actor_name': self.actor_name,
+             'actor_name': self.actor_name, 'superseded': getattr(self, 'superseded', 0),
              'decided_by_name': self.decided_by_name, 'decided_note': self.decided_note,
              'created_at': self.created_at.isoformat() if self.created_at else None,
-             'decided_at': self.decided_at.isoformat() if self.decided_at else None}
+             'decided_at': self.decided_at.isoformat() if self.decided_at else None,
+             'now': now}
         pair = self.pair
         if pair is not None:
             d['subject_name'] = pair.subject.name if pair.subject else None
@@ -74,11 +78,6 @@ class MaturityProposal(db.Model):
             d['sector'] = pair.subject.sector if pair.subject else None
             axis = D.axis_of(d['sector'], self.axis) if d['sector'] else None
             d['axis_label'] = (axis or {}).get('label') or self.axis
-            if with_now:
-                # ⚠️ 지금 값은 **볼 때** 읽는다 — 제안한 뒤 남이 고쳤을 수 있다.
-                now = (pair_dict(pair).get('assessments') or {}).get(self.axis) or {}
-                d['now'] = {'rung': now.get('rung'), 'value': now.get('value'),
-                            'note': now.get('note')} if now else None
         return d
 
 
@@ -95,8 +94,18 @@ def _guard(pair, kind, axis_key, payload):
 
 
 def create(pair, kind, axis_key, payload, actor):
-    """제안 하나. **자료는 아무것도 안 바뀐다** — 승인해야 그때 들어간다."""
+    """제안 하나. **자료는 아무것도 안 바뀐다** — 승인해야 그때 들어간다.
+
+    ⚠️ 같은 자리(연계 × 축 × 갈래)에 대기 중인 것이 있으면 **밀어낸다**(superseded).
+       AI 가 고쳐 다시 내면 똑같은 카드가 쌓여, 사람이 어느 것이 최신인지 모른다.
+       지우지는 않는다 — 아무도 안 누른 것이라도 「이렇게도 제안했다」는 기록이다.
+    """
     _guard(pair, kind, axis_key, payload)
+    old = MaturityProposal.query.filter_by(pair_id=pair.id, axis=axis_key, kind=kind,
+                                           status='pending').all()
+    for o in old:
+        o.status = 'superseded'
+        o.decided_at = datetime.utcnow()
     row = MaturityProposal(
         pair_id=pair.id, division_id=pair.subject.division_id, kind=kind, axis=axis_key,
         payload={k: v for k, v in (payload or {}).items() if k != 'actor_mode'},
@@ -104,16 +113,39 @@ def create(pair, kind, axis_key, payload, actor):
         actor_user_id=getattr(actor, 'id', None), actor_name=getattr(actor, 'name', None))
     db.session.add(row)
     db.session.flush()
+    row.superseded = len(old)          # 화면·MCP 가 「앞의 것을 밀어냈다」를 말할 수 있게
     return row
 
 
+def _now_map(rows):
+    """(pair_id, axis) → 지금 값. **한 질의로** 모은다.
+
+    ⚠️ 예전에는 줄마다 pair_dict() 를 불렀다 — 한 칸을 보려고 그 연계의 평가 전부·수단·
+       부서·문턱·재평가 여부를 다시 셌다. 줄당 질의 8회였다(2026-08-30 실측).
+    """
+    from .models import MaturityAssessment
+    keys = {(r.pair_id, r.axis) for r in rows}
+    if not keys:
+        return {}
+    got = (MaturityAssessment.query
+           .filter(MaturityAssessment.pair_id.in_({p for p, _ in keys}))
+           .filter(MaturityAssessment.axis.in_({a for _, a in keys})).all())
+    return {(a.pair_id, a.axis): {'rung': a.rung, 'value': a.value, 'note': a.note}
+            for a in got if (a.pair_id, a.axis) in keys}
+
+
 def listing(division_id=None, status='pending', limit=200):
-    q = MaturityProposal.query
+    # ⚠️ 연계·대상·수단을 **한 번에 당긴다** — 안 그러면 줄마다 세 질의가 더 간다.
+    q = MaturityProposal.query.options(
+        joinedload(MaturityProposal.pair).joinedload(MaturityPair.subject),
+        joinedload(MaturityProposal.pair).joinedload(MaturityPair.agent))
     if division_id is not None:
         q = q.filter_by(division_id=int(division_id))
     if status and status != 'all':
         q = q.filter_by(status=status)
-    return [r.to_dict() for r in q.order_by(MaturityProposal.id.desc()).limit(limit).all()]
+    rows = q.order_by(MaturityProposal.id.desc()).limit(limit).all()
+    now = _now_map(rows)
+    return [r.to_dict(now.get((r.pair_id, r.axis))) for r in rows]
 
 
 def count_pending(division_ids=None):

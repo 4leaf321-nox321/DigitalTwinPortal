@@ -1312,3 +1312,78 @@ def test_AI_가_낸_판단은_제안으로_가고_사람이_승인해야_판에_
                                                  'name': 'AI 가 세운 항목', 'actor_mode': 'ai'},
                        headers=auth(mx_user))
     assert made.status_code == 201        # 202 가 아니다 — 승인 30번이 되면 아무도 안 쓴다
+
+
+def test_같은_자리에_다시_제안하면_앞의_것을_밀어낸다(client, auth, db, world, mx_user):
+    """AI 가 고쳐 다시 내면 똑같은 카드가 쌓여, 사람이 어느 것이 최신인지 모른다.
+
+    ⚠️ 지우지는 않는다 — 아무도 안 누른 것이라도 「이렇게도 제안했다」는 기록이다.
+    """
+    mx = world['mx'].id
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+
+    def _propose(rung, note):
+        r = client.put(f'{BASE}/pairs/{p["id"]}/assessments/scope',
+                       json={'actor_mode': 'ai', 'rung': rung, 'note': note},
+                       headers=auth(mx_user))
+        assert r.status_code == 202
+        return r.get_json()['data']
+
+    first = _propose('issue', '처음 판단')
+    assert first['preview']['superseded'] == 0
+    second = _propose('basic', '다시 보니 대표 모델')
+    assert second['preview']['superseded'] == 1        # 하나를 밀어냈다
+
+    rows = client.get(f'{BASE}/proposals?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert len(rows) == 1 and rows[0]['id'] == second['proposal_id']      # 카드는 하나
+    assert rows[0]['payload']['rung'] == 'basic'
+    assert client.get(f'{BASE}/proposals/count?division_id={mx}',
+                      headers=auth(mx_user)).get_json()['data']['pending'] == 1
+
+    # 밀려난 것은 남는다 — 무엇을 냈었는지 볼 수 있다
+    old = client.get(f'{BASE}/proposals?division_id={mx}&status=superseded',
+                     headers=auth(mx_user)).get_json()['data']
+    assert [x['id'] for x in old] == [first['proposal_id']]
+    assert old[0]['payload']['rung'] == 'issue'
+
+    # 다른 축은 따로 선다 — 「같은 자리」는 연계 × 축 × 갈래다
+    client.put(f'{BASE}/pairs/{p["id"]}/assessments/automation',
+               json={'actor_mode': 'ai', 'flags': ['pre'], 'note': '다른 축'},
+               headers=auth(mx_user))
+    assert client.get(f'{BASE}/proposals/count?division_id={mx}',
+                      headers=auth(mx_user)).get_json()['data']['pending'] == 2
+
+
+def test_확인_대기_목록은_줄_수와_무관하게_질의가_는다(client, auth, db, world, mx_user):
+    """줄마다 pair_dict() 를 부르면 한 칸 보려고 연계 전부를 다시 센다 — 줄당 질의 8회였다.
+
+    ⚠️ 200건이면 1600회다. 「지금 값」은 한 질의로 모아 읽고, 연계·대상·수단은 함께 당긴다.
+    """
+    from sqlalchemy import event
+    from app.modules.dev_dt_maturity import proposals as PR
+    mx = world['mx'].id
+    made = []
+    for i in range(6):
+        _, _, p = _pair(client, auth, mx_user, world['mx'],
+                        subject=f'대상 q{i}', agent=f'수단 q{i}')
+        client.put(f'{BASE}/pairs/{p["id"]}/assessments/scope',
+                   json={'actor_mode': 'ai', 'rung': 'basic', 'note': f'{i}번'},
+                   headers=auth(mx_user))
+        made.append(p['id'])
+
+    n = [0]
+
+    def _count(*a):
+        n[0] += 1
+
+    event.listen(db.engine, 'before_cursor_execute', _count)
+    try:
+        PR.listing(mx, 'pending')          # 데워 두고
+        n[0] = 0
+        rows = PR.listing(mx, 'pending')
+    finally:
+        event.remove(db.engine, 'before_cursor_execute', _count)
+    assert len(rows) >= 6
+    # 줄 수에 따라 늘지 않는다 — 목록 + 지금 값, 두어 질의면 된다
+    assert n[0] <= 4, f'{len(rows)}건에 질의 {n[0]}회 — 줄마다 읽고 있다'
+    assert rows[0]['subject_name'] and rows[0]['axis_label']      # 그래도 다 채워 온다

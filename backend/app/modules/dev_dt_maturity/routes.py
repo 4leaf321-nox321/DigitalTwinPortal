@@ -371,9 +371,11 @@ def _propose_if_ai(pair, kind, axis, payload, actor):
     n = PR.count_pending([pair.subject.division_id])
     return success_response({
         'proposal_id': row.id, 'status': 'pending', 'pending_in_division': n,
-        'preview': row.to_dict(),
-    }, message=f'확인 대기로 넣었습니다 — 화면의 「확인 대기」에서 승인해야 반영됩니다. '
-               f'이 사업부에 대기 {n}건.', status_code=202)
+        'preview': row.to_dict(PR._now_map([row]).get((row.pair_id, row.axis))),
+    }, message=('확인 대기로 넣었습니다 — 화면의 「확인 대기」에서 승인해야 반영됩니다.'
+                + (f' 같은 자리의 앞선 제안 {row.superseded}건은 밀어냈습니다.'
+                   if getattr(row, 'superseded', 0) else '')
+                + f' 이 사업부에 대기 {n}건.'), status_code=202)
 
 
 @bp.route('/pairs/<int:pair_id>/assessments/<axis>', methods=['PUT'])
@@ -449,7 +451,7 @@ def decide_proposal(actor, row_id, decision):
         pair = PR.decide(row, decision == 'approve', actor,
                          (request.get_json(silent=True) or {}).get('note') or '')
         db.session.commit()
-        return success_response({'proposal': row.to_dict(),
+        return success_response({'proposal': row.to_dict(PR._now_map([row]).get((row.pair_id, row.axis))),
                                  'pair': S.pair_dict(pair, with_changes=True) if pair else None})
     except S.Stale as e:
         db.session.rollback()
