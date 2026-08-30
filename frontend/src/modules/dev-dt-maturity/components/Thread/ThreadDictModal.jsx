@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Check, Plus, Trash2, AlertTriangle, Merge, Download } from 'lucide-react';
+import { X, Check, Plus, Trash2, AlertTriangle, Merge } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 
 // 디지털 스레드의 사전 관리 창(2026-08-28) — 시스템 · 조직 · 스레드(사무국).
 // 시뮬레이션 관리와 같은 문법: 왼쪽 목록(위에 빠른 추가), 오른쪽 상세.
 //   시스템: 전사 하나. 이름·종류·주관 조직·생애 단계·연계 수단·상태. 처음 적은 사업부나 사무국이 고친다. 사무국은 「합치기」(정돈).
-//   조직: 사업부의 것. 포탈 부서에서 가져오거나 손으로. 생애 단계 역할.
+//   조직: 사업부의 것. **포탈 부서는 저절로 들어온다**(2026-08-30) — 단추를 눌러야 채워지면
+//         대개 안 채워진다. 없어진 부서는 지우지 않고 짚어 주고, 안 쓰는 것만 정리한다.
 //   스레드: 사무국만. 이름·설명·안 쓰는 축·표준 구간(단계 → 단계).
 
 const Backdrop = styled.div`position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 60;`;
@@ -34,6 +35,7 @@ const Button = styled.button`
 `;
 const Notice = styled.div`display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.8125rem; color: #991b1b;`;
 const Muted = styled.div`font-size: 0.8125rem; color: #94a3b8;`;
+const Gone = styled.span`color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.25rem; padding: 0 0.3rem; font-size: 0.6875rem;`;
 const Tabs = styled.div`display: flex; gap: 0.25rem;`;
 const Tab = styled.button`padding: 0.3rem 0.8rem; border: 1px solid ${p => (p.$on ? '#1d4ed8' : '#e2e8f0')}; border-radius: 999px; background: ${p => (p.$on ? '#1d4ed8' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')}; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;`;
 const SegRow = styled.div`display: grid; grid-template-columns: minmax(0, 1fr) 7rem 1rem 7rem 1.6rem; & + & { margin-top: 0.15rem; } gap: 0.3rem; align-items: center; font-size: 0.8125rem; input, select { padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; min-width: 0; }`;
@@ -57,7 +59,6 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
   const [quickKind, setQuickKind] = useState('other');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [deps, setDeps] = useState([]);
   const [mergeInto, setMergeInto] = useState('');
   const stages = thread?.stages || [];
   const kinds = thread?.system_kinds || [];
@@ -66,7 +67,8 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
   const load = async () => {
     try {
       if (kind === 'system') setRows((await maturityApi.listSystems()).data || []);
-      else if (kind === 'org') { setRows(division != null ? (await maturityApi.listOrgs(division)).data || [] : []); if (division != null) setDeps((await maturityApi.orgsFromDepartments(division)).data || []); }
+      // 포탈 부서는 목록을 읽을 때 서버가 알아서 맞춰 온다 — 따로 가져올 것이 없다
+      else if (kind === 'org') { setRows(division != null ? (await maturityApi.listOrgs(division)).data || [] : []); }
       else setRows((await maturityApi.listThreads(true)).data || []);
       setError(null);
     } catch (e) { setError(e.message); }
@@ -128,9 +130,13 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
     try { await maturityApi.mergeSystems(Number(mergeInto), current.id); setSel(Number(mergeInto)); setMergeInto(''); await load(); if (onChanged) onChanged(); }
     catch (err) { setError(err.message); } finally { setBusy(false); }
   };
-  const importDep = async (d) => {
+  // 포탈에서 없어진 조직 — 지우지 않고 짚어 준다. 안 쓰는 것만 정리한다(2026-08-30).
+  const goneRows = kind === 'org' ? rows.filter(r => r.gone) : [];
+  const freeGone = goneRows.filter(r => !r.usage).length;
+  const prune = async () => {
+    if (!window.confirm(`쓰는 구간이 없는 ${freeGone}개를 지웁니다. 되돌릴 수 없습니다.`)) return;
     setBusy(true);
-    try { const r = await maturityApi.createOrg({ division_id: division, name: d.name, source_kind: 'portal', source_id: String(d.id) }); await load(); setSel(r.data.id); }
+    try { await maturityApi.pruneOrgs(division); await load(); if (onChanged) onChanged(); }
     catch (err) { setError(err.message); } finally { setBusy(false); }
   };
 
@@ -169,21 +175,31 @@ const ThreadDictModal = ({ kind: initialKind = 'system', divisionId, divisions =
               {rows.map(r => (
                 <Item key={r.id} type="button" $on={sel === r.id} onClick={() => setSel(r.id)}>
                   <span>{r.name}</span>
-                  <small>{kind === 'system' ? (kinds.find(k => k.key === r.kind)?.label || r.kind) : kind === 'org' ? (stages.find(s => s.key === r.role)?.label || '') : `구간 ${(r.segments || []).length}`}</small>
+                  <small>{kind === 'system' ? (kinds.find(k => k.key === r.kind)?.label || r.kind)
+                    : kind === 'org' ? (r.gone
+                      ? <Gone title={r.usage ? `구간 ${r.usage}개가 쓰고 있어 지우지 않습니다` : '쓰는 구간이 없습니다'}>없어진 부서{r.usage ? ` · 쓰임 ${r.usage}` : ''}</Gone>
+                      : (stages.find(s => s.key === r.role)?.label || ''))
+                    : `구간 ${(r.segments || []).length}`}</small>
                 </Item>
               ))}
               {rows.length === 0 && <Muted style={{ padding: '0.8rem' }}>아직 없습니다.</Muted>}
             </List>
-            {kind === 'org' && canEditKind && deps.length > 0 && (
-              <div style={{ borderTop: '1px solid #e2e8f0', padding: '0.5rem 0.8rem', fontSize: '0.75rem', color: '#64748b', maxHeight: '10rem', overflow: 'auto' }}>
-                <div style={{ fontWeight: 700, marginBottom: '0.2rem' }}>포탈 부서에서 가져오기</div>
-                {deps.filter(d => !d.org_id).map(d => (
-                  <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{d.name}</span>
-                    <IconBtn type="button" onClick={() => importDep(d)} title="조직 사전에 넣기" aria-label={`${d.name} 가져오기`}><Download size={12} /></IconBtn>
-                  </div>
-                ))}
-                {deps.every(d => d.org_id) && <span>전부 들어와 있습니다.</span>}
+            {kind === 'org' && (
+              <div style={{ borderTop: '1px solid #e2e8f0', padding: '0.5rem 0.8rem', fontSize: '0.75rem', color: '#64748b' }}>
+                {goneRows.length === 0
+                  ? <span>포탈의 부서 표를 그대로 따릅니다 — 새 부서는 저절로 들어오고, 이름이 바뀌면 따라갑니다.</span>
+                  : (
+                    <>
+                      <div style={{ fontWeight: 700, marginBottom: '0.2rem', color: '#92400e' }}>없어진 부서 {goneRows.length}</div>
+                      <div>포탈에서 사라졌거나 꺼진 부서입니다. <strong>지우지 않았습니다</strong> — 구간이 가리키고 있을 수 있습니다.
+                        {freeGone > 0 ? ` 그중 ${freeGone}개는 쓰는 구간이 없습니다.` : ' 전부 쓰이고 있어 정리할 것이 없습니다.'}</div>
+                      {canEditKind && freeGone > 0 && (
+                        <Button type="button" style={{ marginTop: '0.35rem' }} disabled={busy} onClick={prune}>
+                          안 쓰는 {freeGone}개 정리
+                        </Button>
+                      )}
+                    </>
+                  )}
               </div>
             )}
           </Left>

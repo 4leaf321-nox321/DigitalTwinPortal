@@ -2,7 +2,8 @@
 //
 //   ① 구간이 스레드 묶음으로 보이고(출발 → 매개 → 도착, 비시스템 매개는 호박색), 연결 방식 배지
 //   ② 아래 줄에서 스레드·표준 구간·조직·시스템을 고르고 「구간 추가」 → POST /segments
-//   ③ 사전 창: 시스템 빠른 추가 → POST /systems · 조직 탭에서 포탈 부서 가져오기 → POST /orgs(portal)
+//   ③ 사전 창: 시스템 빠른 추가 → POST /systems · 조직 탭은 **포탈 부서가 저절로 들어와 있고**,
+//     없어진 부서는 지우지 않고 짚어 준다(쓰는 구간이 없는 것만 정리)
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, type, select, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
@@ -32,7 +33,13 @@ const THREADS = [
   { id: 2, key: 'quality', name: '품질 스레드', axes_off: [], segments: [] },
 ];
 const SYSTEMS = [{ id: 5, name: 'Teamcenter', kind: 'plm', link_means: 'api', status: 'active', stages: ['development'] }, { id: 6, name: '원가 산정 시스템', kind: 'cost', link_means: 'none', status: 'active', stages: [] }, { id: 9, name: '메일', kind: 'informal', link_means: 'none', status: 'active', stages: [] }];
-const ORGS = [{ id: 21, name: 'MX 설계그룹', role: 'development', division_id: 17, source_kind: 'manual' }, { id: 22, name: '원가팀', role: 'management', division_id: 17, source_kind: 'manual' }];
+const ORGS = [
+  { id: 21, name: 'MX 설계그룹', role: 'development', division_id: 17, source_kind: 'portal', source_id: '3' },
+  { id: 22, name: '원가팀', role: 'management', division_id: 17, source_kind: 'manual' },
+  // 포탈에서 사라진 둘 — 하나는 구간이 쓰고 있어 못 지운다
+  { id: 24, name: '없어진팀', role: null, division_id: 17, source_kind: 'portal', source_id: '9', gone: true, usage: 0 },
+  { id: 25, name: '쓰이는옛팀', role: null, division_id: 17, source_kind: 'portal', source_id: '8', gone: true, usage: 2 },
+];
 const SEG = { id: 101, subject_id: 501, division_id: 17, thread_id: 1, thread_name: '재료비 스레드', segment_def_id: 12, segment_def: THREADS[0].segments[1], name: '설계 BOM → 예상 원가',
   from_org_id: 21, from_org_name: 'MX 설계그룹', from_system_id: 5, from_system_name: 'Teamcenter', via_system_id: 9, via_system_name: '메일', via_informal: true, to_org_id: 22, to_org_name: '원가팀', to_system_id: 6, to_system_name: '원가 산정 시스템',
   data_kinds: ['bom', 'cost'], data_kind_labels: ['BOM(E/M)', '원가·단가'], division_id: 17, division_name: 'MX',
@@ -53,7 +60,7 @@ export default async function run() {
     if (url.includes('/segments')) return [SEG];
     if (url.includes('/systems') && method === 'POST') return { id: 7, name: body.name, kind: body.kind, link_means: 'unknown', status: 'active', stages: [] };
     if (url.includes('/systems')) return SYSTEMS;
-    if (url.includes('/orgs/from-departments')) return [{ id: 3, name: 'CAE그룹(MX)', org_id: null }, { id: 4, name: 'Mecha그룹(MX)', org_id: 21 }];
+    if (url.includes('/orgs/prune')) return { deleted: 1, names: ['없어진팀'], kept: 1 };
     if (url.includes('/orgs') && method === 'POST') return { id: 23, name: body.name, division_id: 17, source_kind: body.source_kind || 'manual', source_id: body.source_id || null };
     if (url.includes('/orgs')) return ORGS;
     if (url.includes('/pairs/901')) return { id: 901, subject: { name: '설계 BOM → 예상 원가' }, agent: null, assessments: { link_mode: { rung: 'manual', rung_index: 0, note: '엑셀 메일', evidence: {}, assessed_at: '2026-06-01T00:00:00' } }, unassessed: ['capture'], changes: [], deny_reason: null };
@@ -106,11 +113,13 @@ export default async function run() {
     const ps = calls.find(c => c.method === 'POST' && c.url.endsWith('/systems'));
     say(!!ps && ps.body.name === 'Windchill' && ps.body.kind === 'plm', `③ POST /systems: ${JSON.stringify(ps?.body)}`);
     await click(byText('button', '조직')); await settle(60);
-    say(html().includes('포탈 부서에서 가져오기') && !!document.querySelector('button[aria-label="CAE그룹(MX) 가져오기"]') && !document.querySelector('button[aria-label="Mecha그룹(MX) 가져오기"]'), '③ 조직 탭 — 아직 안 들어온 부서만 가져오기 단추');
+    say(!byText('button', '가져오기') && html().includes('MX 설계그룹'), '③ 조직 탭 — 가져오기 단추 없이 이미 들어와 있음');
+    say(html().includes('없어진 부서 2'), '③ 포탈에서 사라진 것은 지우지 않고 짚어 준다');
+    say(html().includes('쓰임 2'), '③ 쓰는 구간 수를 함께 — 이건 지우면 안 된다');
     calls.length = 0;
-    await click(document.querySelector('button[aria-label="CAE그룹(MX) 가져오기"]')); await settle(60);
-    const po = calls.find(c => c.method === 'POST' && c.url.endsWith('/orgs'));
-    say(!!po && po.body.source_kind === 'portal' && po.body.source_id === '3' && po.body.name === 'CAE그룹(MX)', `③ POST /orgs(portal): ${JSON.stringify(po?.body)}`);
+    await click(byText('button', '안 쓰는 1개 정리')); await settle(60);
+    const pr = calls.find(c => c.url.includes('/orgs/prune'));
+    say(JSON.stringify(pr?.body) === JSON.stringify({ division_id: 17 }), `③ 정리는 사업부째로: ${JSON.stringify(pr?.body)}`);
     say(!!byText('button', '스레드 정의'), '③ 사무국에는 스레드 정의 탭');
     await unmount();
 

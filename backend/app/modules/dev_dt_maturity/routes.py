@@ -1112,13 +1112,20 @@ def list_orgs(actor):
     return _refused(lambda: success_response(T.list_orgs(_int_arg('division_id'))))
 
 
-@bp.route('/orgs/from-departments', methods=['GET'])
+@bp.route('/orgs/prune', methods=['POST'])
 @read_required
-def orgs_from_departments(actor):
-    division_id = _int_arg('division_id')
+def prune_orgs(actor):
+    """포탈에서 없어졌고 아무 구간도 안 쓰는 조직을 정리한다(2026-08-30).
+
+    ⚠️ 쓰는 조직은 지우지 않는다 — 구간이 가리키던 조직이 말없이 사라지면 안 된다.
+    """
+    division_id = _int_arg('division_id') or (request.get_json(silent=True) or {}).get('division_id')
     if division_id is None:
-        return error_response('사업부를 고르세요.', status_code=400)
-    return _refused(lambda: success_response(T.departments_as_orgs(division_id)))
+        return error_response('사업부가 필요합니다.', status_code=400)
+    denied = _deny(actor, division_id)
+    if denied:
+        return denied
+    return _refused(lambda: success_response(T.prune_orgs(int(division_id))))
 
 
 @bp.route('/orgs', methods=['POST'])

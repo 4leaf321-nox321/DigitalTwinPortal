@@ -116,6 +116,7 @@ export const maturityApi = {
   // 일괄 입력 — 「추출」과 같은 머리글의 표를 붙여넣어 한 번에 세운다(2026-08-30)
   getVocabs: () => request('/vocabs'),          // 기준 정보 — 화면의 선택지들
   promoteReview: (payload) => request('/reviews/promote', json('POST', payload)),   // 정착 후보 → 상시 항목
+  pruneOrgs: (divisionId) => request('/orgs/prune', json('POST', { division_id: divisionId })),   // 없어진 부서 정리
   getVocabMismatches: () => request('/vocabs/mismatches'),   // 점검 — 자료가 가리키는 없는 값
   remapVocab: (vocab, moves) => request('/vocabs/remap', json('POST', { vocab, moves })),
   bulkKinds: (sector, divisionId) => request(`/bulk/kinds?sector=${sector}&division_id=${divisionId ?? 'all'}`),
@@ -127,7 +128,6 @@ export const maturityApi = {
   mergeSystems: (keepId, dropId) => request('/systems/merge', json('POST', { keep_id: keepId, drop_id: dropId })),
   systemHubs: (divisionId) => request(`/systems/hubs?division_id=${divisionId}`),
   listOrgs: (divisionId) => request(`/orgs?division_id=${divisionId}`),
-  orgsFromDepartments: (divisionId) => request(`/orgs/from-departments?division_id=${divisionId}`),
   createOrg: (payload) => request('/orgs', json('POST', payload)),
   updateOrg: (id, payload) => request(`/orgs/${id}`, json('PUT', payload)),
   deleteOrg: (id) => request(`/orgs/${id}`, { method: 'DELETE' }),

@@ -136,7 +136,6 @@ def main():
             out[f'/agents?division_id={did}&sector={MON}'] = [x.to_dict() for x in MaturityAgent.query.filter_by(division_id=did, sector=MON).order_by(MaturityAgent.name).all()]
             out[f'/segments?division_id={did}'] = T.list_segments(did)
             out[f'/orgs?division_id={did}'] = T.list_orgs(did)
-            out[f'/orgs/from-departments?division_id={did}'] = T.departments_as_orgs(did)
             out[f'/threads/stats?division_id={did}'] = T.thread_stats(did)
             out[f'/threads/org-matrix?division_id={did}'] = T.org_matrix(did)
             out[f'/thread-cases/years?division_id={did}'] = T.case_years(did)

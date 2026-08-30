@@ -258,10 +258,67 @@ def merge_systems(keep_id, drop_id):
 
 # 조직 — 포탈 부서·프로세스 노드를 참조하거나 손으로.
 def list_orgs(division_id=None):
+    """그 사업부의 조직 — 읽을 때마다 포탈 부서를 맞춰 온다(2026-08-30).
+
+    ⚠️ 없어진 부서는 **지우지 않고** `gone` 으로 짚는다. 구간이 가리키고 있을 수 있다.
+    """
+    gone = sync_from_portal(division_id) if division_id is not None else set()
     q = ThreadOrg.query
     if division_id is not None:
         q = q.filter((ThreadOrg.division_id == int(division_id)) | (ThreadOrg.division_id.is_(None)))
-    return [o.to_dict() for o in q.order_by(ThreadOrg.name).all()]
+    out = []
+    for o in q.order_by(ThreadOrg.name).all():
+        d = o.to_dict()
+        if o.id in gone:
+            d['gone'] = True                     # 포탈에서 사라진(또는 꺼진) 부서
+            d['usage'] = org_usage(o.id)         # 쓰는 구간이 없으면 정리할 수 있다
+        out.append(d)
+    return out
+
+
+def sync_from_portal(division_id):
+    """포탈 부서를 조직 사전에 맞춘다 — 새 것은 만들고, 이름은 따라가고, 없어진 것은 짚는다.
+
+    ⚠️ 지우지 않는다. 자동으로 지우면 구간이 가리키던 조직이 말없이 사라진다.
+    ⚠️ 사람이 이름을 고친 줄(update_org 가 출처를 manual 로 돌린 것)은 건드리지 않는다.
+    """
+    from .services import departments_of
+    division_id = int(division_id)
+    live = {str(d['id']): d['name'] for d in departments_of(division_id)}
+    mine = ThreadOrg.query.filter_by(division_id=division_id).all()
+    by_source = {o.source_id: o for o in mine if o.source_kind == 'portal' and o.source_id}
+    by_name = {o.name: o for o in mine}
+
+    for did, name in live.items():
+        row = by_source.get(did)
+        if row is None:
+            # 이름이 같은 줄이 이미 있으면 그것을 부서와 묶는다 — 같은 조직을 둘로 만들지 않는다
+            row = by_name.get(name)
+            if row is not None and row.source_kind != 'portal':
+                row.source_kind, row.source_id = 'portal', did
+                continue
+            if row is None:
+                db.session.add(ThreadOrg(name=name[:200], division_id=division_id,
+                                         source_kind='portal', source_id=did))
+        elif row.name != name:
+            row.name = name[:200]                # 포탈이 이름을 바꿨다 — 따라간다
+    db.session.flush()
+
+    return {o.id for o in ThreadOrg.query.filter_by(division_id=division_id, source_kind='portal').all()
+            if o.source_id not in live}
+
+
+def prune_orgs(division_id):
+    """포탈에서 없어졌고 **아무 구간도 안 쓰는** 조직만 지운다. 쓰는 것은 그대로 둔다."""
+    gone = sync_from_portal(division_id)
+    dropped = []
+    for row in ThreadOrg.query.filter(ThreadOrg.id.in_(gone or [-1])).all():
+        if org_usage(row.id) == 0:
+            dropped.append(row.name)
+            db.session.delete(row)
+    db.session.flush()
+    kept = len(gone) - len(dropped)
+    return {'deleted': len(dropped), 'names': dropped[:20], 'kept': kept}
 
 
 def create_org(payload, division_id=None):
@@ -290,6 +347,9 @@ def update_org(row, payload):
         name = (payload.get('name') or '').strip()[:200]
         if not name:
             raise Refused('조직 이름이 필요합니다.')
+        if name != row.name and row.source_kind == 'portal':
+            # ⚠️ 손으로 고친 이름은 포탈이 덮지 않는다 — 고치는 순간 출처가 이 사람이 된다.
+            row.source_kind, row.source_id = 'manual', None
         row.name = name
     if 'role' in payload:
         role = payload.get('role') or None
@@ -303,13 +363,6 @@ def update_org(row, payload):
 
 def org_usage(org_id):
     return ThreadSegment.query.filter((ThreadSegment.from_org_id == org_id) | (ThreadSegment.to_org_id == org_id)).count()
-
-
-def departments_as_orgs(division_id):
-    """포탈 부서 표를 조직 후보로 — 이미 조직 사전에 있으면 그 id 를 같이 준다."""
-    from .services import departments_of
-    have = {(o.source_kind, o.source_id): o.id for o in ThreadOrg.query.filter_by(division_id=int(division_id)).all()}
-    return [{'id': d['id'], 'name': d['name'], 'org_id': have.get(('portal', str(d['id'])))} for d in departments_of(division_id)]
 
 
 # ── 사업부 구간 ─────────────────────────────────────────────────────────────

@@ -1095,3 +1095,73 @@ def test_정착_후보를_상시_시험_항목으로_올린다(client, auth, wor
                                                         'item': '굽힘', 'make_agent': True},
                        headers=auth(mx_user)).get_json()['data']
     assert made['made'] == {'subject': True, 'agent': True, 'pair': True}
+
+
+def test_포탈_부서는_저절로_들어오고_없어져도_지우지_않는다(client, auth, db, world, mx_user, office):
+    """단추를 눌러야 채워지면 대개 안 채워진다 — 목록을 읽을 때마다 맞춰 온다(2026-08-30).
+
+    ⚠️ 없어진 부서를 자동으로 지우면 구간이 가리키던 조직이 말없이 사라진다.
+    """
+    from app.modules.digital_twin_dashboard.models import Department
+    mx = world['mx'].id
+
+    def _orgs():
+        return client.get(f'{BASE}/orgs?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+
+    d1 = Department(division_id=mx, name='CAE그룹(MX)', is_active=True)
+    d2 = Department(division_id=mx, name='Mecha그룹(MX)', is_active=True)
+    db.session.add_all([d1, d2])
+    db.session.commit()
+
+    # ① 누르지 않아도 들어와 있다
+    rows = _orgs()
+    by = {o['name']: o for o in rows}
+    assert {'CAE그룹(MX)', 'Mecha그룹(MX)'} <= set(by)
+    assert by['CAE그룹(MX)']['source_kind'] == 'portal'
+    assert not by['CAE그룹(MX)'].get('gone')
+
+    # ② 두 번 읽어도 하나 — 같은 부서를 또 만들지 않는다
+    assert len([o for o in _orgs() if o['name'] == 'CAE그룹(MX)']) == 1
+
+    # ③ 포탈이 이름을 바꾸면 따라간다
+    d1.name = 'CAE解석그룹(MX)'
+    db.session.commit()
+    assert 'CAE解석그룹(MX)' in {o['name'] for o in _orgs()}
+
+    # ④ 사람이 이름을 고치면 그때부터 포탈이 안 덮는다 — 손댔으면 이 사람의 것이다
+    mine = next(o for o in _orgs() if o['name'] == 'CAE解석그룹(MX)')
+    client.put(f'{BASE}/orgs/{mine["id"]}', json={'name': '우리식 이름'}, headers=auth(mx_user))
+    d1.name = '또 바꾼 이름'
+    db.session.commit()
+    after = {o['name']: o for o in _orgs()}
+    assert '우리식 이름' in after and after['우리식 이름']['source_kind'] == 'manual'
+    assert '또 바꾼 이름' in after           # 부서와의 끈이 끊겼으니 새 줄이 하나 선다
+
+    # ⑤ 부서가 꺼지면 — 지우지 않고 짚는다
+    used = next(o for o in _orgs() if o['name'] == 'Mecha그룹(MX)')
+    d2.is_active = False
+    db.session.commit()
+    gone = next(o for o in _orgs() if o['id'] == used['id'])
+    assert gone['gone'] is True and gone['usage'] == 0
+
+    # ⑥ 쓰는 구간이 있으면 정리해도 남는다
+    threads = client.get(f'{BASE}/threads', headers=auth(mx_user)).get_json()['data']
+    seg_def = threads[1]['segments'][0]
+    client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': seg_def['id'],
+                                          'from_org_id': used['id']}, headers=auth(mx_user))
+    still = next(o for o in _orgs() if o['id'] == used['id'])
+    assert still['gone'] is True and still['usage'] == 1
+    out = client.post(f'{BASE}/orgs/prune', json={'division_id': mx}, headers=auth(office)).get_json()['data']
+    assert out == {'deleted': 0, 'names': [], 'kept': 1}
+    assert used['id'] in {o['id'] for o in _orgs()}          # 쓰는 것은 지우지 않는다
+
+    # ⑦ 안 쓰는 없어진 줄만 정리된다
+    d3 = Department(division_id=mx, name='버릴그룹(MX)', is_active=True)
+    db.session.add(d3)
+    db.session.commit()
+    spare = next(o for o in _orgs() if o['name'] == '버릴그룹(MX)')
+    d3.is_active = False
+    db.session.commit()
+    out2 = client.post(f'{BASE}/orgs/prune', json={'division_id': mx}, headers=auth(office)).get_json()['data']
+    assert out2['deleted'] == 1 and out2['names'] == ['버릴그룹(MX)'] and out2['kept'] == 1
+    assert spare['id'] not in {o['id'] for o in _orgs()}
