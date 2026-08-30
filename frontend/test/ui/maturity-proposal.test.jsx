@@ -27,6 +27,11 @@ const ROWS = [
     sector: 'simulation', subject_name: '굽힘 시험', agent_name: '낙하 해석',
     payload: { flags: ['pre'] }, note: '메시만 템플릿', now: null,
     actor_name: '박용진', created_at: '2026-08-30T10:05:00', status: 'pending' },
+  // 남의 사업부 것 — 보이되 못 누른다
+  { id: 13, pair_id: 7, division_id: 18, kind: 'assess', axis: 'scope', axis_label: '적용 범위',
+    sector: 'simulation', subject_name: 'VD 시험', agent_name: 'VD 해석', division_name: 'VD',
+    payload: { rung: 'basic' }, note: 'VD 쪽 근거', now: null, deny_reason: 'VD 사업부 인력만 평가합니다.',
+    actor_name: '박용진', created_at: '2026-08-30T10:10:00', status: 'pending' },
 ];
 
 export default async function run() {
@@ -68,6 +73,13 @@ export default async function run() {
     say(html().includes('2026 상반기 대표 모델 개발에서 돌렸다'), '② 근거가 그대로 보인다');
     say(html().includes('전처리 자동'), '② 묶음 축은 항목 이름으로 풀어서');
 
+    // ⑥ 남의 사업부 것 — 보이되 단추가 없고, 왜 못 하는지 말해 준다
+    say(html().includes('VD 시험') && html().includes('VD 사업부 인력만'),
+        '⑥ 남의 사업부 것은 보이되 이유가 붙는다');
+    say(!document.querySelector('button[aria-label="VD 시험 적용 범위 승인"]'),
+        '⑥ 남의 것에는 승인 단추가 없다');
+    say(html().includes('그 사업부에서 승인합니다'), '⑥ 어디서 하라고 알려 준다');
+
     calls.length = 0;
     await click(document.querySelector('button[aria-label="낙하 시험 적용 범위 승인"]')); await settle();
     const ok = calls.find(c => c.method === 'POST' && c.url.includes('/proposals/11/approve'));
@@ -78,7 +90,7 @@ export default async function run() {
     await click(document.querySelector('button[aria-label="굽힘 시험 자동화 거절"]')); await settle();
     const no = calls.find(c => c.method === 'POST' && c.url.includes('/proposals/12/reject'));
     say(!!no, `③ 거절은 reject 로: ${no?.url}`);
-    say(html().includes('확인할 것이 없습니다'), '④ 비면 그렇게 말한다');
+    say(!html().includes('확인할 것이 없습니다'), '④ 남의 것이 남아 있으면 「없습니다」가 아니다');
 
     // ⑤ 지난 것 — 감사 기록. 여기서는 아무것도 못 바꾼다.
     await click(byText('button', '지난 것')); await settle();

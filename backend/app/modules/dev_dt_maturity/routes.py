@@ -416,9 +416,9 @@ def list_proposals(actor):
     status = request.args.get('status') or 'pending'
     division_id = _int_arg('division_id')
     if division_id is not None:
-        return _refused(lambda: success_response(PR.listing(division_id, status)))
+        return _refused(lambda: success_response(PR.listing(division_id, status, actor=actor)))
     ids = [d for d, _ in _visible_division_ids()]
-    rows = [r for r in PR.listing(None, status) if r['division_id'] in ids]
+    rows = [r for r in PR.listing(None, status, actor=actor) if r['division_id'] in ids]
     return success_response(rows)
 
 
@@ -426,9 +426,12 @@ def list_proposals(actor):
 @read_required
 def count_proposals(actor):
     """헤더의 「확인 대기 N」 — 안 보면 쌓이기만 하므로 눈에 띄어야 한다."""
+    # ⚠️ 배지는 **내가 결정할 수 있는 것**만 센다 — 「4건」이라 눌렀는데 하나가 403 이면
+    #    그 수는 거짓말이다(2026-08-30). 남의 사업부 것은 목록에서 보되 세지는 않는다.
     division_id = _int_arg('division_id')
     ids = [division_id] if division_id is not None else [d for d, _ in _visible_division_ids()]
-    return success_response({'pending': PR.count_pending(ids)})
+    mine = [d for d in ids if d is not None and P.can_touch_division(actor, d)]
+    return success_response({'pending': PR.count_pending(mine)})
 
 
 @bp.route('/proposals/<int:row_id>/<decision>', methods=['POST'])

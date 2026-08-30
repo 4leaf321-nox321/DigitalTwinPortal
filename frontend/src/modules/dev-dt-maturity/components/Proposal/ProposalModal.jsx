@@ -152,6 +152,7 @@ const ProposalModal = ({ divisionId, axesBySector = {}, onClose, onChanged }) =>
                   <Card key={p.id} $edge={fg}>
                     <Where>
                       {p.subject_name}{p.agent_name ? ` × ${p.agent_name}` : ''}
+                      {p.division_name && <span style={{ color: '#94a3b8', fontWeight: 400 }}>· {p.division_name}</span>}
                       <span style={{ color: '#64748b', fontWeight: 400 }}>· {p.axis_label}</span>
                       <Verdict $fg={fg} $bg={bg}>{label}</Verdict>
                     </Where>
@@ -183,6 +184,7 @@ const ProposalModal = ({ divisionId, axesBySector = {}, onClose, onChanged }) =>
               <Card key={p.id}>
                 <Where>
                   {p.subject_name}{p.agent_name ? ` × ${p.agent_name}` : ''}
+                  {p.division_name && <span style={{ color: '#94a3b8', fontWeight: 400 }}>· {p.division_name}</span>}
                   <span style={{ color: '#64748b', fontWeight: 400 }}>· {p.axis_label}</span>
                   <Ai><Bot size={11} /> AI</Ai>
                 </Where>
@@ -191,16 +193,22 @@ const ProposalModal = ({ divisionId, axesBySector = {}, onClose, onChanged }) =>
                 </Move>
                 <Note>{p.note || '(근거 없음)'}</Note>
                 <Small>{p.actor_name} · {String(p.created_at || '').slice(0, 16).replace('T', ' ')}</Small>
-                <Row>
-                  <Button $primary disabled={busy === p.id} onClick={() => decide(p, true)}
-                          aria-label={`${p.subject_name} ${p.axis_label} 승인`}>
-                    <Check size={13} /> 승인
-                  </Button>
-                  <Button $bad disabled={busy === p.id} onClick={() => decide(p, false)}
-                          aria-label={`${p.subject_name} ${p.axis_label} 거절`}>
-                    <Ban size={13} /> 거절
-                  </Button>
-                </Row>
+                {/* ⚠️ 남의 사업부 것도 **보이기는 한다**(전사 현황을 봐야 하므로).
+                    다만 못 누르는 이유를 그대로 붙인다 — 사업부 목록과 같은 방식. */}
+                {p.deny_reason ? (
+                  <Small>{p.deny_reason} — 그 사업부에서 승인합니다.</Small>
+                ) : (
+                  <Row>
+                    <Button $primary disabled={busy === p.id} onClick={() => decide(p, true)}
+                            aria-label={`${p.subject_name} ${p.axis_label} 승인`}>
+                      <Check size={13} /> 승인
+                    </Button>
+                    <Button $bad disabled={busy === p.id} onClick={() => decide(p, false)}
+                            aria-label={`${p.subject_name} ${p.axis_label} 거절`}>
+                      <Ban size={13} /> 거절
+                    </Button>
+                  </Row>
+                )}
               </Card>
             );
           })}

@@ -134,7 +134,12 @@ def _now_map(rows):
             for a in got if (a.pair_id, a.axis) in keys}
 
 
-def listing(division_id=None, status='pending', limit=200):
+def listing(division_id=None, status='pending', limit=200, actor=None):
+    """`actor` 를 주면 줄마다 **내가 결정할 수 있는지**를 붙인다.
+
+    ⚠️ 목록은 다 보여 준다(읽기는 전사 허용). 못 누르는 것을 감추면 「왜 배지 수와
+       목록이 다르지」가 되고, 남의 사업부에서 무엇이 오가는지도 못 본다.
+    """
     # ⚠️ 연계·대상·수단을 **한 번에 당긴다** — 안 그러면 줄마다 세 질의가 더 간다.
     q = MaturityProposal.query.options(
         joinedload(MaturityProposal.pair).joinedload(MaturityPair.subject),
@@ -148,12 +153,26 @@ def listing(division_id=None, status='pending', limit=200):
         q = q.filter_by(status=status)
     rows = q.order_by(MaturityProposal.id.desc()).limit(limit).all()
     now = _now_map(rows)
-    return [r.to_dict(now.get((r.pair_id, r.axis))) for r in rows]
+    out = []
+    for r in rows:
+        d = r.to_dict(now.get((r.pair_id, r.axis)))
+        if actor is not None:
+            from . import permissions as P
+            from app.modules.digital_twin_dashboard.models import Division
+            div = Division.query.get(r.division_id)
+            reason = P.deny_reason(actor, r.division_id, div.name if div else None)
+            d['deny_reason'] = reason               # 없으면 내가 결정할 수 있다
+            d['division_name'] = div.name if div else None
+        out.append(d)
+    return out
 
 
 def count_pending(division_ids=None):
+    """⚠️ 부르는 쪽이 **내가 결정할 수 있는 사업부만** 넘긴다 — 배지는 내 할 일이다."""
     q = MaturityProposal.query.filter_by(status='pending')
-    if division_ids:
+    if division_ids is not None:
+        if not division_ids:
+            return 0
         q = q.filter(MaturityProposal.division_id.in_(list(division_ids)))
     return q.count()
 

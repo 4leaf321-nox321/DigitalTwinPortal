@@ -1426,3 +1426,39 @@ def test_지난_제안도_볼_수_있다_감사_기록이다(client, auth, world
     # 대기는 대기대로 — 섞이지 않는다
     pend = client.get(f'{BASE}/proposals?division_id={mx}', headers=auth(mx_user)).get_json()['data']
     assert [r['id'] for r in pend] == [live_id]
+
+
+def test_확인_대기_배지는_내가_결정할_수_있는_것만_센다(client, auth, db, world, mx_user, vd_user, office):
+    """「4건」이라 눌렀는데 하나가 403 이면 그 수는 거짓말이다.
+
+    ⚠️ 목록은 다 보여 준다 — 이 모듈은 읽기가 전사 허용이다(전사 현황을 봐야 한다).
+       다만 못 누르는 줄에는 **왜 못 하는지**를 붙인다.
+    """
+    mx, vd = world['mx'].id, world['vd'].id
+    _, _, pm = _pair(client, auth, mx_user, world['mx'])
+    _, _, pv = _pair(client, auth, vd_user, world['vd'], subject='VD 시험', agent='VD 해석')
+    for p, who in ((pm, mx_user), (pv, vd_user)):
+        client.put(f'{BASE}/pairs/{p["id"]}/assessments/scope',
+                   json={'actor_mode': 'ai', 'rung': 'basic', 'note': 'AI 판단'}, headers=auth(who))
+
+    # MX 사람이 「전체」로 볼 때 — 배지는 자기 것만
+    cnt = client.get(f'{BASE}/proposals/count', headers=auth(mx_user)).get_json()['data']
+    assert cnt['pending'] == 1, f'남의 사업부까지 셌다: {cnt}'
+
+    # 목록에는 둘 다 보인다 — 남의 것에는 이유가 붙는다
+    rows = client.get(f'{BASE}/proposals', headers=auth(mx_user)).get_json()['data']
+    by = {r['division_id']: r for r in rows}
+    assert set(by) == {mx, vd}
+    assert by[mx]['deny_reason'] is None                       # 내 것은 누를 수 있다
+    assert '사업부 인력만' in (by[vd]['deny_reason'] or '')     # 남의 것은 이유가 붙는다
+    assert by[vd]['division_name']                             # 어느 사업부인지도 보여 준다
+
+    # 그래도 누르면 막힌다 — 화면이 꺼도 문은 잠겨 있어야 한다
+    assert client.post(f'{BASE}/proposals/{by[vd]["id"]}/approve',
+                       headers=auth(mx_user)).status_code == 403
+
+    # 사무국은 전부 셈에 든다
+    assert client.get(f'{BASE}/proposals/count',
+                      headers=auth(office)).get_json()['data']['pending'] == 2
+    all_rows = client.get(f'{BASE}/proposals', headers=auth(office)).get_json()['data']
+    assert all(r['deny_reason'] is None for r in all_rows)
