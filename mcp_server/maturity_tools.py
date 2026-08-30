@@ -53,7 +53,7 @@ def register(mcp, request_fn):
               rung   — 칸 하나를 고른다(`rung`)
               value  — **값을 넣는다**(`value`). 칸은 서버가 문턱으로 정한다 — 칸을 직접
                        넣으면 거절된다(정확도가 둘이 되기 때문).
-              set    — 여러 칸을 켠다(`rungs` 목록)
+              set    — 여러 항목을 켠다(**`flags`** 목록 — `rung` 이 아니다)
               matrix — 바탕 토글 + 불량 유형 표. 이건 화면에서 다루는 것이 낫다.
 
         ⚠️ 이 모듈은 **대시보드 과제와 다른 것**이다. 과제·성과·KPI 를 찾는다면
@@ -167,7 +167,7 @@ def register(mcp, request_fn):
     @mcp.tool()
     async def maturity_assess(ctx: Context, pair_id: int, axis: str, note: str,
                               rung: str = "", value: float = None,
-                              rungs: list = None, evidence: dict = None,
+                              flags: list = None, evidence: dict = None,
                               base_assessed_at: str = "") -> dict:
         """연계의 한 축을 **매긴다.** 이 모듈의 핵심 도구.
 
@@ -179,7 +179,7 @@ def register(mcp, request_fn):
           rung   → `rung` 에 칸 key 하나
           value  → `value` 에 숫자(정확도는 %). **칸은 넣지 않는다** — 서버가 사업부
                    문턱으로 정한다. 칸을 직접 넣으면 거절된다.
-          set    → `rungs` 에 켤 칸 key 목록
+          set    → **`flags`** 에 켤 항목 key 목록(`rung` 이 아니다 — 묶음이라 여럿을 켠다)
           matrix → 화면에서 다루세요(불량 유형 × 열 표라 도구로 다루기에 나쁘다).
 
         `evidence` 는 축이 요구하는 근거 자료다(예: 정확도의 compared_tests·error_pct,
@@ -198,8 +198,8 @@ def register(mcp, request_fn):
             body["rung"] = rung
         if value is not None:
             body["value"] = value
-        if rungs:
-            body["rungs"] = rungs
+        if flags:
+            body["flags"] = flags
         if evidence:
             body["evidence"] = evidence
         if base_assessed_at:
