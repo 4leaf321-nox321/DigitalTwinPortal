@@ -31,6 +31,16 @@ def register(mcp, request_fn):
     async def _m(ctx, method, path, *, params=None, json_body=None):
         out = await request_fn(ctx, method, path, params=params, json_body=json_body,
                                prefix=MATURITY_PREFIX)
+        # 202 는 「확인 대기로 갔다」다 — 안내가 대시보드 것(confirm_change)이라 갈아 준다.
+        #    ⚠️ 성숙도에는 **승인 도구가 없다.** 사람이 화면에서 눌러야 한다.
+        if isinstance(out, dict) and out.get("status") == "needs_confirmation":
+            data = out.get("data") or {}
+            n = data.get("pending_in_division")
+            out = {**out, "next": "판에는 아직 안 올랐습니다. 사용자에게 **무엇을 어떻게 매기자고 "
+                                  "제안했는지**와 근거를 그대로 보여 주고, 성숙도 화면의 "
+                                  "「확인 대기」에서 승인해 달라고 말하세요."
+                                  + (f" 이 사업부에 대기 {n}건." if n else ""),
+                   "cannot": "AI 는 자기 제안을 승인할 수 없습니다 — 승인 도구는 일부러 없습니다."}
         # 409 안내는 대시보드 것(get_project·rowVersion)이라 성숙도 말로 바꿔 준다.
         if isinstance(out, dict) and out.get("status") == "conflict":
             out = {**out, "hint": "maturity_get_pair 로 그 축의 assessed_at 을 다시 받아 "
@@ -281,7 +291,12 @@ def register(mcp, request_fn):
                               rung: str = "", value: float = None,
                               flags: list = None, evidence: dict = None,
                               base_assessed_at: str = "") -> dict:
-        """[성숙도] 연계의 한 축을 **매긴다.** 이 모듈의 핵심 도구.
+        """[성숙도] 연계의 한 축을 **매기자고 제안한다.** 이 모듈의 핵심 도구.
+
+        ⚠️ **바로 반영되지 않는다.** AI 가 낸 판단은 확인 대기로 가고, 사람이 성숙도
+           화면의 「확인 대기」에서 근거를 읽고 승인해야 판에 오른다(202 로 답한다).
+           승인 도구는 일부러 없다 — 있으면 AI 가 자기 제안을 승인한다.
+           자료(대상·수단·연계·기록·사전)는 제안이 아니라 **바로** 들어간다.
 
         ⚠️ **`note`(근거)가 없으면 저장되지 않는다.** 올릴 때도 내릴 때도 마찬가지다 —
            근거 없는 칸은 인상평이라 이 모듈이 일부러 막는다. 「어디서 확인했는지」를
@@ -306,7 +321,8 @@ def register(mcp, request_fn):
             return {"status": "error",
                     "message": "근거(note)가 필요합니다 — 이 모듈은 근거 없는 평가를 저장하지 않습니다.",
                     "hint": "무엇을 보고 그렇게 판단했는지 사용자에게 물어보고 다시 부르세요."}
-        body = {"note": note}
+        # ⚠️ AI 가 낸 **판단**이라고 밝힌다 — 서버가 확인 대기로 돌린다(202).
+        body = {"actor_mode": "ai", "note": note}
         if rung:
             body["rung"] = rung
         if value is not None:
@@ -322,7 +338,9 @@ def register(mcp, request_fn):
     @mcp.tool()
     async def maturity_set_defect(ctx: Context, pair_id: int, axis: str, name: str,
                                   col: str, month: str = "") -> dict:
-        """[성숙도] **모델링 수준의 불량 유형 표** 칸 하나 — 「그 불량을 재현하는가」.
+        """[성숙도] **모델링 수준의 불량 유형 표** 칸 하나 — 「그 불량을 재현하는가」. (제안)
+
+        ⚠️ 판단이라 **확인 대기로 간다** — 사람이 화면에서 승인해야 반영된다.
 
         `name` 은 그 시뮬레이션의 불량 유형(예: 크랙·변색). **시뮬레이션에 없는 유형은
         못 적는다** — `maturity_update_item` 으로 `defect_types` 에 먼저 넣으세요.
@@ -335,12 +353,15 @@ def register(mcp, request_fn):
         if col not in ("test", "market"):
             return {"status": "error", "message": "col 은 test(시험 불량) · market(시장 불량) 중 하나입니다."}
         return await _m(ctx, "PUT", f"/pairs/{pair_id}/defects/{axis}",
-                        json_body={"name": name, "col": col, "month": month or None})
+                        json_body={"actor_mode": "ai", "name": name, "col": col,
+                                   "month": month or None})
 
     @mcp.tool()
     async def maturity_reached(ctx: Context, pair_id: int, axis: str, rung: str,
                                month: str) -> dict:
-        """[성숙도] 그 칸에 **언제 올라왔는지**를 적는다 — 옛 자료를 넣을 때 쓴다.
+        """[성숙도] 그 칸에 **언제 올라왔는지**를 적자고 제안한다 — 옛 자료를 넣을 때.
+
+        ⚠️ 이력의 날짜를 옮기는 일이라 판단으로 본다 — **확인 대기로 간다.**
 
         `month` 는 연-월(`2025-03`). 이력의 날짜가 그 달로 옮겨지고, 그 칸을 만든 이력이
         없으면 하나 만든다(근거는 「시점 적기」).
@@ -350,7 +371,7 @@ def register(mcp, request_fn):
            정확도 같은 값 축도 안 된다(값을 저장할 때 `assessed_at` 으로 넣으세요).
         """
         return await _m(ctx, "PUT", f"/pairs/{pair_id}/reached/{axis}/{rung}",
-                        json_body={"month": month})
+                        json_body={"actor_mode": "ai", "month": month, "note": f"도달 시점 {month}"})
 
     @mcp.tool()
     async def maturity_bulk(ctx: Context, division_id: int, kind: str, text: str,
@@ -375,6 +396,23 @@ def register(mcp, request_fn):
                                    "kind": kind, "text": text, "dry_run": dry_run})
 
 
+
+    @mcp.tool()
+    async def maturity_pending(ctx: Context, division_id: int = 0) -> list:
+        """[성숙도] **확인 대기** — 내가(또는 다른 AI 가) 낸 판단 중 아직 승인 안 된 것.
+
+        `division_id` 를 비우면 볼 수 있는 사업부 전부.
+
+        매기자고 제안한 뒤에는 이걸 읽어 **사용자에게 몇 건이 기다리는지 말해 주세요.**
+        아무도 안 보면 쌓이기만 하고, 그러면 제안이 무의미해진다.
+
+        ⚠️ 여기서 승인할 수 없다. 승인은 **사람이 성숙도 화면**에서 한다 —
+           AI 가 자기 제안을 승인하면 제안을 둔 뜻이 없어진다.
+        """
+        params = {"status": "pending"}
+        if division_id:
+            params["division_id"] = division_id
+        return await _m(ctx, "GET", "/proposals", params=params)
 
     # ── 이름 표준 — 「사용 툴」·「제품군」은 자유 칸이지만 뒤에 표준이 있다 ────
     #
@@ -422,22 +460,10 @@ def register(mcp, request_fn):
             return {"status": "error", "message": "kind 는 tool · family 중 하나입니다."}
         return await _m(ctx, "GET", row[1], params={"division_id": division_id})
 
-    @mcp.tool()
-    async def maturity_rename(ctx: Context, kind: str, division_id: int,
-                              from_name: str, to_name: str) -> dict:
-        """[성숙도] 그 사업부의 **모든 줄에서** 이름 하나를 바꾼다 — 표준에 맞출 때.
-
-        `maturity_name_audit` 의 `suggestion` 을 그대로 넣으면 된다.
-
-        ⚠️ 되돌리는 도구는 없다(반대로 한 번 더 부르면 되지만, 원래 두 이름이 섞여
-           있었다면 그 구분은 사라진다). **사용자에게 무엇을 무엇으로 바꾸는지 보여 주고
-           동의를 받은 뒤** 부르세요. 몇 군데가 바뀌는지는 audit 의 `count` 에 있다.
-        """
-        row = _NAME.get(kind)
-        if not row:
-            return {"status": "error", "message": "kind 는 tool · family 중 하나입니다."}
-        return await _m(ctx, "POST", row[2],
-                        json_body={"division_id": division_id, "from": from_name, "to": to_name})
+    # ⚠️ 이름 바꾸기(rename)는 **일부러 두지 않는다** — 사업부의 모든 줄을 한 번에 덮고
+    #    되돌리는 길이 없다(원래 두 이름이 섞여 있었다면 그 구분이 사라진다).
+    #    AI 는 `maturity_name_audit` 로 「이런 게 표준 밖입니다」까지 말하고,
+    #    고치는 것은 사람이 화면의 「도구 정돈」·「제품군 정돈」에서 한다.
 
     # ── 건 기록 — 척도가 상태라면 이쪽은 사건이다 ────────────────────────────
     #

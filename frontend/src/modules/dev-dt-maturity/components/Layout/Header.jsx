@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio, Factory, FileSpreadsheet, ChevronDown, Download, ClipboardPaste } from 'lucide-react';
+import { Gauge, FlaskConical, Cpu, Upload, Settings, Eye, Activity, PenTool, CheckSquare, Link2, Server, Users, BookOpen, Radio, Factory, FileSpreadsheet, ChevronDown, Download, ClipboardPaste, Bot } from 'lucide-react';
 import CommonHeader from '../../../../shared/components/Header/CommonHeader';
 
 // 로드맵 정보(「언제」)의 형제 — 이 모듈은 「얼마나」를 말한다.
@@ -25,9 +25,10 @@ const DataList = styled.div`
 const HeaderButton = styled.button`
   display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px;
   font-size: 0.8rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.2s ease;
-  background: ${p => (p.$variant === 'primary' ? '#1d4ed8' : 'transparent')};
-  color: ${p => (p.$variant === 'primary' ? 'white' : '#64748b')};
-  border: ${p => (p.$variant === 'primary' ? 'none' : '1px solid #e2e8f0')};
+  background: ${p => (p.$variant === 'primary' ? '#1d4ed8' : p.$variant === 'warn' ? '#fffbeb' : 'transparent')};
+  em { font-style: normal; font-weight: 700; margin-left: 0.15rem; }
+  color: ${p => (p.$variant === 'primary' ? 'white' : p.$variant === 'warn' ? '#92400e' : '#64748b')};
+  border: ${p => (p.$variant === 'primary' ? 'none' : p.$variant === 'warn' ? '1px solid #fde68a' : '1px solid #e2e8f0')};
   &:hover { background: ${p => (p.$variant === 'primary' ? '#1e40af' : '#f1f5f9')}; color: ${p => (p.$variant === 'primary' ? 'white' : '#475569')}; }
 `;
 const Count = styled.span`font-size: 0.7rem; color: #94a3b8; font-weight: 500;`;
@@ -60,7 +61,7 @@ const SECTORS = [
 const subjectLabel = (sectors, key) => sectors.find(s => s.key === key)?.subject_label || '시험 항목';
 const agentLabel = (sectors, key) => sectors.find(s => s.key === key)?.agent_label || '시뮬레이션';
 
-const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector, exporting = false }) => {
+const Header = ({ onGoHome, onOpen, counts = {}, pending = 0, canCurate = false, sample = false, onToggleSample, sector = 'simulation', sectors = [], onSector, exporting = false }) => {
   const [dataOpen, setDataOpen] = useState(false);
   // 바깥을 누르거나 Esc 면 닫는다 — 열려 있을 때만 듣는다.
   useEffect(() => {
@@ -143,6 +144,13 @@ const Header = ({ onGoHome, onOpen, counts = {}, canCurate = false, sample = fal
             </DataList>
           )}
         </DataMenu>
+        {/* 확인 대기 — AI 가 낸 판단. 사무국이 아니어도 자기 사업부 것은 봐야 한다(2026-08-30) */}
+        {pending > 0 && (
+          <HeaderButton $variant="warn" onClick={() => onOpen('proposals')}
+                        title="AI 가 매기자고 낸 판단 — 근거를 읽고 승인해야 판에 오릅니다">
+            <Bot size={16} /> 확인 대기 <em>{pending}</em>
+          </HeaderButton>
+        )}
         {canCurate && (
           <HeaderButton onClick={() => onOpen('settings')} title="정확도 문턱과 경계 — 사무국·관리자">
             <Settings size={16} /> 설정

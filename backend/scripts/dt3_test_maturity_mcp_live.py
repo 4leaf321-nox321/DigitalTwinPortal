@@ -44,6 +44,7 @@ from app import create_app                                            # noqa: E4
 from app.modules.auth.models import User                              # noqa: E402
 
 MCP_URL = os.environ.get('MCP_URL', 'http://127.0.0.1:3003/mcp')
+BASE_API = os.environ.get('DT_API_BASE', 'http://localhost:5174').rstrip('/')
 MARK = 'ZZ-MCP시험'          # 만든 것에 붙이는 표 — 중간에 죽어도 이 이름으로 찾는다
 FAIL = []
 
@@ -152,6 +153,26 @@ def main():
     print(f'· 사용자: {user.name} (id={user.id})')
 
     m = Mcp(token)
+    hdr = {'Authorization': f'Bearer {token}'}
+
+    def rate(tool, args):
+        """판단 도구를 부르고, 확인 대기로 갔으면 **사람 몫**(승인)을 대신 해 준다.
+
+        ⚠️ 문(제안 → 승인)은 D 마당이 따로 본다. 여기서는 그 너머의 **규칙**을 보려는
+           것이므로, 매번 문을 다시 열지 않는다.
+        """
+        out = m.call(tool, args)
+        if not (isinstance(out, dict) and out.get('status') == 'needs_confirmation'):
+            return out                                  # 거절(400)이면 그대로 돌려준다
+        pid = (out.get('data') or {}).get('proposal_id')
+        r = requests.post(f'{BASE_API}/api/dev-dt-maturity/proposals/{pid}/approve',
+                          headers=hdr, timeout=30)
+        if not r.ok:
+            body = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+            return {'status': 'error', 'httpStatus': r.status_code,
+                    'message': body.get('message') or r.text[:200]}
+        return (r.json().get('data') or {}).get('pair') or {}
+
     made = {'subject': None, 'agent': None, 'pair': None,
             'promoted_subject': None, 'sys': None, 'org': None, 'case': None,
             'mon_subject': None, 'mon_agent': None, 'mon_pair': None,
@@ -211,22 +232,37 @@ def main():
                                              'note': '', 'rung': 'pre'})
         check('근거가 비면 막힌다', blocked.get('status'), 'error')
 
+        # ⚠️ AI 가 낸 판단은 **바로 안 오른다** — 확인 대기로 간다(2026-08-30)
         got = m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'automation',
                                          'note': '전처리 템플릿 확인(2026-08)', 'flags': ['pre'],
                                          'evidence': {'hours_per_run': 4}})
-        check_true('근거가 있으면 저장된다', isinstance(got, dict) and got.get('assessments'))
-        auto = (got.get('assessments') or {}).get('automation') or {}
-        check_true('자동화 칸이 매겨졌다', auto.get('rung'))
+        check('근거가 있으면 확인 대기로 간다', got.get('status'), 'needs_confirmation')
+        check_true('무엇을 하라고 말해 준다', '확인 대기' in (got.get('next') or ''))
+        check_true('AI 가 스스로 승인 못 한다고 말한다', '승인' in (got.get('cannot') or ''))
+        pend = m.call_list('maturity_pending', {'division_id': did})
+        check_true('대기 목록에서 보인다', any(x['axis'] == 'automation' for x in pend))
+        now = m.call('maturity_get_pair', {'pair_id': made['pair']})
+        check('판에는 아직 없다', ((now.get('assessments') or {}).get('automation')), None)
+        # 사람이 승인한다 — MCP 에는 승인 길이 없으므로 API 로(화면이 하는 일)
+        pid = next(x['id'] for x in pend if x['axis'] == 'automation')
+        okr = requests.post(f'{os.environ.get("DT_API_BASE", "http://localhost:5174").rstrip("/")}'
+                            f'/api/dev-dt-maturity/proposals/{pid}/approve',
+                            headers={'Authorization': f'Bearer {token}'}, timeout=30)
+        check('사람이 승인하면 200', okr.status_code, 200)
+        auto = ((m.call('maturity_get_pair', {'pair_id': made['pair']}).get('assessments') or {})
+                .get('automation') or {})
+        check_true('승인 뒤에야 칸이 매겨졌다', auto.get('rung'))
+        check('승인한 사람 이름으로 남는다', auto.get('assessed_by_name'), user.name)
 
         # ── E 값 축 ────────────────────────────────────────────────────────
         print('\nE. 값 축 — 값만 넣고 칸은 서버가 정한다')
-        acc = m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'accuracy',
+        acc = rate('maturity_assess', {'pair_id': made['pair'], 'axis': 'accuracy',
                                          'note': '시험 5건 비교, 오차 6%', 'value': 94,
                                          'evidence': {'compared_tests': 5, 'error_pct': 6}})
         row = (acc.get('assessments') or {}).get('accuracy') or {}
         check('값이 들어갔다', row.get('value'), 94)
         check_true('칸은 서버가 정했다', row.get('rung'))
-        refused = m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'accuracy',
+        refused = rate('maturity_assess', {'pair_id': made['pair'], 'axis': 'accuracy',
                                              'note': '칸을 직접', 'rung': 'correlated'})
         check('값 축에 칸을 넣으면 거절', refused.get('status'), 'error')
 
@@ -235,55 +271,62 @@ def main():
         cur = m.call('maturity_get_pair', {'pair_id': made['pair']})
         stamp = ((cur.get('assessments') or {}).get('automation') or {}).get('assessed_at')
         check_true('평가 시각을 준다', stamp)
-        m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'automation',
-                                   'note': '남이 먼저 고친 셈', 'flags': ['pre', 'run'],
-                                   'evidence': {'hours_per_run': 3}})
-        stale = m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'automation',
-                                           'note': '낡은 기준으로 덮기', 'flags': ['pre'],
-                                           'evidence': {'hours_per_run': 4},
-                                           'base_assessed_at': stamp})
-        check('낡은 기준이면 409', stale.get('status'), 'conflict')
-        check_true('성숙도 말로 안내한다', 'maturity_get_pair' in (stale.get('hint') or ''))
+        rate('maturity_assess', {'pair_id': made['pair'], 'axis': 'automation',
+                                 'note': '남이 먼저 고친 셈', 'flags': ['pre', 'run'],
+                                 'evidence': {'hours_per_run': 3}})
+        # ⚠️ AI 의 판단은 제안으로 가므로 **낡은 기준으로 덮을 수가 없다** — 승인이 곧
+        #    결정 시점이고, 승인 화면이 「지금 값 → 제안」을 나란히 보여 준다.
+        #    (사람이 화면에서 바로 매길 때의 409 는 pytest 쪽에서 본다.)
+        held = m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'automation',
+                                          'note': '낡은 기준으로 덮기', 'flags': ['pre'],
+                                          'evidence': {'hours_per_run': 4},
+                                          'base_assessed_at': stamp})
+        check('낡은 기준을 줘도 제안으로 간다', held.get('status'), 'needs_confirmation')
+        card = (held.get('data') or {}).get('preview') or {}
+        check_true('승인 화면이 볼 지금 값을 함께 준다', (card.get('now') or {}).get('rung'))
+        pid2 = (held.get('data') or {}).get('proposal_id')
+        requests.post(f'{BASE_API}/api/dev-dt-maturity/proposals/{pid2}/reject',
+                      headers=hdr, timeout=30)
 
         # ── M 모델링 수준 ──────────────────────────────────────────────────
         print('\nM. 모델링 수준 — 두 손잡이')
         check('modeling 은 matrix 축', by_axis['modeling']['kind'], 'matrix')
         base_keys = [b['key'] for b in by_axis['modeling']['base']]
-        got_b = m.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'modeling',
+        got_b = rate('maturity_assess', {'pair_id': made['pair'], 'axis': 'modeling',
                                            'note': '치수·재질이 실물과 같음(도면 대조)',
                                            'flags': [base_keys[0]]})
         mod = (got_b.get('assessments') or {}).get('modeling') or {}
         check_true('바탕이 켜졌다', mod.get('rung'))
 
         # 불량 유형은 **그 시뮬레이션의 목록**에 있어야 적을 수 있다
-        nope = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+        nope = rate('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
                                               'name': '없는유형', 'col': 'test', 'month': '2026-03'})
         check('시뮬레이션에 없는 불량 유형은 거절', nope.get('status'), 'error')
         m.call('maturity_update_item', {'kind': 'agent', 'item_id': made['agent'],
                                         'fields': {'defect_types': ['크랙']}})
-        cell = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+        cell = rate('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
                                               'name': '크랙', 'col': 'test', 'month': '2026-03'})
         ev = ((cell.get('assessments') or {}).get('modeling') or {}).get('evidence') or {}
         check_true('불량 유형 칸이 켜졌다', (ev.get('defects') or {}).get('크랙', {}).get('test'))
-        bad_col = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+        bad_col = rate('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
                                                  'name': '크랙', 'col': 'nope'})
         check('col 은 test·market 뿐', bad_col.get('status'), 'error')
-        off = m.call('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
+        off = rate('maturity_set_defect', {'pair_id': made['pair'], 'axis': 'modeling',
                                              'name': '크랙', 'col': 'test'})
         ev2 = ((off.get('assessments') or {}).get('modeling') or {}).get('evidence') or {}
         check('달을 비우면 칸이 꺼진다', (ev2.get('defects') or {}).get('크랙', {}).get('test'), None)
 
         # ── N 도달 시점 ────────────────────────────────────────────────────
         print('\nN. 도달 시점 — 옛 자료를 그 달로')
-        reach = m.call('maturity_reached', {'pair_id': made['pair'], 'axis': 'automation',
+        reach = rate('maturity_reached', {'pair_id': made['pair'], 'axis': 'automation',
                                             'rung': 'pre', 'month': '2025-03'})
         hit = [c for c in (reach.get('changes') or []) if c.get('after') and 'pre' in str(c['after'])]
         check_true('그 칸의 이력이 그 달로 옮겨졌다',
                    any(str(c.get('created_at', '')).startswith('2025-03') for c in hit))
-        high = m.call('maturity_reached', {'pair_id': made['pair'], 'axis': 'automation',
+        high = rate('maturity_reached', {'pair_id': made['pair'], 'axis': 'automation',
                                            'rung': 'pipeline', 'month': '2025-01'})
         check('아직 안 올라온 칸에는 못 적는다', high.get('status'), 'error')
-        val = m.call('maturity_reached', {'pair_id': made['pair'], 'axis': 'accuracy',
+        val = rate('maturity_reached', {'pair_id': made['pair'], 'axis': 'accuracy',
                                           'rung': 'correlated', 'month': '2025-01'})
         check('값 축은 시점을 따로 안 적는다', val.get('status'), 'error')
 
@@ -340,13 +383,13 @@ def main():
         check_true('모니터링 연계가 생겼다', made['mon_pair'])
 
         # 모니터링의 축은 시뮬레이션과 **다르다** — 남의 축을 넣으면 거절돼야 한다
-        wrong = m.call('maturity_assess', {'pair_id': made['mon_pair'], 'axis': 'accuracy',
+        wrong = rate('maturity_assess', {'pair_id': made['mon_pair'], 'axis': 'accuracy',
                                            'note': '남의 부문 축', 'value': 90})
         check('다른 부문의 축은 거절', wrong.get('status'), 'error')
 
         mon_axes = {a['key']: a for a in defs['axes'][mon]}
         check_true('모니터링에 기본 계측 축이 있다', 'basic_metrics' in mon_axes)
-        got_m = m.call('maturity_assess', {'pair_id': made['mon_pair'], 'axis': 'basic_metrics',
+        got_m = rate('maturity_assess', {'pair_id': made['mon_pair'], 'axis': 'basic_metrics',
                                            'note': '설비 8/12대에서 상태·C/T 수집 확인',
                                            'flags': ['state', 'ct'],
                                            'evidence': {'coverage_pct': 67}})
@@ -387,7 +430,7 @@ def main():
         tpair = (mine_seg or {}).get('pairs', [{}])[0].get('pair_id') if mine_seg else None
         check_true('수단 없이 연계가 서 있다', tpair)
         if tpair:
-            got_t = m.call('maturity_assess', {'pair_id': tpair, 'axis': 'link_mode',
+            got_t = rate('maturity_assess', {'pair_id': tpair, 'axis': 'link_mode',
                                                'note': '엑셀 메일로 넘긴다 — 담당자 확인',
                                                'rung': 'manual'})
             lm = (got_t.get('assessments') or {}).get('link_mode') or {}
@@ -442,7 +485,7 @@ def main():
             'subject_name': f'{MARK} 힌지 강성 시험'})
         check_true('상시 항목으로 올라간다', up.get('pair_id'))
         made['promoted_subject'] = up.get('subject_id')
-        rated = m.call('maturity_assess', {'pair_id': up['pair_id'], 'axis': 'automation',
+        rated = rate('maturity_assess', {'pair_id': up['pair_id'], 'axis': 'automation',
                                            'note': '올린 뒤 바로 매긴다', 'flags': ['pre']})
         check_true('올린 연계를 곧바로 매길 수 있다',
                    ((rated.get('assessments') or {}).get('automation') or {}).get('rung'))
@@ -494,10 +537,13 @@ def main():
         hit = next((r for r in (au.get('tools') or []) if r['name'] == 'HyperMesh'), None)
         check_true('점검이 표준 밖을 짚는다', hit and not hit.get('in_intel'))
         check('고칠 후보를 준다', (hit or {}).get('suggestion'), 'Altair HyperMesh')
-        m.call('maturity_rename', {'kind': 'tool', 'division_id': did,
-                                   'from_name': 'HyperMesh', 'to_name': 'Altair HyperMesh'})
+        # ⚠️ 맞추는 것은 **화면의 일**이다 — MCP 에 rename 을 두지 않았다(되돌릴 수 없다).
+        #    AI 는 「이런 게 표준 밖입니다」까지 말하고 거기서 멈춘다.
+        check_true('AI 에게 이름 바꾸기 도구는 없다', 'maturity_rename' not in names)
+        requests.post(f'{BASE_API}/api/dev-dt-maturity/tools/rename', headers=hdr, timeout=30,
+                      json={'division_id': did, 'from': 'HyperMesh', 'to': 'Altair HyperMesh'})
         au2 = m.call('maturity_name_audit', {'kind': 'tool', 'division_id': did})
-        check('맞추면 사라진다',
+        check('사람이 맞추면 사라진다',
               [r for r in (au2.get('tools') or []) if r['name'] == 'HyperMesh'], [])
 
         # ── L 권한 ─────────────────────────────────────────────────────────

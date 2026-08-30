@@ -1229,3 +1229,86 @@ def test_없는_칸을_보내면_무엇이_맞는지_함께_말해_준다(client
     assert r2.status_code == 400
     msg2 = r2.get_json()['message']
     assert '없는 항목' in msg2 and 'pre' in msg2 and 'pipeline' in msg2, msg2
+
+
+def test_AI_가_낸_판단은_제안으로_가고_사람이_승인해야_판에_오른다(client, auth, world, mx_user, vd_user):
+    """「근거 없이는 매기지 않는다」가 막는 것은 빈 근거이지 **지어낸 근거**가 아니다.
+
+    AI 는 그럴듯한 근거를 만들어 내므로 판단은 사람이 읽고 승인해야 오른다.
+    ⚠️ 대기 중인 제안은 **딴 표에 있다** — 판·요약·변화·추출 어디에도 들지 않는다.
+       그래서 저 셈들은 이 기능 때문에 아무것도 안 바꿨다. 그것을 여기서 확인한다.
+    """
+    mx = world['mx'].id
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+
+    # ① AI 가 매기면 202 — 자료는 아무것도 안 바뀐다
+    res = client.put(f'{BASE}/pairs/{p["id"]}/assessments/scope',
+                     json={'actor_mode': 'ai', 'rung': 'basic', 'note': 'AI 가 적은 근거'},
+                     headers=auth(mx_user))
+    assert res.status_code == 202, res.get_json()
+    body = res.get_json()
+    pid = body['data']['proposal_id']
+    assert body['data']['pending_in_division'] == 1
+    assert '확인 대기' in body['message']
+
+    pair = client.get(f'{BASE}/pairs/{p["id"]}', headers=auth(mx_user)).get_json()['data']
+    assert pair['assessments']['scope'] is None                  # 판에는 안 올랐다
+    board = client.get(f'{BASE}/board?division_id={mx}&sector=simulation',
+                       headers=auth(mx_user)).get_json()['data']
+    assert board['totals']['unassessed'] > 0                      # 셈에도 안 든다
+    assert client.get(f'{BASE}/changes?division_id={mx}&sector=simulation',
+                      headers=auth(mx_user)).get_json()['data'] == []   # 이력도 없다
+
+    # ② 근거가 없으면 제안조차 안 된다 — 같은 규칙을 여기서도 본다
+    assert client.put(f'{BASE}/pairs/{p["id"]}/assessments/scope',
+                      json={'actor_mode': 'ai', 'rung': 'basic', 'note': ' '},
+                      headers=auth(mx_user)).status_code == 400
+    # 없는 칸도 제안 때 걸린다 — 승인할 때가 되어서야 안 된다고 하면 늦다
+    assert client.put(f'{BASE}/pairs/{p["id"]}/assessments/없는축',
+                      json={'actor_mode': 'ai', 'rung': 'basic', 'note': 'x'},
+                      headers=auth(mx_user)).status_code == 400
+
+    # ③ 대기 목록과 수
+    rows = client.get(f'{BASE}/proposals?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert len(rows) == 1 and rows[0]['axis_label'] == '적용 범위'
+    assert rows[0]['now'] is None and rows[0]['payload']['rung'] == 'basic'
+    assert client.get(f'{BASE}/proposals/count?division_id={mx}',
+                      headers=auth(mx_user)).get_json()['data']['pending'] == 1
+
+    # ④ 남의 사업부 사람은 결정 못 한다
+    assert client.post(f'{BASE}/proposals/{pid}/approve', headers=auth(vd_user)).status_code == 403
+
+    # ⑤ 승인하면 **사람이 매긴 것**이 된다 — 이력의 actor 는 승인한 사람
+    ok = client.post(f'{BASE}/proposals/{pid}/approve', headers=auth(mx_user))
+    assert ok.status_code == 200, ok.get_json()
+    after = client.get(f'{BASE}/pairs/{p["id"]}', headers=auth(mx_user)).get_json()['data']
+    assert after['assessments']['scope']['rung'] == 'basic'
+    assert after['assessments']['scope']['assessed_by_name'] == mx_user.name
+    ch = client.get(f'{BASE}/changes?division_id={mx}&sector=simulation',
+                    headers=auth(mx_user)).get_json()['data']
+    assert len(ch) == 1 and ch[0]['actor_name'] == mx_user.name
+
+    # ⑥ 두 번 결정 못 한다
+    assert client.post(f'{BASE}/proposals/{pid}/approve', headers=auth(mx_user)).status_code == 400
+    assert client.get(f'{BASE}/proposals/count?division_id={mx}',
+                      headers=auth(mx_user)).get_json()['data']['pending'] == 0
+
+    # ⑦ 거절하면 아무것도 안 바뀐다
+    res2 = client.put(f'{BASE}/pairs/{p["id"]}/assessments/scope',
+                      json={'actor_mode': 'ai', 'rung': 'all', 'note': '더 올리자'},
+                      headers=auth(mx_user))
+    pid2 = res2.get_json()['data']['proposal_id']
+    assert res2.get_json()['data']['preview']['now']['rung'] == 'basic'    # 지금 값을 보여 준다
+    client.post(f'{BASE}/proposals/{pid2}/reject', json={'note': '근거가 약함'},
+                headers=auth(mx_user))
+    still = client.get(f'{BASE}/pairs/{p["id"]}', headers=auth(mx_user)).get_json()['data']
+    assert still['assessments']['scope']['rung'] == 'basic'                # 그대로
+    done = client.get(f'{BASE}/proposals?division_id={mx}&status=rejected',
+                      headers=auth(mx_user)).get_json()['data']
+    assert done[0]['decided_note'] == '근거가 약함'      # 왜 거절했는지 남는다
+
+    # ⑧ **자료는 제안이 아니다** — 사람이 세우는 것과 같은 길로 바로 들어간다
+    made = client.post(f'{BASE}/subjects', json={'division_id': mx, 'sector': 'simulation',
+                                                 'name': 'AI 가 세운 항목', 'actor_mode': 'ai'},
+                       headers=auth(mx_user))
+    assert made.status_code == 201        # 202 가 아니다 — 승인 30번이 되면 아무도 안 쓴다

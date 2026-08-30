@@ -101,7 +101,7 @@ SAMPLE = {
     'maturity_bulk_kinds': {'division_id': 17},
     'maturity_name_catalog': {'kind': 'tool', 'division_id': 17},
     'maturity_name_audit': {'kind': 'family', 'division_id': 17},
-    'maturity_rename': {'kind': 'tool', 'division_id': 17, 'from_name': 'a', 'to_name': 'b'},
+    'maturity_pending': {'division_id': 17},
     'maturity_list_records': {'kind': 'review', 'division_id': 17, 'year': 2026},
     'maturity_record_stats': {'kind': 'thread_case', 'division_id': 17},
     'maturity_add_record': {'kind': 'review', 'division_id': 17, 'fields': {'month': '2026-03'}},

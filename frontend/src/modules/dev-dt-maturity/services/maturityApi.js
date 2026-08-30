@@ -114,6 +114,12 @@ export const maturityApi = {
   deleteSegmentDef: (id) => request(`/threads/segment-defs/${id}`, { method: 'DELETE' }),
   listProjects: (divisionId) => request(`/projects?division_id=${divisionId}`),   // 수행 디지털 트윈 과제 고르기의 재료
   // 일괄 입력 — 「추출」과 같은 머리글의 표를 붙여넣어 한 번에 세운다(2026-08-30)
+  // 확인 대기 — AI 가 낸 판단. 승인해야 판에 오른다(2026-08-30)
+  listProposals: (divisionId) => request(`/proposals?status=pending`
+    + (divisionId != null && divisionId !== 'all' ? `&division_id=${divisionId}` : '')),
+  countProposals: (divisionId) => request('/proposals/count'
+    + (divisionId != null && divisionId !== 'all' ? `?division_id=${divisionId}` : '')),
+  decideProposal: (id, decision) => request(`/proposals/${id}/${decision}`, json('POST', {})),
   getVocabs: () => request('/vocabs'),          // 기준 정보 — 화면의 선택지들
   promoteReview: (payload) => request('/reviews/promote', json('POST', payload)),   // 정착 후보 → 상시 항목
   pruneOrgs: (divisionId) => request('/orgs/prune', json('POST', { division_id: divisionId })),   // 없어진 부서 정리

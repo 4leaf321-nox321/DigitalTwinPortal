@@ -12,6 +12,7 @@ import ThreadCaseLedger from './components/Thread/ThreadCaseLedger';
 import PairModal from './components/Pair/PairModal';
 import ModalHost from './components/List/ModalHost';
 import SettingsModal from './components/Settings/SettingsModal';
+import ProposalModal from './components/Proposal/ProposalModal';
 import maturityApi from './services/maturityApi';
 import { setSampleMode } from './sample/sampleStore';
 import { filtersFromParams, filtersToParams, tabInSector } from './utils/board';
@@ -144,6 +145,15 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   }, [defs, sector]);   // eslint-disable-line react-hooks/exhaustive-deps
   // 추출 — 지금 부문의 입력 자료를 엑셀 한 권으로. 자료는 화면과 같은 길로 받으니 샘플 뷰도 따라온다.
   const [exporting, setExporting] = useState(false);
+  // 확인 대기 — AI 가 낸 판단. 안 보면 쌓이기만 하므로 헤더에 수를 띄운다(2026-08-30).
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    let dead = false;
+    maturityApi.countProposals(divisionId)
+      .then(r => { if (!dead) setPending(r.data?.pending || 0); })
+      .catch(() => { if (!dead) setPending(0); });
+    return () => { dead = true; };
+  }, [divisionId, refreshKey]);
   const runExport = async () => {
     if (exporting) return;
     setExporting(true);
@@ -179,6 +189,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
       <Header onGoHome={onGoHome} onOpen={(kind) => (kind === 'export' ? runExport() : setModal({ kind }))}
               counts={counts} canCurate={!!defs?.can_curate} exporting={exporting}
               sample={sample} onToggleSample={() => patch({ sample: sample ? null : '1', pair: null })}
+              pending={pending}
               sector={sector} sectors={defs?.sectors || []} onSector={(k) => patch({ sector: k === 'simulation' ? null : k, pair: null, tab: tabInSector(tab, k) })} />
       {sample && (
         <SampleBar role="status">
@@ -232,6 +243,10 @@ const DevDtMaturityApp = ({ onGoHome }) => {
         {modal && ['system', 'org', 'thread'].includes(modal.kind) && defs && (
           <ThreadDictModal kind={modal.kind} divisionId={divisionId} divisions={divisions} thread={defs.thread} axes={defs.axes?.digital_thread || []}
                            canCurate={!!defs.can_curate} denyReason={division?.deny_reason || null} onClose={() => setModal(null)} onChanged={bump} />
+        )}
+        {modal?.kind === 'proposals' && defs && (
+          <ProposalModal divisionId={divisionId} axesBySector={defs.axes || {}}
+                         onClose={() => setModal(null)} onChanged={bump} />
         )}
         {modal?.kind === 'settings' && defs && (
           <SettingsModal divisions={divisions} sectors={defs.sectors || []}

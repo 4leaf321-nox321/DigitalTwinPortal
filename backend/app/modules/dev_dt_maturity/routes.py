@@ -354,6 +354,28 @@ def delete_pair(actor, pair_id):
         return _crashed()
 
 
+from . import proposals as PR                     # noqa: E402
+
+
+def _propose_if_ai(pair, kind, axis, payload, actor):
+    """AI 가 낸 **판단**이면 제안으로 돌린다(2026-08-30).
+
+    ⚠️ 「근거 없이는 매기지 않는다」가 막는 것은 빈 근거이지 **지어낸 근거**가 아니다.
+       AI 는 그럴듯한 근거를 만들어 내므로, 판단은 사람이 화면에서 보고 승인해야 오른다.
+       자료(대상·수단·연계·기록·사전)는 사실이라 그대로 들어간다 — 틀리면 고치면 된다.
+    """
+    if (payload or {}).get('actor_mode') != 'ai':
+        return None
+    row = PR.create(pair, kind, axis, payload, actor)
+    db.session.commit()
+    n = PR.count_pending([pair.subject.division_id])
+    return success_response({
+        'proposal_id': row.id, 'status': 'pending', 'pending_in_division': n,
+        'preview': row.to_dict(),
+    }, message=f'확인 대기로 넣었습니다 — 화면의 「확인 대기」에서 승인해야 반영됩니다. '
+               f'이 사업부에 대기 {n}건.', status_code=202)
+
+
 @bp.route('/pairs/<int:pair_id>/assessments/<axis>', methods=['PUT'])
 @read_required
 def assess(actor, pair_id, axis):
@@ -365,6 +387,9 @@ def assess(actor, pair_id, axis):
         return denied
     try:
         payload = request.get_json() or {}
+        held = _propose_if_ai(pair, 'assess', axis, payload, actor)
+        if held:
+            return held
         T.guard_assess(pair, axis, payload)
         S.assess(pair, axis, payload, actor)
         db.session.commit()
@@ -381,6 +406,60 @@ def assess(actor, pair_id, axis):
 
 
 # ── 설정 ───────────────────────────────────────────────────────────────────
+
+@bp.route('/proposals', methods=['GET'])
+@read_required
+def list_proposals(actor):
+    """확인 대기 — AI 가 낸 판단. `division_id` 를 비우면 볼 수 있는 사업부 전부."""
+    status = request.args.get('status') or 'pending'
+    division_id = _int_arg('division_id')
+    if division_id is not None:
+        return _refused(lambda: success_response(PR.listing(division_id, status)))
+    ids = [d for d, _ in _visible_division_ids()]
+    rows = [r for r in PR.listing(None, status) if r['division_id'] in ids]
+    return success_response(rows)
+
+
+@bp.route('/proposals/count', methods=['GET'])
+@read_required
+def count_proposals(actor):
+    """헤더의 「확인 대기 N」 — 안 보면 쌓이기만 하므로 눈에 띄어야 한다."""
+    division_id = _int_arg('division_id')
+    ids = [division_id] if division_id is not None else [d for d, _ in _visible_division_ids()]
+    return success_response({'pending': PR.count_pending(ids)})
+
+
+@bp.route('/proposals/<int:row_id>/<decision>', methods=['POST'])
+@read_required
+def decide_proposal(actor, row_id, decision):
+    """승인·거절. **승인하면 사람이 매긴 것이 된다** — 이력의 actor 는 승인한 사람이다.
+
+    ⚠️ 승인은 화면에서만 한다. MCP 에 승인 도구를 두지 않는다 — 두면 AI 가 자기 제안을
+       승인한다.
+    """
+    if decision not in ('approve', 'reject'):
+        return error_response('approve 또는 reject 입니다.', status_code=400)
+    row = PR.MaturityProposal.query.get(row_id)
+    if not row:
+        return error_response('없는 제안입니다.', status_code=404)
+    denied = _deny(actor, row.division_id)
+    if denied:
+        return denied
+    try:
+        pair = PR.decide(row, decision == 'approve', actor,
+                         (request.get_json(silent=True) or {}).get('note') or '')
+        db.session.commit()
+        return success_response({'proposal': row.to_dict(),
+                                 'pair': S.pair_dict(pair, with_changes=True) if pair else None})
+    except S.Stale as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=409)
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
 
 @bp.route('/settings', methods=['GET'])
 @read_required
@@ -752,7 +831,11 @@ def set_reached(actor, pair_id, axis, rung):
     if denied:
         return denied
     try:
-        S.set_reached(pair, axis, rung, (request.get_json() or {}).get('month'), actor)
+        p = request.get_json() or {}
+        held = _propose_if_ai(pair, 'reached', axis, {**p, 'rung': rung}, actor)
+        if held:
+            return held
+        S.set_reached(pair, axis, rung, p.get('month'), actor)
         db.session.commit()
         return success_response(S.pair_dict(pair, with_changes=True))
     except S.Refused as e:
@@ -795,6 +878,9 @@ def set_defect_cell(actor, pair_id, axis):
         return denied
     p = request.get_json() or {}
     try:
+        held = _propose_if_ai(pair, 'defect', axis, p, actor)
+        if held:
+            return held
         S.set_defect_cell(pair, axis, p.get('name'), p.get('col'), p.get('month'), actor)
         db.session.commit()
         return success_response(S.pair_dict(pair, with_changes=True))
