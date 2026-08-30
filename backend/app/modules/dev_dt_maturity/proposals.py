@@ -141,7 +141,10 @@ def listing(division_id=None, status='pending', limit=200):
         joinedload(MaturityProposal.pair).joinedload(MaturityPair.agent))
     if division_id is not None:
         q = q.filter_by(division_id=int(division_id))
-    if status and status != 'all':
+    if status == 'done':
+        # 지난 것 — 결정됐거나 밀려난 것 전부. 「무엇을 냈고 우리가 어떻게 했나」를 본다.
+        q = q.filter(MaturityProposal.status != 'pending')
+    elif status and status != 'all':
         q = q.filter_by(status=status)
     rows = q.order_by(MaturityProposal.id.desc()).limit(limit).all()
     now = _now_map(rows)

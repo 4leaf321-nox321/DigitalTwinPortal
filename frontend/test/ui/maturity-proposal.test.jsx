@@ -4,6 +4,7 @@
 //   ② 근거가 그대로 보인다 — 이 창의 존재 이유다
 //   ③ 승인하면 approve, 거절하면 reject 가 간다
 //   ④ 비었으면 「확인할 것이 없습니다」
+//   ⑤ 「지난 것」 — 승인·거절·밀려남까지 남는다(감사 기록)
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
@@ -31,9 +32,27 @@ const ROWS = [
 export default async function run() {
   const { say, done } = suite();
   let rows = [...ROWS];
+  const PAST = [
+    { id: 8, pair_id: 5, division_id: 17, kind: 'assess', axis: 'scope', axis_label: '적용 범위',
+      sector: 'simulation', subject_name: '낙하 시험', agent_name: '낙하 해석',
+      payload: { rung: 'basic' }, note: '올린 근거', status: 'approved',
+      actor_name: '박용진', decided_by_name: '홍길동', decided_note: null,
+      created_at: '2026-08-20T09:00:00', decided_at: '2026-08-20T11:00:00' },
+    { id: 9, pair_id: 5, division_id: 17, kind: 'assess', axis: 'scope', axis_label: '적용 범위',
+      sector: 'simulation', subject_name: '낙하 시험', agent_name: '낙하 해석',
+      payload: { rung: 'issue' }, note: '내린 근거', status: 'rejected',
+      actor_name: '박용진', decided_by_name: '홍길동', decided_note: '근거가 약하다',
+      created_at: '2026-08-21T09:00:00', decided_at: '2026-08-21T10:00:00' },
+    { id: 10, pair_id: 6, division_id: 17, kind: 'assess', axis: 'automation', axis_label: '자동화',
+      sector: 'simulation', subject_name: '굽힘 시험', agent_name: '낙하 해석',
+      payload: { flags: ['pre'] }, note: '먼저 낸 것', status: 'superseded',
+      actor_name: '박용진', decided_by_name: null, decided_note: null,
+      created_at: '2026-08-22T09:00:00', decided_at: '2026-08-22T09:30:00' },
+  ];
   const calls = fakeFetch(({ url, method }) => {
     if (url.includes('/proposals/11/approve')) { rows = rows.filter(r => r.id !== 11); return { proposal: {}, pair: {} }; }
     if (url.includes('/proposals/12/reject')) { rows = rows.filter(r => r.id !== 12); return { proposal: {}, pair: null }; }
+    if (url.includes('status=done')) return PAST;
     if (url.includes('/proposals')) return rows;
     return {};
   });
@@ -60,6 +79,16 @@ export default async function run() {
     const no = calls.find(c => c.method === 'POST' && c.url.includes('/proposals/12/reject'));
     say(!!no, `③ 거절은 reject 로: ${no?.url}`);
     say(html().includes('확인할 것이 없습니다'), '④ 비면 그렇게 말한다');
+
+    // ⑤ 지난 것 — 감사 기록. 여기서는 아무것도 못 바꾼다.
+    await click(byText('button', '지난 것')); await settle();
+    say(html().includes('올린 근거') && html().includes('내린 근거'), '⑤ 승인·거절한 것이 다 남는다');
+    say(html().includes('승인') && html().includes('거절') && html().includes('밀려남'),
+        '⑤ 결말을 딱지로 말해 준다');
+    say(html().includes('근거가 약하다'), '⑤ 거절 사유도 남는다');
+    say(html().includes('먼저 낸 것'), '⑤ 밀려난 것도 남는다 — 이렇게도 제안했다는 기록');
+    say(html().includes('홍길동'), '⑤ 누가 결정했는지');
+    say(!byText('button', '승인') && !byText('button', '거절'), '⑤ 지난 것은 못 바꾼다');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

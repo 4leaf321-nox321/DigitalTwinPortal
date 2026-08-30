@@ -115,7 +115,7 @@ export const maturityApi = {
   listProjects: (divisionId) => request(`/projects?division_id=${divisionId}`),   // 수행 디지털 트윈 과제 고르기의 재료
   // 일괄 입력 — 「추출」과 같은 머리글의 표를 붙여넣어 한 번에 세운다(2026-08-30)
   // 확인 대기 — AI 가 낸 판단. 승인해야 판에 오른다(2026-08-30)
-  listProposals: (divisionId) => request(`/proposals?status=pending`
+  listProposals: (divisionId, status = 'pending') => request(`/proposals?status=${status}`
     + (divisionId != null && divisionId !== 'all' ? `&division_id=${divisionId}` : '')),
   countProposals: (divisionId) => request('/proposals/count'
     + (divisionId != null && divisionId !== 'all' ? `?division_id=${divisionId}` : '')),

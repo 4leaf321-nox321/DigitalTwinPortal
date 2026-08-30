@@ -1387,3 +1387,42 @@ def test_확인_대기_목록은_줄_수와_무관하게_질의가_는다(client
     # 줄 수에 따라 늘지 않는다 — 목록 + 지금 값, 두어 질의면 된다
     assert n[0] <= 4, f'{len(rows)}건에 질의 {n[0]}회 — 줄마다 읽고 있다'
     assert rows[0]['subject_name'] and rows[0]['axis_label']      # 그래도 다 채워 온다
+
+
+def test_지난_제안도_볼_수_있다_감사_기록이다(client, auth, world, mx_user):
+    """제안 표에 다 남는데 화면이 대기만 보여 주면 「지난달에 뭘 거절했나」를 못 본다.
+
+    ⚠️ 밀려난 것(superseded)도 함께 본다 — 아무도 안 누른 것이라도 「AI 가 이렇게도
+       제안했다」는 기록이다.
+    """
+    mx = world['mx'].id
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+
+    def _propose(axis, body, note):
+        r = client.put(f'{BASE}/pairs/{p["id"]}/assessments/{axis}',
+                       json={'actor_mode': 'ai', 'note': note, **body}, headers=auth(mx_user))
+        return r.get_json()['data']['proposal_id']
+
+    ok_id = _propose('scope', {'rung': 'basic'}, '승인될 것')
+    client.post(f'{BASE}/proposals/{ok_id}/approve', headers=auth(mx_user))
+    no_id = _propose('scope', {'rung': 'all'}, '거절될 것')
+    client.post(f'{BASE}/proposals/{no_id}/reject', json={'note': '근거가 약하다'},
+                headers=auth(mx_user))
+    old_id = _propose('automation', {'flags': ['pre']}, '밀려날 것')
+    live_id = _propose('automation', {'flags': ['pre', 'run']}, '새로 낸 것')
+
+    done = client.get(f'{BASE}/proposals?division_id={mx}&status=done',
+                      headers=auth(mx_user)).get_json()['data']
+    by = {r['id']: r for r in done}
+    assert {ok_id, no_id, old_id} <= set(by), '지난 것 셋이 다 보여야 한다'
+    assert live_id not in by, '아직 대기 중인 것은 지난 것이 아니다'
+    assert by[ok_id]['status'] == 'approved' and by[ok_id]['decided_by_name'] == mx_user.name
+    assert by[no_id]['status'] == 'rejected' and by[no_id]['decided_note'] == '근거가 약하다'
+    assert by[old_id]['status'] == 'superseded'
+    # 무엇을 냈었는지 그대로 남는다 — 그게 기록의 값이다
+    assert by[no_id]['payload']['rung'] == 'all' and by[no_id]['note'] == '거절될 것'
+    assert by[old_id]['payload']['flags'] == ['pre']
+
+    # 대기는 대기대로 — 섞이지 않는다
+    pend = client.get(f'{BASE}/proposals?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert [r['id'] for r in pend] == [live_id]
