@@ -761,7 +761,10 @@ def bulk_input(actor):
         return error_response('아직 열리지 않은 부문입니다.', status_code=400)
     try:
         out = B.run(division_id if division_id is not None else 'all', sector, p.get('kind'),
-                    p.get('text') or '', actor, dry_run=bool(p.get('dry_run', True)))
+                    p.get('text') or '', actor, dry_run=bool(p.get('dry_run', True)),
+                    # ⚠️ 덮어쓰기는 켜야 돈다 — 예전 표를 실수로 붙여넣어 지금 자료를
+                    #    되돌리는 일이 나면 안 된다(2026-08-30).
+                    mode='update' if p.get('mode') == 'update' else 'add')
         return success_response(out)
     except (B.TableFormatError, S.Refused) as e:
         db.session.rollback()
@@ -801,6 +804,25 @@ def post_vocab_remap(actor):
         return error_response(str(e), status_code=400)
     db.session.commit()
     return success_response(out)
+
+
+@bp.route('/bulk/rows', methods=['GET'])
+@read_required
+def bulk_rows(actor):
+    """지금 자료를 **그 표의 머리글 그대로** — 화면이 표에 채운다(2026-08-30).
+
+    이게 있어야 「불러오기 → 엑셀에서 고치기 → 붙여넣기」가 돈다. 머리글은 추출·붙여넣기와
+    **같아야** 한다 — 어긋나면 그 칸이 조용히 비워진다.
+    """
+    sector = request.args.get('sector') or 'simulation'
+    kind = request.args.get('kind') or 'subject'
+    division_id = _int_arg('division_id')
+    try:
+        return success_response(B.rows_now(division_id, sector, kind))
+    except (B.TableFormatError, S.Refused) as e:
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
 
 
 @bp.route('/bulk/kinds', methods=['GET'])

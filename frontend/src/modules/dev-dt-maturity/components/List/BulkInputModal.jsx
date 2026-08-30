@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { X, Check, AlertTriangle, ClipboardPaste, Copy } from 'lucide-react';
+import { X, Check, AlertTriangle, ClipboardPaste, Copy, Download } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import { applyPaste, emptyGrid, isUnknown, toText, usedRows } from '../../utils/bulkGrid';
 
@@ -62,7 +62,14 @@ const Button = styled.button`
   background: ${p => (p.$primary ? '#1d4ed8' : 'white')}; color: ${p => (p.$primary ? 'white' : '#475569')};
   &:disabled { opacity: 0.45; cursor: not-allowed; }
 `;
-const STATUS = { new: '새로 만듦', exists: '이미 있음', error: '오류' };
+const STATUS = { new: '새로 만듦', exists: '이미 있음', update: '고침', same: '그대로', error: '오류' };
+// 바뀔 값 — 미리보기에서 **눈으로 보고** 올린다(2026-08-30)
+const Diff = styled.div`
+  font-size: 0.75rem; color: #334155; line-height: 1.6;
+  b { font-weight: 600; color: #64748b; margin-right: 0.25rem; }
+  del { color: #94a3b8; text-decoration: line-through; }
+  ins { color: #1d4ed8; text-decoration: none; font-weight: 600; }
+`;
 
 const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, denyReason, onClose, onChanged }) => {
   const [kinds, setKinds] = useState([]);
@@ -73,6 +80,10 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null);
+  // 있는 것을 고칠까 — **기본은 꺼짐.** 예전 표를 실수로 붙여넣어 지금 자료를 되돌리는
+  // 일이 나면 안 된다. 켜면 미리보기가 무엇이 무엇으로 바뀌는지 말해 준다(2026-08-30).
+  const [update, setUpdate] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     maturityApi.bulkKinds(sector, divisionId).then(r => {
@@ -98,11 +109,35 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
   };
   const rowCount = usedRows(grid).length;
 
+  /** 지금 자료를 표에 채운다 — 이걸로 시작해야 엑셀에서 고칠 것이 생긴다. */
+  const loadNow = async () => {
+    if (!spec) return;
+    setBusy(true); setError(null); setPreview(null); setDone(null);
+    try {
+      const r = await maturityApi.bulkRows(sector, kind, divisionId);
+      const rows = r.data?.rows || [];
+      // 빈 줄 몇을 붙여 둔다 — 불러온 뒤 새 줄도 바로 적을 수 있게
+      setGrid([...rows.map(x => spec.columns.map((_, i) => x[i] ?? '')), ...emptyGrid(spec.columns, 3)]);
+      setAt({ r: 0, c: 0 });
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  /** 머리글까지 통째로 — 엑셀에 그대로 붙는다(탭으로 나눈다). */
+  const copyTable = async () => {
+    const text = toText(grid, spec.columns);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    } catch { setError('클립보드에 못 넣었습니다 — 표를 끌어 골라 Ctrl+C 하세요.'); }
+  };
+
   const run = async (dryRun) => {
     setBusy(true); setError(null);
     try {
       const r = await maturityApi.bulkInput({
         division_id: divisionId, sector, kind, text: toText(grid, spec.columns), dry_run: dryRun,
+        mode: update ? 'update' : 'add',
       });
       if (dryRun) { setPreview(r.data); setDone(null); } else {
         setDone(r.data); setPreview(r.data);
@@ -113,6 +148,9 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
   };
 
   const okRows = preview ? preview.summary.rows - preview.summary.errors : 0;
+  const willChange = preview ? (preview.summary.new + (preview.summary.updated || 0)) : 0;
+  // ⚠️ 고치기를 켰다 껐다 하면 미리보기의 뜻이 달라진다 — 다시 보게 한다.
+  const setMode = (v) => { setUpdate(v); setPreview(null); setDone(null); };
   return (
     <Backdrop onClick={onClose}>
       <Box onClick={e => e.stopPropagation()} role="dialog" aria-label="일괄 입력">
@@ -134,6 +172,16 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
               <Bar>
                 <Button type="button" onClick={() => navigator.clipboard?.writeText(header)}><Copy size={13} /> 머리글 복사</Button>
                 <Button type="button" onClick={() => setGrid(g => [...g, spec.columns.map(() => '')])}>줄 더하기</Button>
+                {/* ⚠️ 불러오기가 있어야 「엑셀에서 고치기」가 시작된다 — 빈 표에서 시작하면
+                    있는 것을 다시 적어야 한다(2026-08-30). */}
+                <Button type="button" disabled={busy} onClick={loadNow}
+                        title="지금 저장된 자료를 이 표에 채웁니다 — 고쳐서 되넣을 수 있습니다">
+                  <Download size={13} /> 지금 자료 불러오기
+                </Button>
+                <Button type="button" disabled={!rowCount} onClick={copyTable}
+                        title="머리글까지 클립보드로 — 엑셀에 그대로 붙습니다">
+                  <Copy size={13} /> {copied ? '복사했습니다' : '표 복사'}
+                </Button>
                 <Button type="button" onClick={() => setGrid(emptyGrid(spec.columns))}>비우기</Button>
                 <Hint>엑셀에서 복사해 표 안에 <strong>Ctrl+V</strong> — 고를 수 있는 칸은 목록에 있으면 골라지고, 없으면 빨갛게 남습니다.</Hint>
               </Bar>
@@ -177,24 +225,52 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
               </GridWrap>
             </>
           )}
+          {spec && (
+            <Hint as="label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={update} onChange={e => setMode(e.target.checked)}
+                     aria-label="있는 것은 고치기" />
+              <span>
+                <strong>있는 것은 고치기</strong> — 이름이 같으면 나머지 칸을 덮어씁니다.
+                끄면 <strong>새것만</strong> 들어갑니다(있는 것은 건너뜁니다).
+                {' '}빈 칸은 지우지 않습니다 — 비우려면 그 항목을 열어 지우세요.
+              </span>
+            </Hint>
+          )}
           {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
           {preview && (
             <>
               <Hint>
-                줄 <strong>{preview.summary.rows}</strong> · 새로 만듦 <strong>{preview.summary.new}</strong> ·
-                이미 있음 {preview.summary.exists} · <span style={{ color: preview.summary.errors ? '#b91c1c' : undefined }}>오류 {preview.summary.errors}</span>
+                줄 <strong>{preview.summary.rows}</strong> · 새로 만듦 <strong>{preview.summary.new}</strong>
+                {update && <> · 고침 <strong style={{ color: '#b45309' }}>{preview.summary.updated || 0}</strong></>}
+                {' '}· {update ? '고칠 것 없음' : '이미 있음'} {update ? preview.summary.exists : preview.summary.exists}
+                {' '}· <span style={{ color: preview.summary.errors ? '#b91c1c' : undefined }}>오류 {preview.summary.errors}</span>
                 {done ? ' — 넣었습니다.' : ' — 아직 저장하지 않았습니다.'}
               </Hint>
               <Scroll>
                 <Table>
-                  <thead><tr><th style={{ width: '3.5rem' }}>줄</th><th style={{ width: '6rem' }}>어떻게</th><th>이름</th><th>이유</th></tr></thead>
+                  <thead><tr><th style={{ width: '3.5rem' }}>줄</th><th style={{ width: '6rem' }}>어떻게</th><th style={{ width: '12rem' }}>이름</th><th>바뀌는 값 · 이유</th></tr></thead>
                   <tbody>
                     {preview.rows.map(r => (
                       <tr key={r.line}>
                         <td>{r.line}</td>
                         <td><Tag $s={r.status}>{STATUS[r.status] || r.status}</Tag></td>
                         <td>{r.name || '—'}</td>
-                        <td style={{ color: '#b91c1c' }}>{r.message || ''}</td>
+                        <td>
+                          {/* ⚠️ 덮어쓰기는 **눈으로 보고** 올린다 — 무엇이 무엇으로 바뀌는지 여기서 읽는다. */}
+                          {(r.changes || []).length > 0 && (
+                            <Diff>
+                              {r.changes.map(c => (
+                                <div key={c.field}>
+                                  <b>{c.col}</b>
+                                  <del>{String(c.before ?? '') || '(비어 있음)'}</del>
+                                  {' → '}
+                                  <ins>{String(c.after ?? '')}</ins>
+                                </div>
+                              ))}
+                            </Diff>
+                          )}
+                          {r.message && <span style={{ color: '#b91c1c' }}>{r.message}</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -205,8 +281,12 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
         </Body>
         <Foot>
           <Button type="button" disabled={!canEdit || !rowCount || busy} onClick={() => run(true)}>미리보기 ({rowCount}줄)</Button>
-          <Button type="button" $primary disabled={!canEdit || busy || !preview || okRows === 0 || !!done} onClick={() => run(false)}>
-            <Check size={13} /> {done ? '넣었습니다' : `${okRows}줄 넣기`}
+          {/* ⚠️ 미리보기를 봐야 열린다. 바뀔 것이 없으면(전부 「그대로」) 누를 것도 없다. */}
+          <Button type="button" $primary disabled={!canEdit || busy || !preview || willChange === 0 || !!done}
+                  onClick={() => run(false)}>
+            <Check size={13} /> {done ? '넣었습니다'
+              : update ? `새로 ${preview?.summary.new || 0} · 고침 ${preview?.summary.updated || 0} 넣기`
+              : `${okRows}줄 넣기`}
           </Button>
           <span style={{ flex: 1 }} />
           <Button type="button" onClick={onClose}>닫기</Button>

@@ -162,7 +162,7 @@ def _label_key(items, text, what):
     raise TableFormatError(f'{what} 「{text}」 을(를) 모르겠습니다.')
 
 
-def run(division_id, sector, kind, text, actor, dry_run=True):
+def run(division_id, sector, kind, text, actor, dry_run=True, mode='add'):
     """미리보기(dry_run=True)와 넣기(False)가 **같은 길**을 간다 — 미리보기에서 통과한 줄은 들어간다."""
     from app.extensions import db
     from . import threads as T
@@ -180,15 +180,18 @@ def run(division_id, sector, kind, text, actor, dry_run=True):
         i = mapping.get(col)
         return (cells[i].strip() if i is not None and i < len(cells) else '')
 
-    out, made, reused, errors = [], 0, 0, 0
+    out, made, reused, errors, updated = [], 0, 0, 0, 0
     for (line, cells) in body:
         try:
-            status, what = _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T)
+            status, what, changes = _one(division_id, sector, kind, spec, cell, cells,
+                                         actor, dry_run, T, mode=mode)
             if status == 'new':
                 made += 1
+            elif status == 'update':
+                updated += 1
             else:
                 reused += 1
-            out.append({'line': line, 'status': status, 'name': what})
+            out.append({'line': line, 'status': status, 'name': what, 'changes': changes})
         except Exception as e:                                  # noqa: BLE001 — 줄마다 이유를 남긴다
             errors += 1
             out.append({'line': line, 'status': 'error', 'name': cell(cells, spec['required'][0]),
@@ -197,11 +200,141 @@ def run(division_id, sector, kind, text, actor, dry_run=True):
         db.session.rollback()
     else:
         db.session.commit()
-    return {'kind': kind, 'summary': {'rows': len(body), 'new': made, 'exists': reused, 'errors': errors}, 'rows': out}
+    return {'kind': kind, 'mode': mode,
+            'summary': {'rows': len(body), 'new': made, 'exists': reused,
+                        'updated': updated, 'errors': errors}, 'rows': out}
 
 
-def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
-    """한 줄. 만들었으면 'new', 이미 있으면 'exists'. 오류는 올린다."""
+def _same(a, b):
+    """값이 같은가 — 목록은 차례를 따지지 않고, 글은 앞뒤 공백을 무시한다."""
+    if isinstance(a, list) or isinstance(b, list):
+        return [norm(x) for x in (a or [])] == [norm(x) for x in (b or [])]
+    return norm('' if a is None else a) == norm('' if b is None else b)
+
+
+def _diff(row, fields):
+    """바뀔 칸만 골라 낸다 — [{col, field, before, after}].
+
+    ⚠️ **빈 칸은 안 지운다.** 엑셀에서 열을 지우고 붙여넣었다고 자료가 비워지면
+       고치기가 지우기가 된다. 비우려면 화면에서 그 항목을 열어 지운다.
+    """
+    out = []
+    for col, field, new, show in fields:
+        if new in (None, '', []):
+            continue
+        old = getattr(row, field)
+        if not _same(old, new):
+            out.append({'col': col, 'field': field,
+                        'before': show(old) if show else (old if old not in (None, '') else ''),
+                        'after': show(new) if show else new})
+    return out
+
+
+def _apply(row, changes, fields, dry_run):
+    """미리보기면 손대지 않는다 — 같은 셈으로 보고, 같은 셈으로 넣는다."""
+    if dry_run:
+        return
+    by = {f[1]: f[2] for f in fields}
+    for c in changes:
+        setattr(row, c['field'], by[c['field']])
+
+
+# ── 지금 자료를 표로 — 왕복의 첫 걸음(2026-08-30) ────────────────────────────
+#
+# 「추출 → 엑셀에서 고치기 → 붙여넣기」가 돌려면 **불러오는 쪽도 같은 머리글**이어야 한다.
+# 열 이름이 어긋나면 그 칸이 조용히 비워진다(모니터링 「공정」 겹침 참고).
+
+def _lab_of(vocab, key):
+    return next((v['label'] for v in vocab if v['key'] == key), key or '')
+
+
+def _div_name(did):
+    from app.modules.digital_twin_dashboard.models import Division
+    d = Division.query.get(did) if did else None
+    return d.name if d else ''
+
+
+def _dept_name(dept_id):
+    from app.modules.digital_twin_dashboard.models import Department
+    d = Department.query.get(dept_id) if dept_id else None
+    return d.name if d else ''
+
+
+def _subjects_of(div, sector):
+    q = MaturitySubject.query.filter_by(sector=sector)
+    if div is not None:
+        q = q.filter_by(division_id=div)
+    return q.order_by(MaturitySubject.order, MaturitySubject.id).all()
+
+
+def _agents_of(div, sector):
+    q = MaturityAgent.query.filter_by(sector=sector)
+    if div is not None:
+        q = q.filter_by(division_id=div)
+    return q.order_by(MaturityAgent.name).all()
+
+
+def rows_now(division_id, sector, kind):
+    """지금 자료를 그 갈래 표의 머리글 그대로. 화면이 이걸 표에 채운다."""
+    from . import threads as T
+    spec = _spec(sector, kind)
+    cols = spec['columns']
+    div = division_id if isinstance(division_id, int) else None
+    sec = D.sector_of(sector)
+    out = []
+
+    def _row(vals):
+        out.append([str(vals.get(c, '') or '') for c in cols])
+
+    if kind == 'system':
+        for x in T.list_systems():
+            _row({'시스템': x['name'], '종류': _lab_of(D.vocab('system_kinds'), x.get('kind')),
+                  '주관 조직': x.get('owner_org'),
+                  '생애 단계': ' · '.join(_lab_of(D.vocab('thread_stages'), k) for k in (x.get('stages') or [])),
+                  '연계 수단': _lab_of(D.vocab('link_means'), x.get('link_means')),
+                  '상태': _lab_of(D.vocab('system_status'), x.get('status')), '메모': x.get('note')})
+    elif kind == 'org':
+        for o in T.list_orgs(div):
+            _row({'조직': o['name']})
+    elif kind == 'segment':
+        for g in T.list_segments(div):
+            _row({'스레드': g.get('thread_name'), '구간': g.get('name'),
+                  '출발 조직': g.get('from_org_name'), '출발 시스템': g.get('from_system_name'),
+                  '매개 시스템': g.get('via_system_name'), '도착 조직': g.get('to_org_name'),
+                  '도착 시스템': g.get('to_system_name'),
+                  '데이터 종류': ' · '.join(g.get('data_kind_labels') or [])})
+    elif kind == 'subject':
+        for r in _subjects_of(div, sector):
+            _row({'사업부': _div_name(r.division_id), sec.get('subject_label') or '대상': r.name,
+                  '세부': r.detail, '제품군': ' · '.join(r.product_families or []),
+                  '라인·사업장': r.line, '공정 단계': _lab_of(D.vocab('process_steps'), r.process)})
+    elif kind == 'agent':
+        for r in _agents_of(div, sector):
+            _row({'사업부': _div_name(r.division_id), sec.get('agent_label') or '수단': r.name,
+                  '종류': r.kind, '수단 종류': r.kind,
+                  '모델 종류': _lab_of(D.vocab('model_kinds'), r.model_kind),
+                  '사용 툴': ' · '.join(r.tools or []),
+                  '불량 유형': ' · '.join(r.defect_types or []),
+                  '담당 부서': _dept_name(r.department_id)})
+    elif kind == 'pair':
+        subs = {r.id: r for r in _subjects_of(div, sector)}
+        ags = {r.id: r for r in _agents_of(div, sector)}
+        for p in MaturityPair.query.filter(MaturityPair.subject_id.in_(list(subs) or [-1])).all():
+            sub = subs.get(p.subject_id)
+            ag = ags.get(p.agent_id)
+            if sub is None:
+                continue
+            _row({'사업부': _div_name(sub.division_id),
+                  sec.get('subject_label') or '대상': sub.name,
+                  sec.get('agent_label') or '수단': ag.name if ag else ''})
+    return {'columns': cols, 'rows': out}
+
+
+def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='add'):
+    """한 줄. 'new' · 'exists'(그대로) · 'update'(고침) · 'same'(고칠 것 없음).
+
+    `mode='update'` 면 이미 있는 줄의 칸을 덮어쓴다. 무엇이 바뀌는지 함께 돌려준다.
+    """
     sec = D.SECTOR_BY_KEY[sector]
     subject_label = sec.get('subject_label') or '대상'
     agent_label = sec.get('agent_label') or '수단'
@@ -212,7 +345,26 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
             raise TableFormatError('시스템 이름이 없습니다.')
         row = next((s for s in T.list_systems() if norm(s['name']) == norm(name)), None)
         if row:
-            return 'exists', name
+            if mode != 'update':
+                return 'exists', name, []
+            from .models import ThreadSystem
+            live = ThreadSystem.query.get(row['id'])
+            kind_lab = lambda v: _lab_of(D.vocab('system_kinds'), v)
+            fields = [
+                ('종류', 'kind', _label_key(D.vocab('system_kinds'), cell(cells, '종류'), '시스템 종류'), kind_lab),
+                ('주관 조직', 'owner_org', cell(cells, '주관 조직') or None, None),
+                ('생애 단계', 'stages', [_label_key(D.vocab('thread_stages'), x, '생애 단계')
+                                     for x in _split(cell(cells, '생애 단계'))],
+                 lambda v: ' · '.join(_lab_of(D.vocab('thread_stages'), x) for x in (v or []))),
+                ('연계 수단', 'link_means', _label_key(D.vocab('link_means'), cell(cells, '연계 수단'), '연계 수단'),
+                 lambda v: _lab_of(D.vocab('link_means'), v)),
+                ('상태', 'status', _label_key(D.vocab('system_status'), cell(cells, '상태'), '상태'),
+                 lambda v: _lab_of(D.vocab('system_status'), v)),
+                ('메모', 'note', cell(cells, '메모') or None, None),
+            ]
+            ch = _diff(live, fields)
+            _apply(live, ch, fields, dry_run)
+            return ('update' if ch else 'same'), name, ch
         T.create_system({
             'name': name, 'kind': _label_key(D.vocab('system_kinds'), cell(cells, '종류'), '시스템 종류') or 'other',
             'owner_org': cell(cells, '주관 조직') or None,
@@ -221,7 +373,7 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
             'status': _label_key(D.vocab('system_status'), cell(cells, '상태'), '상태') or 'active',
             'note': cell(cells, '메모') or None,
         }, division_id if isinstance(division_id, int) else None)
-        return 'new', name
+        return 'new', name, []
 
     if kind == 'org':
         name = cell(cells, '조직')
@@ -229,9 +381,9 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
             raise TableFormatError('조직 이름이 없습니다.')
         div = _division_or_refuse(division_id)
         if any(norm(o['name']) == norm(name) for o in T.list_orgs(div)):
-            return 'exists', name
+            return 'exists', name, []          # 조직은 이름 한 칸뿐 — 고칠 것이 없다
         T.create_org({'name': name}, div)
-        return 'new', name
+        return 'new', name, []
 
     if kind == 'segment':
         return _segment(division_id, cell, cells, T)
@@ -243,28 +395,58 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
         if not name:
             raise TableFormatError(f'{subject_label} 이름이 없습니다.')
         row = MaturitySubject.query.filter_by(division_id=div, sector=sector).all()
-        if any(norm(r.name) == norm(name) for r in row):
-            return 'exists', name
+        live = next((r for r in row if norm(r.name) == norm(name)), None)
+        if live is not None:
+            if mode != 'update':
+                return 'exists', name, []
+            fields = [
+                ('세부', 'detail', cell(cells, '세부') or None, None),
+                ('제품군', 'product_families', _split(cell(cells, '제품군')), lambda v: ' · '.join(v or [])),
+                ('라인·사업장', 'line', cell(cells, '라인·사업장') or None, None),
+                ('공정 단계', 'process',
+                 _label_key(D.vocab('process_steps'), cell(cells, '공정 단계'), '공정 단계')
+                 if cell(cells, '공정 단계') else None,
+                 lambda v: _lab_of(D.vocab('process_steps'), v)),
+            ]
+            ch = _diff(live, fields)
+            _apply(live, ch, fields, dry_run)
+            return ('update' if ch else 'same'), name, ch
         S.create_subject(div, sector, name, cell(cells, '세부'), _split(cell(cells, '제품군')),
                          'auto', None, cell(cells, '라인·사업장'),
                          _label_key(D.vocab('process_steps'), cell(cells, '공정 단계'), '공정 단계')
                          if cell(cells, '공정 단계') else None)
-        return 'new', name
+        return 'new', name, []
 
     if kind == 'agent':
         name = cell(cells, agent_label)
         if not name:
             raise TableFormatError(f'{agent_label} 이름이 없습니다.')
-        if any(norm(r.name) == norm(name) for r in MaturityAgent.query.filter_by(division_id=div, sector=sector).all()):
-            return 'exists', name
+        live = next((r for r in MaturityAgent.query.filter_by(division_id=div, sector=sector).all()
+                     if norm(r.name) == norm(name)), None)
         dept = cell(cells, '담당 부서')
         dept_id = next((d['id'] for d in S.departments_of(div) if norm(d['name']) == norm(dept)), None) if dept else None
         if dept and dept_id is None:
             raise TableFormatError(f'담당 부서 「{dept}」 을(를) 이 사업부에서 못 찾았습니다.')
+        if live is not None:
+            if mode != 'update':
+                return 'exists', name, []
+            fields = [
+                ('종류', 'kind', cell(cells, '종류') or cell(cells, '수단 종류') or None, None),
+                ('모델 종류', 'model_kind',
+                 _label_key(D.vocab('model_kinds'), cell(cells, '모델 종류'), '모델 종류')
+                 if cell(cells, '모델 종류') else None,
+                 lambda v: _lab_of(D.vocab('model_kinds'), v)),
+                ('사용 툴', 'tools', _split(cell(cells, '사용 툴')), lambda v: ' · '.join(v or [])),
+                ('불량 유형', 'defect_types', _split(cell(cells, '불량 유형')), lambda v: ' · '.join(v or [])),
+                ('담당 부서', 'department_id', dept_id, lambda v: _dept_name(v)),
+            ]
+            ch = _diff(live, fields)
+            _apply(live, ch, fields, dry_run)
+            return ('update' if ch else 'same'), name, ch
         S.create_agent(div, sector, name, cell(cells, '종류') or cell(cells, '수단 종류'),
                        _label_key(D.vocab('model_kinds'), cell(cells, '모델 종류'), '모델 종류') if cell(cells, '모델 종류') else None,
                        None, _split(cell(cells, '사용 툴')), dept_id, _split(cell(cells, '불량 유형')))
-        return 'new', name
+        return 'new', name, []
 
     if kind == 'pair':
         sname, aname = cell(cells, subject_label), cell(cells, agent_label)
@@ -275,9 +457,9 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
         if agent is None:
             raise TableFormatError(f'{agent_label} 「{aname}」 을(를) 못 찾았습니다 — 먼저 올리세요.')
         if MaturityPair.query.filter_by(subject_id=subject.id, agent_id=agent.id).first():
-            return 'exists', f'{sname} × {aname}'
+            return 'exists', f'{sname} × {aname}', []      # 연계는 이음 자체 — 고칠 칸이 없다
         S.create_pair(subject, agent)
-        return 'new', f'{sname} × {aname}'
+        return 'new', f'{sname} × {aname}', []
 
     raise TableFormatError('이 부문에 없는 종류입니다.')
 
@@ -290,7 +472,9 @@ def _segment(division_id, cell, cells, T):
     if thread is None:
         raise TableFormatError(f'스레드 「{tname}」 을(를) 못 찾았습니다.')
     if any(norm(s['name']) == norm(sname) for s in T.list_segments(div)):
-        return 'exists', sname
+        # ⚠️ 구간 고치기는 아직 없다 — 조직·시스템을 이름으로 다시 이어야 해서 결이 다르다.
+        #    화면의 구간 창에서 고친다.
+        return 'exists', sname, []
     sd = next((s for s in thread['segments'] if norm(s['name']) == norm(sname)), None)
     orgs = {norm(o['name']): o['id'] for o in T.list_orgs(div)}
     systems = {norm(s['name']): s['id'] for s in T.list_systems()}

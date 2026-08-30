@@ -20,11 +20,27 @@ export default async function run() {
         hint: '제품군은 · 로 나눠 적습니다.', choices: { 사업부: ['MX', 'VD'] } },
       { key: 'agent', label: '시뮬레이션', columns: ['사업부', '시뮬레이션', '종류'], required: ['시뮬레이션'], hint: '' },
     ];
-    if ((url || '').endsWith('/bulk') && method === 'POST') return {
-      kind: body.kind,
-      summary: { rows: 2, new: 1, exists: 0, errors: 1 },
-      rows: [{ line: 2, status: 'new', name: '낙하 시험' }, { line: 3, status: 'error', name: '', message: '시험 항목 이름이 없습니다.' }],
+    if (url.includes('/bulk/rows')) return {
+      columns: ['사업부', '시험 항목', '세부', '제품군'],
+      rows: [['MX', '낙하 시험', '1.2m', 'S 시리즈'], ['MX', '굽힘 시험', '', '']],
     };
+    if ((url || '').endsWith('/bulk') && method === 'POST') {
+      // 고치기를 켜면 **무엇이 무엇으로** 바뀌는지 함께 온다
+      if (body.mode === 'update') return {
+        kind: body.kind, mode: 'update',
+        summary: { rows: 2, new: 0, exists: 1, updated: 1, errors: 0 },
+        rows: [
+          { line: 2, status: 'update', name: '낙하 시험',
+            changes: [{ col: '세부', field: 'detail', before: '1.2m', after: '1.5m' }] },
+          { line: 3, status: 'same', name: '굽힘 시험', changes: [] },
+        ],
+      };
+      return {
+        kind: body.kind,
+        summary: { rows: 2, new: 1, exists: 0, updated: 0, errors: 1 },
+        rows: [{ line: 2, status: 'new', name: '낙하 시험' }, { line: 3, status: 'error', name: '', message: '시험 항목 이름이 없습니다.' }],
+      };
+    }
     if (url.includes('/subjects')) return [{ id: 1, name: '낙하 시험', division_id: 17, product_families: [] }];
     if (url.includes('/agents')) return [{ id: 5, name: '구조 해석', division_id: 17, tools: [] }, { id: 6, name: '열 해석', division_id: 17, tools: [] }];
     if (url.includes('/board')) return { subjects: [{ id: 1, name: '낙하 시험', pairs: [{ id: 9, subject_id: 1, agent_id: 5, agent: { name: '구조 해석', tools: ['LS-DYNA', 'HyperMesh'], department_name: 'CAE그룹(MX)', projects: [{ uuid: 'u1', code: 'MX-1', title: '낙하 해석 자동화' }] }, unassessed: [], assessments: {} }] }], totals: {} };
@@ -109,6 +125,31 @@ export default async function run() {
     await click(byText('button', '1줄 넣기')); await settle(60);
     const put = calls.filter(c => c.method === 'POST' && (c.url || '').endsWith('/bulk')).pop();
     say(put && put.body.dry_run === false && changed === 1, `⑦ 넣기는 dry_run=false 로 가고 화면이 새로 읽는다: ${JSON.stringify(put?.body?.dry_run)}`);
+
+    // ⑧ 왕복 — 지금 자료를 불러와, 고쳐, 되넣는다(2026-08-30)
+    calls.length = 0;
+    await click(byText('button', '지금 자료 불러오기')); await settle(60);
+    say(!!calls.find(c => c.url.includes('/bulk/rows')), '⑧ 불러오기가 지금 자료를 부른다');
+    say(document.querySelector('input[aria-label="1행 시험 항목"]').value === '낙하 시험'
+        && document.querySelector('input[aria-label="1행 세부"]').value === '1.2m',
+        '⑧ 표에 지금 값이 채워진다');
+
+    // 고치기를 안 켜면 예전처럼 새것만
+    calls.length = 0;
+    await click(byText('button', '미리보기 (2줄)')); await settle(60);
+    const add = calls.find(c => c.method === 'POST' && (c.url || '').endsWith('/bulk'));
+    say(add?.body?.mode === 'add', `⑧ 기본은 새것만: mode=${add?.body?.mode}`);
+
+    // 켜면 미리보기가 바뀔 값을 보여 준다
+    await click(document.querySelector('input[aria-label="있는 것은 고치기"]')); await settle();
+    say(!html().includes('아직 저장하지 않았습니다'), '⑧ 고치기를 켜면 앞선 미리보기는 버린다');
+    calls.length = 0;
+    await click(byText('button', '미리보기 (2줄)')); await settle(60);
+    const upd = calls.find(c => c.method === 'POST' && (c.url || '').endsWith('/bulk'));
+    say(upd?.body?.mode === 'update', `⑧ 켜면 mode=update`);
+    say(html().includes('1.2m') && html().includes('1.5m'), '⑧ 무엇이 무엇으로 바뀌는지 보여 준다');
+    say(html().includes('고침') && html().includes('그대로'), '⑧ 줄마다 어떻게 될지');
+    say(byText('button', '새로 0 · 고침 1 넣기') != null, '⑧ 넣기 단추가 몇 건인지 말해 준다');
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

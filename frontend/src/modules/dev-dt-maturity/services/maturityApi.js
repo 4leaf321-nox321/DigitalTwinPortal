@@ -125,6 +125,9 @@ export const maturityApi = {
   pruneOrgs: (divisionId) => request('/orgs/prune', json('POST', { division_id: divisionId })),   // 없어진 부서 정리
   getVocabMismatches: () => request('/vocabs/mismatches'),   // 점검 — 자료가 가리키는 없는 값
   remapVocab: (vocab, moves) => request('/vocabs/remap', json('POST', { vocab, moves })),
+  // 일괄 입력 왕복 — 지금 자료를 그 표의 꼴로 받는다(2026-08-30)
+  bulkRows: (sector, kind, divisionId) => request(`/bulk/rows?sector=${sector}&kind=${kind}`
+    + (divisionId != null && divisionId !== 'all' ? `&division_id=${divisionId}` : '')),
   bulkKinds: (sector, divisionId) => request(`/bulk/kinds?sector=${sector}&division_id=${divisionId ?? 'all'}`),
   bulkInput: (payload) => request('/bulk', json('POST', payload)),
   listSystems: () => request('/systems'),

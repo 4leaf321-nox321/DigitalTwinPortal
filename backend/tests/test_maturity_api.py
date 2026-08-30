@@ -733,7 +733,7 @@ def test_구간을_적고_매기고_스레드로_센다(client, auth, world, mx_
         return client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'digital_thread', 'kind': kind,
                                                  'text': text, 'dry_run': dry}, headers=auth(mx_user))
     dry = _bulk(table, True).get_json()['data']
-    assert dry['summary'] == {'rows': 3, 'new': 2, 'exists': 1, 'errors': 0}      # 셋째 줄은 첫 줄과 같은 이름
+    assert dry['summary'] == {'rows': 3, 'new': 2, 'exists': 1, 'updated': 0, 'errors': 0}   # 셋째 줄은 첫 줄과 같은 이름
     assert not [x for x in _sys_names(client, auth, mx_user) if x.startswith('일괄')]   # 미리보기는 저장하지 않는다
     assert _bulk(table, False).get_json()['data']['summary']['new'] == 2
     names = _sys_names(client, auth, mx_user)
@@ -1462,3 +1462,71 @@ def test_확인_대기_배지는_내가_결정할_수_있는_것만_센다(clien
                       headers=auth(office)).get_json()['data']['pending'] == 2
     all_rows = client.get(f'{BASE}/proposals', headers=auth(office)).get_json()['data']
     assert all(r['deny_reason'] is None for r in all_rows)
+
+
+def test_일괄_입력_왕복_불러오고_고쳐_되넣는다(client, auth, world, mx_user):
+    """「추출 → 엑셀에서 고치기 → 붙여넣기」가 돌아야 한다.
+
+    여태는 이름이 같으면 건너뛰고 나머지 칸을 손대지 않아 **고친 것이 아무 일도 안 했다.**
+    ⚠️ 덮어쓰기는 켜야 돈다. 그리고 **빈 칸은 안 지운다** — 엑셀에서 열을 지우고 붙여넣었다고
+       자료가 비워지면 고치기가 지우기가 된다.
+    """
+    mx = world['mx'].id
+    client.post(f'{BASE}/subjects', json={'division_id': mx, 'sector': 'simulation',
+                                          'name': '낙하 시험', 'detail': '1.2m',
+                                          'product_families': ['S 시리즈']}, headers=auth(mx_user))
+
+    # ① 지금 자료를 그 표의 머리글 그대로 받는다
+    got = client.get(f'{BASE}/bulk/rows?division_id={mx}&sector=simulation&kind=subject',
+                     headers=auth(mx_user)).get_json()['data']
+    kinds = client.get(f'{BASE}/bulk/kinds?sector=simulation&division_id={mx}',
+                       headers=auth(mx_user)).get_json()['data']
+    assert got['columns'] == next(k for k in kinds if k['key'] == 'subject')['columns']
+    line = next(r for r in got['rows'] if r[1] == '낙하 시험')
+    assert line[2] == '1.2m' and line[3] == 'S 시리즈'       # 값이 실려 온다
+
+    # ② 세부만 고쳐서 되넣는다 — 덮어쓰기를 안 켜면 아무 일도 안 일어난다
+    line[2] = '1.5m 6면 26모서리'
+    text = '\t'.join(got['columns']) + '\n' + '\t'.join(line)
+    body = {'division_id': mx, 'sector': 'simulation', 'kind': 'subject', 'text': text}
+    keep = client.post(f'{BASE}/bulk', json={**body, 'dry_run': False}, headers=auth(mx_user)).get_json()['data']
+    assert keep['summary']['exists'] == 1 and keep['summary']['updated'] == 0
+    row = next(r for r in client.get(f'{BASE}/subjects?division_id={mx}&sector=simulation',
+                                     headers=auth(mx_user)).get_json()['data'] if r['name'] == '낙하 시험')
+    assert row['detail'] == '1.2m', '덮어쓰기를 안 켰는데 바뀌었다'
+
+    # ③ 미리보기가 **무엇이 무엇으로** 바뀌는지 말해 준다 — 보고 나서 올린다
+    pre = client.post(f'{BASE}/bulk', json={**body, 'mode': 'update'},
+                      headers=auth(mx_user)).get_json()['data']
+    assert pre['summary']['updated'] == 1
+    ch = next(r for r in pre['rows'] if r['name'] == '낙하 시험')['changes']
+    assert ch == [{'col': '세부', 'field': 'detail', 'before': '1.2m', 'after': '1.5m 6면 26모서리'}]
+    row = next(r for r in client.get(f'{BASE}/subjects?division_id={mx}&sector=simulation',
+                                     headers=auth(mx_user)).get_json()['data'] if r['name'] == '낙하 시험')
+    assert row['detail'] == '1.2m', '미리보기가 저장했다'
+
+    # ④ 올린다
+    ok = client.post(f'{BASE}/bulk', json={**body, 'mode': 'update', 'dry_run': False},
+                     headers=auth(mx_user)).get_json()['data']
+    assert ok['summary']['updated'] == 1
+    row = next(r for r in client.get(f'{BASE}/subjects?division_id={mx}&sector=simulation',
+                                     headers=auth(mx_user)).get_json()['data'] if r['name'] == '낙하 시험')
+    assert row['detail'] == '1.5m 6면 26모서리'
+    assert row['product_families'] == ['S 시리즈']          # 손 안 댄 칸은 그대로
+
+    # ⑤ 다시 넣으면 「고칠 것 없음」 — 같은 표를 두 번 올려도 조용하다
+    again = client.post(f'{BASE}/bulk', json={**body, 'mode': 'update', 'dry_run': False},
+                        headers=auth(mx_user)).get_json()['data']
+    assert again['summary']['updated'] == 0
+    assert next(r for r in again['rows'])['status'] == 'same'
+
+    # ⑥ **빈 칸은 안 지운다** — 제품군 열을 비워 보낸다
+    blank = list(line)
+    blank[3] = ''
+    text2 = '\t'.join(got['columns']) + '\n' + '\t'.join(blank)
+    client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'simulation', 'kind': 'subject',
+                                      'text': text2, 'mode': 'update', 'dry_run': False},
+                headers=auth(mx_user))
+    row = next(r for r in client.get(f'{BASE}/subjects?division_id={mx}&sector=simulation',
+                                     headers=auth(mx_user)).get_json()['data'] if r['name'] == '낙하 시험')
+    assert row['product_families'] == ['S 시리즈'], '빈 칸이 자료를 지웠다'
