@@ -647,7 +647,7 @@ const ItemManagerModal = ({
 
   return (
     <Overlay onClick={onClose}>
-      <Panel onClick={e => e.stopPropagation()}>
+      <Panel onClick={e => e.stopPropagation()} role="dialog" aria-label={meta.title}>
         <Head>
           <Title>{meta.title}</Title>
           <Count>{allMode ? '전체' : divName(divisionId)} · {items.length}개{picked.length > 1 && ` · ${picked.length}개 고름`}</Count>

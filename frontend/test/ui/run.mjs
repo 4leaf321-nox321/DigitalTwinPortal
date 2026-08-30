@@ -22,7 +22,11 @@ for (const f of files) {
   await build({
     entryPoints: [join(here, f)],
     bundle: true, format: 'esm', platform: 'node', outfile, logLevel: 'error',
-    alias: { 'styled-components': join(here, 'sc-stub.js'), 'react-force-graph-2d': join(here, 'fg-stub.js') },
+    alias: {
+      'styled-components': join(here, 'sc-stub.js'),
+      'react-force-graph-2d': join(here, 'fg-stub.js'),
+      'xlsx-js-style': join(here, 'xlsx-stub.js'),   // CJS 라 묶으면 불러오는 자리에서 터진다
+    },
     // Vite 의 import.meta.env 는 esbuild 에 없다 — 다른 모듈 부품을 끌어 쓰면 여기서 터진다.
     define: { 'import.meta.env': '{}' },
     external: ['jsdom'],
