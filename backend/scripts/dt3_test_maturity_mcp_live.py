@@ -304,6 +304,14 @@ def main():
         # ── 판·변화도 읽히는가 ─────────────────────────────────────────────
         board = m.call('maturity_board', {'division_id': did})
         check_true('판이 읽힌다', isinstance(board, dict) and 'subjects' in board)
+        # ⚠️ 판은 **간추려서** 준다 — 통짜는 연계 100개에 40만 자가 넘어 못 읽는다(실측)
+        import json as _j
+        fullb = m.call('maturity_board', {'division_id': did, 'full': True})
+        slim_n, full_n = len(_j.dumps(board, ensure_ascii=False)), len(_j.dumps(fullb, ensure_ascii=False))
+        check_true(f'간추린 판이 통짜보다 훨씬 작다 ({slim_n:,} < {full_n:,})', slim_n * 2 < full_n)
+        one = next((p for s3 in board['subjects'] for p in s3['pairs']), None)
+        check_true('간추려도 pair_id 와 축별 지금 칸은 있다', one and 'pair_id' in one and 'at' in one)
+        check_true('근거 글은 빠져 있다(get_pair 로)', 'note' not in _j.dumps(one, ensure_ascii=False))
         ch = m.call('maturity_changes', {'division_id': did, 'days': 7})
         check_true('변화가 읽힌다', isinstance(ch, (dict, list)))
 
@@ -347,7 +355,7 @@ def main():
 
         mboard = m.call('maturity_board', {'division_id': did, 'sector': mon})
         check_true('모니터링 판이 읽힌다', any(
-            s2['id'] == made['mon_subject'] for s2 in (mboard.get('subjects') or [])))
+            s2['subject_id'] == made['mon_subject'] for s2 in (mboard.get('subjects') or [])))
 
         # ── J 디지털 스레드 ────────────────────────────────────────────────
         print('\nJ. 디지털 스레드 — 수단이 없다')
@@ -374,9 +382,9 @@ def main():
 
         tboard = m.call('maturity_board', {'division_id': did, 'sector': th})
         mine_seg = next((x for x in (tboard.get('subjects') or [])
-                         if x['id'] == made['seg_subject']), None)
+                         if x['subject_id'] == made['seg_subject']), None)
         check_true('스레드 판에서 보인다', mine_seg)
-        tpair = (mine_seg or {}).get('pairs', [{}])[0].get('id') if mine_seg else None
+        tpair = (mine_seg or {}).get('pairs', [{}])[0].get('pair_id') if mine_seg else None
         check_true('수단 없이 연계가 서 있다', tpair)
         if tpair:
             got_t = m.call('maturity_assess', {'pair_id': tpair, 'axis': 'link_mode',

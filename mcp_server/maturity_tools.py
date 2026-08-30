@@ -38,6 +38,52 @@ def register(mcp, request_fn):
                                   "덮기 전에 무엇이 바뀌었는지 사용자에게 보여 주세요."}
         return out
 
+    def _slim_axes(axes):
+        """축은 key·이름·종류·칸 목록만 — 묻는 말과 칸 설명은 describe 가 준다."""
+        return [{"key": a["key"], "label": a["label"], "kind": a["kind"],
+                 "rungs": [r["key"] for r in a.get("rungs") or []]}
+                for a in axes or []]
+
+    def _slim_cell(v):
+        """평가 하나 — 「지금 어느 칸인가」만. 근거·근거 자료·누가 언제는 get_pair 로."""
+        if not v:
+            return None
+        out = {}
+        if v.get("value") is not None:
+            out["value"] = v["value"]
+        if v.get("rung"):
+            out["rung"] = v["rung"]
+        if v.get("stale"):
+            out["stale"] = True                      # 재평가 필요
+        if v.get("unknown"):
+            out["unknown"] = True                    # 「모름」 — 확인이 필요한 상태
+        return out or None
+
+    def _compact_board(b):
+        """판을 AI 가 읽을 수 있는 크기로. `full=True` 면 통짜 그대로."""
+        subjects = []
+        for s in b.get("subjects") or []:
+            pairs = []
+            for p in s.get("pairs") or []:
+                cells = {k: _slim_cell(v) for k, v in (p.get("assessments") or {}).items()}
+                pairs.append({"pair_id": p.get("id"),
+                              "agent_id": p.get("agent_id"),
+                              "agent_name": (p.get("agent") or {}).get("name"),
+                              "at": {k: v for k, v in cells.items() if v},
+                              "unassessed": p.get("unassessed") or []})
+            row = {"subject_id": s.get("id"), "name": s.get("name"), "pairs": pairs}
+            for f in ("detail", "line", "process_label"):
+                if s.get(f):
+                    row[f] = s[f]
+            subjects.append(row)
+        return {"division_id": b.get("division_id"), "sector": b.get("sector"),
+                "deny_reason": b.get("deny_reason"), "stale_days": b.get("stale_days"),
+                "totals": b.get("totals"), "axes": _slim_axes(b.get("axes")),
+                "subjects": subjects,
+                "note": "간추린 판입니다 — 근거·근거 자료·이력은 maturity_get_pair 로, "
+                        "축의 묻는 말과 칸 설명은 maturity_describe 로 보세요. "
+                        "통짜가 필요하면 full=True."}
+
     # ── 읽기 ────────────────────────────────────────────────────────────────
 
     @mcp.tool()
@@ -71,17 +117,24 @@ def register(mcp, request_fn):
 
     @mcp.tool()
     async def maturity_board(ctx: Context, division_id: int,
-                             sector: str = "simulation") -> dict:
+                             sector: str = "simulation", full: bool = False) -> dict:
         """[성숙도] 한 사업부의 **판** — 대상 × 수단마다 축별 지금 칸. 성숙도를 읽는 기본 도구.
 
         `sector` 는 `maturity_describe` 의 부문 key(simulation · manufacturing_monitoring ·
         digital_thread …). 안 주면 시뮬레이션이다.
 
-        돌아오는 각 연계에는 `pair_id` 가 있다 — 고치려면 그 id 로
-        `maturity_get_pair` · `maturity_assess` 를 부른다.
+        각 연계에 `pair_id` 가 있다 — 고치려면 그 id 로 `maturity_assess` 를 부른다.
+        `at` 이 축별 지금 칸이고, `unassessed` 는 아직 안 매긴 축이다.
+
+        ⚠️ 기본은 **간추린 판**이다. 근거 글·근거 자료·누가 언제는 빠져 있다 — 그건
+           `maturity_get_pair` 로 그 연계 하나만 열어 보세요. 사업부에 연계가 백 개면
+           통짜는 40만 자가 넘어 통째로 읽을 수 없다. 정말 필요할 때만 `full=True`.
         """
-        return await _m(ctx, "GET", "/board",
-                        params={"division_id": division_id, "sector": sector})
+        out = await _m(ctx, "GET", "/board",
+                       params={"division_id": division_id, "sector": sector})
+        if full or not isinstance(out, dict) or "subjects" not in out:
+            return out
+        return _compact_board(out)
 
     @mcp.tool()
     async def maturity_list_items(ctx: Context, division_id: int, kind: str,
@@ -107,11 +160,14 @@ def register(mcp, request_fn):
 
     @mcp.tool()
     async def maturity_changes(ctx: Context, division_id: int,
-                               sector: str = "simulation", days: int = 365) -> dict:
-        """[성숙도] 그 사업부에서 **무엇이 언제 올라갔나** — 축별 변화 이력.
+                               sector: str = "simulation", days: int = 365) -> list:
+        """[성숙도] 그 사업부에서 **무엇이 언제 올라갔나** — 축별 변화 이력의 **목록**.
 
-        「지난 분기에 뭐가 좋아졌나」 같은 물음에 이걸 쓴다. 칸이 실제로 바뀐 것만 남는다
-        (같은 값을 다시 저장한 것은 이력에 없다).
+        「지난 분기에 뭐가 좋아졌나」 같은 물음에 이걸 쓴다. 줄마다 시험 항목·시뮬레이션·
+        축·before→after·근거·누가·언제가 들어 있어 그대로 사람에게 보고할 수 있다.
+
+        칸이 **실제로 바뀐 것만** 남는다(같은 값을 다시 저장한 것은 이력에 없다).
+        정확도 같은 값 축만 예외로 저장마다 한 줄 쌓인다 — 값의 흐름이 곧 이야기라서다.
         """
         return await _m(ctx, "GET", "/changes",
                         params={"division_id": division_id, "sector": sector, "days": days})
