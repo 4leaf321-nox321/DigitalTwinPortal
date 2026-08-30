@@ -1,7 +1,7 @@
 // 가입자 현황의 셈 — 주·월·연으로 묶고, 빈 칸도 0 으로 채워 줄이 끊기지 않게.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketOf, signupSeries } from '../utils/signupStats.js';
+import { bucketOf, signupSeries, viewSeries, bucketLabel } from '../utils/signupStats.js';
 
 const u = (iso) => ({ created_at: iso });
 
@@ -49,4 +49,41 @@ test('가입 시각이 없는 사람은 빼고 세되, 몇 명인지 알려 준�
 
 test('아무도 없으면 빈 줄', () => {
   assert.deepEqual(signupSeries([], 'month').rows, []);
+});
+
+
+// ── 조회수 현황 ─────────────────────────────────────────────────────────────
+// 서버가 **자기가 가진 칸만** 준다(빈 달은 아예 없다). 채우고 누계를 내는 것은 여기서 한다.
+const v = (bucket, views, visitors = 1, logins = 0) => ({ bucket, views, visitors, logins });
+
+test('조회수 — 빈 칸을 채우고 누계를 낸다', () => {
+  const { rows, total } = viewSeries([v('2026-01', 10), v('2026-04', 5)], 'month', 24, new Date('2026-04-20'));
+  assert.deepEqual(rows.map(r => r.bucket), ['2026-01', '2026-02', '2026-03', '2026-04']);
+  assert.deepEqual(rows.map(r => r.조회), [10, 0, 0, 5]);
+  assert.deepEqual(rows.map(r => r.누계), [10, 10, 10, 15]);
+  assert.equal(total, 15);
+});
+
+test('조회수 — 방문자와 로그인도 실려 온다', () => {
+  const { rows, logins } = viewSeries([v('2026-03', 40, 7, 12)], 'month', 24, new Date('2026-03-10'));
+  assert.equal(rows[0].방문자, 7);
+  assert.equal(rows[0].로그인, 12);
+  assert.equal(logins, 12);
+});
+
+test('조회수 — 잘라 낸 앞쪽도 누계에는 들어간다', () => {
+  // keep 가 2 여도 「지금까지 모두 몇」은 맞아야 한다
+  const { rows } = viewSeries([v('2026-01', 10), v('2026-02', 5), v('2026-03', 1)], 'month', 2, new Date('2026-03-10'));
+  assert.deepEqual(rows.map(r => r.bucket), ['2026-02', '2026-03']);
+  assert.deepEqual(rows.map(r => r.누계), [15, 16]);
+});
+
+test('조회수 — 이력이 없으면 빈 줄', () => {
+  assert.deepEqual(viewSeries([], 'month').rows, []);
+});
+
+test('가로 눈금의 글자는 둘이 같다', () => {
+  assert.equal(bucketLabel('2026', 'year'), '2026년');
+  assert.equal(bucketLabel('2026-08', 'month'), '26/08');
+  assert.equal(bucketLabel('2026-08-24', 'week'), '08/24');
 });

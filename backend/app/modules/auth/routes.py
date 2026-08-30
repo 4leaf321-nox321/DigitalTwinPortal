@@ -798,6 +798,67 @@ def get_access_logs():
         return error_response(f'접속 이력 조회 실패: {str(e)}', status_code=500)
 
 
+@bp.route('/access-logs/stats', methods=['GET'])
+@jwt_required()
+def access_log_stats():
+    """조회수 현황 — 접속 이력을 주·월·연으로 묶어 준다(관리자 전용, 2026-08-30).
+
+    ⚠️ 목록(/access-logs)은 한 번에 200줄까지다. 그래프를 그리려고 수천 줄을 다
+       내려받게 할 수는 없어 **DB 에서 묶어** 보낸다.
+    ⚠️ 묶는 기준은 **KST**. 화면의 가입자 현황이 로컬(=한국) 기준이라, 여기서 UTC 로
+       묶으면 자정 언저리의 건이 다른 칸에 들어가 둘이 어긋난다.
+
+    돌려주는 것 — 칸마다 {bucket, views, visitors, logins}
+        views    그 칸의 화면 열람 수(MODULE_ACCESS)
+        visitors 그 칸에 실제로 들어온 사람 수(같은 사람은 하나로)
+        logins   그 칸의 로그인 수
+    누계는 화면에서 더한다 — 가입자 현황과 같은 셈을 쓰기 위해서다.
+    """
+    user_id = int(get_jwt_identity())
+    current_user = UserService.get_by_id(user_id)
+    if not current_user or not current_user.is_admin_user():
+        return error_response('관리자 권한이 필요합니다.', status_code=403)
+
+    unit = (request.args.get('unit') or 'month').strip()
+    if unit not in ('week', 'month', 'year'):
+        return error_response('묶는 단위는 week · month · year 입니다.', status_code=400)
+
+    try:
+        from sqlalchemy import text
+        # date_trunc('week') 는 월요일에 시작한다 — 화면(signupStats.bucketOf)과 같은 결이다.
+        rows = db.session.execute(text("""
+            SELECT to_char(date_trunc(:unit, created_at + interval '9 hours'),
+                           CASE :unit WHEN 'year' THEN 'YYYY'
+                                      WHEN 'month' THEN 'YYYY-MM'
+                                      ELSE 'YYYY-MM-DD' END)            AS bucket,
+                   COUNT(*) FILTER (WHERE action = 'MODULE_ACCESS')     AS views,
+                   COUNT(DISTINCT user_email)
+                         FILTER (WHERE action = 'MODULE_ACCESS')        AS visitors,
+                   COUNT(*) FILTER (WHERE action = 'LOGIN')             AS logins
+              FROM access_logs
+             GROUP BY 1
+             ORDER BY 1
+        """), {'unit': unit}).mappings().all()
+
+        # 어느 화면을 많이 보나 — 그래프 옆에 붙는 곁줄. 상위 몇 개면 충분하다.
+        top = db.session.execute(text("""
+            SELECT COALESCE(module_name, module, '(이름 없음)') AS name, COUNT(*) AS views
+              FROM access_logs
+             WHERE action = 'MODULE_ACCESS'
+             GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+        """)).mappings().all()
+
+        return success_response({
+            'unit': unit,
+            'rows': [{'bucket': r['bucket'], 'views': int(r['views']),
+                      'visitors': int(r['visitors']), 'logins': int(r['logins'])} for r in rows],
+            'modules': [{'name': r['name'], 'views': int(r['views'])} for r in top],
+        })
+    except Exception as e:
+        print(f"[AccessLog Stats Error] {e}")
+        return error_response(f'조회수 집계 실패: {str(e)}', status_code=500)
+
+
 @bp.route('/access-logs', methods=['POST'])
 @jwt_required()
 def create_access_log():

@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend,
 } from 'recharts';
-import { UNITS, signupSeries } from '../utils/signupStats';
+import { UNITS, signupSeries, bucketLabel as label } from '../utils/signupStats';
 
 /**
  * 가입자 현황 — 플랫폼에 가입한 사람이 언제 늘었나(2026-08-30).
@@ -41,12 +41,6 @@ const Stat = styled.div`
 const ChartBox = styled.div`height: clamp(20rem, calc(100vh - 34rem), 55rem);`;
 const Muted = styled.div`color: #9ca3af; font-size: 0.9375rem; padding: 2rem 0; text-align: center;`;
 const Note = styled.p`margin: 0; color: #6b7280; font-size: 0.8125rem;`;
-
-const label = (key, unit) => {
-  if (unit === 'year') return `${key}년`;
-  if (unit === 'month') return key.slice(2).replace('-', '/');
-  return key.slice(5).replace('-', '/');
-};
 
 const SignupTrend = ({ users = [], loading = false }) => {
   const [unit, setUnit] = useState('month');

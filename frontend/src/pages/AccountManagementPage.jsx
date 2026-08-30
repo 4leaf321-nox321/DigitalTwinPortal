@@ -11,6 +11,7 @@ import { MODULE_NAMES, invalidateRolePermissionsCache } from '../components/Prot
 import McpTokenSection from '../modules/auth/components/McpTokenSection';
 // 가입자 현황 — 이미 받아 둔 사용자 목록의 created_at 하나로 그린다(2026-08-30).
 import SignupTrend from '../modules/auth/components/SignupTrend';
+import AccessTrend from '../modules/auth/components/AccessTrend';
 import { todayLocalYmd } from '../shared/utils/localDate';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -1295,6 +1296,18 @@ const ITEMS_PER_PAGE = 10;
  * `adminOnly` 탭은 관리자가 아니면 **막대에 나오지도 않는다.** 안 보이는 탭을 고를 수는
  * 없지만, 그래도 렌더링 조건은 각 자리에 그대로 남겨 둔다(탭은 보이기 규칙이지 권한이 아니다).
  */
+// 가입자 ↔ 조회수 — 아래의 눈금 칩(주·월·연)과 헷갈리지 않게 **밑줄 탭** 꼴로 둔다.
+const TrendSwitch = styled.div`
+  display: flex; gap: 0.25rem; border-bottom: 1px solid #e5e7eb; margin-bottom: 0.9rem;
+  button {
+    border: none; background: transparent; cursor: pointer; font-family: inherit;
+    font-size: 0.9375rem; font-weight: 600; color: #6b7280; padding: 0.5rem 0.9rem;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    &:hover { color: #374151; }
+    &.on { color: #0891b2; border-bottom-color: #0891b2; }
+  }
+`;
+
 const TABS = [
   { key: 'me', label: '내 정보', icon: User, adminOnly: false },
   { key: 'users', label: '사용자 권한 관리', icon: Users, adminOnly: true },
@@ -1329,6 +1342,9 @@ const AccountManagementPage = () => {
   const [departmentLoading, setDepartmentLoading] = useState(false);
 
   // 접속 이력 관련 상태
+  // ⚠️ 가입자(사람 수, 수십)와 조회수(클릭 수, 수천)는 자릿수가 달라 한 그림에 겹치면
+  //    둘 다 안 읽힌다. 같은 탭에서 **갈아 끼운다**(2026-08-30 요청).
+  const [trendView, setTrendView] = useState('signups');
   const [accessLogs, setAccessLogs] = useState([]);
   const [accessLogPage, setAccessLogPage] = useState(1);
   const [accessLogTotal, setAccessLogTotal] = useState(0);
@@ -2464,11 +2480,24 @@ const AccountManagementPage = () => {
                   <TrendingUp size={32} strokeWidth={2} />
                 </IconWrapper>
                 <HeaderText>
-                  <h1>가입자 현황</h1>
-                  <p>관리자 전용 - 플랫폼에 가입한 사람이 언제 늘었는지 봅니다 (총 {users.length}명)</p>
+                  <h1>{trendView === 'signups' ? '가입자 현황' : '조회수 현황'}</h1>
+                  <p>
+                    {trendView === 'signups'
+                      ? `관리자 전용 - 플랫폼에 가입한 사람이 언제 늘었는지 봅니다 (총 ${users.length}명)`
+                      : '관리자 전용 - 화면을 언제 얼마나 열어 봤는지 봅니다 (접속 이력 기준)'}
+                  </p>
                 </HeaderText>
               </CardHeader>
-              <SignupTrend users={users} loading={loading} />
+              <TrendSwitch role="tablist" aria-label="무엇을 볼까">
+                {[['signups', '가입자'], ['views', '조회수']].map(([k, lab]) => (
+                  <button key={k} type="button" role="tab" aria-selected={trendView === k}
+                          className={trendView === k ? 'on' : ''}
+                          onClick={() => setTrendView(k)}>{lab}</button>
+                ))}
+              </TrendSwitch>
+              {trendView === 'signups'
+                ? <SignupTrend users={users} loading={loading} />
+                : <AccessTrend />}
             </Card>
           </WidePanel>
         )}
