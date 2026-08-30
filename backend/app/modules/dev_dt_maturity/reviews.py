@@ -18,7 +18,7 @@ from app.extensions import db
 
 from . import definitions as D
 from .importer import TableFormatError, _read_rows, norm
-from .models import MaturityAgent, MaturityReviewCase
+from .models import MaturityAgent, MaturityPair, MaturityReviewCase, MaturitySubject
 from .services import Refused
 
 
@@ -166,7 +166,9 @@ def stats(division_id, year, promote_min=None):
     for kind in D.vocab_keys('review_kind'):
         rs = [r for r in rows if r.kind == kind]
         leads = [r.lead_days for r in rs if r.lead_days is not None]
-        pairs = Counter((r.agent_name or f'#{r.agent_id}', r.item or '') for r in rs if (r.agent_id or r.agent_name) and r.item)
+        # ⚠️ 이미 올린 건은 **후보 셈에서만** 뺀다 — 건수·비율에는 그대로 든다(사건은 사건대로).
+        pairs = Counter((r.agent_name or f'#{r.agent_id}', r.item or '')
+                        for r in rs if (r.agent_id or r.agent_name) and r.item and not r.promoted_pair_id)
         out['kinds'][kind] = {
             'count': len(rs),
             'early': _rate(rs, 'timing', 'before_spec'),        # 스펙 확정 전 이상
@@ -176,6 +178,52 @@ def stats(division_id, year, promote_min=None):
             'promote': [{'agent_name': a, 'item': i, 'count': n} for (a, i), n in pairs.most_common() if n >= promote_min],
         }
     return out
+
+
+def promote(division_id, agent_name, item, actor, subject_name=None, make_agent=False):
+    """정착 후보 하나를 상시 시험 항목 × 시뮬레이션 연계로 올린다.
+
+    ⚠️ 평가는 만들지 않는다 — 근거 없이 저장 못 하는 규칙(services.assess)을 우회하게 된다.
+       연계만 세우고, 사람이 그 화면에서 근거를 적으며 첫 칸을 매긴다.
+    ⚠️ 이름이 같으면 다시 만들지 않는다(가져오기와 같은 규칙) — 두 번 눌러도 하나다.
+    """
+    from . import services as S
+    division_id = int(division_id)
+    agent_name = (agent_name or '').strip()
+    name = (subject_name or item or '').strip()
+    if not agent_name or not name:
+        raise Refused('시뮬레이션과 시험 항목 이름이 필요합니다.')
+
+    agent = next((a for a in MaturityAgent.query.filter_by(division_id=division_id, sector='simulation').all()
+                  if norm(a.name) == norm(agent_name)), None)
+    made_agent = agent is None
+    if agent is None:
+        if not make_agent:
+            raise Refused(f'「{agent_name}」 은 시뮬레이션 사전에 없습니다. 새로 만들지 고르세요.')
+        agent = S.create_agent(division_id, 'simulation', agent_name)
+
+    subject = next((s for s in MaturitySubject.query.filter_by(division_id=division_id, sector='simulation').all()
+                    if norm(s.name) == norm(name)), None)
+    made_subject = subject is None
+    if subject is None:
+        subject = S.create_subject(division_id, 'simulation', name)
+
+    pair = MaturityPair.query.filter_by(subject_id=subject.id, agent_id=agent.id).first()
+    made_pair = pair is None
+    if pair is None:
+        pair = S.create_pair(subject, agent)
+
+    # 기록은 지우지 않고 **표만 남긴다** — 사건은 사건대로 남고, 후보에는 다시 안 뜬다.
+    fed = 0
+    for r in MaturityReviewCase.query.filter_by(division_id=division_id).all():
+        if norm(r.item or '') == norm(item or '') and norm(r.agent_name or '') == norm(agent_name):
+            r.promoted_pair_id = pair.id
+            fed += 1
+    db.session.flush()
+    return {'pair_id': pair.id, 'subject_id': subject.id, 'agent_id': agent.id,
+            'subject_name': subject.name, 'agent_name': agent.name,
+            'made': {'subject': made_subject, 'agent': made_agent, 'pair': made_pair},
+            'cases': fed}
 
 
 def stats_all(year, division_ids):

@@ -873,6 +873,31 @@ def create_review(actor):
         return _crashed()
 
 
+@bp.route('/reviews/promote', methods=['POST'])
+@read_required
+def promote_review(actor):
+    """정착 후보를 상시 시험 항목 × 시뮬레이션 연계로 올린다(2026-08-30).
+
+    평가는 만들지 않는다 — 연계만 세우고 사람이 근거를 적으며 첫 칸을 매긴다.
+    """
+    p = request.get_json() or {}
+    if p.get('division_id') is None:
+        return error_response('사업부가 필요합니다.', status_code=400)
+    denied = _deny(actor, p['division_id'])
+    if denied:
+        return denied
+    try:
+        out = R.promote(p['division_id'], p.get('agent_name'), p.get('item'), actor,
+                        subject_name=p.get('subject_name'), make_agent=bool(p.get('make_agent')))
+        db.session.commit()
+        return success_response(out, status_code=201)
+    except S.Refused as e:
+        db.session.rollback()
+        return error_response(str(e), status_code=400)
+    except Exception:
+        return _crashed()
+
+
 @bp.route('/reviews/<int:row_id>', methods=['PUT'])
 @read_required
 def update_review(actor, row_id):

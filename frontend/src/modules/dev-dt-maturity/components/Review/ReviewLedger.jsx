@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Plus, Trash2, Pencil, X, Check, AlertTriangle, Upload, Download } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Check, AlertTriangle, Upload, Download, ArrowUpRight } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
 import SearchSelect from '../common/SearchSelect';
 
@@ -16,7 +16,28 @@ const Chip = styled.button`
 `;
 const Select = styled.select`padding: 0.3rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-family: inherit; font-size: 0.8125rem; background: white;`;
 const Stats = styled.div`display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8125rem; color: #475569; strong { color: #1e293b; font-size: 1rem; }`;
-const Promote = styled.span`display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 600;`;
+const Up = styled.span`margin-left: 0.3rem; padding: 0 0.35rem; border-radius: 999px; background: #eef2ff; color: #4338ca; font-size: 0.6875rem; font-weight: 600;`;
+const Promote = styled.button`
+  display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; background: #dcfce7; color: #166534;
+  font-size: 0.75rem; font-weight: 600; border: 1px solid #86efac; font-family: inherit; cursor: pointer;
+  &:hover { background: #bbf7d0; }
+`;
+const PromBack = styled.div`position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 70;`;
+const PromBox = styled.div`
+  width: min(46rem, 92vw); max-height: 80vh; display: flex; flex-direction: column; background: white; border-radius: 0.75rem;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3); overflow: hidden;
+`;
+const Head = styled.div`display: flex; align-items: center; gap: 0.5rem; padding: 0.9rem 1.1rem; border-bottom: 1px solid #e2e8f0; h3 { margin: 0; font-size: 1rem; flex: 1; color: #1e293b; }`;
+const Body = styled.div`padding: 1rem 1.1rem; overflow: auto; display: flex; flex-direction: column; gap: 0.75rem;`;
+const Why = styled.div`font-size: 0.8125rem; color: #64748b; line-height: 1.6;`;
+const Cand = styled.table`
+  width: 100%; border-collapse: collapse; font-size: 0.8125rem;
+  th { text-align: left; font-weight: 600; color: #64748b; font-size: 0.75rem; padding: 0.3rem 0.4rem; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 0.4rem 0.4rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  td input { width: 100%; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 0.3rem; font-family: inherit; font-size: 0.8125rem; }
+  td small { color: #94a3b8; display: block; }
+  td.act { text-align: right; white-space: nowrap; }
+`;
 // 입력 줄 — 택1은 드롭다운이 아니라 **토글 묶음**: 선택지가 한눈에 보이고 한 번 눌러 정한다(2026-08-28).
 const Form = styled.form`
   display: flex; flex-direction: column; gap: 0.4rem;
@@ -57,6 +78,31 @@ const empty = (kind = 'spec') => ({ month: thisMonth(), kind, target: '', item: 
 
 const ReviewLedger = ({ divisionId, divisions = [], denyReason, review, refreshKey }) => {
   const allMode = divisionId === 'all';
+  // 정착 후보 올리기 — 목록 창 하나, 줄마다 이름을 고쳐 올린다(2026-08-30)
+  const [promoting, setPromoting] = useState(null);     // { kind, rows:[{agent_name,item,count,name}] }
+  const [busyRow, setBusyRow] = useState(null);
+  const [promoted, setPromoted] = useState({});         // {'수단×항목': 결과} — 올린 것
+  const openPromote = (kindLabel, rows) => setPromoting({
+    kindLabel, rows: rows.map(r => ({ ...r, name: r.item })),
+  });
+  const runPromote = async (row, makeAgent = false) => {
+    const key = `${row.agent_name}×${row.item}`;
+    setBusyRow(key); setError(null);
+    try {
+      const r = await maturityApi.promoteReview({
+        division_id: division, agent_name: row.agent_name, item: row.item,
+        subject_name: row.name, make_agent: makeAgent,
+      });
+      setPromoted(m => ({ ...m, [key]: r.data }));
+      load();
+    } catch (e) {
+      // 사전에 없는 시뮬레이션이면 한 번 묻고 다시 — 말없이 만들지 않는다
+      if (!makeAgent && String(e.message).includes('사전에 없습니다')
+          && window.confirm(`「${row.agent_name}」 은 시뮬레이션 사전에 없습니다. 새로 만들어 올릴까요?`)) {
+        await runPromote(row, true);
+      } else { setError(e.message); }
+    } finally { setBusyRow(null); }
+  };
   const [division, setDivision] = useState(allMode ? (divisions[0]?.id ?? null) : divisionId);
   useEffect(() => { setDivision(allMode ? (divisions[0]?.id ?? null) : divisionId); }, [divisionId, allMode, divisions]);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -142,11 +188,61 @@ const ReviewLedger = ({ divisionId, divisions = [], denyReason, review, refreshK
               <span key={x.key} title="건수 · 스펙 확정 전 이상 · 관문 이상 · 검증됨 · 리드타임 중앙값">
                 <Kind $cause={x.key === 'cause'}>{x.label}</Kind> <strong>{s?.count ?? 0}건</strong>
                 {' '}· 스펙 확정 전 이상 {pct(s?.early)} · 관문 이상 {pct(s?.gate)} · 검증됨 {pct(s?.confirmed)} · 리드타임 {s?.lead_median != null ? `${s.lead_median}일` : '—'}
-                {(s?.promote || []).length > 0 && <> · <Promote title={s.promote.map(p => `${p.agent_name} × ${p.item} ${p.count}건`).join('\n')}>정착 후보 {s.promote.length}</Promote></>}
+                {(s?.promote || []).length > 0 && <> · <Promote type="button" onClick={() => openPromote(x.label, s.promote)}
+                  title="누르면 상시 시험 항목으로 올릴 수 있습니다">정착 후보 {s.promote.length}</Promote></>}
               </span>
             );
           })}
         </Stats>
+      )}
+
+      {promoting && (
+        <PromBack onClick={() => setPromoting(null)}>
+          <PromBox onClick={e => e.stopPropagation()} role="dialog" aria-label="정착 후보 올리기">
+            <Head><h3>정착 후보 — {promoting.kindLabel}</h3>
+              <Button type="button" onClick={() => setPromoting(null)} title="닫기"><X size={14} /></Button></Head>
+            <Body>
+              <Why>
+                한 해에 여러 번 되풀이된 해석입니다. <strong>상시 시험 항목으로 올리면</strong> 척도로 관리됩니다 —
+                시험 항목과 시뮬레이션을 잇기만 하고 <strong>평가는 만들지 않습니다</strong>(근거는 사람이 적습니다).
+                올려도 <strong>이 기록들은 그대로 남습니다</strong> — 기록은 사건이고 연계는 상태라 서로 다른 것을 셉니다.
+                올린 짝은 다음부터 이 목록에 안 나옵니다.
+              </Why>
+              <Cand>
+                <thead><tr><th style={{ width: '13rem' }}>시뮬레이션</th><th>시험 항목 이름</th><th style={{ width: '4rem' }}>건수</th><th style={{ width: '7rem' }} /></tr></thead>
+                <tbody>
+                  {promoting.rows.map((r, i) => {
+                    const key = `${r.agent_name}×${r.item}`;
+                    const done = promoted[key];
+                    return (
+                      <tr key={key}>
+                        <td>{r.agent_name}</td>
+                        <td>
+                          {done ? done.subject_name : (
+                            <>
+                              <input value={r.name} aria-label={`${r.agent_name} 시험 항목 이름`}
+                                     onChange={e => setPromoting(p => ({ ...p, rows: p.rows.map((y, j) => (j === i ? { ...y, name: e.target.value } : y)) }))} />
+                              {r.name !== r.item && <small>기록에는 「{r.item}」</small>}
+                            </>
+                          )}
+                        </td>
+                        <td>{r.count}건</td>
+                        <td className="act">
+                          {done
+                            ? <small>올렸습니다{done.made?.subject ? ' · 항목 새로' : ''}{done.made?.agent ? ' · 수단 새로' : ''}</small>
+                            : <Button type="button" disabled={busyRow === key || !r.name.trim()} onClick={() => runPromote(r)}>
+                                <ArrowUpRight size={13} /> 올리기
+                              </Button>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Cand>
+              {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
+            </Body>
+          </PromBox>
+        </PromBack>
       )}
 
       {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
@@ -202,7 +298,9 @@ const ReviewLedger = ({ divisionId, divisions = [], denyReason, review, refreshK
               <tr key={r.id}>
                 <td>{r.month.slice(0, 7)}</td>
                 <td><Kind $cause={r.kind === 'cause'}>{(review?.kinds || []).find(x => x.key === r.kind)?.label || r.kind}</Kind></td>
-                <td>{r.target}</td><td>{r.item}</td><td>{r.agent_name}</td>
+                <td>{r.target}</td>
+                <td>{r.item}{r.promoted_pair_id && <Up title="상시 시험 항목으로 올린 건입니다 — 후보에는 다시 안 뜹니다">올림</Up>}</td>
+                <td>{r.agent_name}</td>
                 <td>{label('timing', r.timing)}</td><td>{label('decision', r.decision)}</td><td>{label('basis', r.basis)}</td>
                 <td>{r.lead_days != null ? `${r.lead_days}일` : ''}</td>
                 <td style={{ color: '#64748b' }}>{r.note}</td>

@@ -115,6 +115,7 @@ export const maturityApi = {
   listProjects: (divisionId) => request(`/projects?division_id=${divisionId}`),   // 수행 디지털 트윈 과제 고르기의 재료
   // 일괄 입력 — 「추출」과 같은 머리글의 표를 붙여넣어 한 번에 세운다(2026-08-30)
   getVocabs: () => request('/vocabs'),          // 기준 정보 — 화면의 선택지들
+  promoteReview: (payload) => request('/reviews/promote', json('POST', payload)),   // 정착 후보 → 상시 항목
   getVocabMismatches: () => request('/vocabs/mismatches'),   // 점검 — 자료가 가리키는 없는 값
   remapVocab: (vocab, moves) => request('/vocabs/remap', json('POST', { vocab, moves })),
   bulkKinds: (sector, divisionId) => request(`/bulk/kinds?sector=${sector}&division_id=${divisionId ?? 'all'}`),

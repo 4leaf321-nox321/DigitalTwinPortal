@@ -1027,3 +1027,71 @@ def test_기준_정보에서_빼도_자료는_지키고_점검에서_옮긴다(c
     assert not [b for b in scan2['system_kinds']['bad'] if b['value'] == 'plm']
     assert not [b for b in scan2['thread_stages']['bad'] if b['value'] == 'planning']
     _ = mx
+
+
+def test_정착_후보를_상시_시험_항목으로_올린다(client, auth, world, mx_user, vd_user):
+    """되풀이되는 스팟 해석은 상시 항목이 되어야 한다 — 여태 세어만 주고 올릴 길이 없었다.
+
+    ⚠️ 평가는 만들지 않는다. 근거 없이 저장 못 하는 규칙(assess)을 우회하게 된다.
+    """
+    mx = world['mx'].id
+    agent = client.post(f'{BASE}/agents', json={'division_id': mx, 'name': '낙하 해석'},
+                        headers=auth(mx_user)).get_json()['data']
+
+    def _case(item, month):
+        return client.post(f'{BASE}/reviews', json={
+            'division_id': mx, 'kind': 'spec', 'month': month, 'target': 'A제품', 'item': item,
+            'agent_id': agent['id'], 'timing': 'before_spec', 'decision': 'gate', 'basis': 'confirmed',
+        }, headers=auth(mx_user))
+
+    for m in ('2026-01', '2026-03', '2026-05'):
+        assert _case('모서리 낙하', m).status_code == 201
+    _case('한 번뿐', '2026-02')
+
+    def _promote_list():
+        st = client.get(f'{BASE}/reviews/stats?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']
+        return st['kinds']['spec']['promote']
+
+    # ① 세 건 이상만 후보 — 한 번뿐인 것은 아니다
+    cands = _promote_list()
+    assert [(c['item'], c['count']) for c in cands] == [('모서리 낙하', 3)]
+
+    # ② 남의 사업부는 못 올린다
+    assert client.post(f'{BASE}/reviews/promote', json={'division_id': mx, 'agent_name': '낙하 해석',
+                                                        'item': '모서리 낙하'}, headers=auth(vd_user)).status_code == 403
+
+    # ③ 올리면 시험 항목 × 시뮬레이션 연계가 선다 — 이름은 고칠 수 있다
+    res = client.post(f'{BASE}/reviews/promote',
+                      json={'division_id': mx, 'agent_name': '낙하 해석', 'item': '모서리 낙하',
+                            'subject_name': '모서리 낙하 시험'}, headers=auth(mx_user))
+    assert res.status_code == 201, res.get_json()
+    out = res.get_json()['data']
+    assert out['made'] == {'subject': True, 'agent': False, 'pair': True} and out['cases'] == 3
+
+    pair = client.get(f'{BASE}/pairs/{out["pair_id"]}', headers=auth(mx_user)).get_json()['data']
+    assert pair['subject']['name'] == '모서리 낙하 시험' and pair['agent']['name'] == '낙하 해석'
+    assert all(v is None for v in pair['assessments'].values())   # ⚠️ 평가는 안 만든다 — 근거는 사람이 적는다
+
+    # ④ 올린 짝은 후보에서 빠진다 — 안 그러면 해마다 같은 제안이 온다
+    assert _promote_list() == []
+    # 기록은 그대로 남고, 올라간 건은 어느 연계로 갔는지 스스로 안다
+    # ⚠️ 이름으로 밟으면 여기서 끊긴다 — 기록의 「모서리 낙하」와 항목 「모서리 낙하 시험」은 다른 글자다
+    kept = client.get(f'{BASE}/reviews?division_id={mx}&year=2026', headers=auth(mx_user)).get_json()['data']
+    assert len(kept) == 4
+    assert [r['promoted_pair_id'] for r in kept if r['item'] == '모서리 낙하'] == [out['pair_id']] * 3
+    assert [r['promoted_pair_id'] for r in kept if r['item'] == '한 번뿐'] == [None]
+
+    # ⑤ 두 번 눌러도 하나다(멱등)
+    again = client.post(f'{BASE}/reviews/promote',
+                        json={'division_id': mx, 'agent_name': '낙하 해석', 'item': '모서리 낙하',
+                              'subject_name': '모서리 낙하 시험'}, headers=auth(mx_user)).get_json()['data']
+    assert again['pair_id'] == out['pair_id'] and again['made'] == {'subject': False, 'agent': False, 'pair': False}
+
+    # ⑥ 사전에 없는 시뮬레이션은 묻고 나서 만든다
+    blocked = client.post(f'{BASE}/reviews/promote', json={'division_id': mx, 'agent_name': '없는 해석',
+                                                           'item': '굽힘'}, headers=auth(mx_user))
+    assert blocked.status_code == 400 and '사전에 없습니다' in blocked.get_json()['message']
+    made = client.post(f'{BASE}/reviews/promote', json={'division_id': mx, 'agent_name': '없는 해석',
+                                                        'item': '굽힘', 'make_agent': True},
+                       headers=auth(mx_user)).get_json()['data']
+    assert made['made'] == {'subject': True, 'agent': True, 'pair': True}

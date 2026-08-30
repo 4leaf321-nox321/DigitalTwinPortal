@@ -4,6 +4,7 @@
 //   ② 위 줄에 한 건 적고 「추가」 → POST /reviews 에 month·kind·agent_id·timing… 이 간다
 //   ③ 연필로 고치기 → PUT · 휴지통 → DELETE
 //   ④ CSV 가져오기 — 미리보기 → 문제 없으면 넣기
+//   ⑤ 정착 후보 → 상시 시험 항목으로 올리기 (2026-08-30)
 import './setup-dom.mjs';   // ⚠️ 반드시 첫 import
 import React from 'react';
 import { render, click, type, settle, byText, html, fakeFetch, suite, unmount } from './dom-helpers.mjs';
@@ -30,6 +31,9 @@ export default async function run() {
     if (url.includes('/reviews/stats')) return STATS;
     if (url.includes('/reviews/import/preview')) return { count: 2, problems: [], items: [{ line: 2, agent_known: true }, { line: 3, agent_known: false }] };
     if (url.includes('/reviews/import/apply')) return { created: 2 };
+    if (url.includes('/reviews/promote')) return { pair_id: 42, subject_id: 9, agent_id: 5,
+      subject_name: body.subject_name, agent_name: body.agent_name,
+      made: { subject: true, agent: false, pair: true }, cases: 3 };
     if (url.includes('/reviews') && method === 'POST') return { ...ROW, id: 8, ...body };
     if (url.includes('/reviews/7') && method === 'PUT') return { ...ROW, ...body };
     if (url.includes('/reviews/7') && method === 'DELETE') return { deleted: 7 };
@@ -84,6 +88,24 @@ export default async function run() {
     say(html().includes('넣을 건') && html().includes('관리 목록에 없는 시뮬레이션 이름이 1건'), '④ 미리보기 — 건수와 모르는 이름 경고');
     await click(byText('button', '2건 넣기')); await settle(60);
     say(calls.some(c => c.url.includes('/reviews/import/apply')), '④ 넣기가 apply 를 보냄');
+
+    // ⑤ 정착 후보 — 알약을 누르면 목록 창, 이름을 고쳐 올린다
+    calls.length = 0;
+    await click(byText('button', '정착 후보 1')); await settle();
+    say(!!document.querySelector('[aria-label="정착 후보 올리기"]'), '⑤ 알약을 누르면 후보 창');
+    say(html().includes('평가는 만들지 않습니다') && html().includes('그대로 남습니다'),
+        '⑤ 무엇이 일어나는지 먼저 말한다');
+    const nameIn = document.querySelector('input[aria-label="폴딩 응력 해석 시험 항목 이름"]');
+    say(nameIn?.value === '힌지 강성', '⑤ 기록의 항목 이름이 채워져 있음');
+    await type(nameIn, '힌지 강성 시험');
+    say(html().includes('기록에는 「힌지 강성」'), '⑤ 이름을 고치면 원래 것을 짚어 준다');
+    await click(byText('button', '올리기')); await settle();
+    const up = calls.find(c => c.url.includes('/reviews/promote'));
+    say(JSON.stringify(up?.body) === JSON.stringify({ division_id: 17, agent_name: '폴딩 응력 해석',
+      item: '힌지 강성', subject_name: '힌지 강성 시험', make_agent: false }),
+        `⑤ 올릴 때 무엇을 보내나: ${JSON.stringify(up?.body)}`);
+    say(html().includes('올렸습니다') && html().includes('항목 새로'), '⑤ 무엇이 새로 생겼는지 말해 준다');
+
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);

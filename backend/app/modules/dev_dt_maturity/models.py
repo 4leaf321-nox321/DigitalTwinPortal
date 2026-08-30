@@ -196,6 +196,9 @@ class MaturityReviewCase(BaseModel):
     basis = db.Column(db.String(20))
     lead_days = db.Column(db.Float)
     note = db.Column(db.Text)
+    # 이 건이 상시 항목으로 올라갔다면 그 연계 — ⚠️ FK 가 아니다(연계를 지워도 기록은 남는다).
+    #    이름으로 뒤를 밟으면 올릴 때 이름을 고치는 순간 끊긴다(2026-08-30).
+    promoted_pair_id = db.Column(db.Integer, index=True)
     actor_user_id = db.Column(db.Integer)
     actor_name = db.Column(db.String(100))
 
