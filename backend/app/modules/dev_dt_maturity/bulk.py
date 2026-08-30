@@ -47,7 +47,9 @@ def kinds_for(sector, division_id=None):
                     'hint': '조직·시스템은 **이름으로 찾습니다** — 없으면 그 줄이 오류입니다. 시스템·조직을 먼저 올리세요.'})
         return _with_choices(out, sector, division_id)      # ⚠️ 여기서도 선택지를 붙인다 — 빼먹으면 드롭다운이 안 뜬다
     out.append({'key': 'subject', 'label': subject_label,
-                'columns': (['사업부', subject_label, '라인·사업장', '공정', '세부'] if sector == 'manufacturing_monitoring'
+                # ⚠️ 「공정 단계」다 — 모니터링은 대상의 이름표가 「공정」이라 그냥 「공정」이면
+                #    머리글이 겹쳐 **이름 칸이 공정 단계로 읽힌다**(2026-08-30 실측).
+                'columns': (['사업부', subject_label, '라인·사업장', '공정 단계', '세부'] if sector == 'manufacturing_monitoring'
                             else ['사업부', subject_label, '세부', '제품군']),
                 'required': [subject_label],
                 'hint': '「전체」로 열었으면 사업부 열이 필요합니다. 제품군·데이터는 · 로 나눠 적습니다.'})
@@ -104,9 +106,12 @@ def _choices(sector, kind, division_id):
         out['사업부'] = [d.name for d in Division.query.filter_by(is_active=True).order_by(Division.order, Division.id).all()
                        if d.id not in hidden]
         if kind == 'subject' and sector == 'manufacturing_monitoring':
-            out['공정'] = _labels(D.vocab('process_steps'))
+            out['공정 단계'] = _labels(D.vocab('process_steps'))
         if kind == 'agent':
-            out['모델 종류'] = _labels(D.vocab('model_kinds'))
+            # ⚠️ 모니터링의 수단 표에는 「모델 종류」 열이 없다(「수단 종류」다) — 없는 열에
+            #    선택지를 붙이면 화면은 그릴 데가 없고, AI 는 있는 줄 알고 적는다(2026-08-30).
+            if sector != 'manufacturing_monitoring':
+                out['모델 종류'] = _labels(D.vocab('model_kinds'))
             if div:
                 out['담당 부서'] = [x['name'] for x in S.departments_of(div)]
         if kind == 'pair' and div:
@@ -242,7 +247,8 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T):
             return 'exists', name
         S.create_subject(div, sector, name, cell(cells, '세부'), _split(cell(cells, '제품군')),
                          'auto', None, cell(cells, '라인·사업장'),
-                         _label_key(D.vocab('process_steps'), cell(cells, '공정'), '공정') if cell(cells, '공정') else None)
+                         _label_key(D.vocab('process_steps'), cell(cells, '공정 단계'), '공정 단계')
+                         if cell(cells, '공정 단계') else None)
         return 'new', name
 
     if kind == 'agent':

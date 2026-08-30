@@ -4,7 +4,7 @@
 받는 꼴인지**는 못 잡는다. 그건 실제로 불러 봐야 안다. 이 시험은 `localhost:3003/mcp` 의
 JSON-RPC 로 진짜 도구를 부른다 — 운영에서 AI 가 겪는 것과 같은 경로다.
 
-  A  성숙도 도구 25개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
+  A  성숙도 도구 28개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
   B  뼈대 읽기 — 부문·축·칸이 오는가
   C  대상·수단을 만들고 잇는다  ★ 몸통이 맞는지는 여기서만 드러난다
   D  평가 — 근거 없으면 막히고, 있으면 칸이 올라간다
@@ -162,7 +162,7 @@ def main():
         print('\nA. 도구 등록')
         names = m.tools()
         mat = sorted(n for n in names if n.startswith('maturity_'))
-        check('성숙도 도구 수', len(mat), 25)
+        check('성숙도 도구 수', len(mat), 28)
         check_true('대시보드 도구도 그대로', 'list_projects' in names)
         # 성숙도 도구 설명에 다른 모듈과 헷갈리지 말라는 안내가 있는가
         check_true('describe 가 대시보드와 다르다고 말한다', '대시보드' in names['maturity_describe'])
@@ -482,6 +482,23 @@ def main():
         cst = m.call('maturity_record_stats', {'kind': 'thread_case', 'division_id': did,
                                                'year': 2026})
         check_true('연계 개발 셈이 온다', (cst.get('by_status') or cst.get('count')) is not None)
+
+        # ── T 이름 표준 — 자유 칸이지만 뒤에 표준이 있다 ────────────────────
+        print('\nT. 이름 표준 — 지어 적은 것을 뒤에 잡는다')
+        cat = m.call_list('maturity_name_catalog', {'kind': 'tool', 'division_id': did})
+        check_true('도구 카탈로그가 온다', len(cat) > 50)
+        # 표준 밖 이름을 일부러 넣고 — 서버는 안 막는다(사내 도구를 막으면 안 되니까)
+        m.call('maturity_update_item', {'kind': 'agent', 'item_id': made['agent'],
+                                        'fields': {'tools': ['HyperMesh']}})
+        au = m.call('maturity_name_audit', {'kind': 'tool', 'division_id': did})
+        hit = next((r for r in (au.get('tools') or []) if r['name'] == 'HyperMesh'), None)
+        check_true('점검이 표준 밖을 짚는다', hit and not hit.get('in_intel'))
+        check('고칠 후보를 준다', (hit or {}).get('suggestion'), 'Altair HyperMesh')
+        m.call('maturity_rename', {'kind': 'tool', 'division_id': did,
+                                   'from_name': 'HyperMesh', 'to_name': 'Altair HyperMesh'})
+        au2 = m.call('maturity_name_audit', {'kind': 'tool', 'division_id': did})
+        check('맞추면 사라진다',
+              [r for r in (au2.get('tools') or []) if r['name'] == 'HyperMesh'], [])
 
         # ── L 권한 ─────────────────────────────────────────────────────────
         print('\nL. 권한 — 화면과 같은 규칙인가')

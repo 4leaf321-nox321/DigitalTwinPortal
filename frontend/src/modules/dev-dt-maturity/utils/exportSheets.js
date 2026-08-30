@@ -37,7 +37,9 @@ const subjectCols = (sector) => {
     ['출발 조직', s => s.segment?.from_org_name || ''], ['출발 시스템', s => s.segment?.from_system_name || ''],
     ['매개 시스템', s => s.segment?.via_system_name || ''], ['도착 조직', s => s.segment?.to_org_name || ''],
     ['도착 시스템', s => s.segment?.to_system_name || '']];
-  if (sector === 'manufacturing_monitoring') return [['라인·사업장', s => s.line || ''], ['공정', s => s.process_label || s.process || ''], ['세부', s => s.detail || '']];
+  // ⚠️ 「공정 단계」다 — 이 부문은 대상의 이름표가 「공정」이라 머리글이 겹치면
+  //    일괄 입력이 이름 칸을 공정 단계로 읽는다(2026-08-30). 추출과 입력은 같은 머리글이어야 한다.
+  if (sector === 'manufacturing_monitoring') return [['라인·사업장', s => s.line || ''], ['공정 단계', s => s.process_label || s.process || ''], ['세부', s => s.detail || '']];
   return [['세부', s => s.detail || ''], ['제품군', s => (s.product_families || []).join(' · ')]];
 };
 

@@ -51,8 +51,12 @@ test('평가가 하나도 없는 대상도 한 줄로 남는다 — 무엇을 �
 test('부문마다 열이 다르다 — 모니터링은 라인·공정, 스레드는 스레드·조직·시스템', () => {
   const mon = assessmentSheet([{ division_name: 'MX', subjects: [{ name: 'A라인 · SMT 실장', line: 'A라인', process_label: 'SMT 실장', pairs: [] }] }],
     [], 'manufacturing_monitoring', '수집 수단', '공정');
-  assert.deepEqual(mon[0].slice(0, 6), ['사업부', '공정', '라인·사업장', '공정', '세부', '수집 수단']);
+  // ⚠️ 「공정 단계」다. 이 부문은 대상의 이름표가 「공정」이라 그냥 「공정」이면 머리글이
+  //    겹치고, 일괄 입력이 **이름 칸을 공정 단계로 읽는다**(2026-08-30 실측).
+  assert.deepEqual(mon[0].slice(0, 6), ['사업부', '공정', '라인·사업장', '공정 단계', '세부', '수집 수단']);
   assert.equal(mon[1][2], 'A라인');
+  const dup = mon[0].filter((c, i) => c && mon[0].indexOf(c) !== i);
+  assert.deepEqual(dup, [], `머리글이 겹치면 그 칸이 안 닿는다: ${dup}`);
 
   const th = assessmentSheet([{ division_name: 'MX', subjects: [{ name: 'E-BOM → 예상 원가', segment: { thread_name: '재료비 스레드', from_org_name: '설계그룹(MX)' }, pairs: [] }] }],
     [], 'digital_thread', null, '구간');

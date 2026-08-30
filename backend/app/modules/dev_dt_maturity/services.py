@@ -302,14 +302,18 @@ def assess(pair, axis_key, payload, actor):
             if flags is None:
                 raise Refused(f'「{axis["label"]}」에 없는 항목입니다.')
         elif not isinstance(flags, list) or any(f not in D.set_flag_keys(axis) for f in flags):
-            raise Refused(f'「{axis["label"]}」에 없는 항목입니다.')
+            raise Refused(f'「{axis["label"]}」에 없는 항목입니다 — '
+                          f'쓸 수 있는 것: {" · ".join(D.set_flag_keys(axis))}')
         rung = D.set_rung(axis, flags)
         value = None
     else:
         rung = payload.get('rung')
         # 「모름」 — 확인이 필요한 상태. 칸은 아니지만 저장은 된다(rung_index None, unknown True).
         if not (rung == 'unknown' and axis.get('unknown_ok')) and rung not in D.rung_keys(axis):
-            raise Refused(f'「{axis["label"]}」에 없는 칸입니다.')
+            # ⚠️ 무엇이 맞는지 함께 준다 — 화면은 단추라 안 겪지만 API·MCP 는 지어 보내고
+            #    「없는 칸」만 듣고는 고칠 수가 없다(2026-08-30).
+            ok = ' · '.join(D.rung_keys(axis)) + (' · unknown' if axis.get('unknown_ok') else '')
+            raise Refused(f'「{axis["label"]}」에 없는 칸입니다 — 쓸 수 있는 것: {ok}')
         value = None
 
     evidence = _clean_evidence(axis, payload.get('evidence'))

@@ -1165,3 +1165,67 @@ def test_포탈_부서는_저절로_들어오고_없어져도_지우지_않는�
     out2 = client.post(f'{BASE}/orgs/prune', json={'division_id': mx}, headers=auth(office)).get_json()['data']
     assert out2['deleted'] == 1 and out2['names'] == ['버릴그룹(MX)'] and out2['kept'] == 1
     assert spare['id'] not in {o['id'] for o in _orgs()}
+
+
+def test_일괄_입력_표의_머리글은_겹치지_않는다(client, auth, world, mx_user):
+    """겹치면 **한 칸이 닿지 않는다** — 읽는 쪽이 이름으로 칸을 찾기 때문이다.
+
+    ⚠️ 2026-08-30 실측: 모니터링은 대상의 이름표가 「공정」인데 공정 단계 열도 「공정」이라
+       「사업부 | 공정 | 라인·사업장 | 공정 | 세부」가 됐다. 첫 번째가 이겨서 **이름 칸이
+       공정 단계로 읽히고** 진짜 공정 단계 칸은 조용히 버려졌다. 눈으로는 못 잡는다.
+    """
+    mx = world['mx'].id
+    for sector in D.SECTOR_KEYS:
+        rows = client.get(f'{BASE}/bulk/kinds?sector={sector}&division_id={mx}',
+                          headers=auth(mx_user)).get_json()['data']
+        for k in rows:
+            cols = k['columns']
+            dup = [c for c in cols if cols.count(c) > 1]
+            assert not dup, f'{sector}/{k["key"]} 머리글이 겹친다: {dup} — {cols}'
+            # 고를 수 있는 값을 붙인 열은 실제로 그 표에 있어야 한다
+            for col in (k.get('choices') or {}):
+                assert col in cols, f'{sector}/{k["key"]} 「{col}」 은 표에 없는 열이다'
+
+
+def test_모니터링_일괄_입력은_이름과_공정_단계를_따로_읽는다(client, auth, world, mx_user):
+    """겹친 머리글을 고친 뒤 — 이름 칸과 공정 단계 칸이 서로를 안 먹는다."""
+    mx = world['mx'].id
+    kinds = client.get(f'{BASE}/bulk/kinds?sector=manufacturing_monitoring&division_id={mx}',
+                       headers=auth(mx_user)).get_json()['data']
+    cols = next(k for k in kinds if k['key'] == 'subject')['columns']
+    assert '공정 단계' in cols
+    steps = D.vocab('process_steps')
+    # 이름은 공정 단계 이름과 **다르게**, 공정 단계는 사전의 값으로
+    text = _table(tuple(cols), tuple(
+        ['MX' if c == '사업부' else ('A라인' if c == '라인·사업장'
+         else (steps[1]['label'] if c == '공정 단계' else ('3라인 실장부' if c == cols[1] else '')))
+         for c in cols]))
+    res = client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'manufacturing_monitoring',
+                                            'kind': 'subject', 'text': text, 'dry_run': False},
+                      headers=auth(mx_user))
+    assert res.status_code == 200, res.get_json()
+    rows = client.get(f'{BASE}/subjects?division_id={mx}&sector=manufacturing_monitoring',
+                      headers=auth(mx_user)).get_json()['data']
+    made = next(r for r in rows if r['name'] == '3라인 실장부')
+    assert made['process'] == steps[1]['key']       # 이름이 아니라 그 칸에서 읽는다
+    assert made['line'] == 'A라인'
+
+
+def test_없는_칸을_보내면_무엇이_맞는지_함께_말해_준다(client, auth, world, mx_user):
+    """화면은 단추라 안 겪지만 API·MCP 는 칸 key 를 지어 보낸다.
+
+    「없는 칸입니다」만 듣고는 고칠 수가 없다 — 쓸 수 있는 것을 같이 줘야 다음에 맞게 보낸다.
+    (2026-08-30, MCP 로 직접 매겨 보다가.)
+    """
+    _, _, p = _pair(client, auth, mx_user, world['mx'])
+    r = client.put(f'{BASE}/pairs/{p["id"]}/assessments/scope',
+                   json={'rung': '지어낸칸', 'note': '근거'}, headers=auth(mx_user))
+    assert r.status_code == 400
+    msg = r.get_json()['message']
+    assert '없는 칸' in msg and 'issue' in msg and 'basic' in msg, msg
+
+    r2 = client.put(f'{BASE}/pairs/{p["id"]}/assessments/automation',
+                    json={'flags': ['지어낸항목'], 'note': '근거'}, headers=auth(mx_user))
+    assert r2.status_code == 400
+    msg2 = r2.get_json()['message']
+    assert '없는 항목' in msg2 and 'pre' in msg2 and 'pipeline' in msg2, msg2

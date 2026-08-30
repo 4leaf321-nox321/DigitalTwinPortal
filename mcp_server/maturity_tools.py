@@ -183,6 +183,9 @@ def register(mcp, request_fn):
         `fields` 로 부문에 맞는 나머지를 함께 넣는다 —
           시뮬레이션 대상: product_families(목록) · accuracy_rule(auto·mean·single)
           시뮬레이션 수단: kind(구조·열…) · model_kind · tools(목록) · defect_types(목록)
+            ⚠️ `tools` 와 대상의 `product_families` 는 **자유 칸이지만 뒤에 표준이 있다.**
+               지어 적지 말고 `maturity_name_catalog` 에서 고르세요 — 「Altair HyperMesh」를
+               「HyperMesh」로 적으면 같은 도구가 둘이 되어 셈이 틀어진다. 서버는 안 막는다.
           모니터링 대상: line(라인·사업장) · process(공정 단계 key)
 
         ⚠️ 이름이 같은 것이 이미 있으면 그것을 다시 쓰지 않고 **또 만든다** — 먼저
@@ -363,11 +366,78 @@ def register(mcp, request_fn):
         ⚠️ `dry_run=True`(기본)는 **저장하지 않고** 줄마다 어떻게 될지만 돌려준다.
            먼저 이걸로 보고, 오류 줄이 없는지 사용자에게 보여 준 뒤 `dry_run=False` 로
            다시 부르세요. 같은 이름이 이미 있으면 다시 만들지 않는다(멱등).
+        ⚠️ 「사용 툴」·「제품군」 열은 **아무 글자나 들어간다**(오류로 안 잡힌다). 표준
+           이름은 `maturity_name_catalog` 에서 고르고, 넣은 뒤 `maturity_name_audit` 로
+           한 번 훑으세요.
         """
         return await _m(ctx, "POST", "/bulk",
                         json_body={"division_id": division_id, "sector": sector,
                                    "kind": kind, "text": text, "dry_run": dry_run})
 
+
+
+    # ── 이름 표준 — 「사용 툴」·「제품군」은 자유 칸이지만 뒤에 표준이 있다 ────
+    #
+    # ⚠️ 서버가 막지 않는다(막으면 사내 도구를 못 적는다). 그래서 **보고 고르고,
+    #    뒤에 점검하는** 길을 둔다 — 지어 적으면 같은 것이 두 글자가 되어 셈이 틀어진다.
+
+    _NAME = {"tool": ("/tool-catalog", "/tool-audit", "/tools/rename", "사용 툴"),
+             "family": ("/family-catalog", "/family-audit", "/families/rename", "제품군")}
+
+    @mcp.tool()
+    async def maturity_name_catalog(ctx: Context, kind: str, division_id: int) -> list:
+        """[성숙도] 「사용 툴」·「제품군」에 쓸 **표준 이름 목록**. **적기 전에 여기서 고른다.**
+
+        `kind` — `tool`(사용 툴) · `family`(제품군)
+
+        `tool` 은 기술정보 모듈의 도구 사전(수백 개)이고, `family` 는 로드맵 정보의
+        제품군이다. 각 줄의 `category` 가 어디서 온 것인지 말해 준다 —
+        「이 사업부가 쓰는 것」 · 「로드맵 정보의 제품군」 · 「다른 사업부의 제품군」.
+
+        ⚠️ **여기 없는 이름도 적을 수는 있다**(사내 도구·아직 등록 안 된 제품군).
+           다만 지어 적지 말고, 없으면 없다고 사용자에게 말하고 그대로 쓸지 물어보세요.
+           `Altair HyperMesh` 를 `HyperMesh` 로 적으면 같은 도구가 둘이 된다.
+        """
+        row = _NAME.get(kind)
+        if not row:
+            return {"status": "error", "message": "kind 는 tool(사용 툴) · family(제품군) 중 하나입니다."}
+        return await _m(ctx, "GET", row[0], params={"division_id": division_id})
+
+    @mcp.tool()
+    async def maturity_name_audit(ctx: Context, kind: str, division_id: int) -> dict:
+        """[성숙도] 그 사업부가 적어 둔 이름 중 **표준 밖인 것**과 고칠 후보.
+
+        줄마다 `name`(적힌 이름) · `count`(몇 군데) · `suggestion`(표준 이름 후보) ·
+        `in_intel`/`in_standard`(표준에 있나) 가 온다.
+
+        `suggestion` 이 있으면 `maturity_rename` 으로 한 번에 맞출 수 있다. 다만
+        **자동으로 고치지 마세요** — 사내 도구가 우연히 비슷한 이름일 수 있다.
+        사용자에게 「이렇게 바꿀까요」를 보여 주고 동의를 받으세요.
+
+        ⚠️ 자료를 넣은 **뒤에는 이걸 한 번 부르세요.** 표준 밖 이름은 어긋남 셈을 틀어
+           놓는데, 넣을 때는 아무 말도 안 나온다(자유 칸이라).
+        """
+        row = _NAME.get(kind)
+        if not row:
+            return {"status": "error", "message": "kind 는 tool · family 중 하나입니다."}
+        return await _m(ctx, "GET", row[1], params={"division_id": division_id})
+
+    @mcp.tool()
+    async def maturity_rename(ctx: Context, kind: str, division_id: int,
+                              from_name: str, to_name: str) -> dict:
+        """[성숙도] 그 사업부의 **모든 줄에서** 이름 하나를 바꾼다 — 표준에 맞출 때.
+
+        `maturity_name_audit` 의 `suggestion` 을 그대로 넣으면 된다.
+
+        ⚠️ 되돌리는 도구는 없다(반대로 한 번 더 부르면 되지만, 원래 두 이름이 섞여
+           있었다면 그 구분은 사라진다). **사용자에게 무엇을 무엇으로 바꾸는지 보여 주고
+           동의를 받은 뒤** 부르세요. 몇 군데가 바뀌는지는 audit 의 `count` 에 있다.
+        """
+        row = _NAME.get(kind)
+        if not row:
+            return {"status": "error", "message": "kind 는 tool · family 중 하나입니다."}
+        return await _m(ctx, "POST", row[2],
+                        json_body={"division_id": division_id, "from": from_name, "to": to_name})
 
     # ── 건 기록 — 척도가 상태라면 이쪽은 사건이다 ────────────────────────────
     #
