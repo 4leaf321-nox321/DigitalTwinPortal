@@ -99,6 +99,9 @@ SAMPLE = {
     'maturity_assess': {'pair_id': 12, 'axis': 'automation', 'note': '근거', 'rung': 'pre'},
     'maturity_bulk': {'division_id': 17, 'kind': 'subject', 'text': 'a\tb'},
     'maturity_bulk_kinds': {'division_id': 17},
+    'maturity_add_segment': {'division_id': 17, 'segment_def_id': 5},
+    'maturity_threads': {},
+    'maturity_thread_dicts': {'division_id': 17},
 }
 missing = [n for n in fake.tools if n not in SAMPLE]
 check(not missing, f'검사에 빠진 도구가 없다 (빠진 것: {missing})')
@@ -111,7 +114,12 @@ async def run_all():
 
 
 asyncio.run(run_all())
-check(len(calls) == len(SAMPLE), f'도구마다 한 번씩 서버를 불렀다 ({len(calls)}번)')
+# maturity_thread_dicts 는 사전 둘을 읽어 한 번에 준다 — 부름이 하나 더 는다
+check(len(calls) == len(SAMPLE) + 1, f'도구마다 서버를 불렀다 ({len(calls)}번)')
+
+# 모듈 표 — 목록에서 첫 줄만 보이는 클라이언트에서도 갈리게
+unmarked = [n for n, f in fake.tools.items() if '[성숙도]' not in (f.__doc__ or '')]
+check(not unmarked, f'모든 도구 설명이 [성숙도] 로 시작한다 (빠진 것: {unmarked})')
 
 # ── ③ 남의 모듈로 새지 않는가 ───────────────────────────────────────────────
 strayed = sorted({c['prefix'] for c in calls} - {maturity_tools.MATURITY_PREFIX})

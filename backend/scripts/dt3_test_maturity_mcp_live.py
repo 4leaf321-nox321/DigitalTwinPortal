@@ -4,13 +4,16 @@
 받는 꼴인지**는 못 잡는다. 그건 실제로 불러 봐야 안다. 이 시험은 `localhost:3003/mcp` 의
 JSON-RPC 로 진짜 도구를 부른다 — 운영에서 AI 가 겪는 것과 같은 경로다.
 
-  A  성숙도 도구 12개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
+  A  성숙도 도구 15개가 등록돼 있고 대시보드 도구와 이름이 안 겹친다
   B  뼈대 읽기 — 부문·축·칸이 오는가
   C  대상·수단을 만들고 잇는다  ★ 몸통이 맞는지는 여기서만 드러난다
   D  평가 — 근거 없으면 막히고, 있으면 칸이 올라간다
   E  값 축(정확도)은 값으로 넣고 칸은 서버가 정한다
   F  동시 수정 — 낡은 base_assessed_at 이면 409
   G  일괄 입력 dry_run 은 저장하지 않는다
+  I  **모니터링** — 공정 × 수집 수단, 라인·공정 단계까지
+  J  **디지털 스레드** — 수단이 없다. 구간은 제 길로만 세워진다
+  K  **섞이지 않는가** — 성숙도 도구에 모듈 표가 있고, 대시보드가 이쪽을 가리킨다
   H  **뒷정리** — 만든 것을 전부 지운다
 
 ⚠️ 개발 DB 의 성숙도는 일부러 비워 둔 상태다(운영 첫 실행 모습을 보려고).
@@ -130,14 +133,16 @@ def main():
     print(f'· 사용자: {user.name} (id={user.id})')
 
     m = Mcp(token)
-    made = {'subject': None, 'agent': None, 'pair': None}
+    made = {'subject': None, 'agent': None, 'pair': None,
+            'mon_subject': None, 'mon_agent': None, 'mon_pair': None,
+            'seg_subject': None}
 
     try:
         # ── A 등록과 이름 갈림 ──────────────────────────────────────────────
         print('\nA. 도구 등록')
         names = m.tools()
         mat = sorted(n for n in names if n.startswith('maturity_'))
-        check('성숙도 도구 수', len(mat), 12)
+        check('성숙도 도구 수', len(mat), 15)
         check_true('대시보드 도구도 그대로', 'list_projects' in names)
         # 성숙도 도구 설명에 다른 모듈과 헷갈리지 말라는 안내가 있는가
         check_true('describe 가 대시보드와 다르다고 말한다', '대시보드' in names['maturity_describe'])
@@ -239,13 +244,106 @@ def main():
         ch = m.call('maturity_changes', {'division_id': did, 'days': 7})
         check_true('변화가 읽힌다', isinstance(ch, (dict, list)))
 
+        # ── I 모니터링 ─────────────────────────────────────────────────────
+        print('\nI. 모니터링 — 공정 × 수집 수단')
+        mon = 'manufacturing_monitoring'
+        msec = sectors[mon]
+        check('대상 이름표가 부문의 말', msec['subject_label'], '공정')
+        check('수단 이름표도', msec['agent_label'], '수집 수단')
+        steps = defs.get('monitoring', {}).get('process_steps') or []
+        check_true('공정 단계 사전이 온다', steps)
+
+        ms = m.call('maturity_add_item', {'division_id': did, 'kind': 'subject', 'sector': mon,
+                                          'name': f'{MARK} SMT 실장',
+                                          'fields': {'line': 'A라인', 'process': steps[0]['key']}})
+        check_true('공정이 생겼다', isinstance(ms, dict) and ms.get('id'))
+        made['mon_subject'] = ms.get('id')
+        check('라인이 들어갔다', ms.get('line'), 'A라인')
+        check('공정 단계가 들어갔다', ms.get('process'), steps[0]['key'])
+
+        ma = m.call('maturity_add_item', {'division_id': did, 'kind': 'agent', 'sector': mon,
+                                          'name': f'{MARK} MES 수집'})
+        made['mon_agent'] = ma.get('id')
+        mp = m.call('maturity_link', {'subject_id': made['mon_subject'], 'agent_id': made['mon_agent']})
+        made['mon_pair'] = mp.get('id')
+        check_true('모니터링 연계가 생겼다', made['mon_pair'])
+
+        # 모니터링의 축은 시뮬레이션과 **다르다** — 남의 축을 넣으면 거절돼야 한다
+        wrong = m.call('maturity_assess', {'pair_id': made['mon_pair'], 'axis': 'accuracy',
+                                           'note': '남의 부문 축', 'value': 90})
+        check('다른 부문의 축은 거절', wrong.get('status'), 'error')
+
+        mon_axes = {a['key']: a for a in defs['axes'][mon]}
+        check_true('모니터링에 기본 계측 축이 있다', 'basic_metrics' in mon_axes)
+        got_m = m.call('maturity_assess', {'pair_id': made['mon_pair'], 'axis': 'basic_metrics',
+                                           'note': '설비 8/12대에서 상태·C/T 수집 확인',
+                                           'flags': ['state', 'ct'],
+                                           'evidence': {'coverage_pct': 67}})
+        bm = (got_m.get('assessments') or {}).get('basic_metrics') or {}
+        check_true('모니터링 칸이 매겨졌다', bm.get('rung'))
+
+        mboard = m.call('maturity_board', {'division_id': did, 'sector': mon})
+        check_true('모니터링 판이 읽힌다', any(
+            s2['id'] == made['mon_subject'] for s2 in (mboard.get('subjects') or [])))
+
+        # ── J 디지털 스레드 ────────────────────────────────────────────────
+        print('\nJ. 디지털 스레드 — 수단이 없다')
+        th = 'digital_thread'
+        check('수단이 없는 부문', sectors[th]['has_agent'], False)
+
+        # 대상을 그냥 만들면 구간 속성이 없는 줄이 생긴다 — 도구가 막아야 한다
+        blocked_t = m.call('maturity_add_item', {'division_id': did, 'kind': 'subject',
+                                                 'sector': th, 'name': f'{MARK} 잘못된 구간'})
+        check('스레드 대상은 이 도구로 못 만든다', blocked_t.get('status'), 'error')
+        check_true('제 길을 알려 준다', 'maturity_add_segment' in (blocked_t.get('hint') or ''))
+
+        threads = m.call_list('maturity_threads', {})
+        check_true('표준 스레드가 온다', threads and threads[0].get('segments'))
+        sdef = threads[0]['segments'][0]
+        dicts = m.call('maturity_thread_dicts', {'division_id': did})
+        check_true('시스템·조직 사전이 온다', 'systems' in dicts and 'orgs' in dicts)
+
+        seg = m.call('maturity_add_segment', {'division_id': did, 'segment_def_id': sdef['id']})
+        check_true('구간이 섰다', isinstance(seg, dict) and seg.get('id'))
+        made['seg_subject'] = seg.get('subject_id')
+        check('표준 구간의 이름을 쓴다', seg.get('name'), sdef['name'])
+        check_true('구간에 스레드가 붙어 있다', seg.get('thread_id'))
+
+        tboard = m.call('maturity_board', {'division_id': did, 'sector': th})
+        mine_seg = next((x for x in (tboard.get('subjects') or [])
+                         if x['id'] == made['seg_subject']), None)
+        check_true('스레드 판에서 보인다', mine_seg)
+        tpair = (mine_seg or {}).get('pairs', [{}])[0].get('id') if mine_seg else None
+        check_true('수단 없이 연계가 서 있다', tpair)
+        if tpair:
+            got_t = m.call('maturity_assess', {'pair_id': tpair, 'axis': 'link_mode',
+                                               'note': '엑셀 메일로 넘긴다 — 담당자 확인',
+                                               'rung': 'manual'})
+            lm = (got_t.get('assessments') or {}).get('link_mode') or {}
+            check('스레드 축이 매겨졌다', lm.get('rung'), 'manual')
+
+        # ── K 섞이지 않는가 ────────────────────────────────────────────────
+        print('\nK. 대시보드와 섞이지 않는가')
+        unmarked = [n for n, d in names.items()
+                    if n.startswith('maturity_') and '[성숙도]' not in (d or '')]
+        check('성숙도 도구에 모듈 표가 다 있다', unmarked, [])
+        marked_dash = [n for n, d in names.items()
+                       if not n.startswith('maturity_') and '[성숙도]' in (d or '')]
+        check('대시보드 도구에는 그 표가 없다', marked_dash, [])
+        check_true('대시보드 길잡이가 성숙도를 가리킨다',
+                   'maturity_describe' in (names.get('describe_data') or ''))
+        check_true('필드 길잡이도 가리킨다',
+                   'maturity_describe' in (names.get('describe_fields') or ''))
+
     finally:
         # ── H 뒷정리 ───────────────────────────────────────────────────────
         print('\nH. 뒷정리 — 만든 것을 지운다')
         base = os.environ.get('DT_API_BASE', 'http://localhost:5174').rstrip('/')
         h = {'Authorization': f'Bearer {token}'}
         left = []
-        for kind, key in (('pairs', 'pair'), ('agents', 'agent'), ('subjects', 'subject')):
+        for kind, key in (('pairs', 'pair'), ('agents', 'agent'), ('subjects', 'subject'),
+                          ('pairs', 'mon_pair'), ('agents', 'mon_agent'), ('subjects', 'mon_subject'),
+                          ('subjects', 'seg_subject')):
             rid = made.get(key)
             if not rid:
                 continue

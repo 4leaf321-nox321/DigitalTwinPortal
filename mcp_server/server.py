@@ -142,6 +142,10 @@ async def describe_fields(ctx: Context) -> dict:
       relation    이 PATCH 로 못 고친다. `via` 의 다른 API 를 써야 한다
       unsupported 쓰기 경로가 없다. 시도하지 말 것
       immutable   서버가 정한다
+
+    ⚠️ 여기는 **디지털 트윈 대시보드(과제)** 다. 「시험 하나에 대해 시뮬레이션이 어디까지
+       왔나」(성숙도 척도·평가·연계)는 이 도구들이 다루지 않는다 — `maturity_describe`
+       쪽의 `maturity_*` 도구를 쓰세요. 여기서 안 나온다고 「자료가 없다」고 답하지 말 것.
     """
     return await _request(ctx, "GET", "/describe/fields")
 
@@ -255,6 +259,9 @@ async def describe_data(ctx: Context) -> dict:
     넣으면 조용히 0건이 나온다.
 
     (고칠 수 있는 필드를 알려면 `describe_fields` — 다른 도구다)
+
+    ⚠️ 이 목록은 **과제·성과·KPI** 의 것이다. 성숙도(부문·축·칸·시험 항목·시뮬레이션)는
+       여기 없다 — `maturity_describe` 를 쓰세요. 두 모듈은 자료도 따로다.
     """
     return await _request(ctx, "GET", "/ai/data-map")
 
