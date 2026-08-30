@@ -52,15 +52,17 @@ const HeatTable = styled.table`
      칸만 넓어진다.** 달 칸은 무조건 같은 폭이어야 그림으로 읽힌다(2026-08-30). */
   border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.6875rem; table-layout: fixed;
   th { position: sticky; top: 0; z-index: 1; background: #f8fbff; color: #94a3b8; font-weight: 600; padding: 0 0.15rem 0.2rem; white-space: nowrap; overflow: visible; }
-  th:first-child { left: 0; z-index: 2; text-align: left; width: 11rem; }
-  td { padding: 0; height: 1.15rem; }
+  /* ⚠️ 첫 칸(연계 이름)만 **크게** 읽는다 — 달 머리글은 눈금이라 작아도 되지만 이름은
+     사람이 찾는 것이다. 0.6875rem 이면 안 보인다는 말을 들었다(2026-08-30). */
+  th:first-child { left: 0; z-index: 2; text-align: left; width: 13.5rem; font-size: 0.8125rem; color: #64748b; }
+  td { padding: 0; height: 1.5rem; }
   td:first-child {
-    position: sticky; left: 0; background: #f8fbff; color: #334155; padding-right: 0.4rem; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis; max-width: 11rem;
+    position: sticky; left: 0; background: #f8fbff; color: #1e293b; padding-right: 0.5rem; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 13.5rem; font-size: 0.8125rem;
   }
 `;
 const Cell = styled.div`
-  height: 0.95rem; border-radius: 2px; margin: 0.05rem 0.05rem;
+  height: 1.3rem; border-radius: 2px; margin: 0.05rem 0.05rem;
   background: ${p => (p.$c || 'white')};
   ${p => (p.$empty ? 'border: 1px dashed #cbd5e1;' : '')}
 `;
@@ -122,7 +124,9 @@ const PairDetail = ({ axis, series, months }) => {
             ))}
           </DistRow>
           <HeatScroll>
-            <HeatTable>
+            {/* ⚠️ 이름 칸을 넓혔으니 달 칸이 눌릴 수 있다 — 눌러 담는 대신 **가로로 넘긴다**
+                (HeatScroll 이 굴린다). 달 칸이 실처럼 얇으면 그림으로 안 읽힌다. */}
+            <HeatTable style={{ minWidth: `calc(13.5rem + ${months.length} * 1.1rem)` }}>
               <thead>
                 <tr>
                   <th>연계 {visible.length}</th>
