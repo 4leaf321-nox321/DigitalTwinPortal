@@ -53,6 +53,15 @@ def main():
         out['/divisions?all=1'] = rows
         out['/settings'] = {k: D._setting(k) for k in D.SETTINGS_KEYS}
         out['/vocabs'] = D.vocab_all()          # 기준 정보 — 설정 화면이 그린다
+        # 확인 대기 — AI 가 낸 판단을 사람이 승인하는 화면. 말보다 보여 주는 편이 낫다(2026-08-30).
+        from app.modules.dev_dt_maturity import proposals as PR
+        all_pending = PR.listing(None, 'pending')
+        out['/proposals?status=pending'] = all_pending
+        out['/proposals/count'] = {'pending': len(all_pending)}
+        for did in ids:
+            mine = [r for r in all_pending if r['division_id'] == did]
+            out[f'/proposals?status=pending&division_id={did}'] = mine
+            out[f'/proposals/count?division_id={did}'] = {'pending': len(mine)}
         out['/tool-names'] = S.tool_names() if hasattr(S, 'tool_names') else []
         out['/tool-catalog'] = S.tool_catalog() if hasattr(S, 'tool_catalog') else []
 

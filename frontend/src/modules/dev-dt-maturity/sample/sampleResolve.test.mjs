@@ -45,3 +45,25 @@ test('부문을 물었으면 부문 없는 옛 키로 넘어가지 않는다 —
   assert.deepEqual(resolveSample('/subjects?division_id=17&sector=simulation', 'GET', store).data, ['시뮬레이션 대상']);
   assert.deepEqual(resolveSample('/subjects?division_id=17', 'GET', store).data, ['시뮬레이션 대상']);   // 안 물으면 그대로
 });
+
+// ── 샘플 판 자체를 본다 — 뽑기 스크립트가 키를 빠뜨리면 화면이 조용히 빈다 ──────
+test('샘플 뷰에 「확인 대기」 예시가 들어 있다 (2026-08-30)', async () => {
+  const store = (await import('./sample-data.json', { with: { type: 'json' } })).default;
+  const rows = resolveSample('/proposals?status=pending&division_id=17', 'GET', store).data;
+  assert.ok(rows.length >= 1, '확인 대기 예시가 없다 — 뽑기 스크립트가 키를 빠뜨렸나');
+  assert.equal(resolveSample('/proposals/count?division_id=17', 'GET', store).data.pending, rows.length);
+
+  const r = rows[0];
+  // 창이 그리는 데 필요한 것이 다 있어야 한다 — 하나라도 없으면 카드가 반쪽이 된다
+  for (const k of ['subject_name', 'axis', 'axis_label', 'sector', 'payload', 'note', 'now']) {
+    assert.ok(k in r, `확인 대기 줄에 ${k} 가 없다`);
+  }
+  assert.equal(r.status, 'pending');
+  assert.equal(r.source, 'ai');
+  // 축 종류를 갈라 담는다 — 창이 종류마다 다르게 그리므로 하나만 있으면 못 본다
+  const kinds = new Set(rows.map(x => ('value' in x.payload ? 'value' : x.payload.flags ? 'set' : 'rung')));
+  assert.ok(kinds.size >= 2, `축 종류가 ${[...kinds]} 뿐 — 값·묶음·칸을 갈라 담을 것`);
+
+  // ⚠️ 샘플 뷰에서 승인은 **안 된다.** 보기 전용인 것이 맞다.
+  assert.throws(() => resolveSample(`/proposals/${r.id}/approve`, 'POST', store), /샘플 뷰/);
+});

@@ -522,6 +522,15 @@ def main():
         counts['segments'] = _seed_threads(divisions)         # 디지털 스레드 — 구간과 평가
         counts['monitoring'] = _seed_monitoring(divisions)    # 제조 모니터링 — 라인 × 공정
         counts['thread_cases'] = _seed_thread_cases(divisions)   # 연계 개발 기록
+        # 확인 대기 — AI 가 낸 판단. 샘플 뷰가 그 승인 화면을 보여 준다(2026-08-30).
+        mx = divisions.get('MX')
+        if mx is not None:
+            by_name = {}
+            for sub in MaturitySubject.query.filter_by(division_id=mx.id, sector='simulation').all():
+                pr = MaturityPair.query.filter_by(subject_id=sub.id).first()
+                if pr is not None:
+                    by_name[sub.name] = pr
+            counts['proposals'] = _seed_proposals(mx.id, by_name)
         db.session.commit()
         print(f'지운 시험 {n_old}개 → 넣음:', counts)
         for dname, div in divisions.items():
@@ -912,6 +921,37 @@ MON_SEED = {
         ]),
     ],
 }
+
+
+def _seed_proposals(div_id, pairs_by_name):
+    """확인 대기 — AI 가 낸 판단 몇 개. 샘플 뷰가 그 화면을 보여 준다(2026-08-30).
+
+    ⚠️ 축 종류를 갈라 심는다(묶음·값·칸) — 창이 종류마다 다르게 그리므로.
+    """
+    from app.modules.dev_dt_maturity.proposals import MaturityProposal
+    want = [
+        ('낙하 시험', 'substitution', {'flags': ['reference', 'cause_analysis', 'screening']},
+         '2026 상반기 3개 과제에서 사전 검증으로 썼다 — 시험 전 스크리닝 12건'),
+        ('굽힘 시험', 'accuracy', {'value': 78},
+         '힌지 시험 4건과 비교, 평균 오차 11% — 경향은 맞으나 값은 아직'),
+        ('발열 시험', 'automation', {'flags': ['pre', 'run', 'post']},
+         '메시·실행·후처리까지 템플릿으로 돈다. 보고서만 손으로 만든다'),
+    ]
+    made = 0
+    for name, axis, payload, note in want:
+        pair = pairs_by_name.get(name)
+        if pair is None:
+            continue
+        if MaturityProposal.query.filter_by(pair_id=pair.id, axis=axis, status='pending').first():
+            continue
+        db.session.add(MaturityProposal(
+            pair_id=pair.id, division_id=div_id, kind='assess', axis=axis,
+            payload={**payload, 'note': note}, note=note,
+            actor_name='박용진', source='ai', status='pending'))
+        made += 1
+    if made:
+        db.session.flush()
+    return made
 
 
 def _seed_monitoring(divisions):
