@@ -16,6 +16,7 @@ JSON-RPC 로 진짜 도구를 부른다 — 운영에서 AI 가 겪는 것과 �
   I  **모니터링** — 공정 × 수집 수단, 라인·공정 단계까지
   J  **디지털 스레드** — 수단이 없다. 구간은 제 길로만 세워진다
   K  **섞이지 않는가** — 성숙도 도구에 모듈 표가 있고, 대시보드가 이쪽을 가리킨다
+  L  **권한** — 일반 사용자는 남의 사업부를 못 고친다(화면과 같은 규칙)
   H  **뒷정리** — 만든 것을 전부 지운다
 
 ⚠️ 개발 DB 의 성숙도는 일부러 비워 둔 상태다(운영 첫 실행 모습을 보려고).
@@ -127,11 +128,25 @@ class Mcp:
 def main():
     app = create_app()
     with app.app_context():
+        from app.modules.dev_dt_maturity import permissions as MP
         user = User.query.filter_by(is_admin=True).first() or User.query.first()
         if user is None:
             print('사용자가 없습니다.')
             return 1
         token = create_access_token(identity=str(user.id))
+        # 관리자도 사무국도 아닌 사람 — 권한이 진짜 걸리는지 이 사람으로 본다
+        plain, plain_div = None, None
+        for u in User.query.filter_by(is_active=True).limit(300).all():
+            if u.is_admin:
+                continue
+            try:
+                if not MP.can_curate(u) and MP.actor_division_id(u):
+                    plain, plain_div = u, MP.actor_division_id(u)
+                    break
+            except Exception:
+                pass
+        plain_token = create_access_token(identity=str(plain.id)) if plain else None
+        plain_name = plain.name if plain else None
     print(f'· 사용자: {user.name} (id={user.id})')
 
     m = Mcp(token)
@@ -378,6 +393,39 @@ def main():
                    'maturity_describe' in (names.get('describe_data') or ''))
         check_true('필드 길잡이도 가리킨다',
                    'maturity_describe' in (names.get('describe_fields') or ''))
+
+        # ── L 권한 ─────────────────────────────────────────────────────────
+        print('\nL. 권한 — 화면과 같은 규칙인가')
+        if not plain_token:
+            print('  · 일반 사용자를 못 찾아 건너뜀')
+        else:
+            print(f'  · 일반 사용자: {plain_name} (사업부 {plain_div})')
+            pm = Mcp(plain_token)
+            pdivs = pm.call_list('maturity_list_divisions', {})
+            mine_d = next(d for d in pdivs if d['id'] == plain_div)
+            others = [d for d in pdivs if d['id'] != plain_div]
+            check('자기 사업부는 열려 있다', mine_d.get('deny_reason'), None)
+            check_true('남의 사업부에는 이유가 붙는다', all(d.get('deny_reason') for d in others))
+
+            # 읽기는 된다 — 전사 현황은 봐야 한다
+            ob = pm.call('maturity_board', {'division_id': others[0]['id']})
+            check_true('남의 사업부도 읽기는 된다', isinstance(ob, dict) and 'subjects' in ob)
+
+            # 쓰기는 막힌다
+            deny = pm.call('maturity_add_item', {'division_id': others[0]['id'], 'kind': 'subject',
+                                                 'name': f'{MARK} 남의 사업부'})
+            check('남의 사업부에는 못 쓴다', deny.get('status'), 'error')
+            check('403 으로 막힌다', deny.get('httpStatus'), 403)
+            check_true('왜 막혔는지 말해 준다', '사업부' in (deny.get('message') or ''))
+
+            # 남의 사업부 연계에는 평가도 못 한다
+            deny2 = pm.call('maturity_assess', {'pair_id': made['pair'], 'axis': 'automation',
+                                                'note': '남의 것을 매겨 본다', 'flags': ['pre']}) \
+                if made['pair'] else None
+            if made['pair'] and plain_div != did:
+                check('남의 연계는 못 매긴다', (deny2 or {}).get('httpStatus'), 403)
+            else:
+                print('  · 일반 사용자의 사업부가 시험 사업부와 같아 평가 막힘은 건너뜀')
 
     finally:
         # ── H 뒷정리 ───────────────────────────────────────────────────────
