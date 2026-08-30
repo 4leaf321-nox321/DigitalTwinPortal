@@ -258,6 +258,42 @@ def parse_month(value):
     return month
 
 
+def check_axis_value(sector, axis_key, payload):
+    """이 값이 그 축에 쓸 수 있는 것인가 — **저장하지 않고** 본다.
+
+    ⚠️ 제안(proposals)이 이걸 빌려 쓴다. 제안을 저장할 때 값을 안 보면, 없는 칸이 확인
+       대기에 쌓이고 **사람이 승인을 누를 때에야** 안 된다는 말을 듣는다. 그 카드는
+       아무리 눌러도 안 올라가고 거절 말고는 치울 길이 없다(2026-08-30 실측).
+    """
+    axis = D.axis_of(sector, axis_key)
+    if axis is None:
+        raise Refused('이 부문에 없는 축입니다.')
+    if axis['kind'] == 'value':
+        if 'rung' in payload and payload.get('rung') is not None:
+            raise Refused(f'「{axis["label"]}」은 값으로 매깁니다. 칸은 값에서 정해집니다.')
+        try:
+            v = float(payload.get('value'))
+        except (TypeError, ValueError):
+            raise Refused(f'「{axis["label"]}」 값(숫자)이 필요합니다.')
+        if not (0 <= v <= 100):
+            raise Refused('값은 0 에서 100 사이입니다.')
+    elif axis['kind'] in ('set', 'matrix'):
+        flags = payload.get('flags')
+        if flags is None:
+            if D.set_flags(axis, payload.get('rung')) is None:
+                raise Refused(f'「{axis["label"]}」에 없는 항목입니다 — '
+                              f'쓸 수 있는 것: {" · ".join(D.set_flag_keys(axis))}')
+        elif not isinstance(flags, list) or any(f not in D.set_flag_keys(axis) for f in flags):
+            raise Refused(f'「{axis["label"]}」에 없는 항목입니다 — '
+                          f'쓸 수 있는 것: {" · ".join(D.set_flag_keys(axis))}')
+    else:
+        rung = payload.get('rung')
+        if not (rung == 'unknown' and axis.get('unknown_ok')) and rung not in D.rung_keys(axis):
+            ok = ' · '.join(D.rung_keys(axis)) + (' · unknown' if axis.get('unknown_ok') else '')
+            raise Refused(f'「{axis["label"]}」에 없는 칸입니다 — 쓸 수 있는 것: {ok}')
+    return axis
+
+
 def assess(pair, axis_key, payload, actor):
     """축 하나를 매긴다. **근거 없이는 저장하지 않는다.** 이력은 바뀌었을 때만.
 
@@ -300,7 +336,10 @@ def assess(pair, axis_key, payload, actor):
         if flags is None:
             flags = D.set_flags(axis, payload.get('rung'))
             if flags is None:
-                raise Refused(f'「{axis["label"]}」에 없는 항목입니다.')
+                # ⚠️ 여기도 무엇이 맞는지 함께 준다 — 아래 갈래에만 붙여 놓아서, rung 으로
+                #    보낸 API·MCP 는 「없는 항목」만 듣고 고칠 수가 없었다(2026-08-30).
+                raise Refused(f'「{axis["label"]}」에 없는 항목입니다 — '
+                              f'쓸 수 있는 것: {" · ".join(D.set_flag_keys(axis))}')
         elif not isinstance(flags, list) or any(f not in D.set_flag_keys(axis) for f in flags):
             raise Refused(f'「{axis["label"]}」에 없는 항목입니다 — '
                           f'쓸 수 있는 것: {" · ".join(D.set_flag_keys(axis))}')

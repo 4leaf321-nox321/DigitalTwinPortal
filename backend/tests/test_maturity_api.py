@@ -1530,3 +1530,249 @@ def test_일괄_입력_왕복_불러오고_고쳐_되넣는다(client, auth, wor
     row = next(r for r in client.get(f'{BASE}/subjects?division_id={mx}&sector=simulation',
                                      headers=auth(mx_user)).get_json()['data'] if r['name'] == '낙하 시험')
     assert row['product_families'] == ['S 시리즈'], '빈 칸이 자료를 지웠다'
+
+
+def test_한_칸에_여럿이면_파이프로_나눈다_값에_가운뎃점이_들어도_안_쪼갠다(client, auth, world, mx_user):
+    """여럿을 담는 칸의 구분자는 ` | ` 다.
+
+    ⚠️ 여태는 ` · ` 였는데 **값 자체에 · 가 든 것**이 있다 — 「원가·단가」·「요구사항·스펙」·
+       「SPI·AOI 검사」. 그래서 한 칸이 둘로 쪼개져 **둘 다 못 찾는 값**이 됐다.
+       불러오기가 준 판을 그대로 되붙여도 자료가 같아야 왕복이라 할 수 있다.
+    """
+    mx = world['mx'].id
+    client.post(f'{BASE}/subjects', json={'division_id': mx, 'sector': 'simulation', 'name': '낙하 시험',
+                                          'product_families': ['S 시리즈', 'A 시리즈']}, headers=auth(mx_user))
+
+    # ① 불러오기는 | 로 이어 준다
+    got = client.get(f'{BASE}/bulk/rows?division_id={mx}&sector=simulation&kind=subject',
+                     headers=auth(mx_user)).get_json()['data']
+    line = next(r for r in got['rows'] if r[1] == '낙하 시험')
+    assert line[3] == 'S 시리즈 | A 시리즈'
+
+    # ② 그대로 되붙이면 「고칠 것 없음」 — 왕복해도 자료가 안 흔들린다
+    text = '\t'.join(got['columns']) + '\n' + '\t'.join(line)
+    out = client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'simulation', 'kind': 'subject',
+                                            'text': text, 'mode': 'update', 'dry_run': False},
+                      headers=auth(mx_user)).get_json()['data']
+    assert out['summary']['updated'] == 0 and out['rows'][0]['status'] == 'same'
+
+    # ③ 옛 표(·)도 받는다 — 이미 내보낸 판이 세상에 있다
+    old = list(line)
+    old[3] = 'S 시리즈 · B 시리즈'
+    client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'simulation', 'kind': 'subject',
+                                      'text': '\t'.join(got['columns']) + '\n' + '\t'.join(old),
+                                      'mode': 'update', 'dry_run': False}, headers=auth(mx_user))
+    row = next(r for r in client.get(f'{BASE}/subjects?division_id={mx}&sector=simulation',
+                                     headers=auth(mx_user)).get_json()['data'] if r['name'] == '낙하 시험')
+    assert row['product_families'] == ['S 시리즈', 'B 시리즈']
+
+    # ── 여기가 이 규칙의 이유 — 값 안에 · 가 있는 「데이터 종류」 ──────────────
+    threads = client.get(f'{BASE}/threads', headers=auth(mx_user)).get_json()['data']
+    cost = next(t for t in threads if t['key'] == 'cost')
+    d1, d2 = cost['segments'][0], cost['segments'][1]
+    seg = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': d1['id']},
+                      headers=auth(mx_user)).get_json()['data']
+    assert seg['data_kind_labels'] == ['원가·단가', 'BOM(E/M)']
+
+    # ④ 불러오기 — 값 안의 · 는 그대로 두고, 값 사이만 | 로 가른다
+    sg = client.get(f'{BASE}/bulk/rows?division_id={mx}&sector=digital_thread&kind=segment',
+                    headers=auth(mx_user)).get_json()['data']
+    srow = next(r for r in sg['rows'] if r[1] == d1['name'])
+    assert srow[7] == '원가·단가 | BOM(E/M)'
+
+    # ⑤ 그 칸을 그대로 붙여 새 구간을 만든다 — **라벨이 아니라 표준 key 로** 들어가야 한다
+    new = list(srow)
+    new[1] = d2['name']
+    client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'digital_thread', 'kind': 'segment',
+                                      'text': '\t'.join(sg['columns']) + '\n' + '\t'.join(new),
+                                      'dry_run': False}, headers=auth(mx_user))
+    made = next(s for s in client.get(f'{BASE}/segments?division_id={mx}',
+                                      headers=auth(mx_user)).get_json()['data'] if s['name'] == d2['name'])
+    assert made['data_kinds'] == ['cost', 'bom'], made['data_kinds']
+    assert made['data_kind_labels'] == ['원가·단가', 'BOM(E/M)']
+
+    # ⑥ 하나뿐이어도 안 쪼갠다 — 「원가·단가」는 한 값이다
+    seg3 = client.post(f'{BASE}/segments', json={'division_id': mx, 'segment_def_id': cost['segments'][2]['id']},
+                       headers=auth(mx_user)).get_json()['data']
+    client.put(f'{BASE}/segments/{seg3["id"]}', json={'data_kinds': []}, headers=auth(mx_user))
+    sg2 = client.get(f'{BASE}/bulk/rows?division_id={mx}&sector=digital_thread&kind=segment',
+                     headers=auth(mx_user)).get_json()['data']
+    one = list(next(r for r in sg2['rows'] if r[1] == d1['name']))
+    one[1], one[7] = '원가 되짚기', '원가·단가'
+    client.post(f'{BASE}/bulk', json={'division_id': mx, 'sector': 'digital_thread', 'kind': 'segment',
+                                      'text': '\t'.join(sg2['columns']) + '\n' + '\t'.join(one),
+                                      'dry_run': False}, headers=auth(mx_user))
+    solo = next(s for s in client.get(f'{BASE}/segments?division_id={mx}',
+                                      headers=auth(mx_user)).get_json()['data'] if s['name'] == '원가 되짚기')
+    assert solo['data_kinds'] == ['cost'], solo['data_kinds']
+
+
+def _sheet(cols, *rows):
+    return '\n'.join(['\t'.join(cols)] + ['\t'.join(r) for r in rows])
+
+
+def _bulk(client, auth, user, div, sector, kind, text, mode='add', dry=False):
+    r = client.post(f'{BASE}/bulk', json={'division_id': div, 'sector': sector, 'kind': kind,
+                                          'text': text, 'mode': mode, 'dry_run': dry}, headers=auth(user))
+    j = r.get_json() or {}
+    return r.status_code, (j.get('data') if r.status_code < 400 else j.get('message'))
+
+
+def test_전체로_열어도_남의_사업부_줄은_못_넣는다(client, auth, world, mx_user, office):
+    """⚠️ 사업부를 하나 골라 열면 화면이 막지만, 「전체」로 열면 사업부가 **줄마다** 온다.
+
+    그 줄의 사업부를 안 보면 엑셀에서 그 열만 고쳐 붙여넣는 것으로 남의 사업부에 자료가
+    들어간다 — 성숙도는 사업부가 자기 것을 적는 판이라 이러면 판 자체가 무너진다.
+    """
+    mx, vd = world['mx'].id, world['vd'].id
+    cols = ['사업부', '시험 항목', '세부', '제품군']
+    text = _sheet(cols, ['VD', '남의 사업부에 몰래', '', ''])
+
+    st, d = _bulk(client, auth, mx_user, 'all', 'simulation', 'subject', text)
+    assert st == 200 and d['summary']['errors'] == 1
+    assert 'VD 사업부 인력만' in d['rows'][0]['message']
+    got = client.get(f'{BASE}/subjects?division_id={vd}&sector=simulation', headers=auth(mx_user)).get_json()['data']
+    assert not [r for r in got if r['name'] == '남의 사업부에 몰래'], '남의 사업부에 들어갔다'
+
+    # 내 것은 그대로 들어간다 — 막는 것이 「전체」 자체가 아니다
+    st, d = _bulk(client, auth, mx_user, 'all', 'simulation', 'subject',
+                  _sheet(cols, ['MX', '내 사업부', '', '']))
+    assert d['summary']['new'] == 1
+
+    # 사무국은 두 사업부를 한 표로 — 이게 「전체」가 있는 이유다
+    st, d = _bulk(client, auth, office, 'all', 'simulation', 'subject',
+                  _sheet(cols, ['MX', '사무국이 넣은 것', '', ''], ['VD', '사무국이 넣은 저것', '', '']))
+    assert d['summary']['new'] == 2, d['rows']
+
+
+def test_담당_부서가_붙은_수단도_왕복한다(client, auth, world, mx_user):
+    """불러온 판을 손대지 않고 되붙이면 아무 일도 없어야 한다.
+
+    ⚠️ 담당 부서는 **숫자**로 담긴다. 그걸 글자처럼 다듬으려다 터져서, 부서가 붙은 수단은
+       고치기가 통째로 「넣지 못했습니다」로 끝났다(2026-08-30 실측).
+    """
+    mx = world['mx'].id
+    dept = client.get(f'{BASE}/departments?division_id={mx}', headers=auth(mx_user)).get_json()['data'][0]
+    client.post(f'{BASE}/agents', json={'division_id': mx, 'sector': 'simulation', 'name': '구조 해석',
+                                        'kind': '구조', 'tools': ['LS-DYNA', 'Abaqus'],
+                                        'department_id': dept['id']}, headers=auth(mx_user))
+
+    got = client.get(f'{BASE}/bulk/rows?division_id={mx}&sector=simulation&kind=agent',
+                     headers=auth(mx_user)).get_json()['data']
+    line = next(r for r in got['rows'] if r[1] == '구조 해석')
+    assert line[4] == 'LS-DYNA | Abaqus' and line[6] == dept['name']
+
+    text = '\n'.join(['\t'.join(got['columns']), '\t'.join(line)])
+    st, d = _bulk(client, auth, mx_user, mx, 'simulation', 'agent', text, mode='update')
+    assert st == 200 and d['summary']['errors'] == 0, d['rows']
+    assert d['rows'][0]['status'] == 'same', d['rows']
+
+    # 한 칸만 고치면 그 칸만
+    line[6] = ''
+    line[2] = '구조·충격'
+    st, d = _bulk(client, auth, mx_user, mx, 'simulation', 'agent',
+                  '\n'.join(['\t'.join(got['columns']), '\t'.join(line)]), mode='update')
+    assert d['summary']['updated'] == 1
+    row = next(r for r in client.get(f'{BASE}/agents?division_id={mx}&sector=simulation',
+                                     headers=auth(mx_user)).get_json()['data'] if r['name'] == '구조 해석')
+    assert row['kind'] == '구조·충격'
+    assert row['department_id'] == dept['id'], '빈 칸이 부서를 지웠다'
+
+
+def test_구간_일괄_입력은_됐다고_말한다(client, auth, world, mx_user):
+    """⚠️ 구간은 「넣지 못했습니다」를 띄우면서 **실제로는 들어가 있었다.**
+
+    돌려주는 값이 하나 모자라 run() 이 터졌는데, 터진 자리에서 이미 만든 구간이 그대로
+    커밋됐다. 사람은 안 됐다고 믿고 다시 누른다 — 말과 자료가 어긋나면 안 된다.
+    """
+    mx = world['mx'].id
+    th = client.get(f'{BASE}/threads', headers=auth(mx_user)).get_json()['data']
+    cost = next(t for t in th if t['key'] == 'cost')
+    # 시스템은 사전에 박힌 것을 쓴다 — 기준 정보를 고치는 시험이 앞에 돌아도 안 흔들리게
+    sysname = client.get(f'{BASE}/systems', headers=auth(mx_user)).get_json()['data'][0]['name']
+    client.post(f'{BASE}/orgs', json={'division_id': mx, 'name': 'MX 설계그룹'}, headers=auth(mx_user))
+    cols = ['스레드', '구간', '출발 조직', '출발 시스템', '매개 시스템', '도착 조직', '도착 시스템', '데이터 종류']
+
+    st, d = _bulk(client, auth, mx_user, mx, 'digital_thread', 'segment',
+                  _sheet(cols, [cost['name'], cost['segments'][0]['name'], 'MX 설계그룹', sysname,
+                                '', 'MX 설계그룹', sysname, '원가·단가 | BOM(E/M)']))
+    assert st == 200 and d['summary']['new'] == 1, d['rows']
+    assert d['rows'][0]['status'] == 'new'
+    seg = client.get(f'{BASE}/segments?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert len(seg) == 1 and seg[0]['data_kinds'] == ['cost', 'bom']
+
+    # 또 올리면 이미 있음 — 겹쳐 만들지 않는다
+    st, d = _bulk(client, auth, mx_user, mx, 'digital_thread', 'segment',
+                  _sheet(cols, [cost['key'], cost['segments'][0]['name'], '', '', '', '', '', '']))
+    assert d['summary']['exists'] == 1 and d['summary']['errors'] == 0, d['rows']
+
+
+def test_오류가_난_줄은_저장되지_않는다(client, auth, world, mx_user, monkeypatch):
+    """줄 하나가 반쯤 되다 터지면 **그 줄은 없던 일이** 되어야 한다.
+
+    ⚠️ 예전엔 줄마다 되돌림점이 없어서, 오류를 세어 놓고 끝에 통째로 커밋했다. 그래서
+       「넣지 못했습니다」라고 말한 줄의 자료가 판에 남았다. 성한 줄은 그대로 들어간다.
+    """
+    from app.modules.dev_dt_maturity import bulk as B
+    mx = world['mx'].id
+    cols = ['사업부', '시험 항목', '세부', '제품군']
+    real = B._one
+
+    def half(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='add'):
+        out = real(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode=mode)
+        if cell(cells, '시험 항목') == '반쯤 하다 터짐':
+            raise RuntimeError('만들다 말았다')
+        return out
+
+    monkeypatch.setattr(B, '_one', half)
+    st, d = _bulk(client, auth, mx_user, mx, 'simulation', 'subject',
+                  _sheet(cols, ['MX', '멀쩡한 줄', '', ''], ['MX', '반쯤 하다 터짐', '', '']))
+    assert st == 200 and d['summary']['new'] == 1 and d['summary']['errors'] == 1
+    names = [r['name'] for r in client.get(f'{BASE}/subjects?division_id={mx}&sector=simulation',
+                                           headers=auth(mx_user)).get_json()['data']]
+    assert '멀쩡한 줄' in names, '성한 줄까지 날아갔다'
+    assert '반쯤 하다 터짐' not in names, '오류라고 말해 놓고 저장했다'
+
+
+def test_없는_값을_낸_제안은_쌓이기_전에_막는다(client, auth, world, mx_user):
+    """⚠️ 제안도 **저장 전에** 값을 본다.
+
+    여태는 갈래·축·근거만 보고 payload 를 그대로 담았다. 그래서 AI 가 없는 칸을 내면
+    202 로 받아 확인 대기에 쌓이고, **사람이 승인을 누를 때에야** 「없는 칸입니다」가
+    떴다. 그 카드는 아무리 눌러도 안 올라가고 거절 말고는 치울 길이 없었다.
+    내는 쪽(MCP·AI)도 202 를 받았으니 됐다고 여겨 스스로 못 고쳤다(2026-08-30 실측).
+    """
+    mx = world['mx'].id
+    sub = client.post(f'{BASE}/subjects', json={'division_id': mx, 'sector': 'simulation',
+                                                'name': '낙하 시험'}, headers=auth(mx_user)).get_json()['data']
+    ag = client.post(f'{BASE}/agents', json={'division_id': mx, 'sector': 'simulation',
+                                             'name': '구조 해석'}, headers=auth(mx_user)).get_json()['data']
+    pair = client.post(f'{BASE}/pairs', json={'subject_id': sub['id'], 'agent_id': ag['id']},
+                       headers=auth(mx_user)).get_json()['data']
+
+    bad = client.put(f'{BASE}/pairs/{pair["id"]}/assessments/automation',
+                     json={'rung': '없는칸', 'note': '지어낸 근거', 'actor_mode': 'ai'}, headers=auth(mx_user))
+    assert bad.status_code == 400, bad.get_json()
+    msg = bad.get_json()['message']
+    # 무엇을 쓸 수 있는지 함께 준다 — 「없는 칸」만 듣고는 AI 도 사람도 못 고친다
+    assert '쓸 수 있는 것' in msg and 'pipeline' in msg, msg
+    assert client.get(f'{BASE}/proposals?division_id={mx}',
+                      headers=auth(mx_user)).get_json()['data'] == [], '못 쓸 값이 확인 대기에 쌓였다'
+
+    # 근거가 비면 여전히 근거부터 — 값 검사가 근거 검사를 밀어내지 않는다
+    no_note = client.put(f'{BASE}/pairs/{pair["id"]}/assessments/automation',
+                         json={'rung': 'run', 'actor_mode': 'ai'}, headers=auth(mx_user))
+    assert no_note.status_code == 400 and '근거' in no_note.get_json()['message']
+
+    # 쓸 수 있는 값이면 그대로 제안으로 간다
+    ok = client.put(f'{BASE}/pairs/{pair["id"]}/assessments/automation',
+                    json={'rung': 'run', 'note': '해석 실행이 자동', 'actor_mode': 'ai'}, headers=auth(mx_user))
+    assert ok.status_code == 202, ok.get_json()
+    ps = client.get(f'{BASE}/proposals?division_id={mx}', headers=auth(mx_user)).get_json()['data']
+    assert len(ps) == 1 and ps[0]['status'] == 'pending'
+
+    # 그리고 승인이 **된다** — 쌓인 것은 반드시 처리할 수 있어야 한다
+    got = client.post(f'{BASE}/proposals/{ps[0]["id"]}/approve', json={}, headers=auth(mx_user))
+    assert got.status_code == 200, got.get_json()
+    one = client.get(f'{BASE}/pairs/{pair["id"]}', headers=auth(mx_user)).get_json()['data']
+    assert one['assessments']['automation']['rung'] == 'run'

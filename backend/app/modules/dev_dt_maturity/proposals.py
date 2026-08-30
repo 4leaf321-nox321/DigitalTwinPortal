@@ -82,7 +82,13 @@ class MaturityProposal(db.Model):
 
 
 def _guard(pair, kind, axis_key, payload):
-    """제안할 때도 **같은 규칙**을 본다 — 승인할 때가 되어서야 안 된다고 하면 늦다."""
+    """제안할 때도 **같은 규칙**을 본다 — 승인할 때가 되어서야 안 된다고 하면 늦다.
+
+    ⚠️ 값까지 본다. 여태는 갈래·축·근거만 봐서, 없는 칸을 낸 제안이 202 로 받아들여지고
+       확인 대기에 쌓였다. 사람이 승인을 눌러야 「없는 칸입니다」가 나오고, 그 카드는
+       아무리 눌러도 안 올라간다 — 거절 말고는 치울 길이 없었다(2026-08-30 실측).
+       내는 쪽(AI·MCP)도 그 자리에서 바로 고칠 수 있어야 한다.
+    """
     if kind not in KINDS:
         raise Refused('모르는 제안 갈래입니다.')
     axis = D.axis_of(pair.subject.sector, axis_key)
@@ -90,6 +96,9 @@ def _guard(pair, kind, axis_key, payload):
         raise Refused('이 부문에 없는 축입니다.')
     if kind in ('assess', 'reached') and not (payload.get('note') or '').strip():
         raise Refused('근거가 필요합니다. 무엇을 보고 이렇게 매겼는지 한 줄로 적으세요.')
+    if kind == 'assess':
+        from .services import check_axis_value
+        check_axis_value(pair.subject.sector, axis_key, payload)
     return axis
 
 

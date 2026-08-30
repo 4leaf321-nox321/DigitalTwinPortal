@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { X, Check, AlertTriangle, ClipboardPaste, Copy, Download } from 'lucide-react';
 import maturityApi from '../../services/maturityApi';
+import { isSampleMode } from '../../sample/sampleStore';
 import { applyPaste, emptyGrid, isUnknown, toText, usedRows } from '../../utils/bulkGrid';
 
 /**
@@ -85,12 +86,16 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
   const [update, setUpdate] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // ⚠️ 샘플 뷰에는 일괄 입력의 재료(머리글·선택지)가 없다. 그냥 두면 종류도 표도 없는
+  //    **빈 상자**가 열려 사람이 무엇이 잘못됐는지 모른다(2026-08-30).
+  const onSample = isSampleMode();
   useEffect(() => {
+    if (onSample) { setKinds([]); setKind(null); return; }
     maturityApi.bulkKinds(sector, divisionId).then(r => {
       const list = Array.isArray(r.data) ? r.data : [];
       setKinds(list); setKind(list[0]?.key || null);
     }).catch(e => setError(e.message));
-  }, [sector, divisionId]);
+  }, [sector, divisionId, onSample]);
   const spec = useMemo(() => kinds.find(k => k.key === kind), [kinds, kind]);
   const header = (spec?.columns || []).join('\t');
   // 종류를 바꾸면 표를 새로 짠다 — 열이 달라지므로 앞의 값은 뜻이 없다.
@@ -112,6 +117,9 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
   /** 지금 자료를 표에 채운다 — 이걸로 시작해야 엑셀에서 고칠 것이 생긴다. */
   const loadNow = async () => {
     if (!spec) return;
+    // ⚠️ 표를 통째로 갈아치운다 — 적어 둔 것이 있으면 물어본다. 말없이 덮으면
+    //    몇 줄 적다 눌러 본 사람의 것이 그냥 사라진다(2026-08-30).
+    if (rowCount && !window.confirm(`표에 적어 둔 ${rowCount}줄이 지금 자료로 바뀝니다. 계속할까요?`)) return;
     setBusy(true); setError(null); setPreview(null); setDone(null);
     try {
       const r = await maturityApi.bulkRows(sector, kind, divisionId);
@@ -119,6 +127,10 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
       // 빈 줄 몇을 붙여 둔다 — 불러온 뒤 새 줄도 바로 적을 수 있게
       setGrid([...rows.map(x => spec.columns.map((_, i) => x[i] ?? '')), ...emptyGrid(spec.columns, 3)]);
       setAt({ r: 0, c: 0 });
+      // 불러왔다는 것은 **고치러 왔다**는 뜻이다. 켜 두지 않으면 미리보기가 전부
+      // 「이미 있음」으로 끝나 아무 일도 안 한 것처럼 보인다.
+      if (rows.length) setUpdate(true);
+      else setError('지금 저장된 자료가 없습니다 — 새로 적어 넣으세요.');
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   };
@@ -160,6 +172,11 @@ const BulkInputModal = ({ divisionId, divisionName, sector, canEdit = true, deny
           <IconBtn onClick={onClose} title="닫기" aria-label="닫기"><X size={16} /></IconBtn>
         </Head>
         <Body>
+          {onSample && (
+            <Notice><AlertTriangle size={14} />
+              <span>샘플 뷰에서는 일괄 입력을 쓸 수 없습니다 — 위의 <strong>「실제 자료로」</strong>를 누르고 여세요.</span>
+            </Notice>
+          )}
           {denyReason && <Notice><AlertTriangle size={14} /> <span>{denyReason}</span></Notice>}
           <Bar aria-label="종류">
             {kinds.map(k => <Chip key={k.key} type="button" $on={kind === k.key} onClick={() => setKind(k.key)}>{k.label}</Chip>)}

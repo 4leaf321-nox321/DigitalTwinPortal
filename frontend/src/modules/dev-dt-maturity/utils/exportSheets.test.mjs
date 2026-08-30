@@ -72,7 +72,8 @@ test('이력 판 — 축 이름을 사람 말로 옮긴다', () => {
 
 test('대상·수단 목록은 평가가 없어도 다 나온다', () => {
   const s = subjectSheet([{ name: '낙하 시험', division_name: 'MX', detail: '1.2m', product_families: ['S', 'A'] }], 'simulation');
-  assert.deepEqual(s[1], ['MX', '낙하 시험', '1.2m', 'S · A']);
+  // ⚠️ 여럿은 ` | ` 로 잇는다 — 이 판을 그대로 「일괄 입력」에 되붙일 수 있어야 한다.
+  assert.deepEqual(s[1], ['MX', '낙하 시험', '1.2m', 'S | A']);
   const a = agentSheet([{ name: '구조 해석', division_name: 'MX', kind: '구조', tools: ['LS-DYNA'], defect_types: [], projects: [] }], 'simulation');
   assert.equal(a[1][1], '구조 해석');
   assert.equal(a[1][4], 'LS-DYNA');

@@ -6,6 +6,12 @@
 //        목업이 나온다. 추출만 따로 서버를 찌르면 샘플 뷰에서 빈 파일이 나온다.
 //
 // 이 파일은 **판을 짜는 셈**만 한다(그리기·저장은 exportXlsx). 그래서 node 시험이 그대로 읽는다.
+//
+// ⚠️ 한 칸에 여럿인 값은 ` | ` 로 잇는다 — 그래야 이 판을 그대로 「일괄 입력」에 되붙일 수 있다.
+//    값 자체에 · 가 든 것이 있어(「원가·단가」) · 로 이으면 되붙일 때 쪼개진다(2026-08-30).
+//    읽으라고만 적는 칸(축의 단 이름·못 매긴 축)은 그대로 ` · ` 다.
+
+import { SEP } from './bulkGrid';
 
 /** 축 하나의 값 — 사람이 읽는 한 칸. */
 export const axisText = (axis, a) => {
@@ -33,22 +39,22 @@ const ymd = (iso) => (iso ? String(iso).slice(0, 10) : '');
 
 /** 대상의 부문별 속성 — 시뮬레이션은 제품군, 스레드는 스레드·구간, 모니터링은 라인·공정. */
 const subjectCols = (sector) => {
-  if (sector === 'digital_thread') return [['스레드', s => s.segment?.thread_name || ''], ['데이터 종류', s => (s.segment?.data_kind_labels || []).join(' · ')],
+  if (sector === 'digital_thread') return [['스레드', s => s.segment?.thread_name || ''], ['데이터 종류', s => (s.segment?.data_kind_labels || []).join(SEP)],
     ['출발 조직', s => s.segment?.from_org_name || ''], ['출발 시스템', s => s.segment?.from_system_name || ''],
     ['매개 시스템', s => s.segment?.via_system_name || ''], ['도착 조직', s => s.segment?.to_org_name || ''],
     ['도착 시스템', s => s.segment?.to_system_name || '']];
   // ⚠️ 「공정 단계」다 — 이 부문은 대상의 이름표가 「공정」이라 머리글이 겹치면
   //    일괄 입력이 이름 칸을 공정 단계로 읽는다(2026-08-30). 추출과 입력은 같은 머리글이어야 한다.
   if (sector === 'manufacturing_monitoring') return [['라인·사업장', s => s.line || ''], ['공정 단계', s => s.process_label || s.process || ''], ['세부', s => s.detail || '']];
-  return [['세부', s => s.detail || ''], ['제품군', s => (s.product_families || []).join(' · ')]];
+  return [['세부', s => s.detail || ''], ['제품군', s => (s.product_families || []).join(SEP)]];
 };
 
 /** 수단의 속성 — 스레드 부문은 수단이 없다. */
 const agentCols = (sector) => {
   if (sector === 'digital_thread') return [];
   if (sector === 'manufacturing_monitoring') return [['수단 종류', a => a?.kind || ''], ['담당 부서', a => a?.department_name || '']];
-  return [['종류', a => a?.kind || ''], ['모델 종류', a => a?.model_kind || ''], ['사용 툴', a => (a?.tools || []).join(' · ')],
-    ['불량 유형', a => (a?.defect_types || []).join(' · ')], ['담당 부서', a => a?.department_name || ''],
+  return [['종류', a => a?.kind || ''], ['모델 종류', a => a?.model_kind || ''], ['사용 툴', a => (a?.tools || []).join(SEP)],
+    ['불량 유형', a => (a?.defect_types || []).join(SEP)], ['담당 부서', a => a?.department_name || ''],
     ['디지털 트윈 연결 과제', a => (a?.projects || []).map(p => p.title || p.uuid).join(' · ')]];
 };
 
@@ -129,7 +135,7 @@ export const systemSheet = (systems, thread) => {
   const status = (k) => (thread?.system_status || []).find(x => x.key === k)?.label || k || '';
   const rows = [['시스템', '종류', '주관 조직', '생애 단계', '연계 수단', '상태', '메모']];
   (systems || []).forEach(s => rows.push([
-    s.name, kind(s.kind), s.owner_org || '', (s.stages || []).map(stage).join(' · '), means(s.link_means), status(s.status), s.note || '',
+    s.name, kind(s.kind), s.owner_org || '', (s.stages || []).map(stage).join(SEP), means(s.link_means), status(s.status), s.note || '',
   ]));
   return rows;
 };

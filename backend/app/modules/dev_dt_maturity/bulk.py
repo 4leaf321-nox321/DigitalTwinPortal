@@ -20,6 +20,7 @@
 """
 from . import definitions as D
 from . import services as S
+from . import permissions as P
 from .importer import TableFormatError, _read_rows, norm
 from .models import MaturityAgent, MaturityPair, MaturitySubject
 
@@ -38,13 +39,13 @@ def kinds_for(sector, division_id=None):
     out = []
     if sector == 'digital_thread':
         out.append({'key': 'system', 'label': '시스템', 'columns': ['시스템', '종류', '주관 조직', '생애 단계', '연계 수단', '상태', '메모'],
-                    'required': ['시스템'], 'hint': '전사 하나의 사전입니다. 이름이 같으면 다시 만들지 않습니다.'})
+                    'required': ['시스템'], 'hint': '전사 하나의 사전입니다. 이름이 같으면 다시 만들지 않습니다. 생애 단계처럼 한 칸에 여럿이면 | 로 나눠 적습니다.'})
         out.append({'key': 'org', 'label': '조직', 'columns': ['조직'], 'required': ['조직'],
                     'hint': '이 사업부의 조직입니다. 「그룹명(사업부)」 꼴로 적으면 화면과 같아집니다.'})
         out.append({'key': 'segment', 'label': subject_label,
                     'columns': ['스레드', '구간', '출발 조직', '출발 시스템', '매개 시스템', '도착 조직', '도착 시스템', '데이터 종류'],
                     'required': ['스레드', '구간'],
-                    'hint': '조직·시스템은 **이름으로 찾습니다** — 없으면 그 줄이 오류입니다. 시스템·조직을 먼저 올리세요.'})
+                    'hint': '조직·시스템은 **이름으로 찾습니다** — 없으면 그 줄이 오류입니다. 시스템·조직을 먼저 올리세요. 데이터 종류처럼 한 칸에 여럿이면 | 로 나눠 적습니다.'})
         return _with_choices(out, sector, division_id)      # ⚠️ 여기서도 선택지를 붙인다 — 빼먹으면 드롭다운이 안 뜬다
     out.append({'key': 'subject', 'label': subject_label,
                 # ⚠️ 「공정 단계」다 — 모니터링은 대상의 이름표가 「공정」이라 그냥 「공정」이면
@@ -52,12 +53,12 @@ def kinds_for(sector, division_id=None):
                 'columns': (['사업부', subject_label, '라인·사업장', '공정 단계', '세부'] if sector == 'manufacturing_monitoring'
                             else ['사업부', subject_label, '세부', '제품군']),
                 'required': [subject_label],
-                'hint': '「전체」로 열었으면 사업부 열이 필요합니다. 제품군·데이터는 · 로 나눠 적습니다.'})
+                'hint': '「전체」로 열었으면 사업부 열이 필요합니다. 한 칸에 여럿이면 | 로 나눠 적습니다.'})
     if sec.get('has_agent'):
         out.append({'key': 'agent', 'label': agent_label,
                     'columns': (['사업부', agent_label, '수단 종류', '담당 부서'] if sector == 'manufacturing_monitoring'
                                 else ['사업부', agent_label, '종류', '모델 종류', '사용 툴', '불량 유형', '담당 부서']),
-                    'required': [agent_label], 'hint': '도구·불량 유형은 · 로 나눠 적습니다.'})
+                    'required': [agent_label], 'hint': '사용 툴·불량 유형처럼 한 칸에 여럿이면 | 로 나눠 적습니다.'})
         out.append({'key': 'pair', 'label': '연계',
                     'columns': ['사업부', subject_label, agent_label], 'required': [subject_label, agent_label],
                     'hint': '이름으로 찾아 잇습니다 — 없는 이름이면 그 줄이 오류입니다. 대상·수단을 먼저 올리세요.'})
@@ -143,12 +144,38 @@ def _map_header(header, spec):
     return mapping
 
 
-def _split(v):
-    """한 칸에 여럿 — 「LS-DYNA · HyperMesh」. 쉼표로 적어도 받는다."""
+SEP = ' | '        # 여럿을 담는 칸의 정본 구분자. 쓸 때는 늘 이것으로 잇는다.
+
+
+def _split(v, options=None):
+    """한 칸에 여럿 — 「LS-DYNA | HyperMesh」.
+
+    ⚠️ 예전엔 `·` 로 나눴는데 **값 자체에 · 가 든 것**이 있다 — 「원가·단가」·「SPI·AOI 검사」.
+       그래서 한 칸이 둘로 쪼개져 둘 다 못 찾는 값이 됐다. 이제 `|` 가 정본이다.
+       옛 표(· 또는 ,)도 그대로 받되, **통째로 선택지와 맞으면 안 나눈다.**
+    """
     if not v:
         return []
-    parts = [p.strip() for p in v.replace(',', '·').split('·')]
+    s = str(v)
+    if '|' in s:
+        return [p.strip() for p in s.split('|') if p.strip()]
+    if options and norm(s) in {norm(o) for o in options}:
+        return [s.strip()]                     # 「원가·단가」 같은 한 덩어리
+    parts = [p.strip() for p in s.replace(',', '·').split('·')]
     return [p for p in parts if p]
+
+
+def _key_or_text(items, text):
+    """라벨이면 key 로, 아니면 적은 그대로. 직접 적는 것도 받는 칸(데이터 종류)에 쓴다.
+
+    ⚠️ 라벨을 그대로 담으면 불러오기→붙여넣기를 한 번 돌 때마다 표준 값이 「직접 적은 값」으로
+       바뀐다 — 왕복해도 같아야 한다.
+    """
+    n = norm(text)
+    for it in items:
+        if norm(it['label']) == n or norm(it['key']) == n:
+            return it['key']
+    return text.strip()
 
 
 def _label_key(items, text, what):
@@ -182,9 +209,13 @@ def run(division_id, sector, kind, text, actor, dry_run=True, mode='add'):
 
     out, made, reused, errors, updated = [], 0, 0, 0, 0
     for (line, cells) in body:
+        # ⚠️ 줄마다 되돌림점을 둔다 — 그러지 않으면 **오류라고 말해 놓고 저장된다.**
+        #    구간이 딱 그랬다: 「넣지 못했습니다」를 띄우고 실제로는 들어가 있었다.
+        mark = db.session.begin_nested()
         try:
             status, what, changes = _one(division_id, sector, kind, spec, cell, cells,
                                          actor, dry_run, T, mode=mode)
+            mark.commit()
             if status == 'new':
                 made += 1
             elif status == 'update':
@@ -193,6 +224,8 @@ def run(division_id, sector, kind, text, actor, dry_run=True, mode='add'):
                 reused += 1
             out.append({'line': line, 'status': status, 'name': what, 'changes': changes})
         except Exception as e:                                  # noqa: BLE001 — 줄마다 이유를 남긴다
+            if mark.is_active:
+                mark.rollback()
             errors += 1
             out.append({'line': line, 'status': 'error', 'name': cell(cells, spec['required'][0]),
                         'message': str(e) if isinstance(e, (TableFormatError, S.Refused)) else '넣지 못했습니다.'})
@@ -206,10 +239,16 @@ def run(division_id, sector, kind, text, actor, dry_run=True, mode='add'):
 
 
 def _same(a, b):
-    """값이 같은가 — 목록은 차례를 따지지 않고, 글은 앞뒤 공백을 무시한다."""
+    """값이 같은가 — 목록은 차례를 따지지 않고, 글은 앞뒤 공백을 무시한다.
+
+    ⚠️ 담당 부서처럼 **숫자인 칸**도 온다. 예전엔 그걸 글자처럼 다듬으려다 터졌고,
+       그래서 부서가 붙은 수단은 고치기가 통째로 실패했다(2026-08-30 실측).
+    """
     if isinstance(a, list) or isinstance(b, list):
-        return [norm(x) for x in (a or [])] == [norm(x) for x in (b or [])]
-    return norm('' if a is None else a) == norm('' if b is None else b)
+        return [norm(str(x)) for x in (a or [])] == [norm(str(x)) for x in (b or [])]
+    if isinstance(a, (int, float)) or isinstance(b, (int, float)):
+        return a == b
+    return norm('' if a is None else str(a)) == norm('' if b is None else str(b))
 
 
 def _diff(row, fields):
@@ -290,7 +329,7 @@ def rows_now(division_id, sector, kind):
         for x in T.list_systems():
             _row({'시스템': x['name'], '종류': _lab_of(D.vocab('system_kinds'), x.get('kind')),
                   '주관 조직': x.get('owner_org'),
-                  '생애 단계': ' · '.join(_lab_of(D.vocab('thread_stages'), k) for k in (x.get('stages') or [])),
+                  '생애 단계': SEP.join(_lab_of(D.vocab('thread_stages'), k) for k in (x.get('stages') or [])),
                   '연계 수단': _lab_of(D.vocab('link_means'), x.get('link_means')),
                   '상태': _lab_of(D.vocab('system_status'), x.get('status')), '메모': x.get('note')})
     elif kind == 'org':
@@ -302,19 +341,19 @@ def rows_now(division_id, sector, kind):
                   '출발 조직': g.get('from_org_name'), '출발 시스템': g.get('from_system_name'),
                   '매개 시스템': g.get('via_system_name'), '도착 조직': g.get('to_org_name'),
                   '도착 시스템': g.get('to_system_name'),
-                  '데이터 종류': ' · '.join(g.get('data_kind_labels') or [])})
+                  '데이터 종류': SEP.join(g.get('data_kind_labels') or [])})
     elif kind == 'subject':
         for r in _subjects_of(div, sector):
             _row({'사업부': _div_name(r.division_id), sec.get('subject_label') or '대상': r.name,
-                  '세부': r.detail, '제품군': ' · '.join(r.product_families or []),
+                  '세부': r.detail, '제품군': SEP.join(r.product_families or []),
                   '라인·사업장': r.line, '공정 단계': _lab_of(D.vocab('process_steps'), r.process)})
     elif kind == 'agent':
         for r in _agents_of(div, sector):
             _row({'사업부': _div_name(r.division_id), sec.get('agent_label') or '수단': r.name,
                   '종류': r.kind, '수단 종류': r.kind,
                   '모델 종류': _lab_of(D.vocab('model_kinds'), r.model_kind),
-                  '사용 툴': ' · '.join(r.tools or []),
-                  '불량 유형': ' · '.join(r.defect_types or []),
+                  '사용 툴': SEP.join(r.tools or []),
+                  '불량 유형': SEP.join(r.defect_types or []),
                   '담당 부서': _dept_name(r.department_id)})
     elif kind == 'pair':
         subs = {r.id: r for r in _subjects_of(div, sector)}
@@ -354,8 +393,9 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
                 ('종류', 'kind', _label_key(D.vocab('system_kinds'), cell(cells, '종류'), '시스템 종류'), kind_lab),
                 ('주관 조직', 'owner_org', cell(cells, '주관 조직') or None, None),
                 ('생애 단계', 'stages', [_label_key(D.vocab('thread_stages'), x, '생애 단계')
-                                     for x in _split(cell(cells, '생애 단계'))],
-                 lambda v: ' · '.join(_lab_of(D.vocab('thread_stages'), x) for x in (v or []))),
+                                     for x in _split(cell(cells, '생애 단계'),
+                                                    _labels(D.vocab('thread_stages')))],
+                 lambda v: SEP.join(_lab_of(D.vocab('thread_stages'), x) for x in (v or []))),
                 ('연계 수단', 'link_means', _label_key(D.vocab('link_means'), cell(cells, '연계 수단'), '연계 수단'),
                  lambda v: _lab_of(D.vocab('link_means'), v)),
                 ('상태', 'status', _label_key(D.vocab('system_status'), cell(cells, '상태'), '상태'),
@@ -368,7 +408,8 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
         T.create_system({
             'name': name, 'kind': _label_key(D.vocab('system_kinds'), cell(cells, '종류'), '시스템 종류') or 'other',
             'owner_org': cell(cells, '주관 조직') or None,
-            'stages': [_label_key(D.vocab('thread_stages'), s, '생애 단계') for s in _split(cell(cells, '생애 단계'))],
+            'stages': [_label_key(D.vocab('thread_stages'), s, '생애 단계')
+                       for s in _split(cell(cells, '생애 단계'), _labels(D.vocab('thread_stages')))],
             'link_means': _label_key(D.vocab('link_means'), cell(cells, '연계 수단'), '연계 수단') or 'unknown',
             'status': _label_key(D.vocab('system_status'), cell(cells, '상태'), '상태') or 'active',
             'note': cell(cells, '메모') or None,
@@ -389,7 +430,7 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
         return _segment(division_id, cell, cells, T)
 
     # ── 대상 · 수단 · 연계 ────────────────────────────────────────────────
-    div = _row_division(division_id, cell(cells, '사업부'))
+    div = _row_division(division_id, cell(cells, '사업부'), actor)
     if kind == 'subject':
         name = cell(cells, subject_label)
         if not name:
@@ -401,7 +442,7 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
                 return 'exists', name, []
             fields = [
                 ('세부', 'detail', cell(cells, '세부') or None, None),
-                ('제품군', 'product_families', _split(cell(cells, '제품군')), lambda v: ' · '.join(v or [])),
+                ('제품군', 'product_families', _split(cell(cells, '제품군')), lambda v: SEP.join(v or [])),
                 ('라인·사업장', 'line', cell(cells, '라인·사업장') or None, None),
                 ('공정 단계', 'process',
                  _label_key(D.vocab('process_steps'), cell(cells, '공정 단계'), '공정 단계')
@@ -436,8 +477,8 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
                  _label_key(D.vocab('model_kinds'), cell(cells, '모델 종류'), '모델 종류')
                  if cell(cells, '모델 종류') else None,
                  lambda v: _lab_of(D.vocab('model_kinds'), v)),
-                ('사용 툴', 'tools', _split(cell(cells, '사용 툴')), lambda v: ' · '.join(v or [])),
-                ('불량 유형', 'defect_types', _split(cell(cells, '불량 유형')), lambda v: ' · '.join(v or [])),
+                ('사용 툴', 'tools', _split(cell(cells, '사용 툴')), lambda v: SEP.join(v or [])),
+                ('불량 유형', 'defect_types', _split(cell(cells, '불량 유형')), lambda v: SEP.join(v or [])),
                 ('담당 부서', 'department_id', dept_id, lambda v: _dept_name(v)),
             ]
             ch = _diff(live, fields)
@@ -492,9 +533,10 @@ def _segment(division_id, cell, cells, T):
         'from_org_id': pick(orgs, '출발 조직', '조직'), 'from_system_id': pick(systems, '출발 시스템', '시스템'),
         'via_system_id': pick(systems, '매개 시스템', '시스템'),
         'to_org_id': pick(orgs, '도착 조직', '조직'), 'to_system_id': pick(systems, '도착 시스템', '시스템'),
-        'data_kinds': _split(cell(cells, '데이터 종류')),
+        'data_kinds': [_key_or_text(D.vocab('data_kinds'), x)
+                       for x in _split(cell(cells, '데이터 종류'), _labels(D.vocab('data_kinds')))],
     })
-    return 'new', sname
+    return 'new', sname, []       # ⚠️ 셋이다 — 둘만 돌려주면 run() 이 터지고, 이미 만든 구간은 남는다
 
 
 def _division_or_refuse(division_id):
@@ -503,8 +545,13 @@ def _division_or_refuse(division_id):
     return division_id
 
 
-def _row_division(division_id, text):
-    """사업부 — 하나를 골라 열었으면 그것, 「전체」면 줄의 사업부 열을 본다."""
+def _row_division(division_id, text, actor=None):
+    """사업부 — 하나를 골라 열었으면 그것, 「전체」면 줄의 사업부 열을 본다.
+
+    ⚠️ **줄의 사업부도 권한을 본다.** 하나를 골라 열면 화면이 막지만, 「전체」로 열면
+       사업부가 줄마다 오니 여기서 안 보면 아무나 남의 사업부에 자료를 넣는다.
+       엑셀에서 사업부 열만 고쳐 붙여넣으면 그만이었다(2026-08-30 실측).
+    """
     if isinstance(division_id, int):
         return division_id
     if not text:
@@ -513,4 +560,8 @@ def _row_division(division_id, text):
     row = next((d for d in Division.query.filter_by(is_active=True).all() if norm(d.name) == norm(text)), None)
     if row is None:
         raise TableFormatError(f'사업부 「{text}」 을(를) 못 찾았습니다.')
+    if actor is not None:
+        why = P.deny_reason(actor, row.id, row.name)
+        if why:
+            raise TableFormatError(why)
     return row.id

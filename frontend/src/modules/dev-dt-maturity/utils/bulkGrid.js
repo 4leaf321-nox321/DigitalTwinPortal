@@ -45,17 +45,29 @@ export const applyPaste = (grid, columns, choices, text, r0 = 0, c0 = 0) => {
   return next;
 };
 
+export const SEP = ' | ';   // 여럿을 담는 칸의 정본 구분자(서버의 SEP 과 같다)
+
+/** 한 칸을 여럿으로 — `|` 가 있으면 그것만, 없으면 옛 표(· 또는 ,).
+ *
+ * ⚠️ 값 자체에 · 가 든 것이 있어(「원가·단가」) · 로 나누면 쪼개진다. 그래서 `|` 가 정본이다. */
+export const splitCell = (v) => {
+  const s = String(v ?? '');
+  if (s.includes('|')) return s.split('|').map(p => p.trim()).filter(Boolean);
+  return s.split(/[·,]/).map(p => p.trim()).filter(Boolean);
+};
+
 /** 목록이 있으면 그 글자로 맞춘다 — 없으면 적은 그대로 둔다(화면이 「못 찾음」으로 짚는다). */
 export const canon = (raw, options) => {
   const v = String(raw ?? '').trim();
   if (!v || !options || !options.length) return v;
   const hit = options.find(o => norm(o) === norm(v));
   if (hit) return hit;
-  // 여럿을 담는 칸(생애 단계·데이터 종류) — · 나 쉼표로 나뉜 것을 하나씩 맞춰 본다
-  const parts = v.split(/[·,]/).map(p => p.trim()).filter(Boolean);
+  // 여럿을 담는 칸(생애 단계·데이터 종류) — `|` 가 정본, 옛 표(·,)도 받는다.
+  // 통째로 맞는 것은 위에서 이미 걸렀다 — 「원가·단가」를 쪼개지 않으려는 것이다.
+  const parts = splitCell(v);
   if (parts.length > 1) {
     const mapped = parts.map(p => options.find(o => norm(o) === norm(p)) || p);
-    return mapped.join(' · ');
+    return mapped.join(SEP);
   }
   return v;
 };
@@ -64,8 +76,8 @@ export const canon = (raw, options) => {
 export const isUnknown = (value, options) => {
   const v = String(value ?? '').trim();
   if (!v || !options || !options.length) return false;
-  return v.split(/[·,]/).map(p => p.trim()).filter(Boolean)
-    .some(p => !options.some(o => norm(o) === norm(p)));
+  if (options.some(o => norm(o) === norm(v))) return false;   // 통째로 맞으면 됐다(「원가·단가」)
+  return splitCell(v).some(p => !options.some(o => norm(o) === norm(p)));
 };
 
 /** 빈 줄(전부 비었음)은 뺀다 — 표 아래 남은 줄까지 서버에 보내면 오류만 늘어난다. */

@@ -134,23 +134,40 @@ export default async function run() {
         && document.querySelector('input[aria-label="1행 세부"]').value === '1.2m',
         '⑧ 표에 지금 값이 채워진다');
 
-    // 고치기를 안 켜면 예전처럼 새것만
-    calls.length = 0;
-    await click(byText('button', '미리보기 (2줄)')); await settle(60);
-    const add = calls.find(c => c.method === 'POST' && (c.url || '').endsWith('/bulk'));
-    say(add?.body?.mode === 'add', `⑧ 기본은 새것만: mode=${add?.body?.mode}`);
-
-    // 켜면 미리보기가 바뀔 값을 보여 준다
-    await click(document.querySelector('input[aria-label="있는 것은 고치기"]')); await settle();
-    say(!html().includes('아직 저장하지 않았습니다'), '⑧ 고치기를 켜면 앞선 미리보기는 버린다');
+    // ⚠️ 불러왔다는 건 **고치러 왔다**는 뜻이다 — 켜 두지 않으면 미리보기가 전부
+    //    「이미 있음」으로 끝나 아무 일도 안 한 것처럼 보인다(2026-08-30).
+    say(document.querySelector('input[aria-label="있는 것은 고치기"]').checked,
+        '⑧ 불러오면 고치기가 켜진다');
     calls.length = 0;
     await click(byText('button', '미리보기 (2줄)')); await settle(60);
     const upd = calls.find(c => c.method === 'POST' && (c.url || '').endsWith('/bulk'));
-    say(upd?.body?.mode === 'update', `⑧ 켜면 mode=update`);
+    say(upd?.body?.mode === 'update', `⑧ 그대로 미리보면 mode=update`);
     say(html().includes('1.2m') && html().includes('1.5m'), '⑧ 무엇이 무엇으로 바뀌는지 보여 준다');
     say(html().includes('고침') && html().includes('그대로'), '⑧ 줄마다 어떻게 될지');
     say(byText('button', '새로 0 · 고침 1 넣기') != null, '⑧ 넣기 단추가 몇 건인지 말해 준다');
+
+    // 끄면 예전처럼 새것만 — 앞선 미리보기는 뜻이 달라졌으니 버린다
+    await click(document.querySelector('input[aria-label="있는 것은 고치기"]')); await settle();
+    say(!html().includes('아직 저장하지 않았습니다'), '⑧ 고치기를 끄면 앞선 미리보기는 버린다');
+    calls.length = 0;
+    await click(byText('button', '미리보기 (2줄)')); await settle(60);
+    const add = calls.find(c => c.method === 'POST' && (c.url || '').endsWith('/bulk'));
+    say(add?.body?.mode === 'add', `⑧ 끄면 새것만: mode=${add?.body?.mode}`);
     await unmount();
+
+    // ⑨ 샘플 뷰에서는 쓸 수 없다고 말한다(2026-08-30)
+    // ⚠️ 목업에는 일괄 입력의 재료(머리글·선택지)가 없다. 그냥 두면 종류도 표도 없는
+    //    **빈 상자**가 열려 사람이 무엇이 잘못됐는지 모른다.
+    const { setSampleMode } = await import('../../src/modules/dev-dt-maturity/sample/sampleStore');
+    await setSampleMode(true);
+    calls.length = 0;
+    await render(<BulkInputModal divisionId={1} divisionName="MX" sector="simulation" onClose={() => {}} />);
+    await settle(60);
+    say(html().includes('샘플 뷰에서는 일괄 입력을 쓸 수 없습니다'), '⑨ 샘플 뷰에서는 그렇다고 말한다');
+    say(!calls.find(c => (c.url || '').includes('/bulk/kinds')), '⑨ 목업을 묻지도 않는다');
+    say(byText('button', '지금 자료 불러오기') == null, '⑨ 표도 단추도 안 띄운다');
+    await unmount();
+    await setSampleMode(false);
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);
   }
