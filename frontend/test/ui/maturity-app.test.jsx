@@ -25,6 +25,7 @@ const PROPOSALS = [{ id: 1, pair_id: 5, division_id: 17, kind: 'assess', axis: '
 const answer = (url) => {
   const path = decodeURIComponent(String(url)).replace(/^.*\/api\/dev-dt-maturity/, '');
   // 확인 대기 — 샘플에는 없다. 헤더 단추가 뜨게 만들어 **제 창이 열리는지** 본다.
+  if (path.includes('/approve') || path.includes('/reject')) { PROPOSALS.length = 0; return { proposal: {}, pair: {} }; }
   if (path.startsWith('/proposals/count')) return { pending: PROPOSALS.length };
   if (path.startsWith('/proposals')) return PROPOSALS;
   if (path in SAMPLE) return SAMPLE[path];
@@ -47,7 +48,7 @@ const quiet = (fn) => {
 
 export default async function run() {
   const { say, done } = suite();
-  fakeFetch(({ url }) => answer(url));
+  const calls = fakeFetch(({ url }) => answer(url));
   return quiet(async () => {
 
   /** 한 걸음 — 터져도 여기서 잡고 다음으로 간다. */
@@ -150,6 +151,15 @@ export default async function run() {
       if (dlgs.length !== 1) throw new Error(`창이 ${dlgs.length}개 열렸습니다: ${dlgs}`);
       if (dlgs[0] !== '확인 대기') throw new Error(`「${dlgs[0]}」 창이 열렸습니다`);
       if (!html().includes('AI 가 적은 근거')) throw new Error('근거가 안 보입니다');
+      // ⚠️ 승인하면 **판이 저절로 다시 읽혀야** 한다 — 새로고침을 눌러야 보이면
+      //    사람은 승인이 안 먹은 줄 안다(2026-08-30).
+      calls.length = 0;
+      await click(document.querySelector('button[aria-label="낙하 시험 적용 범위 승인"]'));
+      await settle(80);
+      const iAp = calls.findIndex(c => c.url.includes('/proposals/1/approve'));
+      const iBd = calls.findIndex((c, k) => k > iAp && c.url.includes('/board'));
+      if (iAp < 0) throw new Error('승인이 안 갔습니다');
+      if (iBd < 0) throw new Error('승인 뒤에 판을 다시 안 읽습니다 — 새로고침해야 보인다');
       const close = byText('button', '닫기') || document.querySelector('[title="닫기"]');
       if (close) { await click(close); await settle(40); }
     });
