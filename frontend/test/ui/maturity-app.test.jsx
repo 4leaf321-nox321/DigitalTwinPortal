@@ -17,8 +17,16 @@ import DevDtMaturityApp from '../../src/modules/dev-dt-maturity/DevDtMaturityApp
 import SAMPLE from '../../src/modules/dev-dt-maturity/sample/sample-data.json';
 
 /** 샘플에서 답을 찾는다 — 똑같은 주소가 없으면 물음표 앞이 같은 것으로. */
+const PROPOSALS = [{ id: 1, pair_id: 5, division_id: 17, kind: 'assess', axis: 'scope',
+  axis_label: '적용 범위', sector: 'simulation', subject_name: '낙하 시험', agent_name: '낙하 해석',
+  payload: { rung: 'basic' }, note: 'AI 가 적은 근거', now: null, actor_name: '홍',
+  created_at: '2026-08-30T10:00:00', status: 'pending' }];
+
 const answer = (url) => {
   const path = decodeURIComponent(String(url)).replace(/^.*\/api\/dev-dt-maturity/, '');
+  // 확인 대기 — 샘플에는 없다. 헤더 단추가 뜨게 만들어 **제 창이 열리는지** 본다.
+  if (path.startsWith('/proposals/count')) return { pending: PROPOSALS.length };
+  if (path.startsWith('/proposals')) return PROPOSALS;
   if (path in SAMPLE) return SAMPLE[path];
   const base = path.split('?')[0];
   const near = Object.keys(SAMPLE).find(k => k.split('?')[0] === base);
@@ -128,6 +136,23 @@ export default async function run() {
         if (close) { await click(close); await settle(40); }
       });
     };
+    // ⚠️ 예전에는 ModalHost 가 모르는 갈래를 다 받아 **엉뚱한 창**이 열렸다 —
+    //    「확인 대기」를 눌렀더니 「시뮬레이션 관리」가 떴다(2026-08-30).
+    await step('⑦ 확인 대기 → 제 창이 열린다', async () => {
+      await click(byText('button', '시뮬레이션')); await settle(40);
+      const btn = byText('button', '확인 대기');
+      if (!btn) throw new Error('헤더에 「확인 대기」가 없습니다');
+      await click(btn); await settle(60);
+      // ⚠️ **몇 개**인지도 본다 — 버그는 창을 둘 열었다(확인 대기 뒤에 시뮬레이션 관리).
+      //    첫 번째만 보면 통과해 버린다.
+      const dlgs = [...document.querySelectorAll('[role="dialog"]')]
+        .map(d => d.getAttribute('aria-label'));
+      if (dlgs.length !== 1) throw new Error(`창이 ${dlgs.length}개 열렸습니다: ${dlgs}`);
+      if (dlgs[0] !== '확인 대기') throw new Error(`「${dlgs[0]}」 창이 열렸습니다`);
+      if (!html().includes('AI 가 적은 근거')) throw new Error('근거가 안 보입니다');
+      const close = byText('button', '닫기') || document.querySelector('[title="닫기"]');
+      if (close) { await click(close); await settle(40); }
+    });
     await openClose('설정', '시뮬레이션');
     await openClose('시험 항목 관리', '시뮬레이션');
     await openClose('시뮬레이션 관리', '시뮬레이션');

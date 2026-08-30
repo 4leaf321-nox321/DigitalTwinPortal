@@ -65,6 +65,9 @@ const ModalHost = ({ kind, divisionId, divisionName, divisions = [], denyReason,
     return { bySubject, byAgent };
   }, [pairs]);
 
+  // ⚠️ 모르는 갈래는 **안 그린다.** 예전에는 subject 가 아니면 전부 agent 로 떨어져,
+  //    「확인 대기」를 눌렀는데 「시뮬레이션 관리」가 열렸다(2026-08-30).
+  if (!['subject', 'agent', 'import'].includes(kind)) return null;
   if (kind === 'import') {
     const target = allMode
       ? (divisions.find(d => d.id === importDivision) || divisions.find(d => !d.deny_reason) || divisions[0])

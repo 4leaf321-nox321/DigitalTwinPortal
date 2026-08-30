@@ -258,7 +258,10 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                           sector={sector} canEdit={!division?.deny_reason} denyReason={division?.deny_reason || null}
                           onClose={() => setModal(null)} onChanged={bump} />
         )}
-        {modal && !['settings', 'system', 'org', 'thread', 'bulk'].includes(modal.kind) && defs && divisionId && (
+        {/* ⚠️ **화이트리스트**다. 예전에는 「이것들만 빼고 ModalHost」였는데, 새 창을 더할 때
+            목록에 안 넣으면 ModalHost 가 받아 **엉뚱한 창**(수단 관리)이 열렸다 —
+            2026-08-30 「확인 대기」를 눌렀더니 「시뮬레이션 관리」가 떴다. */}
+        {modal && ['subject', 'agent', 'import'].includes(modal.kind) && defs && divisionId && (
           <ModalHost kind={modal.kind} initialId={modal.id ?? null} divisionId={divisionId} divisionName={divisionId === 'all' ? '전체' : division?.name} divisions={divisions}
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      sectorDef={(defs.sectors || []).find(s => s.key === sector)} accuracyRules={defs.accuracy_rules || []}
