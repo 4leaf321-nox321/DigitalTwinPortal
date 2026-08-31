@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Target, X, Search, Calendar, User, Building2, CheckCircle2, Clock, Users, Briefcase, Download, Trash2, RotateCcw, AlertTriangle, LayoutGrid, List, Settings, GripVertical, ChevronUp, ChevronDown, ArrowRight, Table2, Link2 } from 'lucide-react';
+import { FileText, Target, X, Search, Calendar, User, Building2, CheckCircle2, Clock, Users, Briefcase, Download, Trash2, RotateCcw, AlertTriangle, LayoutGrid, List, Settings, GripVertical, ChevronUp, ChevronDown, ArrowRight, Table2, Link2, CalendarCheck } from 'lucide-react';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { todayLocalYmd } from '../../../../shared/utils/localDate';
 // 수준값의 0 과 미입력은 다른 뜻이다. `|| ''` 로 다루면 0 이 사라진다.
@@ -10,6 +10,7 @@ import { compareProjects, sortDivisionNames } from '../../utils/divisionOrder';
 // 상세 과제 정보·마일스톤 — '결과 보고서' 와 **같은 컴포넌트**를 쓴다.
 // 같은 내용을 두 양식으로 보여주면 사람이 다른 것으로 읽는다(2026-08-08 통합).
 import ProjectDetailModal from './ProjectDetailModal';
+import { completionTable, cellCounts, cellProjects } from '../../utils/completionMonth';
 
 const Container = styled.div`
   display: flex;
@@ -1433,6 +1434,93 @@ const PivotAxisOrderActions = styled.div`
 `;
 
 // 피봇 축 필드 옵션
+/* ── 완료 현황 (2026-08-31) ───────────────────────────────────────────────
+   사업부 × 12개월. 칸의 앞 숫자가 **완료**, 뒤가 **아직**. 지연은 주황으로 가른다.
+   별표는 「완료인데 완료일이 없어 종료 월로 셌다」는 뜻 — 그 수가 곧 자료 품질이다. */
+const CmpWrap = styled.div`
+  display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem 2rem 2rem;
+  overflow: auto; flex: 1; min-height: 0;
+`;
+const CmpCard = styled.div`
+  background: white; border: 1px solid #e2e8f0; border-radius: 1rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06); overflow: hidden;
+`;
+const CmpHead = styled.div`
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.85rem 1.1rem; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+  font-size: 0.85rem; font-weight: 700; color: #334155;
+`;
+const CmpNote = styled.span`margin-left: auto; font-size: 0.75rem; font-weight: 500; color: #64748b;`;
+const ShowToggle = styled.div`display: inline-flex; border: 1px solid #cbd5e1; border-radius: 0.5rem; overflow: hidden;`;
+const ShowBtn = styled.button`
+  border: none; cursor: pointer; font-family: inherit; font-size: 0.78rem; font-weight: 600;
+  padding: 0.3rem 0.75rem; background: ${p => (p.$on ? '#0f766e' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};
+  & + & { border-left: 1px solid #cbd5e1; }
+`;
+const CmpScroll = styled.div`overflow-x: auto;`;
+const CmpTable = styled.table`
+  width: 100%; border-collapse: collapse; font-size: 0.8rem;
+  th, td { padding: 0.4rem 0.45rem; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap; }
+  th { font-size: 0.7rem; color: #64748b; font-weight: 700; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  th:first-child, td:first-child { text-align: left; min-width: 7rem; font-weight: 600; color: #1e293b; }
+  /* 12개월과 그 뒤(범위 밖·달 모름·계)를 가른다 — 세는 뜻이 다르다 */
+  th.edge, td.edge { border-left: 1px solid #e2e8f0; }
+  tbody tr:hover td { background: #f8fafc; }
+  tfoot td { font-weight: 700; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+`;
+const CmpCell = styled.button`
+  border: none; background: ${p => (p.$on ? '#ccfbf1' : 'transparent')}; border-radius: 0.35rem;
+  font-family: inherit; font-size: 0.8rem; padding: 0.15rem 0.4rem; cursor: ${p => (p.$empty ? 'default' : 'pointer')};
+  font-variant-numeric: tabular-nums; color: #94a3b8; min-width: 3.2rem;
+  &:hover { background: ${p => (p.$empty ? 'transparent' : '#f1f5f9')}; }
+  b { color: #0f766e; font-weight: 700; }               /* 완료 */
+  i { font-style: normal; color: #64748b; }             /* 아직 */
+  i.late { color: #c2410c; font-weight: 700; }          /* 기한이 지났는데 아직 */
+  sup { color: #b45309; font-weight: 700; }             /* 완료일이 없어 종료 월로 센 것 */
+`;
+const CmpPickHead = styled.div`
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1.1rem;
+  border-bottom: 1px solid #e2e8f0; background: #f0fdfa; font-size: 0.85rem; font-weight: 700; color: #0f766e;
+`;
+const CmpRow = styled.div`
+  display: grid; grid-template-columns: 5rem 1fr 8rem 7rem; gap: 0.75rem; align-items: center;
+  padding: 0.5rem 1.1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.82rem; cursor: pointer;
+  &:hover { background: #f8fafc; }
+  .code { color: #64748b; font-size: 0.75rem; }
+  .name { color: #1e293b; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .when { color: #64748b; font-size: 0.75rem; text-align: right; }
+`;
+const CmpTag = styled.span`
+  display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+  background: ${p => (p.$k === 'done' ? '#ccfbf1' : p.$k === 'late' ? '#ffedd5' : '#f1f5f9')};
+  color: ${p => (p.$k === 'done' ? '#0f766e' : p.$k === 'late' ? '#c2410c' : '#64748b')};
+`;
+const CmpEmpty = styled.div`padding: 1.5rem; text-align: center; color: #94a3b8; font-size: 0.85rem;`;
+
+/** 칸 하나 — 앞이 완료, 뒤가 아직. 둘 다 0 이면 누를 것이 없다. */
+const CmpCellView = ({ cell, show, on, onPick }) => {
+  const n = cellCounts(cell, show);
+  const empty = n.done === 0 && n.open === 0;
+  return (
+    <CmpCell type="button" $on={on} $empty={empty} disabled={empty}
+             onClick={empty ? undefined : onPick}
+             title={empty ? '' : `완료 ${n.done}건${n.estimated ? ` (완료일 미기재 ${n.estimated}건)` : ''} · 미완료 ${n.open}건${n.late ? ` (기한 경과 ${n.late}건)` : ''}`}>
+      {empty ? '·' : (
+        <>
+          {n.done > 0 && <b>{n.done}{n.estimated > 0 && <sup>*</sup>}</b>}
+          {n.done > 0 && n.open > 0 && ' · '}
+          {n.open > 0 && <i className={n.late > 0 ? 'late' : undefined}>{n.open}</i>}
+        </>
+      )}
+    </CmpCell>
+  );
+};
+
+/** 선택한 항목의 이름 — 표의 열 이름과 같은 말을 쓴다. */
+const cmpPickLabel = (key) => (typeof key === 'number' ? `${key}월`
+  : key === 'out' ? '기간 외 (해당 연도 밖 완료)'
+    : key === 'none' ? '미정 (계획 종료월 없음)' : '합계');
+
 const PIVOT_FIELD_OPTIONS = [
   { value: '사업부', label: '사업부' },
   { value: '프로세스', label: '프로세스' },
@@ -1659,6 +1747,9 @@ const AllProjectsView = ({
   const [showTrash, setShowTrash] = useState(false);
   const [viewMode, setViewMode] = useState('all'); // 'all' | 'grouped' | 'pivot' | 'performance'
   const [divisionFilter, setDivisionFilter] = useState(''); // 그룹별 보기 사업부 필터
+  // 완료 현황 — 무엇을 셀까(완료만·아직만·둘 다)와 지금 고른 칸
+  const [cmpShow, setCmpShow] = useState('both');
+  const [cmpPick, setCmpPick] = useState(null);   // {division, key} key = 1~12 | 'out' | 'none' | 'total'
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [tempColumnSettings, setTempColumnSettings] = useState({ column1: [], column2: [], column3: [], column4: [] });
 
@@ -2045,6 +2136,17 @@ const AllProjectsView = ({
   const sortedProjects = useMemo(
     () => [...filteredProjects].sort(compareProjects(settingsData)),
     [filteredProjects, settingsData]);
+
+  /* 완료 현황 — 사업부 × 12개월. 규칙은 utils/completionMonth 에 있다.
+     ⚠️ 위의 검색·필터가 **그대로 걸린다**(sortedProjects 를 쓴다) — 표의 숫자와
+        다른 보기의 목록이 갈리면 안 된다. */
+  const cmpTable = useMemo(
+    () => completionTable({
+      projects: sortedProjects,
+      year: currentYear,
+      divisions: sortDivisionNames([...new Set(sortedProjects.map(p => p.사업부).filter(Boolean))], settingsData),
+    }),
+    [sortedProjects, currentYear, settingsData]);
 
   /*
     사업부 칩·필터의 후보 목록. 순서는 설정을 따른다.
@@ -2695,6 +2797,14 @@ const AllProjectsView = ({
                 <Link2 size={14} />
                 성과 보기
               </ViewModeButton>
+              <ViewModeButton
+                $active={viewMode === 'completion'}
+                onClick={() => setViewMode('completion')}
+                title="월별 과제 완료 및 계획 현황"
+              >
+                <CalendarCheck size={14} />
+                완료 현황
+              </ViewModeButton>
             </ViewModeToggle>
           )}
 
@@ -3343,6 +3453,146 @@ const AllProjectsView = ({
               );
             })()}
           </PerformanceViewContainer>
+        ) : viewMode === 'completion' && !showTrash ? (
+          /*
+            완료 현황 (2026-08-31 요청) — 사업부 × 12개월. **임원 보고에 그대로 띄운다.**
+
+            ⚠️ **완료와 미완료는 기준이 다르다.**
+                 완료   실제로 끝난 달 = 액션아이템 완료일 중 가장 늦은 것
+                 미완료 끝내기로 한 달 = 종료 월
+               한 표에 두 기준이 섞이므로 머리에 그 사실을 적어 둔다. 안 적으면
+               「12월 마감인데 왜 3월 칸에 있지」를 매번 다시 판단하게 된다.
+
+            ⚠️ 완료인데 완료일이 없는 과제가 많다(액션아이템을 안 쓰고 상태만 바꾼 것).
+               종료 월로 대신 세되 **별표**로 드러낸다 — 그 수가 곧 자료 품질이다.
+
+            숫자와 목록을 토글로 가르지 않는다. 칸을 누르면 아래에 그 과제가 선다.
+          */
+          <CmpWrap>
+            <CmpCard>
+              <CmpHead>
+                <CalendarCheck size={16} />
+                <span>{currentYear}년 월별 과제 완료 현황</span>
+                <ShowToggle role="group" aria-label="집계 대상">
+                  {[['both', '전체'], ['done', '완료'], ['pending', '미완료']].map(([k, lab]) => (
+                    <ShowBtn key={k} type="button" $on={cmpShow === k}
+                             aria-pressed={cmpShow === k}
+                             onClick={() => { setCmpShow(k); setCmpPick(null); }}>{lab}</ShowBtn>
+                  ))}
+                </ShowToggle>
+                <CmpNote>
+                  <b style={{ color: '#0f766e' }}>완료</b> 실적 완료일 기준(액션아이템 최종 완료일) ·
+                  {' '}<b style={{ color: '#64748b' }}>미완료</b> 계획 종료월 기준 ·
+                  {' '}<b style={{ color: '#c2410c' }}>주황</b> 기한 경과 ·
+                  {' '}<b style={{ color: '#b45309' }}>*</b> 완료일 미기재(계획 종료월 적용)
+                </CmpNote>
+              </CmpHead>
+              <CmpScroll>
+                <CmpTable>
+                  <thead>
+                    <tr>
+                      <th>사업부</th>
+                      {cmpTable.months.map(m => <th key={m}>{m}월</th>)}
+                      <th className="edge" title="완료일이 해당 연도 밖입니다. 특정 월에 합산하지 않고 별도 집계합니다.">기간 외</th>
+                      <th title="계획 종료월이 입력되지 않아 귀속 월을 확정할 수 없습니다.">미정</th>
+                      <th>합계</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cmpTable.rows.map(r => (
+                      <tr key={r.division}>
+                        <td>{r.division}</td>
+                        {r.cells.map((c, i) => (
+                          <td key={i}>
+                            <CmpCellView cell={c} show={cmpShow}
+                                         on={cmpPick?.division === r.division && cmpPick?.key === i + 1}
+                                         onPick={() => setCmpPick({ division: r.division, key: i + 1 })} />
+                          </td>
+                        ))}
+                        <td className="edge">
+                          <CmpCellView cell={r.out} show={cmpShow}
+                                       on={cmpPick?.division === r.division && cmpPick?.key === 'out'}
+                                       onPick={() => setCmpPick({ division: r.division, key: 'out' })} />
+                        </td>
+                        <td>
+                          <CmpCellView cell={r.none} show={cmpShow}
+                                       on={cmpPick?.division === r.division && cmpPick?.key === 'none'}
+                                       onPick={() => setCmpPick({ division: r.division, key: 'none' })} />
+                        </td>
+                        <td>
+                          <CmpCellView cell={r.total} show={cmpShow}
+                                       on={cmpPick?.division === r.division && cmpPick?.key === 'total'}
+                                       onPick={() => setCmpPick({ division: r.division, key: 'total' })} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>합계</td>
+                      {cmpTable.totals.cells.map((c, i) => (
+                        <td key={i}>
+                          <CmpCellView cell={c} show={cmpShow}
+                                       on={cmpPick?.division === '합계' && cmpPick?.key === i + 1}
+                                       onPick={() => setCmpPick({ division: '합계', key: i + 1 })} />
+                        </td>
+                      ))}
+                      <td className="edge"><CmpCellView cell={cmpTable.totals.out} show={cmpShow}
+                        on={cmpPick?.division === '합계' && cmpPick?.key === 'out'}
+                        onPick={() => setCmpPick({ division: '합계', key: 'out' })} /></td>
+                      <td><CmpCellView cell={cmpTable.totals.none} show={cmpShow}
+                        on={cmpPick?.division === '합계' && cmpPick?.key === 'none'}
+                        onPick={() => setCmpPick({ division: '합계', key: 'none' })} /></td>
+                      <td><CmpCellView cell={cmpTable.totals.total} show={cmpShow}
+                        on={cmpPick?.division === '합계' && cmpPick?.key === 'total'}
+                        onPick={() => setCmpPick({ division: '합계', key: 'total' })} /></td>
+                    </tr>
+                  </tfoot>
+                </CmpTable>
+              </CmpScroll>
+            </CmpCard>
+
+            {/* 고른 칸의 과제 — 표에서 이어진다. 누르면 과제 상세가 열린다. */}
+            <CmpCard>
+              <CmpPickHead>
+                <FileText size={15} />
+                {cmpPick ? `${cmpPick.division} · ${cmpPickLabel(cmpPick.key)}` : '항목을 선택하면 해당 과제가 표시됩니다'}
+                {cmpPick && (
+                  <button type="button" onClick={() => setCmpPick(null)}
+                          style={{ marginLeft: 'auto', border: 'none', background: 'transparent',
+                                   color: '#64748b', cursor: 'pointer', fontSize: '0.78rem' }}>선택 해제</button>
+                )}
+              </CmpPickHead>
+              {(() => {
+                if (!cmpPick) return <CmpEmpty>표에서 월을 선택하십시오.</CmpEmpty>;
+                const row = cmpPick.division === '합계'
+                  ? cmpTable.totals
+                  : cmpTable.rows.find(r => r.division === cmpPick.division);
+                const cell = !row ? null
+                  : (typeof cmpPick.key === 'number' ? row.cells[cmpPick.key - 1] : row[cmpPick.key]);
+                const list = cell ? cellProjects(cell, cmpShow) : [];
+                if (!list.length) return <CmpEmpty>해당 항목에 과제가 없습니다.</CmpEmpty>;
+                return list.map(p => (
+                  <CmpRow key={p.id || p.uuid} onClick={() => handleCardClick(p)}>
+                    <span className="code">{p.과제코드 || p.코드 || ''}</span>
+                    <span className="name" title={p.과제명}>{p.과제명}</span>
+                    <span><CmpTag $k={p._slot.kind}>
+                      {/* ⚠️ 「지연」이 아니라 「기한 경과」다 — 진행상태에 이미 '지연' 값이 있어
+                          같은 말을 쓰면 두 가지가 섞여 읽힌다. */}
+                      {p._slot.kind === 'done' ? '완료' : p._slot.kind === 'late' ? '기한 경과' : '예정'}
+                    </CmpTag></span>
+                    <span className="when">
+                      {p._slot.doneDate
+                        ? p._slot.doneDate
+                        : p._slot.estimated
+                          ? `계획 종료 ${p.종료}월*`
+                          : (p.종료 ? `계획 종료 ${p.종료}월` : '계획 종료월 미정')}
+                    </span>
+                  </CmpRow>
+                ));
+              })()}
+            </CmpCard>
+          </CmpWrap>
         ) : (
           /* 전체 보기 (기본) */
           <ProjectGrid>
