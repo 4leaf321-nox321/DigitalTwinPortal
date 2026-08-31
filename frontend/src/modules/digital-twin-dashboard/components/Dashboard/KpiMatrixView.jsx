@@ -35,11 +35,13 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { AlertCircle, Loader2, RefreshCw, X, Grid, ChevronRight, ChevronDown, MessageSquare, Settings, Layers } from 'lucide-react';
+import { AlertCircle, Loader2, RefreshCw, X, Grid, ChevronRight, ChevronDown, MessageSquare, Settings, Layers, ClipboardList, Download } from 'lucide-react';
 
 import { fetchKpiMatrixV2, fetchSystemSettings, saveSystemSettings } from '../../services/settingsApi';
 import { useAuth } from '../../../../contexts/AuthContext';
 import KpiContributionFlow from './KpiContributionFlow';
+import { orgStatusOf } from '../../utils/methodStatus';
+import { exportKpiStatus } from '../../services/exportKpiStatus';
 import BulkKpiLinkModal from './BulkKpiLinkModal';
 
 /**
@@ -1641,6 +1643,77 @@ const DivTabBadge = styled.span`
   color: ${(p) => (p.$on ? '#fff' : '#475569')};
 `;
 
+/* 사업부 탭 줄의 **오른쪽 끝**. 사업부를 고르는 것이 아니라 전부를 한 판에 보는
+   단추라, 탭과 같은 모양을 쓰면 「또 하나의 사업부」로 읽힌다 — 점선 테두리로 가른다. */
+const StatusBtn = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px dashed ${(p) => (p.$warn ? '#f59e0b' : '#cbd5e1')};
+  background: ${(p) => (p.$warn ? '#fffbeb' : '#fff')};
+  color: ${(p) => (p.$warn ? '#b45309' : '#64748b')};
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover { border-style: solid; background: ${(p) => (p.$warn ? '#fef3c7' : '#f8fafc')}; }
+  b { font-variant-numeric: tabular-nums; }
+`;
+
+/*
+  현황 표 — 조직마다 한 줄, **두 단**(과제→연계 · 연계→기여방법).
+
+  두 단을 세로줄로 가른다. 섞어 두면 「과제 4건인데 연결 7건」이 모순처럼 보인다 —
+  왼쪽은 과제를 세고 오른쪽은 연결을 센다는 것이 눈에 보여야 한다.
+*/
+const StatTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  th, td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #f1f5f9; text-align: right; }
+  th { font-size: 0.7rem; color: #64748b; font-weight: 700; background: #f8fafc;
+       position: sticky; top: 0; z-index: 1; }
+  thead tr:last-child th { border-bottom: 1px solid #e2e8f0; }
+  th.grp { text-align: center; color: #334155; font-size: 0.72rem; letter-spacing: 0.02em;
+           border-bottom: 1px solid #e2e8f0; }
+  th:first-child, td:first-child { text-align: left; }
+  /* 두 단의 경계 — 여기서부터 세는 단위가 과제에서 연결로 바뀐다 */
+  th.sep, td.sep { border-left: 1px solid #e2e8f0; }
+  td { font-variant-numeric: tabular-nums; color: #334155; }
+  tbody tr.org { cursor: pointer; }
+  tbody tr.org:hover td { background: #f8fafc; }
+  tbody tr.on td { background: #eef2ff; }
+  /* 사업부 / 기능조직 — 읽는 법이 달라 구획을 나눈다 */
+  tr.band td { background: #f8fafc; color: #64748b; font-size: 0.7rem; font-weight: 700;
+               letter-spacing: 0.03em; padding: 0.3rem 0.5rem; text-align: left; }
+  tfoot td { font-weight: 700; color: #111827; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+  td.bad { color: #b45309; font-weight: 700; }
+  td.bad.zero { color: #94a3b8; font-weight: 500; }
+`;
+/* 비율 한 칸 — 숫자보다 **막대**가 먼저 읽힌다. */
+const FillBar = styled.div`
+  display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end;
+  i { display: block; width: 3.4rem; height: 0.4rem; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+  i > b { display: block; height: 100%; border-radius: 999px;
+          background: ${(p) => (p.$pct >= 80 ? '#10b981' : p.$pct >= 50 ? '#f59e0b' : '#ef4444')}; }
+  span { min-width: 2.4rem; font-variant-numeric: tabular-nums; }
+`;
+/* ⚠️ PanelBody 는 좌우 패딩을 안 준다(과제 줄의 hover 가 폭을 꽉 채워야 해서).
+      그래서 여기 놓는 것은 저마다 PANEL_X 로 여백을 맞춘다 — 안 하면 벽에 붙는다. */
+const PanelPad = styled.div`padding: 0.35rem ${PANEL_X} 0.6rem;`;
+
+/** 비율 한 칸. **없으면 0% 로 칠하지 않는다** — 「안 했다」로 읽혀 없는 안건이 생긴다. */
+const Rate = ({ pct, none }) => (pct === null || pct === undefined
+  ? <span style={{ color: '#94a3b8' }}>{none}</span>
+  : (
+    <FillBar $pct={pct}>
+      <i><b style={{ width: `${pct}%` }} /></i>
+      <span>{pct}%</span>
+    </FillBar>
+  ));
+
 const Split = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -1832,6 +1905,9 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
       한꺼번에 생긴다. 게다가 고를 과제 목록이 이미 그 패널에 떠 있다.
   */
   const [bulk, setBulk] = useState(null);
+  // 기여방법 현황 — 사업부별로 한 판에(2026-08-30 요청)
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [saveErr, setSaveErr] = useState(null);       // 엑셀 저장이 실패하면 조용히 넘기지 않는다
   const [excludedKpiIds, setExcludedKpiIds] = useState(() => new Set());
   const [selOpen, setSelOpen] = useState(false);
 
@@ -2144,6 +2220,13 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
 
     return {
       owners, funcs, quad,
+      /* 조직별 KPI 연계 현황 — 「현황」 모달이 읽는다. 재료가 여기 다 있어 여기서 짠다.
+         ⚠️ 줄의 기준은 **과제의 소속**이다 — 그래야 기능조직도 줄이 서고, 과제·연결이
+            표 전체에서 한 번씩만 세어진다. 자세한 이유는 utils/methodStatus 머리말. */
+      orgStatus: orgStatusOf({ owners, funcs, projects, links, projById, taggedProjects }),
+      /* 엑셀이 「무엇이 남았나」를 적으려면 원재료가 필요하다. 화면이 이미 들고 있는
+         것을 그대로 넘긴다 — 서버를 따로 찌르면 표의 숫자와 파일의 숫자가 갈린다. */
+      statusSource: { owners, funcs, projects, links, projById, taggedProjects, kpis },
       unmatched: data.unmatched || [],
       // 압축은 사업부 관점에만 (위 sectioned 주석 참조)
       catSections: sectioned(rows, true),
@@ -2376,7 +2459,10 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
   if (!model) return null;
 
   const { owners, funcs, catSections, ownerSummary, funcSummary,
-          targetsOf, projectCount, emptyKpis, untaggedCount, quad, unmatched } = model;
+          targetsOf, projectCount, emptyKpis, untaggedCount, quad, unmatched,
+          orgStatus, statusSource } = model;
+  // 단추에 붙는 숫자 — 이 화면의 **할 일**이다(연계 안 된 과제 + 기여방법 빈 연계)
+  const todo = orgStatus.totals.unlinked + orgStatus.totals.missing;
   const funcNameSet = new Set(funcs.map((d) => d.name));
 
   /**
@@ -2569,6 +2655,19 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
                   </DivTab>
                 );
               })}
+              {/* 탭 줄 끝 — 사업부를 하나씩 눌러 보지 않고 **전 조직을 한 판에** 본다.
+                  남은 일이 있으면 단추 자체가 그렇다고 말한다. */}
+              <StatusBtn
+                type="button"
+                $warn={todo > 0}
+                onClick={() => setMethodOpen(true)}
+                title="전 조직의 KPI 연계·기여방법 현황을 한 판에 봅니다"
+              >
+                <ClipboardList size={13} /> 현황
+                {todo > 0 && (
+                  <b>미연계 {orgStatus.totals.unlinked} · 미입력 {orgStatus.totals.missing}</b>
+                )}
+              </StatusBtn>
             </DivTabBar>
           )}
 
@@ -3055,6 +3154,124 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
            서버와 갈리는데, 이 표는 보고에 쓰이는 숫자다. */
         onDone={load}
       />
+
+      {/*
+        KPI 연계 현황 (2026-08-30 요청).
+
+        흐름도의 「기여방법 없음 N건」은 **보고 있는 사업부 하나**의 숫자이고, 연계가
+        아예 없는 과제는 거기 안 잡힌다. 여기서 전 조직을 두 단으로 한 판에 세운다.
+
+            과제 → 연계       단위는 **과제**. 한 과제가 KPI 셋에 걸려도 1건이다.
+            연계 → 기여방법   단위는 **연결**. 같은 과제라도 KPI 마다 따로 적는다.
+
+        줄을 누르면 그 사업부로 옮긴다 — 보고 끝나는 표가 아니라 **가는 문**이다.
+        (기능조직은 사업부별 보기의 탭이 없어 옮길 곳이 없다 — 숫자만 읽는다.)
+      */}
+      {methodOpen && (
+        <Backdrop onClick={() => setMethodOpen(false)}>
+          <Panel onClick={(e) => e.stopPropagation()} style={{ width: 'min(62rem, 100%)' }}
+                 role="dialog" aria-label="KPI 연계 현황">
+            <PanelHead>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>KPI 연계 현황</div>
+                <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: 2 }}>
+                  과제가 KPI에 걸렸는지, 걸린 것마다 「어떻게 기여하는가」가 적혔는지 —
+                  사업부 줄을 누르면 그 사업부로 옮깁니다
+                </div>
+              </div>
+              <PanelHeadRight>
+                {/* 로컬 저장 — 이 표와 **할 일 둘**(미연계 과제·기여방법 미입력)을
+                    엑셀 한 권으로. 숫자만 뽑으면 「몇 건 남았다」까지만 말한다. */}
+                <BulkBtn
+                  onClick={() => {
+                    try {
+                      exportKpiStatus({ year: currentYear, orgStatus, source: statusSource });
+                      setSaveErr(null);
+                    } catch (e) { setSaveErr(e.message || '엑셀을 만들지 못했습니다.'); }
+                  }}
+                  title="현황과 남은 일(미연계 과제 · 기여방법 미입력)을 엑셀 한 권으로 내려받습니다"
+                >
+                  <Download size={13} /> 엑셀로 저장
+                </BulkBtn>
+                <IconButton onClick={() => setMethodOpen(false)}><X size={14} /></IconButton>
+              </PanelHeadRight>
+            </PanelHead>
+            <PanelBody>
+              <PanelPad>
+                {saveErr && (
+                  <div style={{ marginBottom: '0.6rem', padding: '0.5rem 0.7rem', borderRadius: '0.45rem',
+                                background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b',
+                                fontSize: '0.78rem' }}>{saveErr}</div>
+                )}
+                <StatTable>
+                  <thead>
+                    <tr>
+                      <th rowSpan={2}>조직</th>
+                      <th className="grp" colSpan={4}>과제 → KPI 연계</th>
+                      <th className="grp sep" colSpan={4}>연계 → 기여방법</th>
+                    </tr>
+                    <tr>
+                      <th>과제</th><th>연계</th><th>미연계</th><th>연계율</th>
+                      <th className="sep">연결</th><th>정의됨</th><th>미입력</th><th>채움률</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[[true, '사업부 (KPI 보유)'], [false, '기능조직 (사업부 KPI 기여)']].map(([owner, band]) => {
+                      const part = orgStatus.rows.filter((r) => r.isOwner === owner);
+                      if (!part.length) return null;
+                      return (
+                        <React.Fragment key={band}>
+                          <tr className="band"><td colSpan={9}>{band}</td></tr>
+                          {part.map((r) => (
+                            <tr key={r.division}
+                                className={`${owner ? 'org ' : ''}${divView === r.division ? 'on' : ''}`.trim() || undefined}
+                                onClick={owner ? () => {
+                                  setDivView(r.division);
+                                  setLastDiv(r.division);
+                                  setMethodOpen(false);
+                                } : undefined}>
+                              <td style={{ fontWeight: 600, color: '#111827' }}>{r.division}</td>
+                              <td>{r.projects}</td>
+                              <td>{r.linked}</td>
+                              <td className={r.unlinked ? 'bad' : 'bad zero'}>{r.unlinked}</td>
+                              <td><Rate pct={r.linkRate} none="과제 없음" /></td>
+                              <td className="sep">{r.links}</td>
+                              <td>{r.filled}</td>
+                              <td className={r.missing ? 'bad' : 'bad zero'}>{r.missing}</td>
+                              <td><Rate pct={r.fillRate} none="연결 없음" /></td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>합계</td>
+                      <td>{orgStatus.totals.projects}</td>
+                      <td>{orgStatus.totals.linked}</td>
+                      <td className={orgStatus.totals.unlinked ? 'bad' : 'bad zero'}>{orgStatus.totals.unlinked}</td>
+                      <td><Rate pct={orgStatus.totals.linkRate} none="—" /></td>
+                      <td className="sep">{orgStatus.totals.links}</td>
+                      <td>{orgStatus.totals.filled}</td>
+                      <td className={orgStatus.totals.missing ? 'bad' : 'bad zero'}>{orgStatus.totals.missing}</td>
+                      <td><Rate pct={orgStatus.totals.fillRate} none="—" /></td>
+                    </tr>
+                  </tfoot>
+                </StatTable>
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', lineHeight: 1.75 }}>
+                  <b style={{ color: '#334155' }}>과제</b>는 그 조직이 <b>수행</b>하는 것입니다(취소 제외).
+                  기능조직 과제는 기여한 사업부가 아니라 <b>자기 줄</b>에 섭니다 —
+                  그래야 표 전체에서 한 번씩만 세어집니다.<br />
+                  <b style={{ color: '#334155' }}>연결</b>은 (과제 × KPI × 대상) 한 줄 —
+                  기여방법을 적어야 할 자리입니다. 한 과제가 KPI 셋에 걸리면 연결은 3건입니다.<br />
+                  「KPI 선택」에서 감춘 지표도 셈에 들어갑니다 — 채워야 할 것은 보기 설정과 무관합니다.
+                </div>
+              </PanelPad>
+            </PanelBody>
+          </Panel>
+        </Backdrop>
+      )}
 
       {drill && (
         <Backdrop onClick={() => setDrill(null)}>
