@@ -40,7 +40,10 @@ const Table = styled.table`
 `;
 const SubjectCell = styled.td`
   font-weight: 600; color: #1e293b; background: transparent; border-right: 1px solid #e2e8f0; vertical-align: top !important;
-  overflow-wrap: anywhere;   /* 좁으면 줄을 바꾼다 — 연필이 칸 밖으로 밀리지 않게 */
+  /* 좁으면 줄을 바꾼다 — 연필이 칸 밖으로 밀리지 않게. 다만 **anywhere 는 안 된다** —
+     최소 너비가 한 글자가 되어 좁은 화면에서 이 칸부터 짜이고 이름이 세로로 선다
+     (2026-08-31, 디지털 스레드의 구간에서 드러났다). */
+  overflow-wrap: break-word; min-width: 10rem;
   small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }
   position: relative; padding-right: 1.8rem !important;
 `;
@@ -54,7 +57,8 @@ const GroupRow = styled.td`
   font-size: 0.6875rem; font-weight: 700; color: #1e40af; background: #eff6ff; padding: 0.3rem 0.6rem !important;
 `;
 const SimCell = styled.td`
-  color: #1e293b; font-weight: 600; position: relative; padding-right: 1.8rem !important; overflow-wrap: anywhere;
+  color: #1e293b; font-weight: 600; position: relative; padding-right: 1.8rem !important;
+  overflow-wrap: break-word; min-width: 9rem;
   small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
 `;
 // 미평가 배지 — 티는 나되 시끄럽지 않게(호박색).
@@ -78,9 +82,9 @@ const Go = styled.td`
   tr:hover & { color: #1d4ed8; }
 `;
 const Muted = styled.td`color: #94a3b8; font-style: italic;`;
-const DeptCell = styled.td`color: #475569; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; }`;
+const DeptCell = styled.td`color: #475569; font-size: 0.75rem; overflow-wrap: break-word; min-width: 6rem; small { color: #cbd5e1; }`;
 // 사용 툴 · 디지털 트윈 연결 과제 — 제 열로 뺐다(2026-08-29). 과제는 코드가 아니라 **이름**으로.
-const ToolCell = styled.td`color: #64748b; font-size: 0.75rem; overflow-wrap: anywhere; small { color: #cbd5e1; }`;
+const ToolCell = styled.td`color: #64748b; font-size: 0.75rem; overflow-wrap: break-word; min-width: 7rem; small { color: #cbd5e1; }`;
 const ProjCell = styled.td`
   small { color: #cbd5e1; font-size: 0.75rem; }
   display: flex; flex-wrap: wrap; gap: 0.2rem; align-items: center;   /* 과제가 여럿이면 배지가 줄줄이 감긴다 */

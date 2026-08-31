@@ -9,7 +9,13 @@ import PairSide from '../Pair/PairSide';
 // 구간 = 대상(수단 없는 연계)이라 오른쪽은 시뮬레이션 부문의 연계 상세(PairSide)를 그대로 쓴다.
 // 아래 줄에서 구간을 더한다: 스레드 → 표준 구간(또는 이름) → 출발 조직·시스템 / 매개 / 도착 조직·시스템.
 
-const Wrap = styled.div`display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; flex: 1; min-height: 0;`;
+const Wrap = styled.div`
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; flex: 1; min-height: 0;
+  /* ⚠️ 좁은 화면에서는 **위아래로 쌓는다.** 끝까지 반반으로 두면 1366 짜리에서
+     표가 화면의 절반밖에 못 쓰고, 그 좁은 폭을 「구간」 칸 혼자 감당한다.
+     시뷄레이션 목록(ListView)은 진작 이 규칙이 있었다 — 같은 문턴으로 맞춘다(2026-08-31). */
+  @media (max-width: 1100px) { grid-template-columns: 1fr; grid-auto-rows: minmax(20rem, auto); }
+`;
 const Left = styled.div`display: flex; flex-direction: column; min-height: 0; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: white;`;
 const Top = styled.div`flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #1e293b;`;
 const Hint = styled.span`margin-left: auto; font-size: 0.75rem; color: #94a3b8; font-weight: 400;`;
@@ -25,7 +31,13 @@ const GroupTr = styled.tr`
 `;
 const ThreadCell = styled.td`font-weight: 700; color: #1e293b; border-right: 1px solid #e2e8f0; white-space: nowrap; vertical-align: top !important; small { display: block; font-weight: 400; color: #94a3b8; font-size: 0.6875rem; }`;
 const SegCell = styled.td`
-  cursor: pointer; color: #1e293b; position: relative; padding-right: 1.8rem !important; overflow-wrap: anywhere;
+  cursor: pointer; color: #1e293b; position: relative; padding-right: 1.8rem !important;
+  /* ⚠️ 여기는 이 표에서 **유일하게 줄어들 수 있는 칸**이다(나머지는 nowrap).
+     예전엔 overflow-wrap: anywhere 였는데, 그러면 최소 너비가 한 글자가 되어
+     좁은 화면에서 이 칸부터 끝까지 짜인다 — 구간 이름이 세로로 서고 줄 높이가
+     열 배가 됐다. break-word 는 최소 너비를 **가장 긴 낱말**로 지킨다.
+     그래도 모자라면 칸을 짜내지 말고 표가 가로로 흐르게 둔다(Scroll 이 받는다). */
+  overflow-wrap: break-word; min-width: 12rem;
   background: ${p => (p.$on ? '#eff6ff' : 'transparent')}; box-shadow: ${p => (p.$on ? 'inset 3px 0 0 #1d4ed8' : 'none')};
   &:hover { background: ${p => (p.$on ? '#dbeafe' : '#f1f5f9')}; }
   small { color: #94a3b8; font-size: 0.6875rem; margin-left: 0.4rem; }
@@ -141,7 +153,7 @@ const ThreadListView = ({ divisionId, divisions = [], denyReason, axes = [], pai
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
         <Scroll>
           <Table>
-            <thead><tr><th style={{ width: '22%' }}>스레드</th><th>구간</th><th>출발 → 매개 → 도착</th><th style={{ width: '9rem' }}>연결 방식</th><th style={{ width: '2.5rem' }} /></tr></thead>
+            <thead><tr><th style={{ width: '22%' }}>스레드</th><th style={{ minWidth: '12rem' }}>구간</th><th>출발 → 매개 → 도착</th><th style={{ width: '9rem' }}>연결 방식</th><th style={{ width: '2.5rem' }} /></tr></thead>
             <tbody>
               {groups.map((g) => {
                 const rows = g.rows;

@@ -66,7 +66,11 @@ const Td = styled.td`
   &:first-child { position: sticky; left: 0; background: white; z-index: 1; }
 `;
 const SubjectTd = styled.td`
-  padding: 0.45rem 0.6rem; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; background: transparent; vertical-align: top; font-size: 0.8125rem; overflow-wrap: anywhere;
+  padding: 0.45rem 0.6rem; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; background: transparent; vertical-align: top; font-size: 0.8125rem;
+  /* ⚠️ 이 표에서 줄어들 수 있는 칸은 여기뿐이다(Td 는 전부 nowrap). anywhere 로 두면
+     최소 너비가 한 글자가 되어 좁은 화면에서 이름이 세로로 선다 — ThreadListView 의
+     같은 자리 주석 참조. break-word + 바닥값으로 막고, 모자라면 표를 가로로 흘린다. */
+  overflow-wrap: break-word; min-width: 10rem;
 `;
 const SimName = styled.button`border: none; background: transparent; font-family: inherit; font-size: 0.8125rem; font-weight: 600; color: #1e293b; cursor: pointer; padding: 0; text-align: left; &:hover { color: #1d4ed8; text-decoration: underline; }`;
 // 시험 항목 묶음마다 얼룩말 + 묶음 경계선 — 목록 탭과 같은 문법(2026-08-28)
@@ -327,7 +331,7 @@ export const BoardBody = ({ board, changes, changeSets = {}, axes, filters, onFi
             <thead>
               <tr>
                 {isThread && <Th style={{ width: '8%' }}>스레드</Th>}
-                <Th style={{ width: '12%' }}>{isThread ? '구간' : SUBJ}</Th>
+                <Th style={{ width: '12%', minWidth: '10rem' }}>{isThread ? '구간' : SUBJ}</Th>
                 <Th style={{ width: isThread ? '20%' : '12%' }}>{isThread ? '출발 → 매개 → 도착' : AGENT}</Th>
                 {!isThread && <Th style={{ width: '8%' }}>담당 그룹</Th>}
                 {axes.map(a => <Th key={a.key}>{a.label}</Th>)}
