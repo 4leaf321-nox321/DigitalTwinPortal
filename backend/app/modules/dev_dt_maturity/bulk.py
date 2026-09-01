@@ -51,12 +51,13 @@ def kinds_for(sector, division_id=None):
                 # ⚠️ 「공정 단계」다 — 모니터링은 대상의 이름표가 「공정」이라 그냥 「공정」이면
                 #    머리글이 겹쳐 **이름 칸이 공정 단계로 읽힌다**(2026-08-30 실측).
                 'columns': (['사업부', subject_label, '라인·사업장', '공정 단계', '세부'] if sector == 'manufacturing_monitoring'
+                            else ['사업부', subject_label, '법인', '라인', '세부'] if sector == 'factory_optimization'
                             else ['사업부', subject_label, '세부', '제품군']),
                 'required': [subject_label],
                 'hint': '「전체」로 열었으면 사업부 열이 필요합니다. 한 칸에 여럿이면 | 로 나눠 적습니다.'})
     if sec.get('has_agent'):
         out.append({'key': 'agent', 'label': agent_label,
-                    'columns': (['사업부', agent_label, '수단 종류', '담당 부서'] if sector == 'manufacturing_monitoring'
+                    'columns': (['사업부', agent_label, '수단 종류', '담당 부서'] if sector in ('manufacturing_monitoring', 'factory_optimization')
                                 else ['사업부', agent_label, '종류', '모델 종류', '사용 툴', '불량 유형', '담당 부서']),
                     'required': [agent_label], 'hint': '사용 툴·불량 유형처럼 한 칸에 여럿이면 | 로 나눠 적습니다.'})
         out.append({'key': 'pair', 'label': '연계',
@@ -109,10 +110,12 @@ def _choices(sector, kind, division_id):
         if kind == 'subject' and sector == 'manufacturing_monitoring':
             out['공정 단계'] = _labels(D.vocab('process_steps'))
         if kind == 'agent':
-            # ⚠️ 모니터링의 수단 표에는 「모델 종류」 열이 없다(「수단 종류」다) — 없는 열에
+            # ⚠️ 모니터링·공장 최적화의 수단 표에는 「모델 종류」 열이 없다(「수단 종류」다) — 없는 열에
             #    선택지를 붙이면 화면은 그릴 데가 없고, AI 는 있는 줄 알고 적는다(2026-08-30).
-            if sector != 'manufacturing_monitoring':
+            if sector not in ('manufacturing_monitoring', 'factory_optimization'):
                 out['모델 종류'] = _labels(D.vocab('model_kinds'))
+            if sector == 'factory_optimization':
+                out['수단 종류'] = _labels(D.vocab('optimization_kinds'))   # 다섯 종류 — 사전의 문구
             if div:
                 out['담당 부서'] = [x['name'] for x in S.departments_of(div)]
         if kind == 'pair' and div:
@@ -346,7 +349,8 @@ def rows_now(division_id, sector, kind):
         for r in _subjects_of(div, sector):
             _row({'사업부': _div_name(r.division_id), sec.get('subject_label') or '대상': r.name,
                   '세부': r.detail, '제품군': SEP.join(r.product_families or []),
-                  '라인·사업장': r.line, '공정 단계': _lab_of(D.vocab('process_steps'), r.process)})
+                  '라인·사업장': r.line, '공정 단계': _lab_of(D.vocab('process_steps'), r.process),
+                  '법인': r.site, '라인': r.line})
     elif kind == 'agent':
         for r in _agents_of(div, sector):
             _row({'사업부': _div_name(r.division_id), sec.get('agent_label') or '수단': r.name,
@@ -443,7 +447,8 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
             fields = [
                 ('세부', 'detail', cell(cells, '세부') or None, None),
                 ('제품군', 'product_families', _split(cell(cells, '제품군')), lambda v: SEP.join(v or [])),
-                ('라인·사업장', 'line', cell(cells, '라인·사업장') or None, None),
+                ('라인·사업장', 'line', cell(cells, '라인·사업장') or cell(cells, '라인') or None, None),
+                ('법인', 'site', cell(cells, '법인') or None, None),
                 ('공정 단계', 'process',
                  _label_key(D.vocab('process_steps'), cell(cells, '공정 단계'), '공정 단계')
                  if cell(cells, '공정 단계') else None,
@@ -453,9 +458,10 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
             _apply(live, ch, fields, dry_run)
             return ('update' if ch else 'same'), name, ch
         S.create_subject(div, sector, name, cell(cells, '세부'), _split(cell(cells, '제품군')),
-                         'auto', None, cell(cells, '라인·사업장'),
+                         'auto', None, cell(cells, '라인·사업장') or cell(cells, '라인'),
                          _label_key(D.vocab('process_steps'), cell(cells, '공정 단계'), '공정 단계')
-                         if cell(cells, '공정 단계') else None)
+                         if cell(cells, '공정 단계') else None,
+                         site=cell(cells, '법인'))
         return 'new', name, []
 
     if kind == 'agent':
@@ -466,13 +472,18 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
                      if norm(r.name) == norm(name)), None)
         dept = cell(cells, '담당 부서')
         dept_id = next((d['id'] for d in S.departments_of(div) if norm(d['name']) == norm(dept)), None) if dept else None
+        # 공장 최적화의 「수단 종류」는 사전의 다섯 — 문구를 key 로 바꿔 넣는다
+        kind_cell = cell(cells, '종류') or cell(cells, '수단 종류')
+        kind_val = (_label_key(D.vocab('optimization_kinds'), kind_cell, '수단 종류')
+                    if sector == 'factory_optimization' and kind_cell else kind_cell) or None
+        kind_show = ((lambda v: _lab_of(D.vocab('optimization_kinds'), v)) if sector == 'factory_optimization' else None)
         if dept and dept_id is None:
             raise TableFormatError(f'담당 부서 「{dept}」 을(를) 이 사업부에서 못 찾았습니다.')
         if live is not None:
             if mode != 'update':
                 return 'exists', name, []
             fields = [
-                ('종류', 'kind', cell(cells, '종류') or cell(cells, '수단 종류') or None, None),
+                ('종류', 'kind', kind_val, kind_show),
                 ('모델 종류', 'model_kind',
                  _label_key(D.vocab('model_kinds'), cell(cells, '모델 종류'), '모델 종류')
                  if cell(cells, '모델 종류') else None,
@@ -484,7 +495,7 @@ def _one(division_id, sector, kind, spec, cell, cells, actor, dry_run, T, mode='
             ch = _diff(live, fields)
             _apply(live, ch, fields, dry_run)
             return ('update' if ch else 'same'), name, ch
-        S.create_agent(div, sector, name, cell(cells, '종류') or cell(cells, '수단 종류'),
+        S.create_agent(div, sector, name, kind_val,
                        _label_key(D.vocab('model_kinds'), cell(cells, '모델 종류'), '모델 종류') if cell(cells, '모델 종류') else None,
                        None, _split(cell(cells, '사용 툴')), dept_id, _split(cell(cells, '불량 유형')))
         return 'new', name, []

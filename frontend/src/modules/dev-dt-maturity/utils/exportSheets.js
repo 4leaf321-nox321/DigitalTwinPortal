@@ -46,6 +46,8 @@ const subjectCols = (sector) => {
   // ⚠️ 「공정 단계」다 — 이 부문은 대상의 이름표가 「공정」이라 머리글이 겹치면
   //    일괄 입력이 이름 칸을 공정 단계로 읽는다(2026-08-30). 추출과 입력은 같은 머리글이어야 한다.
   if (sector === 'manufacturing_monitoring') return [['라인·사업장', s => s.line || ''], ['공정 단계', s => s.process_label || s.process || ''], ['세부', s => s.detail || '']];
+  // 공장 최적화 — 대상은 법인 × 라인(2026-09-02). 일괄 입력의 머리글과 같아야 한다.
+  if (sector === 'factory_optimization') return [['법인', s => s.site || ''], ['라인', s => s.line || ''], ['세부', s => s.detail || '']];
   return [['세부', s => s.detail || ''], ['제품군', s => (s.product_families || []).join(SEP)]];
 };
 
@@ -53,6 +55,7 @@ const subjectCols = (sector) => {
 const agentCols = (sector) => {
   if (sector === 'digital_thread') return [];
   if (sector === 'manufacturing_monitoring') return [['수단 종류', a => a?.kind || ''], ['담당 부서', a => a?.department_name || '']];
+  if (sector === 'factory_optimization') return [['수단 종류', a => a?.kind_label || a?.kind || ''], ['담당 부서', a => a?.department_name || '']];
   return [['종류', a => a?.kind || ''], ['모델 종류', a => a?.model_kind || ''], ['사용 툴', a => (a?.tools || []).join(SEP)],
     ['불량 유형', a => (a?.defect_types || []).join(SEP)], ['담당 부서', a => a?.department_name || ''],
     ['디지털 트윈 연결 과제', a => (a?.projects || []).map(p => p.title || p.uuid).join(' · ')]];

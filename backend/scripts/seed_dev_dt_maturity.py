@@ -521,6 +521,7 @@ def main():
         counts['reviews'] = _seed_reviews(divisions)          # 해석 활용 기록 — 스팟 건
         counts['segments'] = _seed_threads(divisions)         # 디지털 스레드 — 구간과 평가
         counts['monitoring'] = _seed_monitoring(divisions)    # 제조 모니터링 — 라인 × 공정
+        counts['factory'] = _seed_factory(divisions)          # 공장 최적화 — 법인 × 라인(2026-09-02)
         counts['thread_cases'] = _seed_thread_cases(divisions)   # 연계 개발 기록
         # 확인 대기 — AI 가 낸 판단. 샘플 뷰가 그 승인 화면을 보여 준다(2026-08-30).
         mx = divisions.get('MX')
@@ -993,6 +994,132 @@ def _seed_monitoring(divisions):
                         rung, value = val, None
                     db.session.add(MaturityAssessment(pair_id=pair.id, axis=axis_key, rung=rung, value=value,
                                                       note=f'{who} 평가', evidence={}, assessed_at=_days_ago(days),
+                                                      assessed_by_name=who))
+                    c = MaturityChange(pair_id=pair.id, axis=axis_key, before=None,
+                                       after=(rung or f'{value:g}'), note='', actor_name=who)
+                    db.session.add(c)
+                    db.session.flush()
+                    c.created_at = _days_ago(days)
+                n += 1
+    return n
+
+
+# ── 공장 최적화 — 법인 × 라인 (2026-09-02) ─────────────────────────────────
+# 법인은 삼성전자 생산법인의 통용 약칭. 대상 한 줄 = (법인, 라인, 세부, [(수단 이름, 종류 key, 축 값, 대조 기준, n일 전)]).
+# 축 값 — fidelity(%) · data_link(묶음) · modeling · substitution · scope(택1). 종류가 어느 KPI 에 닿는지를 정한다.
+FACTORY_SEED = {
+    'MX': [
+        ('SEV(베트남 박닌)', 'SMT 1라인', '마운터 24대 · 3교대 · 작업자 18명', [
+            ('SMT 1라인 밸런싱 모델', 'line', {'fidelity': 93, 'data_link': ['layout', 'actuals'], 'modeling': 'actors',
+                                            'substitution': 'approval_gate', 'scope': 'representative'}, 'actual_takt', 15),
+            ('SEV 자재 공급 물류 모델', 'logistics', {'fidelity': 88, 'data_link': ['layout'], 'modeling': 'logistics',
+                                                 'substitution': 'pre_verify', 'scope': 'pilot'}, 'lead_time', 28),
+        ]),
+        ('SEV(베트남 박닌)', '조립 2라인', '조립 셀 12 · 작업자 46명', [
+            ('조립 2라인 가상 시생산', 'virtual_pilot', {'fidelity': 81, 'data_link': ['layout'], 'modeling': 'actors',
+                                                     'substitution': 'parallel', 'scope': 'pilot'}, 'plan_takt', 40),
+        ]),
+        ('SEVT(베트남 타이응우옌)', '조립 5라인', '조립 셀 16 · 2교대', [
+            ('SEVT 조립 라인 배치 모델', 'line', {'fidelity': 76, 'data_link': ['manual'], 'modeling': 'dynamic',
+                                             'substitution': 'reference', 'scope': 'pilot'}, 'throughput', 70),
+            ('SEVT 생산 계획 시뮬레이션', 'operation', {'fidelity': 84, 'data_link': ['actuals', 'realtime'], 'modeling': 'planning',
+                                                  'substitution': 'pre_verify', 'scope': 'representative'}, 'utilization', 22),
+        ]),
+        ('구미 사업장', '파일럿 라인', '신기종 시생산 전용 · 작업자 12명', [
+            ('구미 파일럿 가상 시생산', 'virtual_pilot', {'fidelity': 90, 'data_link': ['layout', 'actuals', 'report'], 'modeling': 'actors',
+                                                    'substitution': 'approval_gate', 'scope': 'new_lines'}, 'actual_takt', 10),
+            ('스크류 체결 로봇 셀 검증', 'equipment', {'fidelity': 95, 'data_link': ['layout'], 'modeling': 'actors',
+                                                'substitution': 'full', 'scope': 'representative'}, 'plan_takt', 33),
+        ]),
+    ],
+    'VD': [
+        ('SAMEX(멕시코 티후아나)', 'TV 조립 3라인', '조립 셀 20 · 2교대 · 작업자 60명', [
+            ('SAMEX 라인 밸런싱 모델', 'line', {'fidelity': 86, 'data_link': ['layout', 'actuals'], 'modeling': 'dynamic',
+                                              'substitution': 'pre_verify', 'scope': 'representative'}, 'actual_takt', 18),
+            ('SAMEX 완제품 물류 모델', 'logistics', {'fidelity': 79, 'data_link': ['manual'], 'modeling': 'logistics',
+                                                'substitution': 'reference', 'scope': 'pilot'}, 'wip', 55),
+        ]),
+        ('SEH(헝가리 야스페니사루)', 'TV 조립 1라인', '조립 셀 14 · 작업자 42명', [
+            ('SEH 생산 계획 시뮬레이션', 'operation', {'fidelity': 82, 'data_link': ['actuals'], 'modeling': 'planning',
+                                                 'substitution': 'parallel', 'scope': 'pilot'}, 'utilization', 45),
+        ]),
+        ('SEHC(베트남 호치민)', 'TV 조립 2라인', '조립 셀 18 · 3교대', [
+            ('SEHC 신규 라인 배치 모델', 'line', {'fidelity': 72, 'data_link': ['layout'], 'modeling': 'static',
+                                              'substitution': 'reference', 'scope': 'pilot'}, 'plan_takt', 90),
+        ]),
+    ],
+    'DA': [
+        ('광주 사업장', '냉장고 2라인', '컨베이어 1.2km · 작업자 110명', [
+            ('냉장고 2라인 배치·순서 모델', 'line', {'fidelity': 89, 'data_link': ['layout', 'actuals'], 'modeling': 'actors',
+                                               'substitution': 'approval_gate', 'scope': 'new_lines'}, 'actual_takt', 12),
+            ('광주 AGV 물류 모델', 'logistics', {'fidelity': 91, 'data_link': ['layout', 'realtime'], 'modeling': 'logistics',
+                                            'substitution': 'pre_verify', 'scope': 'representative'}, 'lead_time', 20),
+            ('냉장고 도어 조립 로봇 검증', 'equipment', {'fidelity': 94, 'data_link': ['layout'], 'modeling': 'actors',
+                                                 'substitution': 'full', 'scope': 'representative'}, 'plan_takt', 26),
+        ]),
+        ('SEHC(베트남 호치민)', '세탁기 1라인', '조립 셀 22 · 2교대', [
+            ('SEHC 세탁기 가상 시생산', 'virtual_pilot', {'fidelity': 77, 'data_link': ['manual'], 'modeling': 'dynamic',
+                                                    'substitution': 'parallel', 'scope': 'pilot'}, 'throughput', 60),
+        ]),
+        ('SEPM(폴란드 브롱키)', '냉장고 1라인', '조립 셀 16 · 작업자 70명', [
+            ('SEPM 생산 계획·보전 시뮬레이션', 'operation', {'fidelity': 80, 'data_link': ['actuals'], 'modeling': 'planning',
+                                                      'substitution': 'pre_verify', 'scope': 'pilot'}, 'utilization', 35),
+        ]),
+    ],
+    'NW': [
+        ('구미 사업장', '기지국 조립 1라인', '조립 셀 8 · 작업자 24명', [
+            ('기지국 라인 배치 모델', 'line', {'fidelity': 74, 'data_link': ['manual'], 'modeling': 'dynamic',
+                                          'substitution': 'reference', 'scope': 'pilot'}, 'plan_takt', 120),
+        ]),
+        ('SEV(베트남 박닌)', '네트워크 SMT 라인', '마운터 12대', [
+            ('네트워크 SMT 물류 모델', 'logistics', {'fidelity': 70, 'data_link': ['manual'], 'modeling': 'static',
+                                               'substitution': 'none', 'scope': 'pilot'}, 'wip', 150),
+        ]),
+    ],
+    '의료기기': [
+        ('삼성메디슨 홍천', '초음파 조립 라인', '조립 셀 6 · 작업자 20명', [
+            ('초음파 라인 가상 시생산', 'virtual_pilot', {'fidelity': 68, 'data_link': ['manual'], 'modeling': 'static',
+                                                    'substitution': 'reference', 'scope': 'pilot'}, 'plan_takt', 200),
+        ]),
+    ],
+}
+
+
+def _seed_factory(divisions):
+    """법인 × 라인을 세우고 공장 시뮬레이션(종류 있음)을 걸어 축 다섯을 매긴다."""
+    from app.modules.dev_dt_maturity import definitions as D
+    axes = {a['key']: a for a in D.AXES['factory_optimization']}
+    n = 0
+    for dname, rows in FACTORY_SEED.items():
+        div = divisions.get(dname)
+        if not div:
+            continue
+        for order, (site, line, detail, links) in enumerate(rows, 1):
+            subject = MaturitySubject(division_id=div.id, sector='factory_optimization',
+                                      name=f'{site} · {line}', detail=detail, site=site, line=line,
+                                      product_families=[], accuracy_rule='auto', order=order)
+            db.session.add(subject)
+            db.session.flush()
+            for (aname, kind, marks, basis, days) in links:
+                agent = MaturityAgent(division_id=div.id, sector='factory_optimization',
+                                      name=aname, kind=kind, tools=[], defect_types=[], project_uuids=[])
+                db.session.add(agent)
+                db.session.flush()
+                pair = MaturityPair(subject_id=subject.id, agent_id=agent.id)
+                db.session.add(pair)
+                db.session.flush()
+                who = PEOPLE[n % len(PEOPLE)]
+                for axis_key, val in marks.items():
+                    axis = axes[axis_key]
+                    if axis['kind'] == 'value':
+                        rung, value = None, float(val)
+                        evidence = {'fidelity_basis': basis, 'error_pct': round(100 - float(val), 1)}
+                    elif axis['kind'] == 'set':
+                        rung, value, evidence = D.set_rung(axis, val), None, {}
+                    else:
+                        rung, value, evidence = val, None, {}
+                    db.session.add(MaturityAssessment(pair_id=pair.id, axis=axis_key, rung=rung, value=value,
+                                                      note=f'{who} 평가', evidence=evidence, assessed_at=_days_ago(days),
                                                       assessed_by_name=who))
                     c = MaturityChange(pair_id=pair.id, axis=axis_key, before=None,
                                        after=(rung or f'{value:g}'), note='', actor_name=who)

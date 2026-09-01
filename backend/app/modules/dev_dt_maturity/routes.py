@@ -93,6 +93,7 @@ def definitions(actor):
         'review': D.review_definitions(),
         'thread': D.thread_definitions(),
         'monitoring': D.monitoring_definitions(),
+        'factory': D.factory_definitions(),
         'can_curate': P.can_curate(actor),
         'my_division_id': P.actor_division_id(actor),
     })
@@ -175,7 +176,7 @@ def create_subject(actor):
         row = S.create_subject(p['division_id'], p.get('sector') or 'simulation',
                                p.get('name'), p.get('detail'), p.get('product_families'),
                                p.get('accuracy_rule') or 'auto', p.get('roadmap_task_id'),
-                               p.get('line'), p.get('process'))
+                               p.get('line'), p.get('process'), p.get('site'))
         db.session.commit()
         return success_response(row.to_dict(), status_code=201)
     except S.Refused as e:

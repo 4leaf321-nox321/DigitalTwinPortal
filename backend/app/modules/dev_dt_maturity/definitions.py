@@ -40,10 +40,10 @@ SECTORS = [
     # 같은 공정의 설비 사이 차이는 근거의 비율(「상태 8/12대」)로 받는다.
     {'key': 'manufacturing_monitoring', 'label': '모니터링', 'has_agent': True,
      'subject_label': '공정', 'agent_label': '수집 수단', 'phase': 4},
-    # 공장 최적화(시뮬레이션) — 라인·물류의 흐름을 모델로 돌려 배치·재고·택트를 고르는 자리.
-    # 자리만 잡아 둔다(2026-08-30). 대상·수단·축은 제조 담당 확인 뒤에.
+    # 공장 최적화(시뮬레이션) — 대상은 **법인 × 라인**, 수단은 공장 시뮬레이션(다섯 종류 —
+    # OPTIMIZATION_KINDS). 축은 시뮬레이션 부문과 같은 뼈대(AXES, 2026-09-02 개통).
     {'key': 'factory_optimization', 'label': '공장 최적화', 'has_agent': True,
-     'subject_label': '최적화 대상', 'agent_label': '공장 시뮬레이션 모델', 'phase': 4},
+     'subject_label': '법인·라인', 'agent_label': '공장 시뮬레이션', 'phase': 4},
     {'key': 'digital_thread', 'label': '디지털 스레드', 'has_agent': False,
      'subject_label': '연계 구간', 'agent_label': None, 'phase': 3},
 ]
@@ -432,6 +432,104 @@ def monitoring_definitions():
     return {'process_steps': vocab('process_steps')}
 
 
+# ── 공장 최적화 (2026-09-02 개통) ─────────────────────────────────────────
+#
+# 대상은 **법인 × 라인**(subject.site · subject.line). 공정 단계는 결정 단위로 너무 잘고
+# 법인만은 너무 굵다 — 같은 법인 안에서도 라인마다 트윈 유무가 갈린다.
+# 수단은 공장 시뮬레이션 — 다섯 **종류**(agent.kind 에 key). 종류는 축이 아니다: 시뮬레이션
+# 부문에서 「낙하 해석」이 축이 아니라 수단인 것과 같다. 어느 KPI 에 닿나는 종류가 정한다.
+OPTIMIZATION_KINDS = [
+    {'key': 'equipment', 'label': '설비·로봇', 'description': '기구·제어SW 설계의 사전 검증'},
+    {'key': 'line', 'label': '라인', 'description': '설비·로봇·작업자 배치와 생산 순서의 사전 결정'},
+    {'key': 'logistics', 'label': '물류', 'description': '동선·물류 기기 대수의 사전 검증'},
+    {'key': 'virtual_pilot', 'label': '가상 시생산', 'description': '생산성·조립성·작업성의 양산 전 검증'},
+    {'key': 'operation', 'label': '생산중 운영', 'description': '생산 계획·보전 주기·창고 운영의 최적 수립'},
+]
+OPTIMIZATION_KIND_KEYS = [k['key'] for k in OPTIMIZATION_KINDS]
+# 모델 충실도의 **대조 기준** — 무엇과 견주어 맞는지를 잰 값인가. 평가 근거 칸에서 고른다.
+FIDELITY_BASIS = [
+    {'key': 'plan_takt', 'label': '계획 택트'},
+    {'key': 'actual_takt', 'label': '실적 택트'},
+    {'key': 'throughput', 'label': '처리량(UPH)'},
+    {'key': 'utilization', 'label': '가동률'},
+    {'key': 'lead_time', 'label': '리드타임'},
+    {'key': 'wip', 'label': '재공·재고'},
+    {'key': 'headcount', 'label': '투입 인원'},
+]
+
+AXES['factory_optimization'] = [
+    # 시뮬레이션 부문의 다섯 축과 같은 뼈대 — 그래야 「계획」 순서도에서 두 부문이 나란히 읽힌다.
+    {
+        'key': 'fidelity', 'label': '모델 충실도', 'kind': 'value', 'unit': '%',
+        'question': '모델이 실측과 얼마나 맞는가',
+        'evidence': ['fidelity_basis', 'error_pct', 'attachment'],
+        'evidence_label': '대조 기준 · 오차(%) · 첨부',
+        # 문턱은 낮은 칸부터 — 값이 넘는 가장 높은 칸(rung_for_value). 신뢰도 축과 같은 방식.
+        'thresholds': [{'rung': 'trend', 'min': 0}, {'rung': 'ranking', 'min': 70}, {'rung': 'reproduce', 'min': 90}],
+        'rungs': [
+            {'key': 'trend', 'label': '경향 일치', 'description': '방향은 맞지만 값이 안 맞아 대안 간 우열까지는 못 가른다'},
+            {'key': 'ranking', 'label': '우열 판정', 'description': '값이 맞아 배치·계획 대안 간 우열을 가린다'},
+            {'key': 'reproduce', 'label': '실측 재현', 'description': '실적 택트·처리량을 그대로 재현해 결과를 믿고 쓴다'},
+        ],
+    },
+    {
+        'key': 'data_link', 'label': '데이터 연동', 'kind': 'set',
+        'question': '모델의 입력이 어디서 오는가',
+        'evidence': ['attachment'], 'evidence_label': '연동 시스템·갱신 주기',
+        'rungs': [
+            {'key': 'manual', 'label': '수동 입력', 'short': '수동', 'description': '레이아웃·택트를 사람이 넣는다'},
+            {'key': 'layout', 'label': '레이아웃·BOM 자동 반영', 'short': '레이아웃', 'description': 'CAD·PLM 의 배치·BOM 이 모델로 들어온다'},
+            {'key': 'actuals', 'label': '택트·실적 자동 입력', 'short': '실적', 'description': 'MES 의 택트·가동 실적이 모델의 입력이 된다'},
+            {'key': 'realtime', 'label': '실시간 동기(운영 트윈)', 'short': '실시간', 'description': '현장 상태가 모델에 실시간으로 비친다'},
+            {'key': 'report', 'label': '결과 자동 보고', 'short': '보고', 'description': '시뮬레이션 결과가 보고서·의사결정 화면으로 자동 간다'},
+        ],
+    },
+    {
+        'key': 'modeling', 'label': '모델링 범위', 'kind': 'rung',
+        'question': '무엇까지 모델에 담는가',
+        'evidence': ['attachment'], 'evidence_label': '모델 구성 요소 목록',
+        'headline_min': 'actors',
+        'rungs': [
+            {'key': 'static', 'label': '정적 배치', 'description': '설비 위치와 면적만 — 흐름은 없다'},
+            {'key': 'dynamic', 'label': '동적 흐름', 'description': '택트·버퍼·정지가 시간으로 돈다'},
+            {'key': 'actors', 'label': '작업자·로봇 거동', 'description': '작업자 이동·로봇 동작까지 모델에 있다'},
+            {'key': 'logistics', 'label': '물류·재고', 'description': '자재 공급·재공·창고까지 한 모델이다'},
+            {'key': 'planning', 'label': '계획·보전 주기', 'description': '생산 계획과 보전 일정까지 모델이 돌린다'},
+        ],
+    },
+    {
+        'key': 'substitution', 'label': '검증 대체', 'kind': 'rung',
+        'question': '시뮬레이션 결과가 실제 결정을 얼마나 대체하는가',
+        'evidence': ['attachment'], 'evidence_label': '대체한 결정·회피한 실물 검증',
+        'headline_min': 'approval_gate',
+        'rungs': [
+            {'key': 'none', 'label': '없음', 'description': '결정은 경험과 실물로만'},
+            {'key': 'reference', 'label': '참고', 'description': '결과를 보긴 하지만 결정 근거는 아니다'},
+            {'key': 'parallel', 'label': '병행 검토', 'description': '실물 검토와 나란히 본다'},
+            {'key': 'pre_verify', 'label': '사전 검증', 'description': '배치·계획 확정 전에 반드시 거친다'},
+            {'key': 'approval_gate', 'label': '승인 게이트', 'description': '투자·배치 승인의 근거 자료로 인정된다'},
+            {'key': 'full', 'label': '완전 대체', 'description': '실물 파일럿 없이 확정한다'},
+        ],
+    },
+    {
+        'key': 'scope', 'label': '적용 범위', 'kind': 'rung',
+        'question': '어느 라인까지 적용됐는가',
+        'evidence': ['coverage_pct'], 'evidence_label': '적용 라인 n/N',
+        'headline_min': 'new_lines',
+        'rungs': [
+            {'key': 'pilot', 'label': '시범 라인', 'description': '한 라인에서 해 봤다'},
+            {'key': 'representative', 'label': '대표 라인', 'description': '법인의 대표 라인에는 적용됐다'},
+            {'key': 'new_lines', 'label': '신규 라인 전부', 'description': '새로 세우는 라인은 다 거친다'},
+            {'key': 'all_sites', 'label': '전 법인', 'description': '모든 법인·라인이 같은 방식으로 한다'},
+        ],
+    },
+]
+
+
+def factory_definitions():
+    return {'optimization_kinds': vocab('optimization_kinds'), 'fidelity_basis': vocab('fidelity_basis')}
+
+
 AXIS_KINDS = {'rung', 'value', 'set', 'matrix'}   # matrix: 바탕 토글 + 불량 유형 × 열 표(모델링 수준)
 
 
@@ -465,6 +563,10 @@ VOCABS = [
      'hint': '한 시험 항목에 수단이 여럿일 때 정확도를 어떻게 낼지. 셈이 key 로 갈려 **문구만** 고칩니다.'},
     {'key': 'process_steps', 'label': '공정 단계', 'sector': 'manufacturing_monitoring',
      'hint': '전기·전자 제조의 표준 공정. 라인 이름이 갈려도 공정끼리는 사업부를 넘어 비교됩니다.'},
+    {'key': 'optimization_kinds', 'label': '공장 시뮬레이션 종류', 'sector': 'factory_optimization', 'fixed': True,
+     'hint': '설비·로봇 / 라인 / 물류 / 가상 시생산 / 생산중 운영 — 수단의 종류입니다. 종류가 어느 KPI 에 닿는지를 정하므로 줄은 못 박고 문구만 고칩니다.'},
+    {'key': 'fidelity_basis', 'label': '모델 충실도 — 대조 기준', 'sector': 'factory_optimization',
+     'hint': '모델 충실도(%)를 무엇과 견주어 잰 값인지 — 평가 근거 칸에서 고릅니다.'},
 ]
 VOCAB_BY_KEY = {v['key']: v for v in VOCABS}
 
@@ -485,6 +587,8 @@ def _vocab_defaults(name):
         'case_actions': THREAD_CASE_ACTIONS,
         'case_status': THREAD_CASE_STATUS,
         'process_steps': PROCESS_STEPS,
+        'optimization_kinds': OPTIMIZATION_KINDS,
+        'fidelity_basis': FIDELITY_BASIS,
         'informal_items': INFORMAL_ITEMS,
         'accuracy_rules': ACCURACY_RULE_LABELS,
     }.get(name, [])
@@ -1481,13 +1585,70 @@ MEASUREMENT_FRAMEWORK = {
              'kpi': [('line_loss', '공정 전체 단위 유실 개선'),
                      ('asr', '전 설비 유출 차단 적용')],
              'outcomes': [],
-             # ⚠️ 설비 투자 절감도 **여기 하나**에만 건다.
-             'new_outcomes': [('capex', '기존 설비 활용률 제고에 의한 증설 회피')],
+             # 설비 투자 절감은 공장 최적화의 「검증 대체」로 옮겼다(2026-09-02) — 검증된 증설
+             # 회피가 곧 그것이고, 성과 후보는 지표 하나에서만 온다.
              'why': '시범 설비 한정 적용 시 공정 전체 지표 미개선 확인',
              'gate_why': '시범은 표본 — 공정 전체가 아님'},
         ],
     },
+    'factory_optimization': {
+        'purpose': '라인·물류·설비의 사전 검증에 의한 동일 설비 생산량 증대',
+        'indicators': [
+            {'axis': 'fidelity', 'role': 'prereq', 'level': 'ranking',
+             'fed_by': [('production', '실적 택트·가동률 데이터의 대조')],
+             'acts_on': [('line_build', '배치·계획 대안의 판정 근거')],
+             'change': '실측 대비 검증된 모델에 의한 대안 판정',
+             'metric': ['대조 기준 대비 오차', '검증 대안 수'], 'deps': [],
+             'kpi': [], 'outcomes': [],
+             'why': '충실도 미확보 모델의 결정 근거 불가 — 나머지 축의 전제',
+             'gate_why': '경향 일치 수준은 방향 확인까지 — 대안 간 우열을 가르는 정량 마진 필요'},
+            {'axis': 'data_link', 'role': 'driver', 'level': 'actuals',
+             'acts_on': [('production', '실적 데이터 기반 운영 트윈')],
+             'change': '실적 데이터의 자동 반영에 의한 상시 검증',
+             'metric': ['입력 자동화 항목 수', '모델 갱신 주기'],
+             'deps': [('fidelity', '검증된 모델 확보')],
+             'kpi': [('line_loss', '계획·보전 주기의 상시 최적화')],
+             'outcomes': [('mfg_cost', '계획 이탈에 의한 손실 감소')],
+             'why': '수동 입력 모델의 일회성 — 운영 중 재검증 불가',
+             'gate_why': '레이아웃 반영까지는 설계 시점 검증 — 실적 입력 후 운영 단계 활용 가능'},
+            {'axis': 'modeling', 'role': 'driver', 'level': 'actors',
+             'acts_on': [('line_build', '배치·물류의 모델 검증'), ('pilot', '조립성·작업성의 가상 검증')],
+             'change': '작업자·로봇·물류를 포함한 사전 검증',
+             'metric': ['모델 구성 요소 수', '가상 검증 항목 수'],
+             'deps': [('fidelity', '요소별 거동의 실측 대조')],
+             'kpi': [('output_per_head', '병목·배치의 사전 해소'),
+                     ('fpy', '조립성 결함의 양산 전 제거')],
+             'outcomes': [('mfg_cost', '동일 인원 기준 산출 증대'),
+                          ('quality_cost', '양산 초기 불량 대응 비용 미발생')],
+             'why': '정적 배치만으로는 병목·작업성이 안 보임',
+             'gate_why': '동적 흐름까지는 설비 중심 — 작업자·로봇 포함 시 시생산 대체 가능'},
+            {'axis': 'substitution', 'role': 'driver', 'level': 'approval_gate',
+             'fed_by': [('invest_rule', '시뮬레이션 결과의 승인 근거 인정')],
+             'needs': [('digital_thread', 'usage', '자료 기반 결정 체계')],
+             'acts_on': [('line_build', '실물 파일럿 없는 배치 확정'), ('pilot', '실물 시생산 회차 축소')],
+             'change': '시뮬레이션 결과에 의한 투자·배치 결정',
+             'metric': ['대체한 결정 건수', '회피한 실물 검증 회차'],
+             'deps': [('fidelity', '판정 근거로서의 정량 마진'), ('modeling', '결정 대상 요소의 모델 포함')],
+             'kpi': [('output_per_head', '실물 시행착오 없는 배치 확정')],
+             'outcomes': [('mfg_cost', '시행착오 재배치 비용 미발생')],
+             # ⚠️ 설비 투자 절감은 **여기 하나**에만 건다 — 검증된 증설 회피가 곧 그것이다.
+             'new_outcomes': [('capex', '검증에 의한 증설 회피')],
+             'why': '검증 결과의 결정 미반영 — 참고 자료에 그침',
+             'gate_why': '사전 검증까지는 확정 전 1회 검토 — 승인 근거 인정 시 결정 대체'},
+            {'axis': 'scope', 'role': 'multiplier', 'level': 'new_lines',
+             'acts_on': [('production', '전 라인 표준 운영 방식화')],
+             'change': '전 법인·라인의 표준 절차화',
+             'metric': ['적용 라인 비율'],
+             'deps': [('substitution', '결정 대체 체계 확보'), ('data_link', '연동 체계 확보')],
+             'kpi': [('line_loss', '공정 전체 단위 유실 개선'),
+                     ('output_per_head', '전 라인 산출 증대')],
+             'outcomes': [],
+             'why': '시범 라인 한정 적용 시 법인 단위 지표 미개선',
+             'gate_why': '대표 라인까지는 개별 성과 — 신규 라인 전부 적용이 곧 표준화'},
+        ],
+    },
 }
+
 FRAMEWORK_CAVEATS = [
     '본 자료는 **측정 체계** — 성과 실적이 아님. 실제 수준은 「성숙도」 탭 참조.',
     '가상검증률·데이터 연결율은 「정확도」·「기본 계측」의 **집계값** — '
@@ -1644,51 +1805,6 @@ PROPOSED_FRAMEWORK = {
              'why': '일부 과제 적용 시 전사 통과율 미개선'},
         ],
     },
-    'factory_optimization': {
-        'label': '공장 최적화',
-        'purpose': '라인·물류·설비의 사전 검증에 의한 동일 설비 생산량 증대',
-        'indicators': [
-            {'axis': 'equip_robot', 'axis_label': '설비·로봇', 'role': 'prereq',
-             'acts_on': [('line_build', '설비·제어SW 사전 검증')],
-             'change': '기구·제어SW 설계의 사전 검증',
-             'metric': ['설치 후 수정 건수', '초기 고장 건수'], 'deps': [],
-             'kpi': [], 'outcomes': [],
-             'why': '단일 설비 정지 시 라인 전체 검증 무효'},
-            {'axis': 'line_layout', 'axis_label': '라인', 'role': 'driver',
-             'acts_on': [('line_build', '배치·순서 사전 결정')],
-             'change': '설비·로봇·작업자 배치와 생산 순서의 사전 결정',
-             'metric': ['공정 편성 효율', '병목 대기 시간'],
-             'deps': [('equip_robot', '개별 설비 거동 확정')],
-             'kpi': [('output_per_head', '병목 없는 배치·순서 확보')],
-             'outcomes': [('mfg_cost', '동일 인원 기준 산출 증대')],
-             'why': '라인 설치 후 배치·순서 변경 불가'},
-            {'axis': 'logistics', 'axis_label': '물류', 'role': 'driver',
-             'acts_on': [('line_build', '동선·물류 기기 사전 검증')],
-             'change': '동선·물류 기기 대수의 사전 검증',
-             'metric': ['공급 대기 시간', '물류 기기 대수'],
-             'deps': [('line_layout', '배치 확정')],
-             'kpi': [('output_per_head', '자재 공급 대기 제거')],
-             'outcomes': [('mfg_cost', '과잉 물류 기기 투자 회피')],
-             'why': '자재 공급 지연에 의한 라인 정지'},
-            {'axis': 'pilot', 'axis_label': '시생산', 'role': 'driver',
-             'acts_on': [('pilot', '생산성·조립성 사전 검증')],
-             'change': '생산성·조립성·작업성의 양산 전 검증',
-             'metric': ['시생산 지적 건수', '양산 초기 불량률'],
-             'deps': [('line_layout', '작업 배치 확정')],
-             'kpi': [('fpy', '조립성 결함의 양산 전 제거')],
-             'outcomes': [('quality_cost', '양산 초기 불량 대응 비용 미발생')],
-             'why': '조립 불가 설계의 시생산 단계 후행 발견'},
-            {'axis': 'in_production', 'axis_label': '생산중 운영', 'role': 'driver',
-             'acts_on': [('production', '생산 계획의 최적 수립'), ('maintenance', '보전 주기의 최적 수립')],
-             'change': '생산 계획·보전 주기·창고 운영의 최적 수립',
-             'metric': ['계획 준수율', '보전 계획 이행률'],
-             'deps': [('logistics', '물류 운영 조건 확정'),
-                      ('pilot', '실 생산 조건 확보')],
-             'kpi': [('line_loss', '계획·보전 주기의 사전 수립')],
-             'outcomes': [('mfg_cost', '계획 이탈에 의한 손실 감소')],
-             'why': '경험 의존 계획 수립과 근거 미보존'},
-        ],
-    },
 }
 # 개발·제조의 **핵심 업무 요소** — 디지털 트윈 **밖**이다(2026-09-01).
 #
@@ -1762,6 +1878,11 @@ VALUE_CHAIN = {
             {'key': 'quality', 'label': '품질 관리·검사', 'kind': 'step', 'next': None,
              'note': '공정·출하 검사와 시장 품질 대응',
              'kpi': [('asr', '출하 검사에 의한 유출 차단')]},
+            # ⚠️ 검증 대체의 「승인 게이트」는 시뮬레이션 결과를 투자·배치 승인 근거로 **인정하는
+            #    기준**이 있어야 성립한다 — 개발 쪽 검증 규정의 짝. 디지털 트윈이 만들 수 없는 몫.
+            {'key': 'invest_rule', 'label': '투자 심의 기준', 'kind': 'lever',
+             'note': '설비 투자·라인 변경의 승인 절차와 근거 요건',
+             'kpi': [('output_per_head', '검증 기반 투자 승인 절차 확보')]},
             {'key': 'capex_people', 'label': '설비 투자·인력 운영', 'kind': 'lever',
              'note': '설비 투자 집행과 인원 편성',
              'kpi': [('output_per_head', '설비·인원 자체의 확보')]},

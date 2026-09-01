@@ -302,7 +302,7 @@ const matrixSummary = (axis, flags, defects, names) => {
 };
 
 // 껍데기(읽기·모달)와 속(PairPanel)을 가른다 — 속은 props 만 받아 시험·SSR 로 그릴 수 있다.
-const PairModal = ({ pairId, axes, since = null, onClose, onChanged }) => {
+const PairModal = ({ pairId, axes, since = null, factory = null, onClose, onChanged }) => {
   const [pair, setPair] = useState(null);
   const [error, setError] = useState(null);
 
@@ -321,14 +321,14 @@ const PairModal = ({ pairId, axes, since = null, onClose, onChanged }) => {
   return (
     <Backdrop onClick={onClose}>
       <Panel onClick={e => e.stopPropagation()}>
-        <PairPanel pair={pair} pairId={pairId} axes={axes} loadError={error} since={since}
+        <PairPanel factory={factory} pair={pair} pairId={pairId} axes={axes} loadError={error} since={since}
                    onClose={onClose} onSaved={(data) => { setPair(p => ({ ...p, ...data })); if (onChanged) onChanged(); }} />
       </Panel>
     </Backdrop>
   );
 };
 
-export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose, onSaved }) => {
+export const PairPanel = ({ pair, pairId, axes, loadError, since = null, factory = null, onClose, onSaved }) => {
   const [editing, setEditing] = useState(null);   // { axis, rung?, value?, note, evidence }
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -431,7 +431,15 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
     hours_per_run: { label: '1회 소요(Hr)', type: 'number' },
     tests_saved_per_year: { label: '줄어든 시험 횟수/년', type: 'number' },
     coverage_pct: { label: '대상 중 확보 비율(%)', type: 'number' },
-  }), []);
+    // 공장 최적화 — 모델 충실도를 무엇과 견주어 잰 값인지. 자유 글이면 「택트」「탁트」가 갈려 못 센다.
+    fidelity_basis: { label: '대조 기준', type: 'select', options: factory?.fidelity_basis || [] },
+  }), [factory]);
+  /** 근거 값의 표시 — 고른 것은 key 가 아니라 문구로 */
+  const evShow = (k, v) => {
+    const f = evidenceFields[k];
+    if (f?.type === 'select') return (f.options.find(o => o.key === v) || {}).label || v;
+    return v;
+  };
 
   return (
     <>
@@ -589,7 +597,7 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
                     <strong>근거</strong> {a.note}
                     {Object.entries(a.evidence || {})
                       .filter(([k]) => evidenceFields[k])
-                      .map(([k, v]) => <span key={k}> · {evidenceFields[k].label} {v}</span>)}
+                      .map(([k, v]) => <span key={k}> · {evidenceFields[k].label} {evShow(k, v)}</span>)}
                   </Note>
                 )}
 
@@ -650,11 +658,21 @@ export const PairPanel = ({ pair, pairId, axes, loadError, since = null, onClose
                       {(axis.evidence || []).filter(k => evidenceFields[k]).map(k => (
                         <label key={k} style={{ fontSize: '0.75rem', color: '#64748b' }}>
                           {evidenceFields[k].label}{' '}
+                          {evidenceFields[k].type === 'select' ? (
+                            <select value={editing.evidence[k] ?? ''}
+                                    onChange={e => setEditing(s => ({
+                                      ...s, evidence: { ...s.evidence, [k]: e.target.value },
+                                    }))}>
+                              <option value="">— 고르세요 —</option>
+                              {evidenceFields[k].options.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                            </select>
+                          ) : (
                           <Input type={evidenceFields[k].type} $w="8rem"
                                  value={editing.evidence[k] ?? ''}
                                  onChange={e => setEditing(s => ({
                                    ...s, evidence: { ...s.evidence, [k]: e.target.value },
                                  }))} />
+                          )}
                         </label>
                       ))}
                     </Row>

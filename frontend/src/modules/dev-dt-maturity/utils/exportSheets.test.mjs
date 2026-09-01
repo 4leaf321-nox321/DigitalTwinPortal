@@ -84,3 +84,15 @@ test('파일 이름 — 부문·사업부·날짜, 샘플이면 그렇다고 적
   assert.equal(fileName({ sectorLabel: '시뮬레이션', divisionName: 'MX', sample: false, now }), '디지털트윈성숙도_시뮬레이션_MX_20260830.xlsx');
   assert.ok(fileName({ sectorLabel: '모니터링', divisionName: '전체', sample: true, now }).includes('_샘플_'));
 });
+
+// 공장 최적화 — 대상은 법인 × 라인, 수단 종류는 사전 문구(2026-09-02)
+test('공장 최적화의 대상 판은 법인·라인 열을, 수단 판은 종류 문구를 쓴다', () => {
+  const s = subjectSheet([{ name: '베트남 · SMT 1라인', division_name: 'MX', site: '베트남 법인', line: 'SMT 1라인', detail: '설비 24대' }],
+    'factory_optimization', '법인·라인');
+  assert.deepEqual(s[0].slice(0, 5), ['사업부', '법인·라인', '법인', '라인', '세부']);
+  assert.deepEqual(s[1].slice(0, 5), ['MX', '베트남 · SMT 1라인', '베트남 법인', 'SMT 1라인', '설비 24대']);
+  const a = agentSheet([{ name: '라인 밸런싱 모델', division_name: 'MX', kind: 'line', kind_label: '라인', department_name: '생산기술' }],
+    'factory_optimization', '공장 시뮬레이션');
+  assert.deepEqual(a[0].slice(0, 4), ['사업부', '공장 시뮬레이션', '수단 종류', '담당 부서']);
+  assert.deepEqual(a[1].slice(0, 4), ['MX', '라인 밸런싱 모델', '라인', '생산기술']);
+});

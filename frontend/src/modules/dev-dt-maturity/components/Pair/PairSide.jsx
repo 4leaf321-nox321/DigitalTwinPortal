@@ -21,6 +21,16 @@ const Empty = styled.div`
 const PairSide = ({ pairId, axes, onChanged, onClose }) => {
   const [pair, setPair] = useState(null);
   const [error, setError] = useState(null);
+  // 공장 최적화의 「대조 기준」 선택지 — 이 칸은 앱의 defs 를 못 받으므로 한 번 직접 읽는다.
+  // 없어도 판은 뜬다(선택지만 빈다) — 못 읽었다고 상세를 막지 않는다.
+  const [factory, setFactory] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    maturityApi.getDefinitions()
+      .then(r => { if (alive) setFactory(r.data?.factory || null); })
+      .catch(() => { /* 선택지만 빈다 */ });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     if (!pairId) { setPair(null); return undefined; }
@@ -41,7 +51,7 @@ const PairSide = ({ pairId, axes, onChanged, onClose }) => {
   }
   return (
     <Box>
-      <PairPanel pair={pair} pairId={pairId} axes={axes} loadError={error} onClose={onClose}
+      <PairPanel pair={pair} pairId={pairId} axes={axes} loadError={error} factory={factory} onClose={onClose}
                  onSaved={(data) => { setPair(p => ({ ...p, ...data })); if (onChanged) onChanged(); }} />
     </Box>
   );

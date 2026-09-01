@@ -17,7 +17,7 @@ from app.modules.auth.models import UserRole
 from app.modules.dev_dt_maturity import definitions as D
 
 BASE = '/api/dev-dt-maturity'
-DEFINED = ('simulation', 'digital_thread', 'manufacturing_monitoring')
+DEFINED = ('simulation', 'digital_thread', 'manufacturing_monitoring', 'factory_optimization')   # 공장 최적화 2026-09-02 개통
 
 
 @pytest.fixture()
@@ -225,7 +225,7 @@ def test_새로_짚는_성과는_지표_하나에서만_온다(app):
         assert src == {
             'product': [('simulation', 'modeling')],
             'new_biz': [('manufacturing_monitoring', 'judgement')],
-            'capex': [('manufacturing_monitoring', 'scope')],
+            'capex': [('factory_optimization', 'substitution')],     # 2026-09-02 공장 최적화로
         }, src
 
 
@@ -282,9 +282,8 @@ def test_아직_안_연_분야는_초안으로_따로_선다(app):
     with app.app_context():
         fw = D.framework_all()
         drafts = {s['key']: s for s in fw['draft_sectors']}
-        assert set(drafts) == {'verification_automation', 'design_automation',
-                               'factory_optimization'}
-        assert {s['label'] for s in fw['draft_sectors']} == {'검증', '설계', '공장 최적화'}
+        assert set(drafts) == {'verification_automation', 'design_automation'}   # 공장 최적화는 2026-09-02 개통
+        assert {s['label'] for s in fw['draft_sectors']} == {'검증', '설계'}
         assert not (set(drafts) & {s['key'] for s in fw['sectors']})   # 안 섞인다
         kpi_keys = {k['key'] for k in D.KPI_SET}
         out_keys = {o['key'] for o in D.BUSINESS_OUTCOMES}
@@ -352,7 +351,7 @@ def test_가치_사슬이_서고_모든_지표가_업무에_작용한다(app):
                 if e['next']:
                     assert e['next'] in elems and elems[e['next']]['kind'] == 'step', e['key']
         # 밖의 지렛대 셋은 초안 부문에서 여기로 옮겨 왔다 — 부문의 축이 아니라 업무 요소다
-        assert {'test_infra', 'design_org', 'capex_people'} <= set(elems)
+        assert {'test_infra', 'design_org', 'capex_people', 'invest_rule'} <= set(elems)
         hit = {}
         for sec in fw['sectors'] + fw['draft_sectors']:
             for r in sec['indicators']:
@@ -522,8 +521,8 @@ def test_중점_추진_분야_여섯이_모두_선다(app):
         got = {a['key']: a for a in areas}
         assert got['simulation']['defined'] and got['simulation']['indicator_count'] == 5
         # 아직 체계를 적지 않은 분야는 그렇다고 말한다
-        assert not got['factory_optimization']['defined']
-        assert got['factory_optimization']['indicator_count'] == 0
+        assert got['factory_optimization']['defined']                      # 2026-09-02 개통
+        assert got['factory_optimization']['indicator_count'] == 5
 
 
 def test_공백_둘을_명시한다(app):

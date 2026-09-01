@@ -46,7 +46,9 @@ def main():
             'axes': {k: D.get_axes(k) for k in D.SECTOR_KEYS},
             'model_kinds': D.vocab('model_kinds'), 'accuracy_rules': sorted(D.ACCURACY_RULES),
             'import_columns': D.IMPORT_COLUMNS, 'stale_days': D.get_stale_days(),
-            'review': D.review_definitions(), 'thread': D.thread_definitions(), 'can_curate': True, 'my_division_id': None,
+            'review': D.review_definitions(), 'thread': D.thread_definitions(),
+            'monitoring': D.monitoring_definitions(), 'factory': D.factory_definitions(),
+            'can_curate': True, 'my_division_id': None,
         }
         rows = [{'id': d.id, 'name': d.name, 'order': d.order or 0, 'deny_reason': None, 'hidden': False} for d in divs]
         out['/divisions'] = rows
@@ -158,6 +160,18 @@ def main():
                     dct = S.pair_dict(p, with_changes=True)
                     dct['deny_reason'] = None
                     out[f'/pairs/{p.id}'] = dct
+        # 공장 최적화 — 법인 × 라인(2026-09-02)
+        FAC = 'factory_optimization'
+        out[f'/board?division_id=all&sector={FAC}'] = S.board_all(FAC)
+        out[f'/subjects?division_id=all&sector={FAC}'] = [x.to_dict() for x in MaturitySubject.query.filter_by(sector=FAC).order_by(MaturitySubject.order, MaturitySubject.id).all()]
+        out[f'/agents?division_id=all&sector={FAC}'] = [x.to_dict() for x in MaturityAgent.query.filter_by(sector=FAC).order_by(MaturityAgent.name).all()]
+        for d in kpi:
+            did = d.id
+            out[f'/board?division_id={did}&sector={FAC}'] = S.board(did, FAC)
+            for days in (365, 730, 1825):
+                out[f'/changes?division_id={did}&sector={FAC}&days={days}'] = S.recent_changes(did, FAC, days)
+            out[f'/subjects?division_id={did}&sector={FAC}'] = [x.to_dict() for x in MaturitySubject.query.filter_by(division_id=did, sector=FAC).order_by(MaturitySubject.order, MaturitySubject.id).all()]
+            out[f'/agents?division_id={did}&sector={FAC}'] = [x.to_dict() for x in MaturityAgent.query.filter_by(division_id=did, sector=FAC).order_by(MaturityAgent.name).all()]
         out['/subjects?division_id=all'] = subjects_all
         out['/subjects?division_id=all&sector=simulation'] = subjects_all
         out['/agents?division_id=all'] = agents_all

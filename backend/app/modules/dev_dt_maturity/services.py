@@ -35,7 +35,7 @@ def _sector_or_refuse(sector):
 
 
 def create_subject(division_id, sector, name, detail=None, product_families=None,
-                   accuracy_rule='auto', roadmap_task_id=None, line=None, process=None):
+                   accuracy_rule='auto', roadmap_task_id=None, line=None, process=None, site=None):
     _sector_or_refuse(sector)
     name = (name or '').strip()
     if not name:
@@ -48,6 +48,7 @@ def create_subject(division_id, sector, name, detail=None, product_families=None
         product_families=_clean_list(product_families),
         accuracy_rule=accuracy_rule, roadmap_task_id=roadmap_task_id,
         line=(line or '')[:200] or None, process=(process or '')[:60] or None,
+        site=(site or '')[:120] or None,
     )
     db.session.add(row)
     db.session.flush()
@@ -92,6 +93,8 @@ def update_subject(row, payload):
         row.line = (payload.get('line') or '')[:200] or None
     if 'process' in payload:
         row.process = (payload.get('process') or '')[:60] or None
+    if 'site' in payload:
+        row.site = (payload.get('site') or '')[:120] or None
     if 'order' in payload and isinstance(payload['order'], int):
         row.order = payload['order']
     return row

@@ -32,6 +32,10 @@ def test_부문과_축의_key_는_유일하고_종류가_맞다():
 def test_시뮬레이션만_살아_있고_나머지는_자리만_있다():
     assert D.sector_is_active('simulation')
     assert D.sector_is_active('digital_thread')                    # 2026-08-28 열림
+    assert D.sector_is_active('factory_optimization')              # 2026-09-02 열림 — 법인 × 라인
+    assert [a['key'] for a in D.AXES['factory_optimization']] == ['fidelity', 'data_link', 'modeling', 'substitution', 'scope']
+    assert [k['key'] for k in D.OPTIMIZATION_KINDS] == ['equipment', 'line', 'logistics', 'virtual_pilot', 'operation']
+    assert D.SECTOR_BY_KEY['factory_optimization']['subject_label'] == '법인·라인'
     for k in ('verification_automation', 'design_automation'):
         assert not D.sector_is_active(k)
     assert D.SECTOR_BY_KEY['digital_thread']['has_agent'] is False   # 수단 없는 연계

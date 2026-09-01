@@ -41,6 +41,8 @@ class MaturitySubject(BaseModel):
     # 공정은 표준 어휘(definitions.PROCESS_STEPS)의 key 지만 없는 것은 직접 적는다 — FK 가 아니다.
     line = db.Column(db.String(200))
     process = db.Column(db.String(60))
+    # 공장 최적화의 대상은 **법인 × 라인**(b7d2e4f6a915, 2026-09-02). line 은 모니터링과 같이 쓴다.
+    site = db.Column(db.String(120))
     order = db.Column(db.Integer, nullable=False, default=0)
 
     pairs = db.relationship('MaturityPair', backref='subject',
@@ -105,6 +107,10 @@ class MaturityAgent(BaseModel):
         d['defect_types'] = list(self.defect_types or [])
         d['project_uuids'] = list(self.project_uuids or ([self.project_uuid] if self.project_uuid else []))
         d['projects'] = _projects_of(d['project_uuids'])          # 이름·코드·상태는 읽을 때 붙인다
+        # 공장 시뮬레이션의 종류(kind)는 사전 key 다 — 화면·엑셀은 문구를 쓴다
+        if self.sector == 'factory_optimization':
+            from .definitions import vocab_labels
+            d['kind_label'] = vocab_labels('optimization_kinds').get(self.kind, self.kind)
         d['department_name'] = None
         if self.department_id:
             try:

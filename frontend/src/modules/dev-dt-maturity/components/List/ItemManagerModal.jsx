@@ -164,14 +164,14 @@ const KEEP = '__keep__';   // 일괄 수정에서 「그대로 두기」
 
 const toDraft = (kind, item) => (kind === 'subject'
   ? { division_id: item.division_id, name: item.name, detail: item.detail || '', product_families: [...(item.product_families || [])],
-      accuracy_rule: item.accuracy_rule || 'auto', line: item.line || '', process: item.process || '' }
+      accuracy_rule: item.accuracy_rule || 'auto', line: item.line || '', process: item.process || '', site: item.site || '' }
   : { division_id: item.division_id, name: item.name, kind: item.kind || '', model_kind: item.model_kind || '', tools: [...(item.tools || [])],
       defect_types: [...(item.defect_types || [])], department_id: item.department_id ?? '',
       project_uuids: [...(item.project_uuids || [])] });
 
 const toPayload = (kind, d) => (kind === 'subject'
   ? { division_id: d.division_id, name: d.name, detail: d.detail, product_families: d.product_families, accuracy_rule: d.accuracy_rule,
-      line: d.line, process: d.process }
+      line: d.line, process: d.process, site: d.site }
   : { division_id: d.division_id, name: d.name, kind: d.kind, model_kind: d.model_kind || null, tools: d.tools, defect_types: d.defect_types,
       project_uuids: d.project_uuids, department_id: d.department_id === '' ? null : Number(d.department_id) });
 
@@ -183,7 +183,7 @@ const emptyBulk = (kind) => (kind === 'subject'
 const ItemManagerModal = ({
   kind, divisionId, allMode = false, divisions = [], items, pairCount, canEdit, denyReason,
   modelKinds = [], toolSuggestions = [], toolCatalog = [], familyCatalogs = {}, departments = {}, initialId = null, onClose, onChanged,
-  sector = 'simulation', processSteps = [], sectorDef = null, accuracyRules = [],
+  sector = 'simulation', processSteps = [], sectorDef = null, accuracyRules = [], factory = null,
 }) => {
   const meta = metaOf(kind, sectorDef);
   const RULES = accuracyRules.length ? accuracyRules : [{ key: 'auto', label: '자동' }];
@@ -448,13 +448,31 @@ const ItemManagerModal = ({
   // 모니터링의 대상은 **라인 × 공정 단계**다(PLAN-monitoring 2-2) — 제품군·정확도 집계 대신
   // 라인과 공정을 받는다. 설비 개체는 세지 않고, 대수는 평가의 근거 칸으로 간다.
   const isMon = sector === 'manufacturing_monitoring';   // 대상이 라인 × 공정인 부문
+  // 공장 최적화의 대상은 **법인 × 라인**(2026-09-02). 공정 단계는 배치·물류·계획의 결정 단위로
+  // 너무 잘고 법인만은 너무 굵다. 라인은 모니터링과 같은 칸을 쓴다.
+  const isFac = sector === 'factory_optimization';
+  const optKinds = factory?.optimization_kinds || [];
   const fieldsSubject = () => (
     <>
       <DivisionField d={d} set={set} canEdit={canEditCur} divisions={divisions} pairs={pairCount[current.id] || 0} />
       <Field><span>이름</span>
         <input value={d.name} disabled={!canEditCur} onChange={e => set({ name: e.target.value })}
-               placeholder={isMon ? '예: A라인 · SMT 실장' : ''} /></Field>
-      {isMon ? (
+               placeholder={isMon ? '예: A라인 · SMT 실장' : isFac ? '예: 베트남 법인 · SMT 1라인' : ''} /></Field>
+      {isFac ? (
+        <>
+          <Pair>
+            <Field><span>법인</span>
+              <input value={d.site} disabled={!canEditCur} onChange={e => set({ site: e.target.value })} placeholder="예: 베트남 법인 · 구미 2공장" />
+              <small>사업부가 쓰는 이름 그대로. 모판 묶음과 필터의 기준입니다.</small></Field>
+            <Field><span>라인</span>
+              <input value={d.line} disabled={!canEditCur} onChange={e => set({ line: e.target.value })} placeholder="예: SMT 1라인" />
+              <small>모니터링의 라인 이름과 같게 적으면 두 부문이 같은 라인으로 읽힙니다.</small></Field>
+          </Pair>
+          <Field><span>세부</span>
+            <input value={d.detail} disabled={!canEditCur} onChange={e => set({ detail: e.target.value })} placeholder="예: 설비 24대 · 작업자 18명 · 2교대" />
+            <small>라인의 규모를 적어 두세요 — 모델링 범위·적용 범위의 근거 칸이 됩니다.</small></Field>
+        </>
+      ) : isMon ? (
         <>
           <Pair>
             <Field><span>라인·사업장</span>
@@ -514,8 +532,19 @@ const ItemManagerModal = ({
         <input value={d.name} disabled={!canEditCur} onChange={e => set({ name: e.target.value })} />
         <small>엑셀 행 단위 — 정확도가 그 단위로 나옵니다. 과제 단위로 묶지 마세요.</small></Field>
       <Pair>
+        {isFac ? (
+        <Field><span>종류</span>
+          {/* 다섯 종류는 축이 아니라 수단의 종류다 — 종류가 어느 KPI 에 닿는지를 정하므로 사전에서 고른다 */}
+          <select value={d.kind} disabled={!canEditCur} onChange={e => set({ kind: e.target.value })}>
+            <option value="">— 고르세요 —</option>
+            {optKinds.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+            {d.kind && !optKinds.some(k => k.key === d.kind) && <option value={d.kind}>{d.kind} — 없는 종류</option>}
+          </select>
+          <small>{(optKinds.find(k => k.key === d.kind) || {}).description || '설비·로봇 / 라인 / 물류 / 가상 시생산 / 생산중 운영'}</small></Field>
+        ) : (
         <Field><span>종류</span>
           <input value={d.kind} disabled={!canEditCur} onChange={e => set({ kind: e.target.value })} placeholder="예: 구조, 열, 유동, 전자기" /></Field>
+        )}
         {isSim && (
         <Field><span>모델 종류</span>
           <select value={d.model_kind} disabled={!canEditCur} onChange={e => set({ model_kind: e.target.value })}>

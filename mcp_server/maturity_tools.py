@@ -131,7 +131,7 @@ def register(mcp, request_fn):
         """[성숙도] 한 사업부의 **판** — 대상 × 수단마다 축별 지금 칸. 성숙도를 읽는 기본 도구.
 
         `sector` 는 `maturity_describe` 의 부문 key(simulation · manufacturing_monitoring ·
-        digital_thread …). 안 주면 시뮬레이션이다.
+        factory_optimization · digital_thread …). 안 주면 시뮬레이션이다.
 
         각 연계에 `pair_id` 가 있다 — 고치려면 그 id 로 `maturity_assess` 를 부른다.
         `at` 이 축별 지금 칸이고, `unassessed` 는 아직 안 매긴 축이다.
@@ -197,6 +197,8 @@ def register(mcp, request_fn):
                지어 적지 말고 `maturity_name_catalog` 에서 고르세요 — 「Altair HyperMesh」를
                「HyperMesh」로 적으면 같은 도구가 둘이 되어 셈이 틀어진다. 서버는 안 막는다.
           모니터링 대상: line(라인·사업장) · process(공정 단계 key)
+          공장 최적화 대상: site(법인 — SEV·SAMEX 같은 법인명) · line(라인)
+          공장 최적화 수단: kind(종류 key — equipment·line·logistics·virtual_pilot·operation 중 하나)
 
         ⚠️ 이름이 같은 것이 이미 있으면 그것을 다시 쓰지 않고 **또 만든다** — 먼저
            `maturity_list_items` 로 있는지 보고 부르세요. 여럿을 한 번에 세울 때는

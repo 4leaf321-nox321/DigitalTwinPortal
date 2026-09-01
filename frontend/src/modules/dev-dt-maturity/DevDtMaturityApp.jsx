@@ -252,7 +252,8 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                     onChanged={bump} refreshKey={refreshKey} />
         ))}
         {pairId && defs && tab !== 'list' && (
-          <PairModal pairId={pairId} axes={axes} since={sinceIso} onClose={() => patch({ pair: null, since: null })} onChanged={bump} />
+          <PairModal pairId={pairId} axes={axes} since={sinceIso} factory={defs?.factory || null}
+                     onClose={() => patch({ pair: null, since: null })} onChanged={bump} />
         )}
         {modal && ['system', 'org', 'thread'].includes(modal.kind) && defs && (
           <ThreadDictModal kind={modal.kind} divisionId={divisionId} divisions={divisions} thread={defs.thread} axes={defs.axes?.digital_thread || []}
@@ -280,6 +281,7 @@ const DevDtMaturityApp = ({ onGoHome }) => {
                      denyReason={division?.deny_reason || null} modelKinds={defs.model_kinds}
                      sectorDef={(defs.sectors || []).find(s => s.key === sector)} accuracyRules={defs.accuracy_rules || []}
                      sector={sector} processSteps={defs.monitoring?.process_steps || []}
+                     factory={defs.factory || null}
                      onClose={() => setModal(null)} onChanged={bump} />
         )}
       </Main>
