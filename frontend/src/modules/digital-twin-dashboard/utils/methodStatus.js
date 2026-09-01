@@ -136,6 +136,54 @@ export const todoSheets = ({
   };
 };
 
+/** 기여 등급 — 서버 KPI_RELATION_TYPES 와 같은 값. 엑셀에는 문구로 적는다. */
+const REL_LABEL = { primary: '주기여', support: '보조기여', indirect: '간접기여' };
+/** 기여 방법 — note 한 칸에 줄바꿈으로 여럿(KpiLinkSection 의 NOTE_SEP 과 같다). */
+export const methodsOf = (note) =>
+  String(note || '').split('\n').map((x) => x.trim()).filter(Boolean);
+
+/**
+ * 과제-기여방법-KPI 연결 한 판 — **전 사업부**, 연결 한 줄에 한 행(2026-09-02 요청).
+ *
+ * ⚠️ 미연계 과제도 넣는다(KPI 칸 비움, 「미연계」). 빼면 「연결된 것만 있는 목록」이 되어
+ *    빠진 과제가 있는지 엑셀에서 알 길이 없다. 기여방법이 빈 연결은 「미입력」으로 적어
+ *    필터 한 번으로 남은 일이 걸러지게 한다.
+ * ⚠️ 기여 방법은 셀 안 줄바꿈(엑셀에서 Alt+Enter 와 같다)으로 여럿을 담고, 개수 열을 따로
+ *    둔다 — 「몇 개 적었나」는 세로로 세지 않아도 보여야 한다.
+ */
+export const linkSheet = ({
+  owners = [], funcs = [], projects = [], links = [], projById = new Map(),
+  taggedProjects = new Set(), kpis = [],
+} = {}) => {
+  const order = new Map([...owners, ...funcs].map((d, i) => [d.name, i]));
+  const rank = (name) => (order.has(name) ? order.get(name) : 999);
+  const kpiOf = new Map(kpis.map((k) => [k.kpiDefinitionId, k]));
+  const rows = [];
+  links.forEach(([puid, kid, target, note, rel]) => {
+    const p = projById.get(puid);
+    if (!p || !target) return;
+    const k = kpiOf.get(kid);
+    const ms = methodsOf(note);
+    rows.push([p.division || '', p.code || '', p.title || '', p.status || '',
+      target, k?.category || '', k?.label || String(kid),
+      REL_LABEL[rel] || (rel ? String(rel) : '미지정'),
+      ms.length, ms.length ? ms.join('\n') : '미입력']);
+  });
+  projects.filter((p) => !taggedProjects.has(p.uuid)).forEach((p) => {
+    rows.push([p.division || '', p.code || '', p.title || '', p.status || '',
+      '', '', '미연계', '', 0, '']);
+  });
+  rows.sort((a, b) => rank(a[0]) - rank(b[0])
+    || String(a[2]).localeCompare(String(b[2])) || String(a[6]).localeCompare(String(b[6])));
+  return [['조직', '과제코드', '과제명', '상태', '대상 사업부', 'KPI 분류', 'KPI',
+    '기여 등급', '기여 방법 수', '기여 방법'], ...rows];
+};
+
+export const linkFileName = (year, now = new Date()) => {
+  const p = (n) => String(n).padStart(2, '0');
+  return `과제-기여방법-KPI연결_${year}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}.xlsx`;
+};
+
 /** 파일 이름 — 무엇을·언제 뽑았는지가 이름에 있어야 폴더에서 찾는다. */
 export const statusFileName = (year, now = new Date()) => {
   const p = (n) => String(n).padStart(2, '0');

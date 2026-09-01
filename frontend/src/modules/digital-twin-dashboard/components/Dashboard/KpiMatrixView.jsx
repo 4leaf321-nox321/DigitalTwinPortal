@@ -41,7 +41,7 @@ import { fetchKpiMatrixV2, fetchSystemSettings, saveSystemSettings } from '../..
 import { useAuth } from '../../../../contexts/AuthContext';
 import KpiContributionFlow from './KpiContributionFlow';
 import { orgStatusOf } from '../../utils/methodStatus';
-import { exportKpiStatus } from '../../services/exportKpiStatus';
+import { exportKpiStatus, exportKpiLinks } from '../../services/exportKpiStatus';
 import BulkKpiLinkModal from './BulkKpiLinkModal';
 
 /**
@@ -1649,7 +1649,7 @@ const StatusBtn = styled.button`
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin-left: auto;
+  margin-left: ${(p) => (p.$tail ? '0.4rem' : 'auto')};   /* 첫 단추만 오른쪽 끝으로 민다 */
   padding: 0.4rem 0.8rem;
   border-radius: 0.5rem;
   border: 1px dashed ${(p) => (p.$warn ? '#f59e0b' : '#cbd5e1')};
@@ -2668,6 +2668,21 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
                 {todo > 0 && (
                   <b>미연계 {orgStatus.totals.unlinked} · 미입력 {orgStatus.totals.missing}</b>
                 )}
+              </StatusBtn>
+              {/* 과제-기여방법-KPI 연결을 **전 사업부** 한 판으로 — 보고서·회의 자료용(2026-09-02 요청).
+                  탭에서 고른 사업부와 무관하게 다 뽑는다 — 화면에 있는 것으로 만들어 서버를 안 찌른다. */}
+              <StatusBtn
+                type="button"
+                $tail
+                onClick={() => {
+                  try {
+                    exportKpiLinks({ year: currentYear, source: statusSource });
+                    setSaveErr(null);
+                  } catch (e) { setSaveErr(e.message || '엑셀을 만들지 못했습니다.'); }
+                }}
+                title="전 사업부의 과제-기여방법-KPI 연결을 엑셀 한 판으로 내려받습니다 (미연계 과제 포함)"
+              >
+                <Download size={13} /> 연결 내보내기
               </StatusBtn>
             </DivTabBar>
           )}

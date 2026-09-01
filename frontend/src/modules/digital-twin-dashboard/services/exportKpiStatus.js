@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import { statusSheet, todoSheets, statusFileName } from '../utils/methodStatus';
+import { statusSheet, todoSheets, statusFileName, linkSheet, linkFileName } from '../utils/methodStatus';
 
 /**
  * 「KPI 연계 현황」을 엑셀 한 권으로 내려받는다(2026-08-30 요청).
@@ -64,4 +64,22 @@ export const exportKpiStatus = ({ year, orgStatus, source }) => {
   XLSX.writeFile(wb, statusFileName(year));
 };
 
-export default { exportKpiStatus };
+/**
+ * 과제-기여방법-KPI 연결 — 전 사업부를 한 판에(2026-09-02 요청).
+ * 기여 방법은 셀 안 줄바꿈이라 그 열만 줄바꿈 표시를 켠다 — 안 켜면 한 줄로 이어져 안 읽힌다.
+ */
+export const exportKpiLinks = ({ year, source }) => {
+  const rows = linkSheet(source);
+  if (rows.length <= 1) throw new Error('내려받을 연결이 없습니다.');
+  const wb = XLSX.utils.book_new();
+  addSheet(wb, '과제-기여방법-KPI', rows);
+  const ws = wb.Sheets['과제-기여방법-KPI'];
+  const col = rows[0].indexOf('기여 방법');
+  for (let r = 1; r < rows.length; r += 1) {
+    const cell = ws[XLSX.utils.encode_cell({ r, c: col })];
+    if (cell) cell.s = { alignment: { wrapText: true, vertical: 'top' } };
+  }
+  XLSX.writeFile(wb, linkFileName(year));
+};
+
+export default { exportKpiStatus, exportKpiLinks };

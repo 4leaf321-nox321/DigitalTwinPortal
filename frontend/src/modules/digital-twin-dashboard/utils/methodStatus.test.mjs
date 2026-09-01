@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  orgStatusOf, rateOf, statusSheet, todoSheets, statusFileName,
+  orgStatusOf, rateOf, statusSheet, todoSheets, statusFileName, linkSheet, linkFileName, methodsOf,
 } from './methodStatus.js';
 
 const OWNERS = [{ name: 'MX' }, { name: 'VD' }];
@@ -153,4 +153,42 @@ test('할 일 판에 취소 과제와 대상 없는 줄은 안 들어간다', ()
 
 test('파일 이름에 무엇을·언제가 들어간다', () => {
   assert.equal(statusFileName(2026, new Date(2026, 7, 30)), 'KPI연계현황_2026_20260830.xlsx');
+});
+
+// ── 과제-기여방법-KPI 연결 한 판 (2026-09-02) ────────────────────────────────
+test('연결 한 줄에 한 행 — 등급은 문구로, 기여 방법은 셀 안 줄바꿈과 개수로', () => {
+  const projects = [{ uuid: 'a', division: 'MX', code: 'P1', title: '낙하 해석', status: '진행' }];
+  const links = [['a', 1, 'MX', '해석으로 회차 감축\n시험 병행 축소', 'primary']];
+  const kpis = [{ kpiDefinitionId: 1, label: '시험 리드타임', category: '개발' }];
+  const rows = linkSheet({ ...src(projects, links), kpis });
+  assert.deepEqual(rows[0], ['조직', '과제코드', '과제명', '상태', '대상 사업부', 'KPI 분류', 'KPI',
+    '기여 등급', '기여 방법 수', '기여 방법']);
+  assert.deepEqual(rows[1], ['MX', 'P1', '낙하 해석', '진행', 'MX', '개발', '시험 리드타임',
+    '주기여', 2, '해석으로 회차 감축\n시험 병행 축소']);
+});
+
+test('미연계 과제도 한 줄로 들어가고, 기여방법이 빈 연결은 「미입력」이다', () => {
+  const projects = [P('a', 'MX'), P('b', 'VD')];
+  const links = [['a', 1, 'MX', '', null]];
+  const rows = linkSheet({ ...src(projects, links), kpis: [{ kpiDefinitionId: 1, label: 'OTP' }] });
+  const a = rows.find((r) => r[0] === 'MX');
+  const b = rows.find((r) => r[0] === 'VD');
+  assert.equal(a[7], '미지정');            // 등급 없는 연결
+  assert.equal(a[8], 0);
+  assert.equal(a[9], '미입력');
+  assert.equal(b[6], '미연계');            // 아무 KPI 에도 안 걸린 과제
+  assert.equal(b[4], '');
+});
+
+test('전 사업부를 조직 차례로 — 탭에서 고른 사업부와 무관하다', () => {
+  const projects = [P('c', 'CS'), P('v', 'VD'), P('m', 'MX')];
+  const links = [['c', 1, 'MX', 'x', 'support'], ['v', 1, 'VD', 'y', 'indirect'], ['m', 1, 'MX', 'z', 'primary']];
+  const rows = linkSheet({ ...src(projects, links), kpis: [{ kpiDefinitionId: 1, label: 'OTP' }] }).slice(1);
+  assert.deepEqual(rows.map((r) => r[0]), ['MX', 'VD', 'CS']);   // 사업부 먼저, 기능조직 뒤
+  assert.deepEqual(rows.map((r) => r[7]), ['주기여', '간접기여', '보조기여']);
+});
+
+test('기여 방법은 줄바꿈으로 나뉘고 빈 줄은 버린다 · 파일 이름에 연도와 날짜', () => {
+  assert.deepEqual(methodsOf(' a \n\n b '), ['a', 'b']);
+  assert.equal(linkFileName(2026, new Date(2026, 8, 2)), '과제-기여방법-KPI연결_2026_20260902.xlsx');
 });
