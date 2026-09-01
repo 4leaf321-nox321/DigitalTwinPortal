@@ -1447,31 +1447,33 @@ const CmpCard = styled.div`
 `;
 const CmpHead = styled.div`
   display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-  padding: 0.85rem 1.1rem; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
-  font-size: 0.85rem; font-weight: 700; color: #334155;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+  font-size: 1rem; font-weight: 700; color: #334155;
 `;
-const CmpNote = styled.span`margin-left: auto; font-size: 0.75rem; font-weight: 500; color: #64748b;`;
+const CmpNote = styled.span`margin-left: auto; font-size: 0.85rem; font-weight: 500; color: #64748b; line-height: 1.6;`;
 const ShowToggle = styled.div`display: inline-flex; border: 1px solid #cbd5e1; border-radius: 0.5rem; overflow: hidden;`;
 const ShowBtn = styled.button`
-  border: none; cursor: pointer; font-family: inherit; font-size: 0.78rem; font-weight: 600;
-  padding: 0.3rem 0.75rem; background: ${p => (p.$on ? '#0f766e' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};
+  border: none; cursor: pointer; font-family: inherit; font-size: 0.9rem; font-weight: 600;
+  padding: 0.42rem 1rem; background: ${p => (p.$on ? '#0f766e' : 'white')}; color: ${p => (p.$on ? 'white' : '#475569')};
   & + & { border-left: 1px solid #cbd5e1; }
 `;
 const CmpScroll = styled.div`overflow-x: auto;`;
 const CmpTable = styled.table`
-  width: 100%; border-collapse: collapse; font-size: 0.8rem;
-  th, td { padding: 0.4rem 0.45rem; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap; }
-  th { font-size: 0.7rem; color: #64748b; font-weight: 700; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-  th:first-child, td:first-child { text-align: left; min-width: 7rem; font-weight: 600; color: #1e293b; }
+  width: 100%; border-collapse: collapse; font-size: 1rem;
+  /* 줄 높이 — 임원 보고용이라 넉넉히. 세로 여백이 곧 줄 높이다(2026-08-31). */
+  th, td { padding: 0.85rem 0.6rem; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap; }
+  th { font-size: 0.85rem; color: #64748b; font-weight: 700; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+       padding: 0.7rem 0.6rem; }
+  th:first-child, td:first-child { text-align: left; min-width: 9rem; font-weight: 700; color: #1e293b; }
   /* 12개월과 그 뒤(범위 밖·달 모름·계)를 가른다 — 세는 뜻이 다르다 */
   th.edge, td.edge { border-left: 1px solid #e2e8f0; }
   tbody tr:hover td { background: #f8fafc; }
   tfoot td { font-weight: 700; background: #f8fafc; border-top: 1px solid #e2e8f0; }
 `;
 const CmpCell = styled.button`
-  border: none; background: ${p => (p.$on ? '#ccfbf1' : 'transparent')}; border-radius: 0.35rem;
-  font-family: inherit; font-size: 0.8rem; padding: 0.15rem 0.4rem; cursor: ${p => (p.$empty ? 'default' : 'pointer')};
-  font-variant-numeric: tabular-nums; color: #94a3b8; min-width: 3.2rem;
+  border: none; background: ${p => (p.$on ? '#ccfbf1' : 'transparent')}; border-radius: 0.4rem;
+  font-family: inherit; font-size: 1.05rem; padding: 0.35rem 0.55rem; cursor: ${p => (p.$empty ? 'default' : 'pointer')};
+  font-variant-numeric: tabular-nums; color: #94a3b8; min-width: 4.2rem;
   &:hover { background: ${p => (p.$empty ? 'transparent' : '#f1f5f9')}; }
   b { color: #0f766e; font-weight: 700; }               /* 완료 */
   i { font-style: normal; color: #64748b; }             /* 아직 */
@@ -1480,22 +1482,22 @@ const CmpCell = styled.button`
 `;
 const CmpPickHead = styled.div`
   display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1.1rem;
-  border-bottom: 1px solid #e2e8f0; background: #f0fdfa; font-size: 0.85rem; font-weight: 700; color: #0f766e;
+  border-bottom: 1px solid #e2e8f0; background: #f0fdfa; font-size: 1rem; font-weight: 700; color: #0f766e;
 `;
 const CmpRow = styled.div`
-  display: grid; grid-template-columns: 5rem 1fr 8rem 7rem; gap: 0.75rem; align-items: center;
-  padding: 0.5rem 1.1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.82rem; cursor: pointer;
+  display: grid; grid-template-columns: 6.5rem 1fr 9rem 10rem; gap: 0.9rem; align-items: center;
+  padding: 0.7rem 1.25rem; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; cursor: pointer;
   &:hover { background: #f8fafc; }
-  .code { color: #64748b; font-size: 0.75rem; }
+  .code { color: #64748b; font-size: 0.85rem; }
   .name { color: #1e293b; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .when { color: #64748b; font-size: 0.75rem; text-align: right; }
+  .when { color: #64748b; font-size: 0.85rem; text-align: right; }
 `;
 const CmpTag = styled.span`
-  display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+  display: inline-block; padding: 0.15rem 0.7rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700;
   background: ${p => (p.$k === 'done' ? '#ccfbf1' : p.$k === 'late' ? '#ffedd5' : '#f1f5f9')};
   color: ${p => (p.$k === 'done' ? '#0f766e' : p.$k === 'late' ? '#c2410c' : '#64748b')};
 `;
-const CmpEmpty = styled.div`padding: 1.5rem; text-align: center; color: #94a3b8; font-size: 0.85rem;`;
+const CmpEmpty = styled.div`padding: 2.5rem; text-align: center; color: #94a3b8; font-size: 1rem;`;
 
 /** 칸 하나 — 앞이 완료, 뒤가 아직. 둘 다 0 이면 누를 것이 없다. */
 const CmpCellView = ({ cell, show, on, onPick }) => {
@@ -3560,7 +3562,7 @@ const AllProjectsView = ({
                 {cmpPick && (
                   <button type="button" onClick={() => setCmpPick(null)}
                           style={{ marginLeft: 'auto', border: 'none', background: 'transparent',
-                                   color: '#64748b', cursor: 'pointer', fontSize: '0.78rem' }}>선택 해제</button>
+                                   color: '#64748b', cursor: 'pointer', fontSize: '0.9rem' }}>선택 해제</button>
                 )}
               </CmpPickHead>
               {(() => {

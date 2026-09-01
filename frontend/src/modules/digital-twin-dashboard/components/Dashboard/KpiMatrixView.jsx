@@ -1671,12 +1671,13 @@ const StatusBtn = styled.button`
 const StatTable = styled.table`
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
-  th, td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #f1f5f9; text-align: right; }
-  th { font-size: 0.7rem; color: #64748b; font-weight: 700; background: #f8fafc;
+  font-size: 0.95rem;
+  /* 줄 높이 — 세로 여백이 곧 줄 높이다. 창을 70% 로 키웠으니 표도 같이 키운다. */
+  th, td { padding: 0.7rem 0.65rem; border-bottom: 1px solid #f1f5f9; text-align: right; }
+  th { font-size: 0.82rem; color: #64748b; font-weight: 700; background: #f8fafc;
        position: sticky; top: 0; z-index: 1; }
   thead tr:last-child th { border-bottom: 1px solid #e2e8f0; }
-  th.grp { text-align: center; color: #334155; font-size: 0.72rem; letter-spacing: 0.02em;
+  th.grp { text-align: center; color: #334155; font-size: 0.9rem; letter-spacing: 0.02em;
            border-bottom: 1px solid #e2e8f0; }
   th:first-child, td:first-child { text-align: left; }
   /* 두 단의 경계 — 여기서부터 세는 단위가 과제에서 연결로 바뀐다 */
@@ -1686,8 +1687,8 @@ const StatTable = styled.table`
   tbody tr.org:hover td { background: #f8fafc; }
   tbody tr.on td { background: #eef2ff; }
   /* 사업부 / 기능조직 — 읽는 법이 달라 구획을 나눈다 */
-  tr.band td { background: #f8fafc; color: #64748b; font-size: 0.7rem; font-weight: 700;
-               letter-spacing: 0.03em; padding: 0.3rem 0.5rem; text-align: left; }
+  tr.band td { background: #f8fafc; color: #64748b; font-size: 0.85rem; font-weight: 700;
+               letter-spacing: 0.03em; padding: 0.45rem 0.65rem; text-align: left; }
   tfoot td { font-weight: 700; color: #111827; background: #f8fafc; border-top: 1px solid #e2e8f0; }
   td.bad { color: #b45309; font-weight: 700; }
   td.bad.zero { color: #94a3b8; font-weight: 500; }
@@ -1695,10 +1696,10 @@ const StatTable = styled.table`
 /* 비율 한 칸 — 숫자보다 **막대**가 먼저 읽힌다. */
 const FillBar = styled.div`
   display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end;
-  i { display: block; width: 3.4rem; height: 0.4rem; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+  i { display: block; width: 5rem; height: 0.55rem; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
   i > b { display: block; height: 100%; border-radius: 999px;
           background: ${(p) => (p.$pct >= 80 ? '#10b981' : p.$pct >= 50 ? '#f59e0b' : '#ef4444')}; }
-  span { min-width: 2.4rem; font-variant-numeric: tabular-nums; }
+  span { min-width: 3rem; font-variant-numeric: tabular-nums; }
 `;
 /* ⚠️ PanelBody 는 좌우 패딩을 안 준다(과제 줄의 hover 가 폭을 꽉 채워야 해서).
       그래서 여기 놓는 것은 저마다 PANEL_X 로 여백을 맞춘다 — 안 하면 벽에 붙는다. */
@@ -3169,12 +3170,16 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
       */}
       {methodOpen && (
         <Backdrop onClick={() => setMethodOpen(false)}>
-          <Panel onClick={(e) => e.stopPropagation()} style={{ width: 'min(62rem, 100%)' }}
+          {/* 화면의 70% — 임원 보고에 띄우는 판이라 넉넉히 본다(2026-08-31).
+              ⚠️ height 도 함께 준다. Panel 은 max-height 뿐이라 내용만큼만 높아져,
+                 줄이 적은 해에는 납작해진다. */}
+          <Panel onClick={(e) => e.stopPropagation()}
+                 style={{ width: '70vw', height: '70vh', maxHeight: '70vh', maxWidth: 'none' }}
                  role="dialog" aria-label="KPI 연계 현황">
             <PanelHead>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>KPI 연계 현황</div>
-                <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: 2 }}>
+                <div style={{ fontWeight: 700, fontSize: '1.15rem' }}>KPI 연계 현황</div>
+                <div style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: 3 }}>
                   과제가 KPI에 걸렸는지, 걸린 것마다 「어떻게 기여하는가」가 적혔는지 —
                   사업부 줄을 누르면 그 사업부로 옮깁니다
                 </div>
@@ -3259,7 +3264,7 @@ const KpiMatrixView = ({ currentYear, onYearChange, onOpenProject, reloadSignal,
                     </tr>
                   </tfoot>
                 </StatTable>
-                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', lineHeight: 1.75 }}>
+                <div style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '1rem', lineHeight: 1.8 }}>
                   <b style={{ color: '#334155' }}>과제</b>는 그 조직이 <b>수행</b>하는 것입니다(취소 제외).
                   기능조직 과제는 기여한 사업부가 아니라 <b>자기 줄</b>에 섭니다 —
                   그래야 표 전체에서 한 번씩만 세어집니다.<br />
