@@ -1127,6 +1127,7 @@ const EditProjectModal =({ isOpen, onClose, onSubmit, onSubmitAndUpload, onSaveA
         handleSaveAndStay={onSubmitAndUpload ? handleSaveAndStay : null}
         handleSaveAsNew={onSaveAsNew ? handleSaveAsNew : null}
         onExportToPPT={canExportReport ? handleExportToPPT : null}
+        subjectTitle={formData.과제명 || ''}
         isEditMode={true}
         onNavigatePrev={prevProject ? handleNavigatePrev : null}
         onNavigateNext={nextProject ? handleNavigateNext : null}

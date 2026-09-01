@@ -181,6 +181,19 @@ const ModalHeader = styled.div`
     align-items: center;
     gap: 0.5rem;
   }
+  /* 과제명 — 어느 탭에 있든 「무슨 과제」인지가 머리줄에 남는다(2026-09-02 요청).
+     기본정보 탭을 벗어나면 제목 칸이 안 보여 다른 과제인 줄 알고 고치는 일이 있었다. */
+  .subject {
+    margin-top: 0.3rem;
+    font-size: 0.92rem;
+    font-weight: 500;
+    opacity: 0.92;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(60vw, 48rem);
+  }
+  .subject small { opacity: 0.75; margin-right: 0.4rem; font-weight: 600; }
   
   .close-btn {
     background: rgba(255, 255, 255, 0.2);
@@ -466,6 +479,8 @@ const ModalLayout = ({
   handleSaveAsNew, onExportToPPT, isEditMode = false, onNavigatePrev, onNavigateNext, navInfo,
   // 탭 UI (선택) — 주지 않으면 기존처럼 세로로 이어 붙인다
   tabs, activeTab, onTabChange,
+  // 머리줄에 남길 과제명(선택) — 탭을 옮겨도 무슨 과제인지 보이게
+  subjectTitle = '', subjectCode = '',
 }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.is_admin;
@@ -549,18 +564,25 @@ const ModalLayout = ({
         transition={{ type: "spring", damping: 25, stiffness: 500 }}
       >
         <ModalHeader>
-          <div className="title">
-            {isEditMode ? (
-              <>
-                <Save size={20} />
-                과제 편집 ({displayYear}년)
-                {navInfo && <NavInfo>{navInfo.current} / {navInfo.total}</NavInfo>}
-              </>
-            ) : (
-              <>
-                <Plus size={20} />
-                새 과제 추가 ({displayYear}년)
-              </>
+          <div>
+            <div className="title">
+              {isEditMode ? (
+                <>
+                  <Save size={20} />
+                  과제 편집 ({displayYear}년)
+                  {navInfo && <NavInfo>{navInfo.current} / {navInfo.total}</NavInfo>}
+                </>
+              ) : (
+                <>
+                  <Plus size={20} />
+                  새 과제 추가 ({displayYear}년)
+                </>
+              )}
+            </div>
+            {(subjectTitle || subjectCode) && (
+              <div className="subject" title={subjectTitle}>
+                {subjectCode && <small>{subjectCode}</small>}{subjectTitle || '(제목 없음)'}
+              </div>
             )}
           </div>
           <button className="close-btn" onClick={handleCloseClick}>

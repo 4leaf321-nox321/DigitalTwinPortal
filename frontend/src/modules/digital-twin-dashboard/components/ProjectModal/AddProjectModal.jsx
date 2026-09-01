@@ -524,6 +524,7 @@ const AddProjectModal = ({ isOpen, onClose, onSubmit, onSubmitAndUpload, current
         formYear={formData.과제년도}
         handleSubmit={handleSubmit}
         handleSubmitAndUpload={onSubmitAndUpload ? handleSubmitAndUploadClick : null}
+        subjectTitle={formData.과제명 || ''}
         isEditMode={false}
         activeTab={activeTab}
         onTabChange={setActiveTab}
