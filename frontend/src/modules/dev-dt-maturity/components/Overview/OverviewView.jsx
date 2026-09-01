@@ -49,6 +49,15 @@ const Draft = styled.span`
   display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px;
   border: 1px dashed #cbd5e1; color: #94a3b8; font-size: 0.74rem; font-weight: 600;
 `;
+/* 현행 운영 KPI 줄 — 문제를 말하기 전에 「지금 무엇을 재고 있나」를 먼저 둔다. */
+const NowRow = styled.div`
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem;
+  margin: 0 0 1rem; padding: 0.7rem 0.85rem; border-radius: 0.5rem;
+  background: #fffbeb; border: 1px solid #fde68a;
+  > b { font-size: 0.86rem; color: #78350f; margin-right: 0.35rem; }
+  > span { font-size: 0.86rem; color: #92400e; }
+  small { margin-left: 0.3rem; font-weight: 500; opacity: 0.75; }
+`;
 const Say = styled.p`
   margin: 0.9rem 0 0; padding-top: 0.8rem; border-top: 1px solid #f1f5f9;
   font-size: 0.95rem; color: #334155; line-height: 1.75;
@@ -62,15 +71,6 @@ const Points = styled.ul`
   li b { color: #0f172a; }
   li em { font-style: normal; display: block; margin-top: 0.2rem;
           font-size: 0.9rem; color: #64748b; }
-`;
-/* 개발시간의 세 갈래 — 인건비만 세면 가장 작은 갈래만 보는 셈이다. */
-const Branch = styled.div`
-  display: grid; grid-template-columns: 8.5rem 1fr; gap: 0.6rem; align-items: baseline;
-  padding: 0.4rem 0; border-top: 1px solid #f1f5f9;
-  &:first-of-type { border-top: none; }
-  b { font-size: 0.92rem; color: ${p => (p.$hi ? '#1e40af' : '#334155')}; }
-  span { font-size: 0.9rem; color: #64748b; line-height: 1.65; }
-  @media (max-width: 700px) { grid-template-columns: 1fr; gap: 0.15rem; }
 `;
 
 /* ── 3. 지표 — 기본은 접혀 있다 ────────────────────────────────────────── */
@@ -151,65 +151,63 @@ const OverviewView = () => {
   const drafts = (fw.draft_sectors || []).map(d => ({ ...d, draft: true }));
   const nInd = fw.sectors.reduce((n, s) => n + s.indicators.length, 0);
   const nDraft = drafts.reduce((n, s) => n + s.indicators.length, 0);
-  const nResult = (fw.kpis || []).filter(k => k.tier === 'result').length;
-  // 개발시간 — 값어치가 세 갈래로 갈리는 유일한 성과다(1절이 그걸 적는다).
-  const devTime = fw.outcomes.find(o => (o.branches || []).length);
+  // 현행 운영 KPI — 1절 첫머리에 먼저 보인다. 「지금 KPI 가 뭐였지」가 안 생기게(2026-09-01 지적).
+  const NOW_ORDER = ['virtual_rate', 'otp', 'test_leadtime', 'data_link', 'line_loss', 'output_per_head', 'asr'];
+  const nowKpis = (fw.kpis || []).filter(k => k.managed)
+    .sort((a, b) => (NOW_ORDER.indexOf(a.key) + 99) % 99 - (NOW_ORDER.indexOf(b.key) + 99) % 99);
 
   return (
     <Wrap>
       {/* 1. 지금 문제 */}
       <Card>
-        <Head><b>1</b><h3>지금 문제</h3><small>단일 지표에 의한 역량 대변</small></Head>
+        <Head><b>1</b><h3>현행 체계의 한계</h3><small>단일 지표에 의한 역량 대변</small></Head>
         <Body>
+          {nowKpis.length > 0 && (
+            <NowRow>
+              <b>현행 운영 KPI</b>
+              {nowKpis.map(k => (
+                <Chip key={k.key} $bg="#ffffff" $fg="#92400e" style={{ border: '1px solid #fcd34d', margin: 0 }}>
+                  {k.label}<small>{k.domain}</small>
+                </Chip>
+              ))}
+              <span>— 과제 편성을 통한 개발비용·개발시간·품질비용·제조비용 절감</span>
+            </NowRow>
+          )}
           <Points>
             <li>
               <b>가상검증률은 시뮬레이션별 「정확도」의 평균.</b> 데이터 연결율 역시
               제조 「기본 계측」의 집계. 즉 현행 역량은 사실상 <b>지표 하나</b>로 대변되는 구조.
             </li>
             <li>
-              자동화·시험 대체 범위·재현 범위는 <b>현행 체계에 미반영.</b>
-              <em>「가상검증률 상승에도 시험 리드타임 정체」의 원인 설명 불가.</em>
+              시험 리드타임·One Time Pass 개선에 대한 <b>디지털 트윈(가상검증)의 기여도 불명확.</b>
+              {' '}라인 유실율·인당 생산대수 개선에 대한 <b>데이터 연결율의 기여도 역시 불명확.</b>
+              <em>자동화·시험 대체 범위·재현 범위, 판정 수준·조치 연계가 현행 체계에 미반영 —
+              「가상검증률 상승에도 시험 리드타임 정체」의 원인 설명 불가.</em>
             </li>
             <li>
-              해당 지표가 <b>어느 비용에 닿는지도 미정의.</b>
-              <em>역량 지표 1개로 성과형 KPI {nResult}개를 설명하는 구조.</em>
+              과제가 <b>각 비용에 직접 연결</b>되어 있어 기여 경로의 설명 곤란.
+              <em>과제 → KPI → 성과 순으로 잇는 <b>과제-KPI 연결 작업 진행 중</b>(디지털 트윈 대시보드).</em>
             </li>
             <li>
               현행 성과 넷은 전부 <b>비용 절감</b> — 매출·사업 확대 측면의 성과는
               <b> 정의 자체가 부재.</b>
-              <em>비용 절감만 집계할 경우 디지털 트윈 가치의 절반만 가시화 — 본 조사에서
-              제품 경쟁력·신사업·설비 투자 절감 셋을 성과 후보로 제안(대응 KPI 미정의).</em>
+              <em>신구조·신공정·신소재·신제품 등 <b>새로운 것의 적용</b>에 쓸 수 있는 성과 체계 필요 —
+              본 조사에서 제품 경쟁력·신사업·설비 투자 절감 셋을 성과 후보로 제안(대응 KPI 미정의).</em>
             </li>
           </Points>
-          {devTime?.branches && (
-            <div style={{ marginTop: '1.1rem', paddingTop: '0.9rem', borderTop: '1px solid #f1f5f9' }}>
-              <p style={{ margin: '0 0 0.5rem', fontSize: '0.95rem', color: '#0f172a', fontWeight: 700 }}>
-                「개발시간 단축」의 가치 — 세 갈래
-              </p>
-              {devTime.branches.map(b => (
-                <Branch key={b.label} $hi={!!b.to}>
-                  <b>{b.label}</b><span>{b.note}</span>
-                </Branch>
-              ))}
-              <p style={{ margin: '0.6rem 0 0', fontSize: '0.9rem', color: '#64748b', lineHeight: 1.7 }}>
-                현행 집계 범위는 첫째 갈래에 한정. 셋째 갈래가 <b>사업 확대로의 연결 고리</b> —
-                기간 단축은 원가가 아닌 <b>재원</b>.
-              </p>
-            </div>
-          )}
         </Body>
       </Card>
 
       {/* 2. 이 조사 */}
       <Card>
-        <Head><b>2</b><h3>이 조사</h3>
+        <Head><b>2</b><h3>성과 연계 구조</h3>
           <small>정의 부문 {fw.sectors.length} · 지표 {nInd}개 &nbsp;|&nbsp; 초안 부문 {drafts.length} · 지표 {nDraft}개 — 업무·KPI·성과에 각각 연결</small></Head>
         <Body>
           <ChainFlow sectors={fw.sectors} kpis={fw.kpis} outcomes={fw.outcomes}
                      drafts={fw.draft_sectors || []} chain={fw.value_chain || {}} />
           <Say>
             단일 지표에 뭉쳐 있던 역량을 <b>여러 지표로 분해하고 각각을 업무·KPI·성과에 연결.</b>
-            {' '}위·아래 띠는 <b>디지털 트윈 밖</b>의 개발·제조 업무 — 파란 선은 디지털 트윈이
+            {' '}위·아래 띠는 <b>디지털 트윈 외 영역</b>의 개발·제조 업무 — 파란 선은 디지털 트윈이
             <b> 작용하는 업무</b>, 점 선은 업무 자체가 KPI 를 미는 <b>디지털 트윈 외 경로.</b>
             {' '}점선은 <b>대응 KPI 미정의</b> — 측정 불가.
           </Say>
@@ -223,7 +221,7 @@ const OverviewView = () => {
 
       {/* 3. 지표 — 기본은 접혀 있다 */}
       <Card>
-        <Head><b>3</b><h3>지표</h3><small>부문 클릭 시 상세 표시 — 초안 부문 포함</small></Head>
+        <Head><b>3</b><h3>지표 상세</h3><small>부문 클릭 시 상세 표시 — 초안 부문 포함</small></Head>
         {[...fw.sectors, ...drafts].map(sec => (
           <React.Fragment key={sec.key}>
             <Fold type="button" $open={open === sec.key}
@@ -301,7 +299,7 @@ const OverviewView = () => {
 
       {/* 4. 전제 */}
       <Card>
-        <Head><b>4</b><h3>전제</h3></Head>
+        <Head><b>4</b><h3>전제 사항</h3></Head>
         <Body><Caveats>{fw.caveats.map(c => <li key={c}>{bold(c)}</li>)}</Caveats></Body>
       </Card>
     </Wrap>

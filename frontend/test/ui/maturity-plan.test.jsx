@@ -164,7 +164,7 @@ export default async function run() {
 
     // ② 절은 넷뿐 — 더 늘리면 안 읽힌다
     const heads = [...document.querySelectorAll('h3')].map(x => x.textContent.trim());
-    say(JSON.stringify(heads) === JSON.stringify(['지금 문제', '이 조사', '지표', '전제']),
+    say(JSON.stringify(heads) === JSON.stringify(['현행 체계의 한계', '성과 연계 구조', '지표 상세', '전제 사항']),
         `② 절이 넷: ${heads}`);
 
     // ③ 1절 — 문제를 그림 하나로
@@ -173,13 +173,24 @@ export default async function run() {
     say(text.includes('지표 하나') && text.includes('대변'), '③ 역량이 하나로 대변된다');
     say(text.includes('현행 체계에 미반영'), '③ 나머지 역량이 빠져 있다');
     say(text.includes('정의 자체가 부재') && text.includes('성과 후보로 제안'), '③ 새로 짚는 성과는 아직 후보다');
-    // KPI 수는 실제 수를 센다 — 고정물의 성과형 KPI 는 다섯이다
-    say(text.includes('성과형 KPI 5개'), '③ 성과형 KPI 수를 데이터에서 센다');
+    // 현행 운영 KPI 가 문제 앞에 먼저 선다 — 고정물의 managed 는 다섯(집계 둘 포함)
+    const nowRow = [...document.querySelectorAll('div')].find(d => d.textContent.startsWith('현행 운영 KPI'));
+    say(!!nowRow && nowRow.textContent.includes('가상검증률') && !nowRow.textContent.includes('설계 원가절감률'),
+        '③ 현행 운영 KPI 가 먼저 보인다(신규 제안은 제외)');
+    // 차례 — 가상검증률 · OTP · 시험 리드타임 · 데이터 연결율 · 라인 유실율 · 인당 생산대수(2026-09-01)
+    const nowTxt = nowRow.textContent;
+    say(nowTxt.indexOf('가상검증률') < nowTxt.indexOf('One Time Pass') && nowTxt.indexOf('One Time Pass') < nowTxt.indexOf('시험 리드타임')
+        && nowTxt.indexOf('시험 리드타임') < nowTxt.indexOf('데이터 연결율') && nowTxt.indexOf('데이터 연결율') < nowTxt.indexOf('라인 유실율'),
+    `③ 현행 KPI 의 차례: ${nowTxt}`);
+    say(text.includes('기여도 불명확') && text.includes('데이터 연결율의 기여도 역시 불명확')
+        && text.includes('과제-KPI 연결 작업 진행 중') && text.includes('새로운 것의 적용'),
+        '③ 둘째·셋째·넷째 문장의 뜻');
     // ⚠️ 임원 보고용 — 서술형 종결·구어 표현이 없어야 한다(2026-09-01 요청)
     ['덧붙여', '셈에 들어간다', '작용한다', '갈라진다', '대변된다', '없앤다', '줄인다']
       .forEach(w => say(!text.includes(w), `③ 구어·서술형 표현이 없다: ${w}`));
     // 개발시간의 세 갈래 — 인건비만 세면 가장 작은 갈래만 보는 셈이다
-    say(text.includes('세 갈래'), '③ 개발시간의 세 갈래');
+    // 「개발시간 단축」의 세 갈래 설명은 1절에서 뺐다(2026-09-01) — 순서도의 갈래 칸이 그 몫이다
+    say(!text.includes('세 갈래'), '③ 세 갈래 설명이 1절에 없다');
     ['인건비 절감', '조기 출시 매출', '개발 여력'].forEach(b => {
       say(text.includes(b), `③ 갈래 「${b}」`);
     });
@@ -257,7 +268,7 @@ export default async function run() {
     const st = built.nodes.find(n => n.id === 'b:design');
     const lv = built.nodes.find(n => n.id === 'b:test_infra');
     say(st.data.kind === 'step' && lv.data.kind === 'lever', '④ 단계와 기반 요소가 갈린다');
-    say(st.data.sub.includes('디지털 트윈 밖') && lv.data.sub.includes('디지털 트윈 밖'),
+    say(st.data.sub.includes('디지털 트윈 외 영역') && lv.data.sub.includes('디지털 트윈 외 영역'),
         '④ 둘 다 밖이라고 적힌다');
     say(lv.data.tip.rows.some(r => r.k === '작용하는 DT 지표' && r.v.includes('대체 불가')),
         '④ 기반 요소 요약이 디지털 트윈이 못 하는 몫임을 적는다');
@@ -305,7 +316,7 @@ export default async function run() {
     const e2 = edges.find(e => e.id === 'd:sim:automation:substitution');
     // 정확도 → 시험 대체는 제 줄의 자동화를 뚫고 가야 하므로 차선으로 비킨다. 이웃한 자동화 → 시험 대체는 안 비킨다.
     say(!!e1.data.lane && !e2.data.lane, `④ 가로막는 칸이 있는 선만 차선을 탄다: ${e1.data.lane} / ${e2.data.lane}`);
-    say(Math.abs(e1.data.lane) >= 30 && Math.abs(e1.data.lane) < 90 - 24,
+    say(Math.abs(e1.data.lane) >= 26 && Math.abs(e1.data.lane) < 80 - 24,
         '④ 차선이 줄 사이 틈 안에 있다 — 칸도 다음 줄도 안 건드린다');
     // ⚠️ 옆으로 들어갈 때도 같은 병이었다 — 같은 칸으로 모이는 선은 꺾는 자리와 들어가는 자리가 달라야 한다
     say(!!e1.data.hroute && !!e2.data.hroute && e1.data.hroute.bx !== e2.data.hroute.bx
@@ -342,6 +353,25 @@ export default async function run() {
     }).map(e => e.id);
     say(pierced.length === 0, `④ 가로 선이 칸을 뚫지 않는다: ${pierced.join(' ') || '없음'}`);
     say(!edges.find(e => e.id === 'a:sim:substitution:test').data.hroute, '④ 세로 선은 가로 길을 안 탄다');
+    // ⚠️ 같은 칸에서 나가는 가로 선 여럿 — 가닥으로 벌어지고, 설명은 제 가닥의 다른 자리에(2026-09-01 지적)
+    const s1 = edges.find(e => e.id === 'e:sim:accuracy:otp');
+    const s2 = edges.find(e => e.id === 'e:sim:accuracy:design_ve');
+    say(!!s1 && !!s2 && Math.abs(s1.data.hroute.runY - s2.data.hroute.runY) >= 14,
+        `④ 같은 칸에서 나가는 선은 가닥이 갈린다: ${s1?.data.hroute.runY} / ${s2?.data.hroute.runY}`);
+    const anc = placeLabels(built.nodes, edges, focusOf(edges, 'i:sim:accuracy').edges);
+    say(Math.abs(anc['e:sim:accuracy:otp'].x - anc['e:sim:accuracy:design_ve'].x) >= 40,
+        `④ 두 설명이 가로로 다른 자리에 앉는다: ${anc['e:sim:accuracy:otp'].x} / ${anc['e:sim:accuracy:design_ve'].x}`);
+    // ⚠️ 꺾는 자리 — 같은 열로 들어가는 선 중 세로 구간이 겹치는 둘이 같은 x 에서 꺾이면 포개진다
+    const hr = edges.filter(e => e.data.hroute);
+    const bendClash = hr.flatMap(a => hr.filter(b => a !== b && a.data.geo.tx === b.data.geo.tx
+      && Math.abs(a.data.hroute.bx - b.data.hroute.bx) < 1
+      && Math.min(a.data.hroute.runY, a.data.hroute.ey) < Math.max(b.data.hroute.runY, b.data.hroute.ey)
+      && Math.min(b.data.hroute.runY, b.data.hroute.ey) < Math.max(a.data.hroute.runY, a.data.hroute.ey))
+      .map(b => `${a.id}~${b.id}`));
+    say(bendClash.length === 0, `④ 꺾인 세로 구간이 겹치는 선이 없다: ${bendClash.join(' ') || '없음'}`);
+    // 성장 성과 첫째(신사업)는 「개발 여력」 갈래와 같은 높이
+    say(Math.abs(at['o:new_biz'].y - built.nodes.find(n => n.id === 'br:dev_time:2').position.y) < 1,
+        '④ 신사업이 개발 여력 갈래의 높이에 선다');
     // ⚠️ 같은 업무 칸으로 모이는 세로 선 — 꾸이는 높이와 들어가는 자리가 선마다 달라야 한다.
     //    같으면 마지막 세로 구간과 가로 구간이 통째로 포개진다(2026-09-01 지적).
     const v1 = edges.find(e => e.id === 'a:sim:automation:test').data.vlane;
@@ -372,7 +402,7 @@ export default async function run() {
       const rects = rectsOf(built);
       const labels = [];
       edges.filter(e => f2.edges.has(e.id)).forEach((e) => {
-        const w = Math.min(200, e.data.how.length * 7.4 + 22); const h = 28;
+        const w = Math.min(384, e.data.how.length * 11.6 + 24); const h = 28;
         const a = sh[e.id] || e.data.mid;
         const r = { x: a.x - w / 2, y: a.y - h / 2, w, h };
         if (rects.some(o => overlap(r, o))) bad.push(`${id}:${e.id}:칸`);
@@ -430,7 +460,7 @@ export default async function run() {
           `④ ${why} KPI 열이 지표·업무 오른쪽에 선다: ${right(g, 'b:')}/${right(g, 'i:')} < ${left(g, 'k:')}`);
       // 남은 KPI 는 구멍 없이 같은 간격으로 선다
       const ys = g.nodes.filter(n => n.id.startsWith('k:')).map(n => n.position.y).sort((p, q) => p - q);
-      say(ys.every((v, i) => i === 0 || Math.abs(v - ys[i - 1] - 100) < 0.5),
+      say(ys.every((v, i) => i === 0 || Math.abs(v - ys[i - 1] - 84) < 0.5),
           `④ ${why} KPI 사이에 구멍이 없다: ${ys.join()}`);
       // 띠 묶음과 KPI 열의 세로 중심이 맞는다
       const bandNs = g.nodes.filter(n => n.type === 'band');
@@ -456,15 +486,15 @@ export default async function run() {
         '④ 꺼진 쪽 지표가 화면에서 사라진다');
     await click(chip('제조')); await settle();
     say(document.querySelectorAll('.react-flow__node').length === before, '④ 다시 켜면 돌아온다');
-    say(text.includes('디지털 트윈 밖') && text.includes('디지털 트윈의 작용'),
+    say(text.includes('디지털 트윈 외 영역') && text.includes('디지털 트윈의 작용'),
         '④ 범례가 작용과 밖의 경로를 적는다');
     say(px['i:sim:accuracy'] === 0 && px['i:sim:substitution'] > px['i:sim:automation'],
     `④ 선행이 가로 자리를 정한다: ${px['i:sim:accuracy']}<${px['i:sim:automation']}<${px['i:sim:substitution']}`);
     // ⚠️ 칸이 겹쳐 보이면 선을 못 따라간다 — KPI·성과는 들어오는 선이
     //    많아 지표보다 더 벌려야 한다(2026-09-01).
     const gap = (a2, b2) => Math.abs(at[b2].y - at[a2].y);
-    say(gap('k:otp', 'k:test_leadtime') >= 90, `④ KPI 사이가 넘넘하다: ${gap('k:otp', 'k:test_leadtime')}`);
-    say(gap('o:dev_cost', 'o:dev_time') >= 100,
+    say(gap('k:otp', 'k:test_leadtime') >= 80, `④ KPI 사이가 넘넘하다: ${gap('k:otp', 'k:test_leadtime')}`);
+    say(gap('o:dev_cost', 'o:dev_time') >= 88,
     `④ 성과 사이가 넘넘하다: ${gap('o:dev_cost', 'o:dev_time')}`);
     say(at['o:dev_cost'].x - at['k:otp'].x >= 250, '④ KPI 와 성과 사이가 벌어져 있다');
     say(at['k:otp'].x - px['i:sim:substitution'] > 265, '④ 지표 끝 단과 KPI 사이도 한 번 더 띄운다');

@@ -35,13 +35,13 @@ def test_경영_성과는_넷이고_모든_KPI_가_거기_귀속된다(app):
         cur = [o['label'] for o in D.BUSINESS_OUTCOMES if o['status'] == 'current']
         new = [o['label'] for o in D.BUSINESS_OUTCOMES if o['status'] == 'new']
         assert cur == ['개발비용', '개발시간', '품질비용', '제조비용']
-        assert new == ['제품 경쟁력', '신사업·서비스 확장', '설비 투자 절감']
+        assert new == ['신사업·서비스 확장', '제품 경쟁력', '설비 투자 절감']
         for o in D.BUSINESS_OUTCOMES:
             assert o['label'] and o['lever']
         # ⚠️ 성장은 절감보다 **뒤 단계**다 — 숫서도에서 더 오른쪽에 선다.
         #    설비 투자 절감은 새 성과지만 쓰는 돈을 줄이는 것이라 절감 쪽이다.
         grow = [o['key'] for o in D.BUSINESS_OUTCOMES if o.get('stage') == 'growth']
-        assert grow == ['product', 'new_biz']
+        assert grow == ['new_biz', 'product']
         # 귀속되지 않는 KPI 는 잴 근거가 없다.
         # ⚠️ 다만 **거쳐 가는 KPI** 가 있다 — 평균 복구 시간은 유실율을 거쳐 원가로 간다.
         #    그런 것은 outcomes 대신 leads_to 를 갖는다. 둘 다 비면 어디에도 안 닿는다.
@@ -316,7 +316,9 @@ def test_아직_안_연_분야는_초안으로_따로_선다(app):
             for r in sec['indicators']:
                 for k in r['kpi']:
                     per.setdefault(k['key'], []).append(r['axis'])
-            assert len(per) >= 2, (key, per)
+            # 동인이 둘 이상인 부문만 KPI 가 갈려야 한다 — 설계는 동인이 하나(초안 생성)라 예외
+            drivers = sum(1 for r in sec['indicators'] if r['role'] == 'driver')
+            assert len(per) >= min(2, drivers), (key, per)
 
 
 def test_가치_사슬이_서고_모든_지표가_업무에_작용한다(app):
@@ -326,7 +328,7 @@ def test_가치_사슬이_서고_모든_지표가_업무에_작용한다(app):
        그 성과를 디지털 트윈 말고 무엇이 또 움직이나」다. 그래서 셋을 지킨다.
          ① 모든 지표(정의·초안)는 업무 요소에 작용한다(acts_on) — 없으면 허공에서 KPI 로 간다
          ② 모든 업무 **단계**에는 작용하는 지표가 있다 — 없으면 디지털 트윈이 안 닿는 단계다
-         ③ 모든 업무 요소는 스스로 KPI 를 민다 — 이것이 디지털 트윈 밖의 경로다
+         ③ 모든 업무 요소는 스스로 KPI 를 민다 — 이것이 디지털 트윈 외 영역의 경로다
     """
     with app.app_context():
         fw = D.framework_all()
@@ -544,7 +546,7 @@ def test_시뮬레이션_체계의_핵심_판단(app):
         assert by['accuracy']['outcomes'] == []          # 선행은 비용을 안 단다
         assert '가상검증률' in by['accuracy']['why']
         # 시험 대체의 유효 수준은 사전 검증이 아니라 인증 게이트다
-        assert by['substitution']['level_label'] == '신뢰성 인증 게이트'
+        assert by['substitution']['level_label'] == '신뢰성 인증 게이트 (PLM내 CAE 항목 관리)'
         assert {o['key'] for o in by['substitution']['outcomes']} == {'dev_cost', 'dev_time'}
         # 적용 범위는 확산 요인 — 비용을 달면 효과가 두 번 세어진다
         assert by['scope']['role'] == 'multiplier'

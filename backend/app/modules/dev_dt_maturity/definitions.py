@@ -93,10 +93,10 @@ AXES = {
             #    없어 따로 선택·해제한다. 「수동」은 아무것도 안 켠 상태. 서열(색)은 켠 개수다.
             'rungs': [
                 {'key': 'manual', 'label': '수동', 'short': '수동', 'description': '아무 단계도 자동이 아니다 — 전 과정을 사람이 한다'},
-                {'key': 'pre', 'label': '전처리 자동', 'short': '전처리', 'description': '형상·메시·조건 준비가 자동'},
-                {'key': 'run', 'label': '실행 자동', 'short': '실행', 'description': '템플릿으로 해석이 돈다'},
-                {'key': 'post', 'label': '후처리 자동', 'short': '후처리', 'description': '결과 정리(추출·그래프)가 자동'},
-                {'key': 'report', 'label': '보고 자동', 'short': '보고', 'description': '보고서가 자동으로 나온다'},
+                {'key': 'pre', 'label': '전처리 자동화', 'short': '전처리', 'description': '형상·메시·조건 준비가 자동'},
+                {'key': 'run', 'label': '실행 자동화', 'short': '실행', 'description': '템플릿으로 해석이 돈다'},
+                {'key': 'post', 'label': '후처리 자동화', 'short': '후처리', 'description': '결과 정리(추출·그래프)가 자동'},
+                {'key': 'report', 'label': '보고서 자동화', 'short': '보고', 'description': '보고서가 자동으로 나온다'},
                 {'key': 'pipeline', 'label': '파이프라인(오케스트레이션)', 'short': '파이프',
                  'description': '설계 변경이 들어오면 단계들이 이어져 결과까지 사람 없이 나온다'},
             ],
@@ -153,7 +153,7 @@ AXES = {
                 {'key': 'reference', 'label': '시험 병행(참고)', 'short': '병행', 'description': '시험은 그대로, 참고만'},
                 {'key': 'cause_analysis', 'label': '원인 분석', 'short': '원인', 'description': '시험에서 난 문제의 원인을 시뮬레이션으로 찾는다'},
                 {'key': 'screening', 'label': '사전 검증(자주 검증)', 'short': '사전', 'description': '시험 전에 설계자가 시뮬레이션으로 먼저 걸러 시험 횟수를 줄인다'},
-                {'key': 'cert_gate', 'label': '신뢰성 인증 게이트', 'short': '인증', 'description': '신뢰성 인증의 관문을 시뮬레이션 결과로 통과한다'},
+                {'key': 'cert_gate', 'label': '신뢰성 인증 게이트 (PLM내 CAE 항목 관리)', 'short': '인증', 'description': '신뢰성 인증의 관문을 시뮬레이션 결과로 통과한다'},
                 {'key': 'full', 'label': '완전 대체', 'short': '완전', 'description': '시험을 하지 않는다'},
             ],
         },
@@ -1144,12 +1144,13 @@ BUSINESS_OUTCOMES = [
      'lever': '결함의 선행 단계 제거'},
     {'key': 'mfg_cost', 'label': '제조비용', 'status': 'current',
      'lever': '이상 조기 대응·공정 최적화'},
-    {'key': 'product', 'label': '제품 경쟁력', 'status': 'new', 'stage': 'growth',
-     'lever': '설계 마진 축소에 의한 동일 원가 성능 향상 — '
-              '발열·강성·에너지 등급·방열 한계가 판매가·점유율을 결정'},
+    # 차례가 곧 순서도의 세로 차례 — 신사업은 「개발 여력」 갈래에 이어지므로 그 높이에, 제품 경쟁력은 그 아래.
     {'key': 'new_biz', 'label': '신사업·서비스 확장', 'status': 'new', 'stage': 'growth',
      'lever': '검증 체계 기반 신규 영역 진입 · 파생·지역 변형의 신속 대응 · '
               'B2B 운영 트윈(예지보전·SLA)'},
+    {'key': 'product', 'label': '제품 경쟁력', 'status': 'new', 'stage': 'growth',
+     'lever': '설계 마진 축소에 의한 동일 원가 성능 향상 — '
+              '발열·강성·에너지 등급·방열 한계가 판매가·점유율을 결정'},
     {'key': 'capex', 'label': '설비 투자 절감', 'status': 'new',
      'lever': '라인 증설 없는 생산량 확보 — 제조비용(OPEX)과 구분되는 회계 항목'},
 ]
@@ -1293,7 +1294,7 @@ INDICATOR_ROLES = {
 #   확산  그 부문의 동인들이 미는 KPI 중 **현행 관리 KPI 전부** — 확산이 없으면 전사 수치가
 #         안 움직인다는 것이 확산의 정의이므로, 전사 집계되는 KPI 에만 건다.
 # needs         **다른 부문**의 선행 지표 — (부문 키, 축 키, 어떻게). 같은 부문 안은 deps.
-# fed_by        이 지표의 **입력**이 되는 업무 요소 — 작용(acts_on)의 역방향. 디지털 트윈 밖에서
+# fed_by        이 지표의 **입력**이 되는 업무 요소 — 작용(acts_on)의 역방향. 디지털 트윈 외 영역에서
 #               받는 것이다(정확도 ← 시험·검증의 실측). 없으면 시뮬레이션이 허공에서 서는 것처럼 보인다.
 # acts_on       이 지표가 **어느 업무 요소**를 바꾸나 — VALUE_CHAIN 의 요소 키.
 #               ⚠️ 이것이 「디지털 트윈의 역할」이다. 없으면 지표가 허공에서 KPI 로 간다.
@@ -1341,7 +1342,7 @@ MEASUREMENT_FRAMEWORK = {
             {'axis': 'modeling', 'role': 'driver', 'level': 'test_all',
              'fed_by': [('quality', '시장·공정 불량 정보의 재현 대상화')],
              'needs': [('design_automation', 'part_lib', '검증된 부품 해석 모델 재사용')],
-             'acts_on': [('design', '설계 마진의 정량 결정')],
+             'acts_on': [('design', '설계 마진의 정량 결정'), ('ve_common', '검증된 마진 축소분의 VE 반영')],
              'change': '양산 결함의 설계 단계 사전 검출',
              'metric': ['ECO 건수', '시장 불량률'],
              'deps': [('accuracy', '현상 재현의 물리적 타당성 확보')],
@@ -1496,7 +1497,7 @@ FRAMEWORK_CAVEATS = [
     '지표에서 성과로의 직결은 측정이 아닌 가설.',
     '검증·설계·공장 최적화는 **초안** — 성숙도 축·수준이 기준 정보에 미등록. '
     '순서도에서 끊긴 테두리·점점선으로 표시.',
-    '업무 단계·기반 요소는 **디지털 트윈 밖** — 성숙도 평가 대상이 아니며, '
+    '업무 단계·기반 요소는 **디지털 트윈 외 영역** — 성숙도 평가 대상이 아니며, '
     '디지털 트윈과 무관하게 KPI 에 기여하는 경로.',
     '평균 복구 시간·평균 고장 간격·공정 능력 지수는 **경유 KPI** — '
     '성과에 직결하지 않음(동일 절감의 이중 계상 방지).',
@@ -1618,7 +1619,10 @@ PROPOSED_FRAMEWORK = {
         'purpose': '표준 부품 조합 기반 설계 초안 자동 생성 — 반복 설계 제거',
         'indicators': [
             {'axis': 'part_lib', 'axis_label': '표준·공용 부품 라이브러리', 'role': 'prereq',
-             'acts_on': [('design', '표준 부품 자산 제공'), ('sourcing', '공용 부품의 구매 집중')],
+             # ⚠️ 「부품 공용화」를 축에서 뺐다(2026-09-01) — 공용 부품을 **채택하는** 것은 설계
+             #    정책·조직의 결정이지 디지털 트윈이 아니다. 라이브러리는 후보를 대는 데까지.
+             'acts_on': [('design', '표준 부품 자산 제공'),
+                         ('ve_common', '공용 후보 부품의 식별·제안')],
              'change': '검증된 부품의 자산 등록',
              'metric': ['등록 부품 수', '적용 가능 사양 범위'], 'deps': [],
              'kpi': [], 'outcomes': [],
@@ -1631,14 +1635,6 @@ PROPOSED_FRAMEWORK = {
              'kpi': [('otp', '초안 단계 기준 오류 제거')],
              'outcomes': [('dev_time', '초안 작성 기간 단축')],
              'why': '백지 설계 반복에 의한 동일 오류 재발'},
-            {'axis': 'commonize', 'axis_label': '부품 공용화', 'role': 'driver',
-             'acts_on': [('design', '기종 간 공용 부품 적용'), ('sourcing', '구매 물량 집중')],
-             'change': '기종 간 공용 부품 적용',
-             'metric': ['공용 부품 적용률', '신규 부품 등록 수'],
-             'deps': [('part_lib', '공용 후보 부품 정리')],
-             'kpi': [('material_cut', '구매 물량 집중에 의한 단가 인하')],
-             'outcomes': [('dev_cost', '신규 부품 개발·검증 비용 미발생')],
-             'why': '기종별 신규 부품 사용에 따른 물량 분산·단가 미인하'},
             {'axis': 'scope', 'axis_label': '적용 범위', 'role': 'multiplier',
              'acts_on': [('design', '전 과제 자동 설계 적용')],
              'change': '전 과제의 표준 설계 절차화',
@@ -1729,6 +1725,11 @@ VALUE_CHAIN = {
             {'key': 'design_org', 'label': '설계 프로세스·조직', 'kind': 'lever',
              'note': '요구 관리·설계 기준·검토 체계',
              'kpi': [('otp', '요구 변경에 의한 재설계 억제')]},
+            # ⚠️ VE·부품 공용화는 디지털 트윈이 아니라 **개발의 활동**이다(2026-09-01). 축에서 빼고
+            #    여기 세운다 — 디지털 트윈은 여기에 후보(공용 부품)와 근거(검증된 마진)를 댄다.
+            {'key': 've_common', 'label': 'VE·부품 공용화', 'kind': 'lever',
+             'note': '원가 절감 설계(VE)와 기종 간 공용 부품 채택',
+             'kpi': [('material_cut', '사양·부품 최적화에 의한 원가 절감')]},
             {'key': 'sourcing', 'label': '부품 구매·소싱', 'kind': 'lever',
              'note': '부품 단가 협상과 공급처 운영',
              'kpi': [('material_cut', '구매 단가 협상에 의한 절감')]},

@@ -111,7 +111,8 @@ test('순서도의 선 위 설명은 카드보다 앞에 서고, 길면 접힌�
   assert.ok(badge, 'EdgeBadge 가 없다');
   assert.match(badge[1], /border-radius:\s*999px/, '알약 꼴이 아니다');
   assert.match(badge[1], /max-width:/, 'max-width 가 없으면 한 줄이 끝없이 길어진다');
-  assert.match(badge[1], /white-space:\s*normal/, 'nowrap 이면 줄이 안 바뀐다');
+  // 한 줄 규칙(2026-09-02) — 기여 문구는 30자 이내라 접을 일이 없고, 접히면 오히려 안 읽힌다
+  assert.match(badge[1], /white-space:\s*nowrap/, '알약은 한 줄이어야 한다');
 });
 
 /**

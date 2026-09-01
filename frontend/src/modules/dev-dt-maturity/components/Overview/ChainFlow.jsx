@@ -73,14 +73,14 @@ const Wrap = styled.div`
      그 층을 카드 층 위로 올린다. 이 규칙이 빠지면 설명이 조용히 가려진다. */
   .react-flow__edgelabel-renderer { z-index: 20; }
 `;
-/** 선 위 설명 — 알약 꼴. 길면 접는다(한 줄로 두면 그림을 가로지른다). */
+/** 선 위 설명 — 알약 꼴. **한 줄**로 쓴다(2026-09-02 요청) — 기여 문구는 30자 이내라 접을 일이 없다. */
 const EdgeBadge = styled.div`
   position: absolute; pointer-events: none;
-  max-width: 12.5rem; box-sizing: border-box;
+  max-width: 24rem; box-sizing: border-box;
   padding: 0.2rem 0.55rem; border-radius: 999px;
   border: 1px solid #cbd5e1; background: #ffffff; color: #334155;
   font-size: 0.72rem; font-weight: 600; line-height: 1.4; text-align: center;
-  white-space: normal; overflow-wrap: break-word;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
 `;
 /* 오른쪽 위 도구 — 토글과 전체 화면. 확대·축소 단추(왼쪽 아래)와 안 겹친다. */
@@ -294,11 +294,8 @@ const BadgeEdge = ({ id, sourceX, sourceY, targetX, targetY,
   );
 };
 
-/** 설명 알약의 크기(대략) — 자리를 잡는 셈에 쓴다. 실제 폭은 12.5rem 에서 접힌다. */
-const badgeSize = (text) => {
-  const w = Math.min(200, (text || '').length * 7.4 + 22);
-  return { w, h: w >= 200 && (text || '').length > 24 ? 44 : 28 };
-};
+/** 설명 알약의 크기(대략) — 자리를 잡는 셈에 쓴다. 한 줄이라 높이는 늘 28, 폭은 글자 수로(한글 ≈ 11.5px). */
+const badgeSize = (text) => ({ w: Math.min(384, (text || '').length * 11.6 + 24), h: 28 });
 const hits = (a, b) => !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
 
 /**
@@ -323,6 +320,10 @@ const spotsOf = (e) => {
     const { runY, bx, ey } = e.data.hroute;
     const x0 = Math.abs(runY - g.sy) >= 1 ? g.sx + 14 : g.sx;
     const run = bx - x0;
+    // 같은 칸에서 나온 가닥이면 제 차례 자리(1/(n+1) …)를 먼저 — 설명이 한 자리에 몰리지 않게
+    if (e.data.strand && e.data.strand.n > 1) {
+      pts.push([x0 + run * ((e.data.strand.i + 1) / (e.data.strand.n + 1)), runY]);
+    }
     pts.push([(x0 + bx) / 2, runY]);
     if (run > 120) pts.push([x0 + run * 0.3, runY], [x0 + run * 0.7, runY]);
     const v = ey - runY;
@@ -362,7 +363,9 @@ export const placeLabels = (nodes, edges, focused) => {
     .forEach((e) => {
       const { w, h } = badgeSize(e.data.how);
       const spots = e.data.geo ? spotsOf(e) : [[e.data.mid.x, e.data.mid.y]];
-      const steps = [0, ...Array.from({ length: 6 }, (_, k) => [-(k + 1) * 34, (k + 1) * 34]).flat()];
+      // 8px 씩 촘촘히 — 34px 씩 뛰면 「칸 바로 위 틈」(줄 사이 44px)에 드는 자리를 건너뛴다.
+      //   짧은 가로 선(KPI → 성과, 75px)의 설명은 그 틈에만 들어갈 수 있다(2026-09-02).
+      const steps = [0, ...Array.from({ length: 14 }, (_, k) => [-(26 + k * 8), 26 + k * 8]).flat()];
       let at = null;
       for (const dy of steps) {
         for (const [px, py] of spots) {
@@ -387,16 +390,16 @@ const GAP_OUT = 270;                // KPI 마지막 단 ─ 절감 성과 사�
 const KPI_STEP = 260;               // KPI 단 사이 가로 간격
 const GAP_BR = 250;                 // 절감 성과 ─ 갈래 사이
 const GAP_GROW = 250;               // 갈래 ─ 성장 성과 사이
-const ROW_H = 90;                   // 지표 세로 간격 — 줄 사이 틈에 차선과 설명이 앉는다
+const ROW_H = 80;                   // 지표 세로 간격 — 줄 사이 틈(32px)에 차선과 설명이 앉는다
 const H_BOX = 48;                   // 칸 높이(대략) — 손잡이 자리·차선 셈에 쓴다
 const LANE = 38;                    // 차선 — 칸 아래 가장자리에서 조금 떨어진 줄 사이 틈
-const ROW_KPI = 100;                // KPI 는 들어오는 선이 많다
-const ROW_OUT = 110;                // 성과도 마찬가지
-const ROW_BR = 80;                  // 갈래 세로 간격
-const SEC_GAP = 26;                 // 부문 사이
+const ROW_KPI = 84;                 // KPI 는 들어오는 선이 많다
+const ROW_OUT = 92;                 // 성과도 마찬가지
+const ROW_BR = 80;                  // 갈래 세로 간격 — 70 이면 갈래 줄 사이 틈(22px)에 설명(28px)이 못 든다
+const SEC_GAP = 20;                 // 부문 사이
 const STEP_W = 330;                 // 업무 단계 사이 가로 간격
-const BAND_GAP = 110;               // 띠 사이 — 세로 선이 지나갈 자리
-const BAND_PAD = 44;                // 띠 머리글 높이
+const BAND_GAP = 96;                // 띠 사이 — 세로 선이 지나갈 자리
+const BAND_PAD = 40;                // 띠 머리글 높이
 /* 누른 자리에서 이만큼 안쪽에서 손을 떼면 고르기 — 그보다 멀면 화면 옮기기다.
    ⚠️ 0 이면 손떨림에도 선택이 씹힌다. 너무 크면 짧게 끈 것이 선택으로 잡힌다. */
 const SLOP = 8;
@@ -529,10 +532,10 @@ export const buildChain = ({ sectors = [], kpis = [], outcomes = [], drafts = []
         id: `b:${e.key}`, type: 'box',
         position: { x: i * STEP_W, y: y0 + r * ROW_H },
         data: { kind: e.kind === 'step' ? 'step' : 'lever', label: e.label,
-          sub: e.kind === 'step' ? '디지털 트윈 밖 · 업무 단계' : '디지털 트윈 밖 · 기반 요소',
+          sub: e.kind === 'step' ? '디지털 트윈 외 영역 · 업무 단계' : '디지털 트윈 외 영역 · 기반 요소',
           tip: { title: e.label,
             sub: [band === 'development' ? dev.label : mfg.label,
-              e.kind === 'step' ? '업무 단계' : '기반 요소(자원·조직)', '디지털 트윈 밖'].join(' · '),
+              e.kind === 'step' ? '업무 단계' : '기반 요소(자원·조직)', '디지털 트윈 외 영역'].join(' · '),
             rows: [...row('내용', e.note),
               ...row('작용하는 DT 지표', (actedBy[e.key] || []).join(' · ')
                 || (e.kind === 'step' ? undefined : '없음 — 디지털 트윈 대체 불가 영역')),
@@ -703,10 +706,10 @@ export const buildChain = ({ sectors = [], kpis = [], outcomes = [], drafts = []
   const saving = liveOut.filter(o => (o.stage || 'saving') !== 'growth');
   const growth = liveOut.filter(o => o.stage === 'growth');
   const outAt = {};
-  const putOut = (list, x) => list.forEach((o, i) => {
+  const putOut = (list, x, y0 = top(list.length * ROW_OUT)) => list.forEach((o, i) => {
     const neo = o.status === 'new';
     const blank = !measured.has(o.key);
-    outAt[o.key] = top(list.length * ROW_OUT) + i * ROW_OUT;
+    outAt[o.key] = y0 + i * ROW_OUT;
     ns.push({
       id: `o:${o.key}`, type: 'box', position: { x, y: outAt[o.key] },
       data: { kind: neo ? 'neo' : 'current', label: o.label,
@@ -723,15 +726,17 @@ export const buildChain = ({ sectors = [], kpis = [], outcomes = [], drafts = []
     });
   });
   putOut(saving, xOut);
-  putOut(growth, xGrow);
 
   // ── 갈래 — 절감 단과 성장 단 **사이** ─────────────────────────────────
+  const brAt = {};                          // 갈래가 이어지는 성과 → 그 갈래의 높이
   liveOut.forEach((o) => {
     const bs = o.branches || [];
     bs.forEach((b, i) => {
+      const by = outAt[o.key] + (i - (bs.length - 1) / 2) * ROW_BR;
+      if (b.to) brAt[b.to] = by;
       ns.push({
         id: `br:${o.key}:${i}`, type: 'box',
-        position: { x: xBr, y: outAt[o.key] + (i - (bs.length - 1) / 2) * ROW_BR },
+        position: { x: xBr, y: by },
         data: { kind: b.to ? 'branch_on' : 'branch', label: b.label,
           sub: b.to ? `${outLabel[b.to] || ''} 투자 재원` : undefined,
           tip: { title: b.label, sub: `${o.label} 단축의 가치 실현 경로`,
@@ -742,12 +747,16 @@ export const buildChain = ({ sectors = [], kpis = [], outcomes = [], drafts = []
     });
   });
 
+  // ── 성장 단 — 첫째(신사업)는 「개발 여력」 갈래와 같은 높이, 나머지는 그 아래로(2026-09-01 요청) ──
+  putOut(growth, xGrow, growth.length && brAt[growth[0].key] != null
+    ? brAt[growth[0].key] : top(growth.length * ROW_OUT));
+
   // ── 띠 바탕 — 맨 뒤에 깔린다 ──────────────────────────────────────────
   const fullW = xGrow + W_OUT + 60;
   const BAND_LABEL = {
-    development: [dev.label, '요구 → 설계 → 시작품 → 시험 → 이관 · 디지털 트윈 밖의 기반 요소'],
+    development: [dev.label, '요구 → 설계 → 시작품 → 시험 → 이관 · 디지털 트윈 외 영역의 기반 요소'],
     dt: ['디지털 트윈 부문', ''],
-    manufacturing: [mfg.label, '라인 구축 → 시생산 → 양산 → 보전 → 품질 · 디지털 트윈 밖의 기반 요소'],
+    manufacturing: [mfg.label, '라인 구축 → 시생산 → 양산 → 보전 → 품질 · 디지털 트윈 외 영역의 기반 요소'],
   };
   Object.entries(bands).forEach(([band, b]) => {
     ns.push({
@@ -866,9 +875,23 @@ export const buildChain = ({ sectors = [], kpis = [], outcomes = [], drafts = []
     && n.position.x < x2 && x1 < n.position.x + (n.style.width || 0));
   const laneCount = {};                    // 차선을 나누는 수 — 같은 칸을 나누는 선끼리 번갈아 위·아래
   const horiz = edges.filter(e => !e.sourceHandle && !e.targetHandle && e.data.geo.tx > e.data.geo.sx);
+  // ⚠️ 같은 칸에서 **나가는** 가로 선이 여럿이면(적용 범위 → OTP·시험 리드타임·ASR) 같은 높이를
+  //    달려 한 줄로 보이고, 설명 셋이 한 자리에 몰려 어느 선 것인지 안 갈렸다(2026-09-01 지적).
+  //    가닥(strand)으로 벌리고, 설명은 제 가닥의 서로 다른 자리(1/4·2/4·3/4)에 앉힌다.
+  //    오프셋은 차선 셈 **전에** 정한다 — 빈 자리를 찾은 높이를 뒤에서 옮기면 다시 칸을 뚫는다.
+  const bySrc = {};
+  horiz.forEach((e) => { (bySrc[e.source] = bySrc[e.source] || []).push(e); });
+  Object.values(bySrc).forEach((g) => {
+    if (g.length < 2) return;
+    const gap = Math.min(16, 40 / (g.length - 1));                          // 칸 높이(48) 안에 든다
+    [...g].sort((a, b) => a.data.geo.ty - b.data.geo.ty).forEach((e, i) => {   // 위 목적지가 위 가닥
+      e.data.strand = { i, n: g.length, off: (i - (g.length - 1) / 2) * gap };
+    });
+  });
   horiz.forEach((e) => {
     const { sx, sy, tx } = e.data.geo;
-    let runY = sy;
+    const off = e.data.strand ? e.data.strand.off : 0;
+    let runY = sy + off;
     // 제 줄에 가로막는 칸이 있으면 줄 사이 틈으로 비킨다 — 먼 열에서 오는 선이 중간 칸을 안 뚫는다
     const skip = new Set([e.source, e.target]);
     if (blocked(sy, sx + 1, tx - 14, skip)) {
@@ -885,13 +908,13 @@ export const buildChain = ({ sectors = [], kpis = [], outcomes = [], drafts = []
       // 목적지 쪽 후보를 **전부** 먼저 대 보고, 다 막혔을 때만 반대쪽으로 — 순서가 뒤집히는 것보다
       // 칸을 뚫는 것이 더 나쁘다. 반대쪽으로 간 선은 표시(laneForced)를 남긴다.
       const free = yy => !blocked(yy, sx + 15, tx - 14, skip);
-      const ds = [38, 32, 44, 28, 50, 56, 62];
-      const near = ds.map(d => sy + sign * d).find(free);
+      const ds = [38, 32, 44, 28, 50, 56, 62].filter(d => d < ROW_H - H_BOX / 2 - 2);   // 다음 줄 칸에 안 닿는 것만
+      const near = ds.map(d => sy + off + sign * d).find(free);
       if (near != null) runY = near;
-      else { runY = ds.map(d => sy - sign * d).find(free) ?? sy + sign * ds[0]; e.data.laneForced = true; }
+      else { runY = ds.map(d => sy + off - sign * d).find(free) ?? sy + off + sign * ds[0]; e.data.laneForced = true; }
+      e.data.lane = runY - sy;                                   // 차선을 탔다 — 가닥 오프셋만으로는 안 붙는다
     }
     e.data.hroute = { runY, bx: tx - 14, ey: e.data.geo.ty };
-    if (runY !== sy) e.data.lane = runY - sy;
   });
   // 같은 칸으로 모이는 선끼리 — 들어가는 자리(ey)는 오는 높이 순, 꺾는 자리(bx)는 먼 것이 목적지 쪽
   const into = {};
@@ -905,10 +928,28 @@ export const buildChain = ({ sectors = [], kpis = [], outcomes = [], drafts = []
     const byY = [...g].sort((a, b) => a.data.geo.sy - b.data.geo.sy || a.data.hroute.runY - b.data.hroute.runY);
     const byFar = [...g].sort((a, b) => Math.abs(b.data.geo.sy - ty) - Math.abs(a.data.geo.sy - ty));
     g.forEach((e) => {
-      const { sx, tx } = e.data.geo;
       const ey = ty + (byY.indexOf(e) - (n - 1) / 2) * stepE;
-      const bx = Math.max(tx - 14 - byFar.indexOf(e) * 10, sx + 22);
-      e.data.hroute = { ...e.data.hroute, bx, ey };
+      e.data.hroute = { ...e.data.hroute, ey, far: byFar.indexOf(e) };
+    });
+  });
+  // ⚠️ 꺾는 자리(bx)는 **같은 열**로 들어가는 선 전체에서 나눈다. 목적지별로만 나누면 위·아래
+  //    칸으로 들어가는 두 선이 같은 x 에서 꺾여 세로 구간이 포개졌다(2026-09-01 지적).
+  //    세로 구간(runY~ey)이 겹치는 선끼리만 자리를 달리한다 — 구간 그래프 색칠. 먼 데서
+  //    온 것(긴 세로 구간)이 목적지에 가까운 자리를 받아 서로 가로지르지 않는다.
+  const byCol = {};
+  horiz.forEach((e) => { (byCol[e.data.geo.tx] = byCol[e.data.geo.tx] || []).push(e); });
+  Object.values(byCol).forEach((col) => {
+    const span = e => [Math.min(e.data.hroute.runY, e.data.hroute.ey) - 6, Math.max(e.data.hroute.runY, e.data.hroute.ey) + 6];
+    const placed = [];                                  // {slot, lo, hi}
+    [...col].sort((a, b) => (span(b)[1] - span(b)[0]) - (span(a)[1] - span(a)[0])).forEach((e) => {
+      const [lo, hi] = span(e);
+      const used = new Set(placed.filter(p => p.lo < hi && lo < p.hi).map(p => p.slot));
+      let slot = 0;
+      while (used.has(slot)) slot += 1;
+      placed.push({ slot, lo, hi });
+      const { sx, tx } = e.data.geo;
+      const bx = Math.max(tx - 14 - slot * 10, sx + 22);
+      e.data.hroute = { ...e.data.hroute, bx };
       const x0 = e.data.hroute.runY !== e.data.geo.sy ? sx + 14 : sx;
       e.data.mid = { x: (x0 + bx) / 2, y: e.data.hroute.runY };
     });
@@ -1117,7 +1158,7 @@ const ChainFlow = ({ sectors = [], kpis = [], outcomes = [], drafts = [], chain 
       )}
       <Legend $full={full}>
         <span><i style={{ borderColor: '#60a5fa' }} /> <b>디지털 트윈의 작용</b> — 지표의 대상 업무</span>
-        <span><i style={{ borderTopStyle: 'dotted' }} /> <b>디지털 트윈 밖</b> — 업무 자체의 KPI 기여 경로</span>
+        <span><i style={{ borderTopStyle: 'dotted' }} /> <b>디지털 트윈 외 영역</b> — 업무 자체의 KPI 기여 경로</span>
         <span><i style={{ borderColor: '#94a3b8' }} /> <b>업무 → 지표 입력</b> — 밖에서 받는 것(실측·불량 정보·규정)</span>
         <span><i /> 연계 경로 확보</span>
         <span><i style={{ borderColor: '#cbd5e1' }} /> 선행 요건 · 다음 단계</span>
