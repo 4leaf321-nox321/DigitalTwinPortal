@@ -130,6 +130,8 @@ export const maturityApi = {
     + (divisionId != null && divisionId !== 'all' ? `&division_id=${divisionId}` : '')),
   bulkKinds: (sector, divisionId) => request(`/bulk/kinds?sector=${sector}&division_id=${divisionId ?? 'all'}`),
   bulkInput: (payload) => request('/bulk', json('POST', payload)),
+  // 개요 — 사슬·진단·겑 한 벌(2026-08-31). 사업부를 안 골라 받는다 — 전 사업부를 한 판에 보는 것이 목적이다.
+  getOverview: () => request('/overview'),
   listSystems: () => request('/systems'),
   createSystem: (payload) => request('/systems', json('POST', payload)),
   updateSystem: (id, payload) => request(`/systems/${id}`, json('PUT', payload)),

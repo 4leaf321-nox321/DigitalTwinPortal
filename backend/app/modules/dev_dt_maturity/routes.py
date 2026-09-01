@@ -774,6 +774,18 @@ def bulk_input(actor):
         return _crashed()
 
 
+@bp.route('/overview', methods=['GET'])
+@read_required
+def get_overview(actor):
+    """「요약」 — 성숙도 조사의 배경과 측정 체계(2026-08-31).
+
+    ⚠️ **부문을 안 받는다.** 여섯 분야를 한눈에 보여 주는 한 페이지라
+       부문에 매이면 목적이 깨진다.
+    ⚠️ 현재 수준·달성도를 담지 않는다 — 그것은 성숙도 판이 보여 준다.
+    """
+    return success_response(D.framework_all())
+
+
 @bp.route('/vocabs', methods=['GET'])
 @read_required
 def get_vocabs(actor):

@@ -18,6 +18,7 @@ import { setSampleMode } from './sample/sampleStore';
 import { filtersFromParams, filtersToParams, tabInSector } from './utils/board';
 import { exportMaturity } from './services/exportXlsx';
 import BulkInputModal from './components/List/BulkInputModal';
+import OverviewView from './components/Overview/OverviewView';
 
 // 디지털 트윈 성숙도 — 시험 하나에 대해 시뮬레이션이 어디까지 왔는가.
 // 계획: ./PLAN.md
@@ -110,6 +111,9 @@ const DevDtMaturityApp = ({ onGoHome }) => {
     return 'all';
   }, [params, divisions]);
   const division = divisions.find(d => d.id === divisionId);
+  /* ⚠️ 기본 탭이 「개요」다(2026-08-31). 처음 보는 사람(임원)에게 평가 판부터
+     들이밀면 「무엇을 왜 재는지」 모른 채 숫자만 본다. 실무자는 탭 하나 더 누르면 되고,
+     URL 이 ?tab= 으로 기억하니 자주 쓰는 사람은 불편이 없다. */
   const tab = ['list', 'reviews', 'cases'].includes(params.get('tab')) ? params.get('tab') : 'board';
   const pairId = Number(params.get('pair')) || null;
   const sinceIso = params.get('since') || null;      // 모판의 기준 시점 — 창에서 바뀐 축을 짚어 준다
@@ -134,12 +138,16 @@ const DevDtMaturityApp = ({ onGoHome }) => {
   // 부문 — URL ?sector=. 열린 부문만(정의의 active). 시뮬레이션이 기본.
   const sector = useMemo(() => {
     const raw = params.get('sector');
+    // ⚠️ 「요약」은 부문이 아니라 한 페이지다 — 부문 목록에 없으므로 따로 통과시킨다.
+    if (raw === 'summary') return 'summary';
     const ok = (defs?.sectors || []).some(s => s.key === raw && s.active);
     return ok ? raw : 'simulation';
   }, [params, defs]);
+  const onSummary = sector === 'summary';
   // 설정에서 감춘 부문을 보고 있으면 시뮬레이션으로 되돌린다 — 토글에 없는 화면에 갇히지 않게.
   // ⚠️ sector·patch 가 선언된 **뒤에** 와야 한다 — 위에 두면 초기화 전 참조로 화면이 죽는다.
   useEffect(() => {
+    if (onSummary) return;
     const cur = (defs?.sectors || []).find(s => s.key === sector);
     if (cur?.hidden) patch({ sector: null, pair: null, tab: null });
   }, [defs, sector]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -197,6 +205,9 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           <button type="button" onClick={() => patch({ sample: null, pair: null })}>실제 자료로</button>
         </SampleBar>
       )}
+      {/* ⚠️ 사업부 줄·탭 줄은 **부문의 것**이다. 요약은 부문과 무관한 한 페이지라
+          띄우면 「고르면 무엇이 달라지나」로 잘못 읽힌다(2026-08-31). */}
+      {!onSummary && (
       <StickyBar>
         <DivBar>
           <DivBtn type="button" $on={divisionId === 'all'} onClick={() => patch({ division: 'all', pair: null })} title="모든 사업부를 사업부별로 묶어 봅니다">전체</DivBtn>
@@ -215,9 +226,12 @@ const DevDtMaturityApp = ({ onGoHome }) => {
           {isThread && <Tab $on={tab === 'cases'} onClick={() => patch({ tab: 'cases', pair: null })} title="시스템 연동·도입·정합화·자동화·폐지 건을 쌓는다 — 끝나면 구간의 연결 방식이 몇 칸 올라갔나">연계 개발 기록</Tab>}
         </Tabs>
       </StickyBar>
+      )}
       <Main $fill>
         {error && <Notice><AlertTriangle size={14} /> <span>{error}</span></Notice>}
-        {defs && divisionId && (tab === 'board' ? (
+        {onSummary ? (
+          <OverviewView />
+        ) : defs && divisionId && (tab === 'board' ? (
           <BoardView divisionId={divisionId} axes={axes} filters={filters} onFiltersChange={setFilters} sector={sector} sectorDef={(defs.sectors || []).find(s => s.key === sector)} modelKinds={defs.model_kinds || []}
                      onOpenPair={(id, since) => patch({ pair: id, since: since || null })} onPickDivision={(id) => patch({ division: id, pair: null })}
                      refreshKey={refreshKey} review={isSim ? defs.review : null} thread={defs.thread} />

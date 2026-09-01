@@ -73,10 +73,12 @@ AXES = {
             #    '미평가' 은 값이 없는 상태라 척도에 없다(None).
             'rungs': [
                 # 문구는 2026-08-28 — 한 줄 막대의 세 영역. key 는 고정.
+                # ⚠️ 가운데 단의 이름을 「원인 분석」에서 바꿨다(2026-09-01) — 시험 대체 축의
+                #    「원인 분석」(해석의 활용 단계)과 이름이 같아 헷갈렸다. key 는 고정.
                 {'key': 'trend', 'label': '경향 일치',
-                 'description': '시험의 방향·순서는 맞지만 값은 안 맞는다'},
-                {'key': 'quantitative', 'label': '원인 분석',
-                 'description': '값이 맞아 문제의 원인을 시뮬레이션으로 찾을 수 있다'},
+                 'description': '시험의 방향은 맞지만 값이 안 맞아 대안 간 우열까지는 못 가른다'},
+                {'key': 'quantitative', 'label': '우열 판정',
+                 'description': '값이 맞아 대안 간 우열과 문제의 원인을 시뮬레이션으로 가린다'},
                 {'key': 'correlated', 'label': '현상 재현',
                  'description': '시험의 현상을 그대로 재현해 결과를 믿고 쓴다'},
             ],
@@ -1093,3 +1095,818 @@ def review_definitions():
     fields = {name: {**f, 'options': vocab(f'review_{name}')} for name, f in REVIEW_FIELDS.items()}
     return {'kinds': vocab('review_kind'), 'fields': fields, 'columns': REVIEW_COLUMNS,
             'promote_min': get_review_promote_min()}
+
+
+# ══ 성숙도 측정 체계 (2026-08-31) ═══════════════════════════════════════════
+#
+# ⚠️ **가상검증률은 여러 시뮬레이션 「정확도」의 평균이다.** 즉 성숙도 지표의 집계값이지
+#    별개의 계층이 아니다. 데이터 연결율도 같다. 이 둘을 「역량형 KPI」라는 별도 층으로
+#    세우면 없는 계층을 지어내는 것이 된다(2026-08-31 지적).
+#
+# 이 조사가 하는 일은 하나다 — **역량을 대변하는 지표를 하나에서 여럿으로 늘리고,
+# 늘린 지표를 성과형 KPI 에 각각 연결한다.**
+#
+#     현행   정확도 ──평균──▶ 가상검증률 ──?──▶ 성과형 KPI ──?──▶ 비용
+#            (나머지 역량은 어디에도 안 잡힌다)
+#
+#     조사   정확도    ──▶ 가상검증률
+#            자동화    ──▶ 시험 리드타임
+#            시험 대체 ──▶ 시험 리드타임 · 개발비용
+#            모델링    ──▶ One Time Pass · ASR
+#            적용 범위 ──▶ (확산)
+
+# status — 'current' 지금 관리하는 성과 · 'new' 이번에 새로 짚는 성과.
+# stage  — 'saving' 덜 쓴다 · 'growth' 더 번다. ⚠️ 성장은 절감보다 **뒤 단계**다 —
+#          숫서도에서 더 오른쪽에 선다. 설비 투자 절감은 새 성과지만 쓰는 돈을
+#          줄이는 것이라 절감 쪽에 남는다.
+#
+# ⚠️ 기존 넷은 **전부 「덜 쓴다」**였다. 매출·사업 확대 쪽이 통째로 비어 있었다.
+#    새로 셋을 더한다 — 다만 **대응 KPI 가 아직 없다.** 그 사실이 요점이라 화면에서
+#    회색으로 두고, 지표에서 성과로 **KPI 를 건너뛰는 점선**으로 그린다.
+#        기존 넷  지표 ─▶ KPI ─▶ 성과      (경로 완성)
+#        신규 셋  지표 ┄┄┄┄┄┄┄▶ 성과      (KPI 없음 — 먼저 만들어야 한다)
+BUSINESS_OUTCOMES = [
+    {'key': 'dev_cost', 'label': '개발비용', 'status': 'current',
+     'lever': '실물 검증의 해석 대체'},
+    {'key': 'dev_time', 'label': '개발시간', 'status': 'current',
+     'lever': '검증 기간·대기 단축',
+     # ⚠️ 개발시간 단축의 값어치는 **셋으로 갈라진다.** 인건비만 세면 가장 작은 갈래만
+     #    보는 셈이다. 셋째 갈래가 사업 확대로 이어지는 고리다.
+     'branches': [
+         {'label': '인건비 절감', 'to': None,
+          'note': '개발 인력 투입 기간 단축 — 세 갈래 중 규모 최소'},
+         {'label': '조기 출시 매출', 'to': None,
+          'note': '동일 제품의 조기 출시에 따른 매출 선점'},
+         {'label': '개발 여력', 'to': 'new_biz',
+          'note': '동일 조직의 연간 과제 소화량 증대 — 초과분의 신사업 투입'},
+     ]},
+    {'key': 'quality_cost', 'label': '품질비용', 'status': 'current',
+     'lever': '결함의 선행 단계 제거'},
+    {'key': 'mfg_cost', 'label': '제조비용', 'status': 'current',
+     'lever': '이상 조기 대응·공정 최적화'},
+    {'key': 'product', 'label': '제품 경쟁력', 'status': 'new', 'stage': 'growth',
+     'lever': '설계 마진 축소에 의한 동일 원가 성능 향상 — '
+              '발열·강성·에너지 등급·방열 한계가 판매가·점유율을 결정'},
+    {'key': 'new_biz', 'label': '신사업·서비스 확장', 'status': 'new', 'stage': 'growth',
+     'lever': '검증 체계 기반 신규 영역 진입 · 파생·지역 변형의 신속 대응 · '
+              'B2B 운영 트윈(예지보전·SLA)'},
+    {'key': 'capex', 'label': '설비 투자 절감', 'status': 'new',
+     'lever': '라인 증설 없는 생산량 확보 — 제조비용(OPEX)과 구분되는 회계 항목'},
+]
+
+# tier — KPI 의 성격.
+#   derived  성숙도 지표의 **집계값**. 별도 계층이 아니라 지표의 다른 표현이다.
+#   result   업무 결과. 비용으로 바로 환산된다.
+KPI_TIERS = {
+    'derived': {'label': '집계 지표', 'sub': '성숙도 지표의 평균',
+                'definition': '성숙도 지표의 집계값 — 현행 역량의 사실상 유일한 대변 지표'},
+    'result': {'label': '성과형 KPI', 'sub': '업무 결과',
+               'definition': '업무 결과 — 비용·시간으로 직접 환산'},
+}
+# part     어느 띠의 KPI 인가 — 순서도의 개발/제조 토글이 이것으로 거른다. any 는 양쪽.
+# managed  현행 관리 KPI 인가 — 순서도에서 가상검증률과 같은 황색. 아니면 새로 제안한 것.
+# ⚠️ 이 목록의 **차례가 곧 세로 차례**다 — 경유 KPI 는 제 목적지 바로 앞에 둔다.
+KPI_SET = [
+    {'key': 'virtual_rate', 'label': '가상검증률', 'domain': '개발', 'tier': 'derived',
+     'part': 'dev', 'managed': True,
+     'from_axis': '정확도', 'from_sector': 'simulation', 'from_axis_key': 'accuracy',
+     'outcomes': ['dev_cost', 'dev_time'],
+     'note': '시뮬레이션별 정확도의 평균 — 「정확도」 단일 관점',
+     'how': {'dev_cost': '실물 검증 횟수 감소', 'dev_time': '검증 소요 기간 단축'}},
+    {'key': 'data_link', 'label': '데이터 연결율', 'domain': '제조', 'tier': 'derived',
+     'part': 'mfg', 'managed': True,
+     'from_axis': '기본 계측', 'from_sector': 'manufacturing_monitoring',
+     'from_axis_key': 'basic_metrics', 'outcomes': ['mfg_cost'],
+     'note': '계측 항목 확보 현황의 집계 — 「연결 여부」 단일 관점',
+     'how': {'mfg_cost': '원인 규명 소요 시간 단축'}},
+    {'key': 'otp', 'label': 'One Time Pass', 'domain': '개발', 'tier': 'result',
+     'part': 'dev', 'managed': True,
+     'from_axis': None, 'outcomes': ['dev_cost', 'dev_time'],
+     'note': '재설계 반복 없는 1회 통과 비율',
+     'how': {'dev_cost': '재설계·재시험 비용 미발생', 'dev_time': '설계 반복 기간 단축'}},
+    # 시험 대체의 **비용 증거**. 리드타임만으로는 무엇을 아꼈는지가 안 잡힌다.
+    {'key': 'sample_cut', 'label': '개발 시료 절감', 'domain': '개발', 'tier': 'result',
+     'part': 'dev', 'managed': False,
+     'from_axis': None, 'outcomes': ['dev_cost', 'dev_time'],
+     'note': '기준 대비 실물 시료 투입량 감축분',
+     'how': {'dev_cost': '시료 제작·시험 비용 미발생',
+             'dev_time': '시료 제작 대기 기간 단축'}},
+    # 마진 축소의 두 갈래 중 **재는 쪽**. 나머지 한 갈래가 제품 경쟁력이다.
+    # ⚠️ 재료비는 이 회사에서 개발비용으로 편성된다 — 그래서 별도 성과가 아니다.
+    {'key': 'material_cut', 'label': '재료비 절감', 'domain': '개발', 'tier': 'result',
+     'part': 'dev', 'managed': False,
+     'from_axis': None, 'outcomes': ['dev_cost'],
+     'note': '사양 변경에 의한 재료비 절감액 ÷ 기준 재료비',
+     'how': {'dev_cost': '사양·재질 등급 하향에 의한 원가 절감'}},
+    {'key': 'test_leadtime', 'label': '시험 리드타임', 'domain': '개발', 'tier': 'result',
+     'part': 'dev', 'managed': True,
+     'from_axis': None, 'outcomes': ['dev_time', 'dev_cost'],
+     'note': '개발 일정의 임계 경로',
+     'how': {'dev_time': '개발 임계경로 단축', 'dev_cost': '시험 물량·설비 투입 감소'}},
+    {'key': 'asr', 'label': 'Annual Service Rate', 'domain': '품질', 'tier': 'result',
+     'part': 'any', 'managed': True,
+     'from_axis': None, 'outcomes': ['quality_cost'], 'note': '시장 결함 발생률',
+     'how': {'quality_cost': '시장 대응 비용 감소'}},
+    # 원인 변수를 계측한다고 곧바로 직행률이 오르지 않는다 — **산포를 잡아서** 오른다.
+    {'key': 'cpk', 'label': '공정 능력 지수', 'domain': '품질', 'tier': 'result',
+     'part': 'mfg', 'managed': False,
+     'from_axis': None, 'outcomes': [],
+     'note': '규격 대비 공정 산포의 여유도(Cpk)',
+     'leads_to': {'fpy': '산포 축소에 의한 직행률 향상'}},
+    # ASR 은 **시장** 불량, 이쪽은 **공정 안** 불량이다 — 겹치지 않는다.
+    {'key': 'fpy', 'label': '공정 직행률', 'domain': '품질', 'tier': 'result',
+     'part': 'mfg', 'managed': False,
+     'from_axis': None, 'outcomes': ['quality_cost', 'mfg_cost'],
+     'note': '재작업 없는 공정 통과 비율',
+     'leads_to': {'output_per_head': '재작업 감소에 의한 순 산출 증대'},
+     'how': {'quality_cost': '공정 내 재작업·폐기 비용 감소',
+             'mfg_cost': '재작업 공수·라인 부하 감소'}},
+    # 제조의 손실은 **고장 빈도 × 복구 시간**으로 갈라 본다. 아래 둘이 그 두 짝이다 —
+    # 「유실이 왜 그대로인가」가 빈도 탓인지 복구 탓인지 여기서 갈린다.
+    {'key': 'mtbf', 'label': '평균 고장 간격', 'domain': '제조', 'tier': 'result',
+     'part': 'mfg', 'managed': False,
+     'from_axis': None, 'outcomes': [],
+     'note': '고장 간 평균 가동 시간',
+     'leads_to': {'line_loss': '고장 빈도 감소에 의한 유실 감소'}},
+    {'key': 'mttr', 'label': '평균 복구 시간', 'domain': '제조', 'tier': 'result',
+     'part': 'mfg', 'managed': False,
+     'from_axis': None, 'outcomes': [],
+     'note': '이상 발생부터 정상 복귀까지의 평균 시간',
+     # ⚠️ 원가로 직접 환산하지 않는다 — 유실율을 거쳐 간다.
+     'leads_to': {'line_loss': '정지 시간 단축에 의한 유실 감소'}},
+    {'key': 'line_loss', 'label': '라인 유실율', 'domain': '제조', 'tier': 'result',
+     'part': 'mfg', 'managed': True,
+     'from_axis': None, 'outcomes': ['mfg_cost'], 'note': '이상에 의한 생산 시간 손실',
+     'leads_to': {'output_per_head': '가동 시간 확보에 의한 산출 증대'},
+     'how': {'mfg_cost': '설비 정지 손실 감소'}},
+    {'key': 'output_per_head', 'label': '인당 생산대수', 'domain': '제조', 'tier': 'result',
+     'part': 'mfg', 'managed': True,
+     'from_axis': None, 'outcomes': ['mfg_cost'], 'note': '공정 효율의 종합 결과',
+     'how': {'mfg_cost': '동일 인원 기준 생산량 증대'}},
+]
+
+FOCUS_AREAS = [
+    {'key': 'simulation', 'kpi': ['virtual_rate', 'test_leadtime', 'otp'],
+     'role': '실물 검증을 해석으로 대체'},
+    {'key': 'verification_automation', 'kpi': ['test_leadtime', 'virtual_rate'],
+     'role': '검증 절차 자동화'},
+    {'key': 'design_automation', 'kpi': ['otp', 'test_leadtime'],
+     'role': '설계 반복 자동화'},
+    {'key': 'manufacturing_monitoring', 'kpi': ['line_loss', 'data_link', 'asr'],
+     'role': '설비·공정 이상 조기 검출'},
+    {'key': 'factory_optimization', 'kpi': ['output_per_head', 'line_loss'],
+     'role': '공정 조건 최적화'},
+    {'key': 'digital_thread', 'kpi': ['data_link', 'otp'],
+     'role': '부서·시스템 간 정보 연결'},
+]
+
+# 본 조사가 보강하는 공백 — 짧게. 이게 조사의 근거다.
+FRAMEWORK_GAPS = [
+    {'no': '1', 'title': '단일 지표에 의한 역량 대변',
+     'example': '가상검증률 = 시뮬레이션별 「정확도」의 평균',
+     'problem': '자동화·대체 범위·재현 범위의 측정 공백 — '
+                '「가상검증률 상승에도 시험 리드타임 정체」의 원인 설명 불가.',
+     'answer': '역량의 다지표 분해 조사.'},
+    {'no': '2', 'title': '분해 지표와 성과 간 연계 부재',
+     'example': '역량 지표 1개 : 성과형 KPI 11개',
+     'problem': '단일 지표의 다수 KPI 설명 불가 — 인과 관계 미분리.',
+     'answer': '지표별 대응 KPI·비용의 확정.'},
+]
+
+INDICATOR_ROLES = {
+    'prereq': {'label': '선행', 'order': 1, 'definition': '미충족 시 후속 지표의 성과 미연계'},
+    'driver': {'label': '동인', 'order': 2, 'definition': '성과의 직접 동인'},
+    'multiplier': {'label': '확산', 'order': 3, 'definition': '효과 확산 범위의 결정'},
+}
+
+# ── 부문별 지표 ─────────────────────────────────────────────────────────────
+# level     유효 수준. 여기를 넘어야 성과로 전환된다.
+# change    무엇이 달라지나 (한 줄)
+# metric    무엇으로 재나 (아직 대부분 안 잰다)
+# kpi       어느 KPI 에 닿나
+# ⚠️ 지표 → KPI 연결 기준(2026-09-01 확정) — 이것을 벗어난 선은 긋지 않는다.
+#   선행  KPI 에 **직결하지 않는다** — 동인을 통해서만 기여한다(정확도만으로 One Time Pass 가
+#         오르지 않는다. 모델링 수준이 서야 오른다). 집계 지표의 원본 축은 그 KPI 와 동일체이므로
+#         이름을 병기하는 것으로 충분하다.
+#   동인  그 지표가 **한 단계**로 움직이는 KPI — 기여 문구(how)가 기전을 한 구절로 적을 수 있어야 한다.
+#         두 단계 건너는 것(예: 자동화 → 제품 경쟁력)은 긋지 않는다.
+#   확산  그 부문의 동인들이 미는 KPI 중 **현행 관리 KPI 전부** — 확산이 없으면 전사 수치가
+#         안 움직인다는 것이 확산의 정의이므로, 전사 집계되는 KPI 에만 건다.
+# needs         **다른 부문**의 선행 지표 — (부문 키, 축 키, 어떻게). 같은 부문 안은 deps.
+# fed_by        이 지표의 **입력**이 되는 업무 요소 — 작용(acts_on)의 역방향. 디지털 트윈 밖에서
+#               받는 것이다(정확도 ← 시험·검증의 실측). 없으면 시뮬레이션이 허공에서 서는 것처럼 보인다.
+# acts_on       이 지표가 **어느 업무 요소**를 바꾸나 — VALUE_CHAIN 의 요소 키.
+#               ⚠️ 이것이 「디지털 트윈의 역할」이다. 없으면 지표가 허공에서 KPI 로 간다.
+# deps          이 지표가 서려면 **먼저 서야 하는 축** — 같은 부문 안의 축 키.
+#               ⚠️ 순서도의 가로 자리를 이것이 정한다. 선행이 없는 축이 맨 왼쪽이다.
+# outcomes      어느 비용에 닿나(기존 성과) — 그 지표의 KPI 를 거쳐 간다
+# new_outcomes  새로 짚는 성과 — **대응 KPI 가 아직 없어** 지표에서 바로 간다
+# why       왜 이 지표를 조사하나 (한 줄)
+# gate_why  왜 그 수준이 유효 수준인가 (한 줄)
+MEASUREMENT_FRAMEWORK = {
+    'simulation': {
+        'purpose': '실물 검증의 해석 대체를 통한 개발비용·개발시간 절감',
+        'indicators': [
+            {'axis': 'accuracy', 'role': 'prereq', 'level': 'quantitative',
+             'fed_by': [('test', '실측 대조에 의한 정확도 확정')],
+             'acts_on': [('design', '설계 판정 근거 제공')],
+             'change': '시험 없는 스펙 판정',
+             'metric': ['예측 오차', '적중률'], 'deps': [],
+             'kpi': [], 'outcomes': [],
+             'why': '전사 가상검증률의 원천 축 — 나머지 네 축은 현행 체계에 미반영',
+             'gate_why': '경향 일치 수준은 방향 확인까지 — 판정 근거로서 우열을 가르는 정량 마진 필요'},
+            {'axis': 'automation', 'role': 'driver', 'level': 'pipeline',
+             'acts_on': [('test', '검증 회전 속도 향상')],
+             'change': '무인 연속 해석 실행',
+             'metric': ['1회 소요 시간', '월 해석 건수'],
+             'deps': [('accuracy', '신뢰 가능한 해석 결과 확보')],
+             'kpi': [('test_leadtime', '해석 대기 시간 제거')],
+             'outcomes': [('dev_time', '검증 대기 시간 단축')],
+             'why': '동일 가상검증률에서의 시험 리드타임 차이 원인(자동화 수준) 규명',
+             'gate_why': '단계별 자동화는 단계 간 대기 잔존 — 파이프라인 수준에서 완주'},
+            {'axis': 'substitution', 'role': 'driver', 'level': 'cert_gate',
+             'fed_by': [('cert_rule', '해석 결과의 인증 근거 인정')],
+             'needs': [('digital_thread', 'usage', '취약 시험의 대체 우선순위 선정')],
+             'acts_on': [('test', '실물 시험의 해석 대체'), ('prototype', '시료 제작 물량 축소')],
+             'change': '개발 일정상 시험 공정 제외',
+             'metric': ['대체 시험 건수', '단축일', '회피 시험비'],
+             'deps': [('accuracy', '판정 근거로서의 정량 마진 확보'),
+                      ('automation', '시험 대체 소요 물량 확보')],
+             'kpi': [('test_leadtime', '시험 일정 자체 제거'),
+                     ('sample_cut', '실물 시료 제작 물량 축소')],
+             'outcomes': [('dev_cost', '시제품·시험 비용 미발생'),
+                          ('dev_time', '시험 기간 일정 제외')],
+             'why': '동일 가상검증률에서의 비용 차이 원인(대체 대상) 규명',
+             'gate_why': '사전 검증 수준까지는 시험 병행 — 일정·비용 미절감'},
+            {'axis': 'modeling', 'role': 'driver', 'level': 'test_all',
+             'fed_by': [('quality', '시장·공정 불량 정보의 재현 대상화')],
+             'needs': [('design_automation', 'part_lib', '검증된 부품 해석 모델 재사용')],
+             'acts_on': [('design', '설계 마진의 정량 결정')],
+             'change': '양산 결함의 설계 단계 사전 검출',
+             'metric': ['ECO 건수', '시장 불량률'],
+             'deps': [('accuracy', '현상 재현의 물리적 타당성 확보')],
+             'kpi': [('otp', '양산 결함의 선행 제거'),
+                     ('asr', '시장 유출 결함 사전 차단'),
+                     ('material_cut', '검증된 마진 축소분의 사양 반영')],
+             'outcomes': [('quality_cost', '양산·시장 대응 비용 미발생'),
+                          ('dev_cost', '재료 사양 하향에 의한 원가 절감')],
+             # ⚠️ 제품 경쟁력은 **여기 하나**에만 건다. 재현 범위가 넓어야 마진을 줄인다 —
+             #    자동화·적용 범위는 빨리·널리 돌리는 것이지 성능을 올리는 것이 아니다.
+             'new_outcomes': [('product', '설계 안전 마진 축소에 의한 성능 향상')],
+             'why': 'One Time Pass·ASR 정체 원인(재현 범위) 규명',
+             'gate_why': '부분 재현 시 잔여 항목의 시험 존치'},
+            {'axis': 'scope', 'role': 'multiplier', 'level': 'derived_some',
+             'acts_on': [('design', '전 과제 표준 절차 적용')],
+             'change': '전사 표준 절차화',
+             'metric': ['적용 과제 비율'],
+             'deps': [('modeling', '전개 가능한 표준 해석 모델 확보'),
+                      ('automation', '전사 전개를 위한 처리 능력 확보')],
+             'kpi': [('test_leadtime', '전사 단위 리드타임 단축'),
+                     ('otp', '전사 단위 통과율 개선'),
+                     ('asr', '전 과제 적용 시 시장 결함 감소')],
+             'outcomes': [],
+             'why': '전사 가상검증률의 특정 과제 편중 여부 확인',
+             'gate_why': '대표 모델 수준까지는 개인 역량 의존'},
+        ],
+    },
+    'digital_thread': {
+        'purpose': '의사결정 자료의 무인·적시 전달',
+        'indicators': [
+            {'axis': 'quality', 'role': 'prereq', 'level': 'master',
+             'acts_on': [('design', '설계 데이터의 신뢰 기반')],
+             'change': '검증 절차 없는 데이터 직접 활용',
+             'metric': ['재작업 건수'], 'deps': [],
+             'kpi': [], 'outcomes': [],
+             'why': '데이터 신뢰성의 측정 공백 — 연결 여부만 집계, 신뢰 여부는 미집계',
+             'gate_why': '매핑표 오류의 비가시성'},
+            {'axis': 'capture', 'role': 'driver', 'level': 'direct',
+             'acts_on': [('transfer', '설계·제조 자료의 자동 취합'),
+                         ('test', '시험별 소요 기간의 자동 집계')],
+             'change': '취합 인력 미투입',
+             'metric': ['자료 준비 공수'],
+             'deps': [('quality', '신뢰 가능한 원천 데이터 확보')],
+             'kpi': [('test_leadtime', '자료 준비 소요일 단축')],
+             'outcomes': [('dev_cost', '자료 취합 인력 미투입')],
+             'why': '데이터 확보 간접 공수 규모의 산정',
+             'gate_why': '취합 방식의 담당자 의존 — 부재 시 중단'},
+            {'axis': 'link_mode', 'role': 'driver', 'level': 'integrated',
+             'acts_on': [('transfer', '구간 간 자료 전달 자동화'), ('quality', '불량 정보의 설계 되먹임')],
+             'change': '대기 없는 구간 간 전달',
+             'metric': ['전달 소요일'],
+             'deps': [('capture', '연계 대상 원천 데이터 확보')],
+             'kpi': [('test_leadtime', '구간 간 전달 대기 제거'),
+                     ('asr', '불량 정보의 설계 되먹임'),
+                     # 품질·표준(선행)이 들고 있던 E-BOM·M-BOM 정합 — 실제로 그것을 **넘기는** 것은
+                     # 연결이다. 선행은 KPI 에 직결하지 않으므로 동인인 여기로 옮긴다.
+                     ('fpy', 'E-BOM·M-BOM 정합 이관에 의한 불량 차단')],
+             'outcomes': [('dev_time', '전달 대기 일정 제외'),
+                          ('quality_cost', '반복 결함 차단에 의한 대응 비용 감소')],
+             'why': '구간별 전달 대기의 개발 일정 영향 규명',
+             'gate_why': '자동 전달은 송신 측만 자동'},
+            {'axis': 'usage', 'role': 'driver', 'level': 'decision',
+             'acts_on': [('design', '자료 기반 설계 결정'), ('production', '자료 기반 생산 결정'),
+                         # 시험별 소요 기간이 잡히면 **취약 시험**이 드러난다 — 순서·병행 조정과
+                         # 설비·인력 보강 판단의 근거. 스레드가 시험 리드타임에 닿는 길이다.
+                         ('test', '취약 시험 식별에 의한 순서·병행 조정'),
+                         ('test_infra', '취약 시험 기준 설비·인력 보강 판단')],
+             'change': '해당 자료 기반 의사결정',
+             'metric': ['데이터 기반 결정 건수'],
+             'deps': [('quality', '의사결정 근거로서의 자료 신뢰성'),
+                      ('link_mode', '적시 자료 도달 보장')],
+             'kpi': [('otp', '근거 기반 결정에 따른 재결정 감소'),
+                     ('test_leadtime', '취약 시험의 병목 해소')],
+             'outcomes': [('dev_time', '설계 반복 횟수 감소')],
+             'why': '미활용 연결의 성과 부재 확인',
+             'gate_why': '참고·검토 수준은 단절 시에도 업무 지속 — 성과 기여 없음'},
+        ],
+    },
+    'manufacturing_monitoring': {
+        'purpose': '이상의 선행 검출과 조치 연계',
+        'indicators': [
+            {'axis': 'reliability', 'role': 'prereq', 'level': 'high',
+             'acts_on': [('production', '판정 결과의 현장 수용')],
+             'change': '판정 결과에 대한 현장 신뢰 확보',
+             'metric': ['오검출률', '알람 조치율'],
+             'deps': [('basic_metrics', '판정 근거 계측 항목 확보')],
+             'kpi': [], 'outcomes': [],
+             'why': '판정 신뢰도 부족 시 알람 차단에 의한 후속 지표 무효화 방지',
+             'gate_why': '오검출 반복 시 판정 자체의 미사용'},
+            {'axis': 'basic_metrics', 'role': 'driver', 'level': 'process_var',
+             'acts_on': [('production', '원인 변수의 상시 계측')],
+             'change': '결과가 아닌 원인 변수 계측',
+             'metric': ['원인 규명 시간'],
+             'deps': [('collection', '실시간 수집 체계 확보')],
+             'kpi': [('cpk', '원인 변수 산포의 관리 가능화')],
+             'outcomes': [('mfg_cost', '원인 규명 소요 시간 감소'),
+                          ('quality_cost', '공정 내 재작업 비용 감소')],
+             'why': '전사 데이터 연결율의 원천 축 — 사후 확인과 사전 예측의 경계',
+             'gate_why': '상태·불량 계측은 발생 확인 수준에 한정'},
+            {'axis': 'judgement', 'role': 'driver', 'level': 'diagnose',
+             'acts_on': [('maintenance', '고장의 사전 예측'), ('production', '이상의 자동 판정')],
+             'change': '시스템에 의한 자동 판정',
+             'metric': ['검출 시간'],
+             'deps': [('basic_metrics', '진단 필요 원인 변수 확보'),
+                      ('reliability', '현장 수용 가능한 판정 신뢰도')],
+             'kpi': [('mtbf', '사전 예측에 의한 고장 예방')],
+             'outcomes': [('mfg_cost', '설비 정지 시간 감소')],
+             # ⚠️ 신사업은 **여기 하나**에만 건다. 설비를 진단하는 능력 자체가 상품이다.
+             'new_outcomes': [('new_biz', '설비 진단 역량의 예지보전 상품화')],
+             'why': '검출 지연 시간과 유실 시간의 일치 확인',
+             'gate_why': '이상 판정은 사실 통보까지 — 원인 규명은 사람 의존'},
+            {'axis': 'response', 'role': 'driver', 'level': 'standard',
+             'acts_on': [('maintenance', '통보의 조치 연계')],
+             'change': '통보의 조치 연계',
+             'metric': ['조치 소요 시간', '미조치율'],
+             'deps': [('judgement', '조치 대상 판정 결과 확보')],
+             'kpi': [('mttr', '통보·조치 사슬 단축'),
+                     ('asr', '불량 유출 사전 차단')],
+             'outcomes': [('mfg_cost', '복구 지연 유실 감소'),
+                          ('quality_cost', '불량 유출 대응 비용 미발생')],
+             'why': '검출 체계 구축 후 유실율 미개선 원인 규명',
+             'gate_why': '담당·조치 미지정 통보의 무시'},
+            {'axis': 'collection', 'role': 'driver', 'level': 'periodic',
+             'acts_on': [('production', '설비 데이터 무인 수집')],
+             'change': '무인 자동 수집',
+             'metric': ['수집 지연'], 'deps': [],
+             'kpi': [('line_loss', '검출 지연 하한 단축')],
+             'outcomes': [('mfg_cost', '인지 지연에 따른 유실 감소')],
+             'why': '수집 주기에 의한 검출 지연 하한 확인',
+             'gate_why': '수기 방식은 취합 주기가 곧 지연'},
+            {'axis': 'scope', 'role': 'multiplier', 'level': 'all_equip',
+             'acts_on': [('production', '전 설비 적용')],
+             'change': '전 설비 기본 사양화',
+             'metric': ['적용 설비 비율'],
+             'deps': [('judgement', '전 설비 확대 대상 판정 체계')],
+             'kpi': [('line_loss', '공정 전체 단위 유실 개선'),
+                     ('asr', '전 설비 유출 차단 적용')],
+             'outcomes': [],
+             # ⚠️ 설비 투자 절감도 **여기 하나**에만 건다.
+             'new_outcomes': [('capex', '기존 설비 활용률 제고에 의한 증설 회피')],
+             'why': '시범 설비 한정 적용 시 공정 전체 지표 미개선 확인',
+             'gate_why': '시범은 표본 — 공정 전체가 아님'},
+        ],
+    },
+}
+FRAMEWORK_CAVEATS = [
+    '본 자료는 **측정 체계** — 성과 실적이 아님. 실제 수준은 「성숙도」 탭 참조.',
+    '가상검증률·데이터 연결율은 「정확도」·「기본 계측」의 **집계값** — '
+    '별도 지표가 아닌 해당 축의 다른 명칭.',
+    '「측정 지표」 대부분은 **집계 체계 미구축** — 다음 단계에서 확보.',
+    '제품 경쟁력·신사업·설비 투자 절감은 **대응 KPI 미정의** — '
+    '지표에서 성과로의 직결은 측정이 아닌 가설.',
+    '검증·설계·공장 최적화는 **초안** — 성숙도 축·수준이 기준 정보에 미등록. '
+    '순서도에서 끊긴 테두리·점점선으로 표시.',
+    '업무 단계·기반 요소는 **디지털 트윈 밖** — 성숙도 평가 대상이 아니며, '
+    '디지털 트윈과 무관하게 KPI 에 기여하는 경로.',
+    '평균 복구 시간·평균 고장 간격·공정 능력 지수는 **경유 KPI** — '
+    '성과에 직결하지 않음(동일 절감의 이중 계상 방지).',
+    '재료비는 **개발비용에 편성** — 별도 성과가 아닌 개발비용의 구성 항목.',
+    '지표 → KPI 연결 기준 — 선행: KPI 직결 없음(동인을 통해 기여) · 동인: 한 단계로 움직이는 KPI '
+    '· 확산: 부문 동인이 미는 현행 관리 KPI 전부. 두 단계 건너는 연결은 배제.',
+    '시뮬레이션은 **밖에서 받는 입력**이 있음 — 정확도는 시험·검증의 실측 대조, 모델링 수준은 '
+    '품질 관리의 불량 정보, 시험 대체는 검증 규정(해석의 인증 근거 인정). 회색 실선으로 표시.',
+]
+
+
+def _how(x):
+    """'키' 또는 ('키', '어떻게 기여하나'). 설명 없이 선만 그릴 수도 있게 둔다."""
+    return x if isinstance(x, tuple) else (x, None)
+
+
+def measurement_framework(sector_key):
+    """부문의 측정 체계 — 축·수준·KPI 명칭을 결합해 반환한다.
+
+    ⚠️ 명칭을 화면에서 다시 찾지 않도록 여기서 붙인다. 기준 정보에서 축 이름을 고치면
+       개요의 표기도 같이 바뀌어야 하며, 두 벌로 두면 언젠가 어긋난다.
+    """
+    conf = MEASUREMENT_FRAMEWORK.get(sector_key)
+    if not conf:
+        return None
+    axes = {a['key']: a for a in get_axes(sector_key)}
+    elems = _element_index()
+    outs = {o['key']: o for o in BUSINESS_OUTCOMES}
+    kpis = {k['key']: k for k in KPI_SET}
+    rows = []
+    for it in conf['indicators']:
+        axis = axes.get(it['axis'])
+        if axis is None:
+            continue                     # 부문에서 뺀 축은 체계에서도 뺀다
+        rungs = axis.get('rungs') or []
+        li = next((i for i, r in enumerate(rungs) if r['key'] == it['level']), None)
+        rows.append({
+            'axis': it['axis'], 'axis_label': axis['label'],
+            # 이 축이 집계 지표의 **원본**이면 그 이름을 병기한다 —
+            # 「정확도 (가상검증률)」처럼. 원본이 아닌 축에는 안 붙인다.
+            'derived_label': next((k['label'] for k in KPI_SET
+                                   if k.get('from_axis_key') == it['axis']
+                                   and k.get('from_sector') == sector_key), None),
+            'role': it['role'], 'role_label': INDICATOR_ROLES[it['role']]['label'],
+            'levels': [{'key': r['key'], 'label': r['label']} for r in rungs],
+            'level_index': li,
+            'level_label': rungs[li]['label'] if li is not None else None,
+            'change': it['change'], 'metric': it['metric'],
+            # 어느 업무 요소에 작용하나 — 디지털 트윈의 **역할**. 순서도가 위·아래 띠로 잇는다.
+            'acts_on': [{'key': e, 'band': elems[e][0], 'label': elems[e][1], 'how': h}
+                        for e, h in map(_how, it.get('acts_on', []))],
+            # 선행 축 — 순서도가 지표끼리 잇는 데 쓴다. 부문에서 뺀 축은 걸러진다.
+            'deps': [{'key': d, 'label': axes[d]['label'], 'how': h}
+                     for d, h in map(_how, it.get('deps', [])) if d in axes],
+            'needs': _needs(it), 'fed_by': _fed_by(it, elems),
+            'why': it['why'], 'gate_why': it['gate_why'],
+            'kpi': [{'key': k, 'label': kpis[k]['label'], 'tier': kpis[k]['tier'], 'how': h}
+                    for k, h in map(_how, it['kpi'])],
+            'outcomes': [{'key': o, 'label': outs[o]['label'], 'how': h}
+                         for o, h in map(_how, it['outcomes'])],
+            # 신규 성과 — KPI 를 거치지 않는다. 화면이 점선으로 그린다.
+            'new_outcomes': [{'key': o, 'label': outs[o]['label'], 'how': h}
+                             for o, h in map(_how, it.get('new_outcomes', []))],
+        })
+    return {
+        'sector': sector_key, 'purpose': conf['purpose'], 'indicators': rows,
+        'outcomes': BUSINESS_OUTCOMES, 'kpis': KPI_SET, 'kpi_tiers': KPI_TIERS,
+        'gaps': FRAMEWORK_GAPS, 'roles': INDICATOR_ROLES, 'caveats': FRAMEWORK_CAVEATS,
+    }
+
+
+# 아직 안 연 중점 분야의 성숙도 지표 **초안**(2026-09-01).
+#
+# ⚠️ MEASUREMENT_FRAMEWORK 와 형태는 같지만 **수준 사다리(level)가 없다.** 축이
+#    기준 정보에 아직 없기 때문이다 — 있는 척하면 「정의된 것」과 「제안하는 것」이
+#    섞인다. 화면은 이것을 끊긴 테두리와 점점선으로 그린다.
+PROPOSED_FRAMEWORK = {
+    'verification_automation': {
+        'label': '검증',
+        'purpose': '설계 룰 자동 검증에 의한 도면 검토 전 결함 제거',
+        'indicators': [
+            {'axis': 'rule_tool', 'axis_label': '설계 룰 검증 툴', 'role': 'prereq',
+             'needs': [('simulation', 'modeling', '해석 확정 마진의 룰 자산화')],
+             'acts_on': [('design', '설계 룰의 자산화')],
+             'change': '설계 룰의 기계 판독 가능화',
+             'metric': ['자산화 룰 건수'], 'deps': [],
+             'kpi': [], 'outcomes': [],
+             'why': '툴 부재 시 룰 확인의 육안 의존'},
+            {'axis': 'mech_rule', 'axis_label': '기구 룰 검증', 'role': 'driver',
+             'acts_on': [('design', '기구 도면 자동 검토')],
+             'change': '치수·형상·조립성의 자동 판정',
+             'metric': ['간섭·공차 위반 검출 건수'],
+             'deps': [('rule_tool', '기구 룰의 자산화')],
+             'kpi': [('otp', '조립 간섭·치수 오류의 선행 제거'),
+                     ('sample_cut', '간섭 확인용 시작품 재제작 회피')],
+             'outcomes': [('dev_cost', '시작품 단계 재작업 미발생')],
+             'why': '조립 간섭의 시작품 단계 후행 발견'},
+            {'axis': 'circuit_rule', 'axis_label': '회로 룰 검증', 'role': 'driver',
+             'acts_on': [('design', '회로 도면 자동 검토')],
+             'change': '부품 용량·배선 간격의 자동 판정',
+             'metric': ['룰 위반 검출 건수'],
+             'deps': [('rule_tool', '회로 룰의 자산화')],
+             'kpi': [('otp', '용량·간격 위반의 선행 제거'),
+                     ('sample_cut', '기판 재제작 회피')],
+             'outcomes': [('dev_cost', '기판 재제작 비용 미발생')],
+             'why': '기판 오류 시 전량 재제작 비용 발생'},
+            {'axis': 'scope', 'axis_label': '적용 범위', 'role': 'multiplier',
+             'acts_on': [('design', '전 과제 자동 검토 적용')],
+             'change': '전 과제의 표준 검증 절차화',
+             'metric': ['자동 검증 적용 과제 비율'],
+             'deps': [('mech_rule', '기구 룰 체계 확보'),
+                      ('circuit_rule', '회로 룰 체계 확보')],
+             'kpi': [('otp', '전사 단위 통과율 개선')], 'outcomes': [],
+             'why': '일부 과제 적용 시 전사 지표 미개선'},
+        ],
+    },
+    'design_automation': {
+        'label': '설계',
+        'purpose': '표준 부품 조합 기반 설계 초안 자동 생성 — 반복 설계 제거',
+        'indicators': [
+            {'axis': 'part_lib', 'axis_label': '표준·공용 부품 라이브러리', 'role': 'prereq',
+             'acts_on': [('design', '표준 부품 자산 제공'), ('sourcing', '공용 부품의 구매 집중')],
+             'change': '검증된 부품의 자산 등록',
+             'metric': ['등록 부품 수', '적용 가능 사양 범위'], 'deps': [],
+             'kpi': [], 'outcomes': [],
+             'why': '조합 대상 부품 부재 시 초안 생성 불가'},
+            {'axis': 'draft_gen', 'axis_label': '설계 Draft 자동 생성', 'role': 'driver',
+             'acts_on': [('req', '사양 정의 시 초안 자동 도출'), ('design', '설계 초안 자동 생성')],
+             'change': '제품 사양 정의 시 초안 자동 도출',
+             'metric': ['초안 작성 소요 시간', '자동 생성 비율'],
+             'deps': [('part_lib', '조합 대상 부품 자산 확보')],
+             'kpi': [('otp', '초안 단계 기준 오류 제거')],
+             'outcomes': [('dev_time', '초안 작성 기간 단축')],
+             'why': '백지 설계 반복에 의한 동일 오류 재발'},
+            {'axis': 'commonize', 'axis_label': '부품 공용화', 'role': 'driver',
+             'acts_on': [('design', '기종 간 공용 부품 적용'), ('sourcing', '구매 물량 집중')],
+             'change': '기종 간 공용 부품 적용',
+             'metric': ['공용 부품 적용률', '신규 부품 등록 수'],
+             'deps': [('part_lib', '공용 후보 부품 정리')],
+             'kpi': [('material_cut', '구매 물량 집중에 의한 단가 인하')],
+             'outcomes': [('dev_cost', '신규 부품 개발·검증 비용 미발생')],
+             'why': '기종별 신규 부품 사용에 따른 물량 분산·단가 미인하'},
+            {'axis': 'scope', 'axis_label': '적용 범위', 'role': 'multiplier',
+             'acts_on': [('design', '전 과제 자동 설계 적용')],
+             'change': '전 과제의 표준 설계 절차화',
+             'metric': ['적용 과제 비율'],
+             'deps': [('draft_gen', '초안 생성 체계 확보')],
+             'kpi': [('otp', '전사 단위 통과율 개선')], 'outcomes': [],
+             'why': '일부 과제 적용 시 전사 통과율 미개선'},
+        ],
+    },
+    'factory_optimization': {
+        'label': '공장 최적화',
+        'purpose': '라인·물류·설비의 사전 검증에 의한 동일 설비 생산량 증대',
+        'indicators': [
+            {'axis': 'equip_robot', 'axis_label': '설비·로봇', 'role': 'prereq',
+             'acts_on': [('line_build', '설비·제어SW 사전 검증')],
+             'change': '기구·제어SW 설계의 사전 검증',
+             'metric': ['설치 후 수정 건수', '초기 고장 건수'], 'deps': [],
+             'kpi': [], 'outcomes': [],
+             'why': '단일 설비 정지 시 라인 전체 검증 무효'},
+            {'axis': 'line_layout', 'axis_label': '라인', 'role': 'driver',
+             'acts_on': [('line_build', '배치·순서 사전 결정')],
+             'change': '설비·로봇·작업자 배치와 생산 순서의 사전 결정',
+             'metric': ['공정 편성 효율', '병목 대기 시간'],
+             'deps': [('equip_robot', '개별 설비 거동 확정')],
+             'kpi': [('output_per_head', '병목 없는 배치·순서 확보')],
+             'outcomes': [('mfg_cost', '동일 인원 기준 산출 증대')],
+             'why': '라인 설치 후 배치·순서 변경 불가'},
+            {'axis': 'logistics', 'axis_label': '물류', 'role': 'driver',
+             'acts_on': [('line_build', '동선·물류 기기 사전 검증')],
+             'change': '동선·물류 기기 대수의 사전 검증',
+             'metric': ['공급 대기 시간', '물류 기기 대수'],
+             'deps': [('line_layout', '배치 확정')],
+             'kpi': [('output_per_head', '자재 공급 대기 제거')],
+             'outcomes': [('mfg_cost', '과잉 물류 기기 투자 회피')],
+             'why': '자재 공급 지연에 의한 라인 정지'},
+            {'axis': 'pilot', 'axis_label': '시생산', 'role': 'driver',
+             'acts_on': [('pilot', '생산성·조립성 사전 검증')],
+             'change': '생산성·조립성·작업성의 양산 전 검증',
+             'metric': ['시생산 지적 건수', '양산 초기 불량률'],
+             'deps': [('line_layout', '작업 배치 확정')],
+             'kpi': [('fpy', '조립성 결함의 양산 전 제거')],
+             'outcomes': [('quality_cost', '양산 초기 불량 대응 비용 미발생')],
+             'why': '조립 불가 설계의 시생산 단계 후행 발견'},
+            {'axis': 'in_production', 'axis_label': '생산중 운영', 'role': 'driver',
+             'acts_on': [('production', '생산 계획의 최적 수립'), ('maintenance', '보전 주기의 최적 수립')],
+             'change': '생산 계획·보전 주기·창고 운영의 최적 수립',
+             'metric': ['계획 준수율', '보전 계획 이행률'],
+             'deps': [('logistics', '물류 운영 조건 확정'),
+                      ('pilot', '실 생산 조건 확보')],
+             'kpi': [('line_loss', '계획·보전 주기의 사전 수립')],
+             'outcomes': [('mfg_cost', '계획 이탈에 의한 손실 감소')],
+             'why': '경험 의존 계획 수립과 근거 미보존'},
+        ],
+    },
+}
+# 개발·제조의 **핵심 업무 요소** — 디지털 트윈 **밖**이다(2026-09-01).
+#
+# ⚠️ 디지털 트윈 지표는 이 요소들에 **작용**해서 KPI 를 움직인다(acts_on). 그리고 이
+#    요소들은 디지털 트윈 없이도 KPI 를 움직인다 — 시험 설비를 늘려도 리드타임은 준다.
+#    그 두 가지가 같이 보여야 「디지털 트윈의 몫이 어디까지인가」가 읽힌다.
+#
+# kind   step  업무 단계 — 차례가 있다(next)
+#        lever 기반 요소 — 단계가 아니라 자원·조직. 디지털 트윈이 대신할 수 없는 몫.
+# kpi    이 요소 **자체**가 움직이는 KPI 와 어떻게. 디지털 트윈과 무관한 경로다.
+VALUE_CHAIN = {
+    'development': {
+        'label': '개발 부문',
+        'elements': [
+            {'key': 'req', 'label': '요구·사양 정의', 'kind': 'step', 'next': 'design',
+             'note': '제품 요구와 목표 사양의 확정',
+             'kpi': [('otp', '요구 확정도에 따른 재설계 발생')]},
+            {'key': 'design', 'label': '설계', 'kind': 'step', 'next': 'prototype',
+             'note': '기구·회로·SW 설계와 도면 확정',
+             'kpi': [('otp', '설계 완성도에 따른 통과 여부'),
+                     ('material_cut', '사양 결정에 의한 재료비 확정')]},
+            {'key': 'prototype', 'label': '시작품 제작', 'kind': 'step', 'next': 'test',
+             'note': '실물 시료의 제작·투입',
+             'kpi': [('sample_cut', '시료 제작 물량의 결정')]},
+            {'key': 'test', 'label': '시험·검증', 'kind': 'step', 'next': 'transfer',
+             'note': '신뢰성·성능 시험과 합부 판정',
+             'kpi': [('test_leadtime', '시험 실행 기간의 확정')]},
+            {'key': 'transfer', 'label': '양산 이관', 'kind': 'step', 'next': None,
+             'note': '설계·공정 조건의 제조 인계',
+             'kpi': [('fpy', '이관 조건 완성도에 따른 초기 불량')]},
+            {'key': 'test_infra', 'label': '시험 설비·인력', 'kind': 'lever',
+             'note': '시험 설비 용량과 숙련 인력',
+             'kpi': [('test_leadtime', '시험 착수 대기의 해소')]},
+            {'key': 'design_org', 'label': '설계 프로세스·조직', 'kind': 'lever',
+             'note': '요구 관리·설계 기준·검토 체계',
+             'kpi': [('otp', '요구 변경에 의한 재설계 억제')]},
+            {'key': 'sourcing', 'label': '부품 구매·소싱', 'kind': 'lever',
+             'note': '부품 단가 협상과 공급처 운영',
+             'kpi': [('material_cut', '구매 단가 협상에 의한 절감')]},
+            # ⚠️ 시험 대체의 「신뢰성 인증 게이트」는 해석 결과를 인증 근거로 **인정하는 규정**이
+            #    있어야 성립한다 — 기술이 아니라 규정의 문제. 디지털 트윈이 만들 수 없는 몫이다.
+            {'key': 'cert_rule', 'label': '검증 규정·인증 기준', 'kind': 'lever',
+             'note': '해석 결과의 인증 근거 인정 절차',
+             'kpi': [('test_leadtime', '시험 면제 승인 절차 확보')]},
+        ],
+    },
+    'manufacturing': {
+        'label': '제조 부문',
+        'elements': [
+            {'key': 'line_build', 'label': '설비 투자·라인 구축', 'kind': 'step', 'next': 'pilot',
+             'note': '설비 도입과 라인 설치',
+             'kpi': [('output_per_head', '생산 능력 자체의 확보'),
+                     ('mtbf', '설비 사양 자체의 신뢰성')]},
+            {'key': 'pilot', 'label': '시생산', 'kind': 'step', 'next': 'production',
+             'note': '양산 전 생산성·조립성 확인',
+             'kpi': [('fpy', '양산 전 조립 결함 제거')]},
+            {'key': 'production', 'label': '양산', 'kind': 'step', 'next': 'maintenance',
+             'note': '계획에 따른 생산 운영',
+             'kpi': [('line_loss', '운영 중 정지·손실 발생'),
+                     ('output_per_head', '실 산출량의 확정'),
+                     ('cpk', '공정 조건의 관리 상태')]},
+            {'key': 'maintenance', 'label': '설비 보전', 'kind': 'step', 'next': 'quality',
+             'note': '예방·사후 보전과 복구',
+             'kpi': [('mtbf', '보전 주기에 따른 고장 빈도'),
+                     ('mttr', '복구 체계에 따른 정지 시간')]},
+            {'key': 'quality', 'label': '품질 관리·검사', 'kind': 'step', 'next': None,
+             'note': '공정·출하 검사와 시장 품질 대응',
+             'kpi': [('asr', '출하 검사에 의한 유출 차단')]},
+            {'key': 'capex_people', 'label': '설비 투자·인력 운영', 'kind': 'lever',
+             'note': '설비 투자 집행과 인원 편성',
+             'kpi': [('output_per_head', '설비·인원 자체의 확보')]},
+            {'key': 'workforce', 'label': '작업자 숙련', 'kind': 'lever',
+             'note': '작업자 교육과 다능화',
+             'kpi': [('mttr', '숙련도에 따른 복구 속도'),
+                     ('output_per_head', '작업 속도·품질의 확보')]},
+            {'key': 'material_supply', 'label': '자재 공급', 'kind': 'lever',
+             'note': '자재 결품·납기 관리',
+             'kpi': [('line_loss', '자재 결품에 의한 정지')]},
+        ],
+    },
+}
+
+
+# 부문이 어느 쪽에 붙나 — 숫서도의 토글(개발/제조/연계)이 쓴다. 스레드는 둘을 **잇는다**.
+SECTOR_PART = {
+    'design_automation': 'dev', 'verification_automation': 'dev', 'simulation': 'dev',
+    'digital_thread': 'link',
+    'factory_optimization': 'mfg', 'manufacturing_monitoring': 'mfg',
+}
+
+
+def value_chain():
+    """업무 요소 — 순서도의 위·아래 띠. KPI 명칭을 붙여 돌려준다."""
+    kpis = {k['key']: k for k in KPI_SET}
+    out = {}
+    for band, conf in VALUE_CHAIN.items():
+        out[band] = {'label': conf['label'], 'elements': [{
+            'key': e['key'], 'label': e['label'], 'kind': e['kind'], 'note': e['note'],
+            'next': e.get('next'),
+            'kpi': [{'key': k, 'label': kpis[k]['label'], 'how': h}
+                    for k, h in map(_how, e['kpi'])],
+        } for e in conf['elements']]}
+    return out
+
+
+def _element_index():
+    return {e['key']: (band, e['label'])
+            for band, conf in VALUE_CHAIN.items() for e in conf['elements']}
+
+
+def _axis_label(sector_key, axis_key):
+    """다른 부문 축의 이름 — 정의된 부문은 기준 정보에서, 초안은 초안에서."""
+    if sector_key in MEASUREMENT_FRAMEWORK:
+        return next((a['label'] for a in get_axes(sector_key) if a['key'] == axis_key), None)
+    conf = PROPOSED_FRAMEWORK.get(sector_key, {})
+    return next((i['axis_label'] for i in conf.get('indicators', []) if i['axis'] == axis_key), None)
+
+
+def _needs(it):
+    """부문을 건너는 선행 — 이름을 붙여 돌려준다. 못 찾는 축은 조용히 빼지 않고 KeyError 다."""
+    out = []
+    for sec, ax, how in it.get('needs', []):
+        label = _axis_label(sec, ax)
+        if label is None:
+            raise KeyError((sec, ax))
+        sec_conf = PROPOSED_FRAMEWORK.get(sec)
+        sec_label = (sec_conf or {}).get('label') or (sector_of(sec) or {}).get('label', sec)
+        out.append({'sector': sec, 'sector_label': sec_label, 'axis': ax, 'label': label, 'how': how})
+    return out
+
+
+def _fed_by(it, elems):
+    """업무 요소 → 지표 입력."""
+    return [{'key': e, 'band': elems[e][0], 'label': elems[e][1], 'how': h}
+            for e, h in map(_how, it.get('fed_by', []))]
+
+
+def proposed_framework():
+    """초안 부문들 — 축이 아직 기준 정보에 없으므로 이름을 여기서 직접 들고 있다.
+
+    ⚠️ 반환 모양을 measurement_framework 의 행과 맞춘다. 화면이 같은 방식으로
+       그리되 draft 표시만 보고 회색으로 처리하면 되게 하기 위해서다.
+    """
+    outs = {o['key']: o for o in BUSINESS_OUTCOMES}
+    kpis = {k['key']: k for k in KPI_SET}
+    elems = _element_index()
+    secs = []
+    for key, conf in PROPOSED_FRAMEWORK.items():
+        lab = {it['axis']: it['axis_label'] for it in conf['indicators']}
+        rows = []
+        for it in conf['indicators']:
+            rows.append({
+                'axis': it['axis'], 'axis_label': it['axis_label'], 'derived_label': None,
+                'role': it['role'], 'role_label': INDICATOR_ROLES[it['role']]['label'],
+                'change': it['change'], 'metric': it['metric'], 'why': it['why'],
+                'acts_on': [{'key': e, 'band': elems[e][0], 'label': elems[e][1], 'how': h}
+                            for e, h in map(_how, it.get('acts_on', []))],
+                'draft': True, 'levels': [], 'level_index': None, 'level_label': None,
+                'gate_why': None,
+                'deps': [{'key': d, 'label': lab[d], 'how': h}
+                         for d, h in map(_how, it['deps'])],
+                'needs': _needs(it), 'fed_by': _fed_by(it, elems),
+                'kpi': [{'key': k, 'label': kpis[k]['label'], 'tier': kpis[k]['tier'], 'how': h}
+                        for k, h in map(_how, it['kpi'])],
+                'outcomes': [{'key': o, 'label': outs[o]['label'], 'how': h}
+                             for o, h in map(_how, it['outcomes'])],
+                'new_outcomes': [{'key': o, 'label': outs[o]['label'], 'how': h}
+                                 for o, h in map(_how, it.get('new_outcomes', []))],
+            })
+        # ⚠️ 넓힌 이름을 쓴다 — SECTORS 의 부문명은 다른 모듈의 분류와 맞물려 있어
+        #    거기서 바꾸면 모듈 사이가 어긋난다. 넓힘은 이 자료 안에서만.
+        secs.append({'key': key, 'part': SECTOR_PART.get(key, 'link'),
+                     'label': conf.get('label') or (sector_of(key) or {}).get('label', key),
+                     'purpose': conf['purpose'], 'indicators': rows, 'draft': True})
+    return secs
+
+
+def focus_areas():
+    """중점 추진 분야 — 조사 대상. 아직 안 연 분야도 남긴다."""
+    kpis = {k['key']: k for k in KPI_SET}
+    return [{
+        'key': f['key'],
+        'label': (PROPOSED_FRAMEWORK.get(f['key'], {}).get('label')
+                  or (sector_of(f['key']) or {}).get('label', f['key'])),
+        'open': bool(sector_is_active(f['key'])),
+        'defined': f['key'] in MEASUREMENT_FRAMEWORK,
+        'indicator_count': len(MEASUREMENT_FRAMEWORK.get(f['key'], {}).get('indicators', [])),
+        'role': f['role'],
+        'kpi': [{'key': k, 'label': kpis[k]['label'], 'tier': kpis[k]['tier']} for k in f['kpi']],
+    } for f in FOCUS_AREAS]
+
+
+def framework_all():
+    """전 부문의 측정 체계 — 「요약」 한 장이 쓴다.
+
+    ⚠️ 요약은 부문 선택과 **무관한 한 페이지**다(2026-08-31 요청). 부문마다 따로
+       부르면 화면이 부문에 매이고, 여섯 분야를 한눈에 보여 준다는 목적이 깨진다.
+       공통 재료(성과·KPI·공백)는 한 벌만 싣는다 — 부문 수만큼 되풀이하면 응답이 붓는다.
+    """
+    secs = []
+    for key in MEASUREMENT_FRAMEWORK:
+        if not sector_is_active(key):
+            continue                       # 아직 안 연 부문은 「중점 분야」에만 남는다
+        f = measurement_framework(key)
+        secs.append({'key': key, 'label': (sector_of(key) or {}).get('label', key),
+                     'part': SECTOR_PART.get(key, 'link'),
+                     'purpose': f['purpose'], 'indicators': f['indicators']})
+    return {
+        'sectors': secs,
+        # ⚠️ 초안은 따로 싣는다 — 섞으면 「정의된 것」과 「제안하는 것」이 구분되지 않는다.
+        'draft_sectors': proposed_framework(),
+        # 개발·제조의 업무 요소 — 순서도의 위·아래 띠. 디지털 트윈 **밖**이다.
+        'value_chain': value_chain(),
+        'focus_areas': focus_areas(),
+        'outcomes': BUSINESS_OUTCOMES, 'kpis': KPI_SET, 'kpi_tiers': KPI_TIERS,
+        'gaps': FRAMEWORK_GAPS, 'roles': INDICATOR_ROLES, 'caveats': FRAMEWORK_CAVEATS,
+    }

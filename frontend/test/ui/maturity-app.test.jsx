@@ -141,6 +141,9 @@ export default async function run() {
     //    「확인 대기」를 눌렀더니 「시뮬레이션 관리」가 떴다(2026-08-30).
     await step('⑦ 확인 대기 → 제 창이 열린다', async () => {
       await click(byText('button', '시뮬레이션')); await settle(40);
+      // ⚠️ 기본 탭이 「개요」로 바뀌었다(2026-08-31). 승인 뒤에 **판이** 다시 읽히는지를
+      //    보려는 것이라 먼저 「성숙도」 탭으로 간다.
+      await click(byText('button', '성숙도')); await settle(60);
       const btn = byText('button', '확인 대기');
       if (!btn) throw new Error('헤더에 「확인 대기」가 없습니다');
       await click(btn); await settle(60);
