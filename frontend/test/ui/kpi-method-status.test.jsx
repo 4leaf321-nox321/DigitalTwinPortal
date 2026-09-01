@@ -12,6 +12,7 @@ import { render, click, settle, byText, html, fakeFetch, suite, unmount } from '
 import { AuthProvider } from '../../src/contexts/AuthContext';
 import KpiMatrixView from '../../src/modules/digital-twin-dashboard/components/Dashboard/KpiMatrixView';
 import { written } from './xlsx-stub.js';
+import { placePick, PICK_W } from '../../src/modules/digital-twin-dashboard/components/Dashboard/BulkKpiLinkModal';
 
 const KPI = (id, label) => ({ kpiDefinitionId: id, label, unit: '%', category: '개발', kind: 'metric' });
 const P = (uuid, division, status = '진행중') => ({ uuid, projectName: uuid, division, status });
@@ -145,6 +146,18 @@ export default async function run() {
     await unmount();
   } catch (e) {
     say(false, `실패: ${e.stack.split('\n').slice(0, 4).join(' | ')}`);
+  }
+  // ── 칸 고르기 패널의 자리 — 누른 칸 아래 **한가운데**(2026-09-01 지적: 오른쪽으로 쏠렸다) ──
+  {
+    const at = placePick({ left: 600, width: 80, top: 300, bottom: 330 }, 1600, 900);
+    say(at.left === 600 + 40 - PICK_W / 2, `패널이 칸 한가운데에 선다: ${at.left}`);
+    say(at.top === 336, '패널이 칸 바로 아래에 선다');
+    const edge = placePick({ left: 1500, width: 80, top: 300, bottom: 330 }, 1600, 900);
+    say(edge.left === 1600 - PICK_W - 8, '오른쪽 끝에서는 화면 안으로 들어온다');
+    const low = placePick({ left: 600, width: 80, top: 800, bottom: 830 }, 1600, 900);
+    say(low.top === 800 - 440 - 6, '아래가 모자라면 칸 위로 올라간다');
+    const tiny = placePick({ left: 10, width: 80, top: 300, bottom: 330 }, 1600, 900);
+    say(tiny.left === 8, '왼쪽 끝에서는 8px 안쪽에 선다');
   }
   return done();
 }

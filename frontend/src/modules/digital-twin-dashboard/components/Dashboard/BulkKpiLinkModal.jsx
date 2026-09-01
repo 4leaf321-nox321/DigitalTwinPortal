@@ -32,7 +32,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { X, Loader2, ChevronLeft, ChevronRight, Check, AlertTriangle, Trash2 } from 'lucide-react';
 
-import { bulkKpiLinks } from '../../services/settingsApi';
+import { bulkKpiLinks, saveSystemSettings } from '../../services/settingsApi';
 
 /* 등급 — 서버 KPI_RELATION_TYPES 와 **같은 값**이어야 한다. */
 const RELS = [
@@ -126,8 +126,33 @@ const BulkKpiLinkModal = ({
     }
   }, [open]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const methodDict = settingsData?.kpiContributionMethods || {};
+  /**
+   * 기여 방법 사전 — 설정(`kpiContributionMethods`)이 정본이고, 여기서 새로 적은 문구는
+   * **바로 목록에 보이게** 지역 겹침(`localMethods`)으로 얹는다. 과제 편집창과 같은 규칙.
+   * 사전 저장은 admin·dt_office 만 된다 — 실패해도 이 칸에는 정상으로 들어가고, 이번
+   * 세션 동안은 목록에 남는다. 막아서 못 쓰게 하는 것보다 낫다.
+   */
+  const [localMethods, setLocalMethods] = useState({});
+  const methodDict = useMemo(() => {
+    const base = settingsData?.kpiContributionMethods || {};
+    const out = { ...base };
+    Object.entries(localMethods).forEach(([k, list]) => {
+      out[k] = [...new Set([...(base[k] || []), ...list])];
+    });
+    return out;
+  }, [settingsData, localMethods]);
   const methodsFor = (kid) => methodDict[String(kid)] || [];
+  const defineMethod = (kid, text) => {
+    const key = String(kid);
+    if ((methodDict[key] || []).includes(text)) return;
+    setLocalMethods((prev) => ({ ...prev, [key]: [...(prev[key] || []), text] }));
+    saveSystemSettings({ kpiContributionMethods:
+      { ...methodDict, [key]: [...new Set([...(methodDict[key] || []), text])] } })
+      .catch((e) => console.warn('[DT] 기여방법 사전 저장 실패(연결에는 정상 저장됩니다):', e.message));
+  };
+  /** 칸 고르기의 직접 입력 칸. 다른 칸을 열면 비운다. */
+  const [free, setFree] = useState('');
+  useEffect(() => { setFree(''); }, [pick?.p?.uuid, pick?.kpi?.kpiDefinitionId, pick?.col?.kpiDefinitionId]);
 
   const chosen = useMemo(
     () => projects.filter((p) => sel.has(p.uuid)), [projects, sel]);
@@ -542,12 +567,7 @@ const BulkKpiLinkModal = ({
                   ...methodsFor(kpi.kpiDefinitionId),
                   ...(st ? st.methods : []),
                 ])];
-                // 패널 크기와 **같은 값**을 써야 화면 밖으로 안 나간다 (PICK_W/PICK_H)
-                const left = Math.min(Math.max(pick.rect.left, 8),
-                                      window.innerWidth - PICK_W - 8);
-                const below = pick.rect.bottom + 6;
-                const top = below + PICK_H > window.innerHeight
-                  ? Math.max(pick.rect.top - PICK_H - 6, 8) : below;
+                const { left, top } = placePick(pick.rect, window.innerWidth, window.innerHeight);
                 return (
                   <>
                     <PickShade onClick={() => setPick(null)} />
@@ -589,8 +609,8 @@ const BulkKpiLinkModal = ({
                         <h5>기여 방법 {!isCol && `(${st.methods.length}개 선택)`}</h5>
                         {!opts.length ? (
                           <Empty2>
-                            이 지표의 방법 사전이 비어 있습니다.<br />
-                            <b>설정 ▸ KPI 기여방법</b> 에서 먼저 등록하세요.
+                            이 지표의 방법 사전이 비어 있습니다 — 아래에 직접 적어 넣으세요.
+                            적은 문구는 사전에도 들어갑니다.
                           </Empty2>
                         ) : (
                           <Opts>
@@ -627,6 +647,36 @@ const BulkKpiLinkModal = ({
                             })}
                           </Opts>
                         )}
+                        {/* 직접 입력 — 사전에 없는 것도 적을 수 있어야 한다(2026-09-01 지적).
+                            적은 문구는 이 칸(열 전체면 그 묶음)에 들어가고, 사전에도 들어간다. */}
+                        {(() => {
+                          const t = free.trim();
+                          const dup = opts.includes(t);
+                          const addFree = () => {
+                            if (!t || dup) return;
+                            defineMethod(kpi.kpiDefinitionId, t);
+                            if (isCol) {
+                              setPick((prev) => ({ ...prev, picked: [...(prev.picked || []), t] }));
+                            } else {
+                              setCell(pick.p, pick.kpi, { methods: [...st.methods, t] });
+                            }
+                            setFree('');
+                          };
+                          return (
+                            <FreeRow>
+                              <FreeInput value={free} maxLength={140}
+                                         placeholder="새 기여 방법 — Enter 로 추가 (사전에도 들어갑니다)"
+                                         onChange={(e) => setFree(e.target.value)}
+                                         onKeyDown={(e) => {
+                                           if (e.key === 'Enter') { e.preventDefault(); addFree(); }
+                                           if (e.key === 'Escape') setFree('');
+                                         }} />
+                              <FreeAdd type="button" disabled={!t || dup}
+                                       title={dup ? '이미 목록에 있습니다' : '이 칸에 넣고 사전에도 등록'}
+                                       onClick={addFree}>추가</FreeAdd>
+                            </FreeRow>
+                          );
+                        })()}
                       </PickSect>
                       )}
 
@@ -946,8 +996,24 @@ const ColPickBtn = styled.button`
 `;
 
 /* 칸 편집기 크기. 위치 계산이 **이 값을 그대로 쓴다** — 따로 적으면 어긋난다. */
-const PICK_W = 360;
+export const PICK_W = 400;          // 방법 이름이 길다 — 360 이면 두 줄로 접혔다
 const PICK_H = 440;
+/**
+ * 칸 고르기 패널의 자리 — 누른 칸 **아래 한가운데**.
+ *
+ * ⚠️ 전에는 칸의 왼쪽 변에 맞춰 오른쪽으로 펼쳤다. 패널(360px)이 칸보다 훨씬 넓어
+ *    늘 칸의 오른쪽으로 쏠려 보였고, 오른쪽 열에서는 화면 끝에 붙어 칸과 멀어졌다
+ *    (2026-09-01 지적). 칸의 가운데에 맞추면 어느 열에서든 칸 바로 아래에 선다.
+ * 패널 크기와 **같은 값**(PICK_W/PICK_H)으로 재야 화면 밖으로 안 나간다.
+ * 순수 함수 — 시험이 직접 부른다.
+ */
+export const placePick = (rect, vw, vh) => {
+  const centered = rect.left + (rect.width || 0) / 2 - PICK_W / 2;
+  const left = Math.min(Math.max(centered, 8), vw - PICK_W - 8);
+  const below = rect.bottom + 6;
+  const top = below + PICK_H > vh ? Math.max(rect.top - PICK_H - 6, 8) : below;
+  return { left, top };
+};
 
 const PickShade = styled.div`position: fixed; inset: 0; z-index: 11500;`;
 const PickPanel = styled.div`
@@ -988,9 +1054,11 @@ const Opts = styled.div.attrs({ role: 'listbox', 'aria-multiselectable': true })
      그래서 네이티브 체크박스를 버리고 줄 자체를 option 으로 만든다.
 */
 const Opt = styled.div.attrs({ role: 'option', tabIndex: 0 })`
-  display: flex; align-items: center; gap: 0.4rem; cursor: pointer;
-  padding: 0.22rem 0.35rem; border-radius: 0.3rem; font-size: 0.73rem;
+  display: flex; align-items: center; gap: 0.45rem; cursor: pointer;
+  padding: 0.3rem 0.45rem; border-radius: 0.3rem; font-size: 0.8rem;
   user-select: none;
+  /* 이름이 남는 폭을 다 쓴다 — 표시 칸(v)은 고정 폭 하나뿐이다(2026-09-01 지적) */
+  span { flex: 1 1 auto; min-width: 0; white-space: normal; line-height: 1.35; overflow-wrap: break-word; }
   background: ${(p) => (p.$on ? '#ecfdf5' : 'transparent')};
   color: ${(p) => (p.$on ? '#065f46' : '#334155')};
   font-weight: ${(p) => (p.$on ? 700 : 400)};
@@ -1001,7 +1069,7 @@ const Opt = styled.div.attrs({ role: 'option', tabIndex: 0 })`
 
 /** 고른 줄에만 뜨는 체크. 자리는 늘 차지해 글자가 좌우로 안 흔들린다. */
 const OptMark = styled.span`
-  width: 13px; height: 13px; flex-shrink: 0;
+  width: 15px; height: 15px; flex: 0 0 15px;
   display: inline-flex; align-items: center; justify-content: center;
   color: #059669;
   visibility: ${(p) => (p.$on ? 'visible' : 'hidden')};
@@ -1028,6 +1096,20 @@ const Warn = styled.div`
   b { color: #991b1b; }
 `;
 const Empty2 = styled.div`font-size: 0.72rem; color: #94a3b8; line-height: 1.5;`;
+/* 직접 입력 줄 — 목록 아래. 과제 편집창의 「직접 입력」과 같은 일을 한다. */
+const FreeRow = styled.div`
+  display: flex; gap: 0.3rem; margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px dashed #e2e8f0;
+`;
+const FreeInput = styled.input`
+  flex: 1 1 auto; min-width: 0; padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.35rem;
+  font-size: 0.78rem; font-family: inherit;
+  &:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15); }
+`;
+const FreeAdd = styled.button`
+  flex: 0 0 auto; padding: 0.3rem 0.6rem; border-radius: 0.35rem; border: 1px solid #0f766e;
+  background: #0f766e; color: #fff; font-size: 0.74rem; font-weight: 700; cursor: pointer; font-family: inherit;
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+`;
 const PickFoot = styled.div`
   margin-top: auto; display: flex; justify-content: flex-end; gap: 0.3rem;
   padding: 0.4rem 0.6rem; border-top: 1px solid #f1f5f9; background: #f8fafc;
